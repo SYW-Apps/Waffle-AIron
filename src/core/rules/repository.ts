@@ -17,7 +17,7 @@ import { namedScalarTypesRule } from './integrity/named-scalar-types.js';
 import { renameTracesRule } from './integrity/rename-traces.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
-import { publicSurfaceDeclaredTypeRule } from './integrity/public-surface-declared-type.js';
+import { implementsContractsRule } from './integrity/implements-contracts.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { exportTablesRule } from './integrity/export-tables.js';
 import { externalDeclarationsRule } from './integrity/external-declarations.js';
@@ -47,6 +47,7 @@ import { nonPortalEndpointsRule } from './doctrine/non-portal-endpoints.js';
 import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
 import { authSourceWiringRule } from './doctrine/auth-source-wiring.js';
 import { subsystemBoundaryDepsRule } from './doctrine/subsystem-boundary-dependencies.js';
+import { libraryCallsRule } from './doctrine/library-calls.js';
 import { logicDependencyClassRule } from './doctrine/logic-dependency-class.js';
 import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
 import { entrypointDepsRule } from './doctrine/entrypoint-dependencies.js';
@@ -74,7 +75,8 @@ import { cyclesRule } from './wiring/dependency-cycles.js';
 import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
-import { portalMountsRule } from './wiring/portal-mounts.js';
+import { entryDeclarationsRule } from './wiring/entry-declarations.js';
+import { networkBoundariesRule } from './wiring/network-boundaries.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
 import { invokedByDescriptionRule } from './wiring/invoked-by-description.js';
 import { unusedTypesRule } from './wiring/unused-types.js';
@@ -206,6 +208,10 @@ export const SDD_RULES: SddRule[] = [
   // the process layer — and finally the Portal read-face guard, the one
   // that reads narratives and dispatch tables rather than dependsOn.
   subsystemBoundaryDepsRule,
+  // A library call (an exported InProcess Portal of another project) is the
+  // one cross-boundary edge no Adapter is asked for: purity and the language
+  // bridge judge it instead.
+  libraryCallsRule,
   logicDependencyClassRule,
   dataBlockDepsRule,
   entrypointDepsRule,
@@ -239,11 +245,13 @@ export const SDD_RULES: SddRule[] = [
   assertionRequiredFieldsRule,
   assertionEndpointShapesRule,
   // The published surface in four questions: what backs the entry, who it is
-  // published to, whether that component's stereotype can realize the type it
-  // declares, and whether the contract it binds is that component's own.
+  // published to, whether a contract realizing another project's extension
+  // point declares its every method, and whether the contract an entry binds
+  // is that component's own. The export kind is derived from the backing
+  // Portal's transport, so no rule compares an authored one.
   publicSurfaceBindingRule,
   publicSurfaceConsumersRule,
-  publicSurfaceDeclaredTypeRule,
+  implementsContractsRule,
   publicSurfaceBoundContractRule,
   // The export tables the resolver settled: what the published names bind.
   exportTablesRule,
@@ -263,13 +271,13 @@ export const SDD_RULES: SddRule[] = [
   dispatchTableBindingsRule,
   dispatchStepRoutingRule,
   lifecycleRule,
-  // Which listener serves which portal: another declared edge into a
-  // component, so its validity reads beside dispatch and lifecycle.
-  portalMountsRule,
-  // The declared entrypoint's own prose before the walk that its declaration
-  // silences, then the walk, then the types no walk can reach.
+  // The declared entries' shape and prose before the walk their declarations
+  // seed, then the walk, then the network verdicts over what reaches each
+  // verb, then the types no walk can reach.
+  entryDeclarationsRule,
   invokedByDescriptionRule,
   reachabilityRule,
+  networkBoundariesRule,
   unusedTypesRule,
   // The declaration (spec-scoped, refused at the write boundary) before the
   // round-trip consequences it enables.

@@ -1,0 +1,47 @@
+id: flow_check_arbiter_impl
+name: Flow Check Arbiter Implementation
+description: Observed flows against the matrix, pure.
+contract: iflow_check_arbiter
+sourcePath: src/network/flow-check.ts
+methods:
+  - name: check
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Name each observed party in design terms: through the bindings (the workload whose
+          selector the name maps from) when given, else as written; outside stays outside
+        type: local
+      - stepNumber: 2
+        label: observed
+        description: For each observed flow
+        type: loop
+        loopKind: forEach
+        over: the observed flows
+        endStep: 5
+      - stepNumber: 3
+        description: Is there a flow from its source to its destination?
+        type: branch
+        condition: no flow's caller lies within the source and callee within the destination
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Record it as unexpected and go on
+        type: jump
+        toStep: 2
+      - stepNumber: 5
+        label: observedEnd
+        description: >-
+          At L7 (a method and path observed), record it as an unknown verb when no allowed flow's
+          binding on that pair matches the method and path (a template segment matching any value);
+          mark every matching flow exercised
+        type: local
+      - stepNumber: 6
+        description: Record every flow never marked exercised as unexercised
+        type: local
+      - stepNumber: 7
+        description: Answer the report
+        type: return
+        outcome: FlowCheckReport
+    detail: full
+status: complete
+createdAt: '2026-10-06T13:12:14.092Z'
+updatedAt: '2026-10-06T13:12:14.716Z'

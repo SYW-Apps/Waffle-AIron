@@ -173,6 +173,8 @@ methods:
       and the method on stderr (never stdout, which is the JSON-RPC channel) so an attachment to an
       ancestor tree is observable rather than mysterious. Then start the MCP server on the stdio
       transport and run until the transport closes.
+    calls:
+      - mcp_hosting_portal.serveStdio
     symbol: runMcpServe
   - name: planInstall
     narrative: []
@@ -199,6 +201,8 @@ methods:
       longer loads and no longer collides with the MCP server — and answer that path; null when
       there is none, and a warning (never a throw) when the move fails. Nothing is deleted.
 detail: intent
+lint:
+  allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-05T23:37:11.580Z'
+updatedAt: '2026-10-06T20:00:27.629Z'

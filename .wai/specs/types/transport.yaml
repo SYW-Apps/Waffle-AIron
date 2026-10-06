@@ -1,0 +1,70 @@
+kind: enum
+id: transport
+name: Transport
+description: >-
+  How callers reach a Portal's verbs. There is one vocabulary: it is the Portal's own `transport`
+  and the endpoint's discriminator. A transport is one of three kinds. A network transport (HTTP,
+  gRPC, GraphQL, MessageBus, Custom) crosses a network, takes scoped entries and produces flows. A
+  local transport (CLI, IPC, NamedPipe, JSONRPC) stays on one host and produces no flows. InProcess
+  is a library call: no endpoint, no flow, and the callable surface of a library, FFI or DLL. The
+  loader reads the retired portalType spelling HTTP_API as HTTP for one release.
+fields: []
+methods:
+  - name: kind
+    signature: 'kind(): TransportKind'
+    params: []
+    returns: TransportKind
+    description: >-
+      Which kind of transport this is: network for HTTP, gRPC, GraphQL, MessageBus and Custom; local
+      for CLI, NamedPipe, IPC and JSONRPC; in-process for InProcess. Flows, entry scopes and the
+      gateway rule apply only to network transports
+    symbol: transportKind
+  - name: requiresEndpoint
+    signature: 'requiresEndpoint(): bool'
+    params: []
+    returns: bool
+    description: >-
+      Whether each verb of a Portal on this transport needs an endpoint binding: every transport
+      except InProcess and Custom
+    symbol: transportRequiresEndpoint
+  - name: exportKind
+    signature: 'exportKind(): PublicInterfaceType'
+    params: []
+    returns: PublicInterfaceType
+    description: >-
+      The export kind a published entry backed by a Portal on this transport is shown as in
+      snapshots and the design export (REST, GraphQL, MessageBus, RPC or Custom), derived instead of
+      authored. HTTP is REST; gRPC and JSONRPC are RPC; InProcess, CLI, IPC and NamedPipe are Custom
+    symbol: transportExportKind
+sourcePath: src/models/specs.ts
+previousIds:
+  - portal_type
+values:
+  - name: HTTP
+    description: 'An HTTP API: each verb is bound to a method and a path'
+  - name: gRPC
+    description: 'A gRPC service: each verb is bound to a service and an rpc method'
+  - name: GraphQL
+    description: 'A GraphQL endpoint: each verb is bound to an operation and a root field'
+  - name: MessageBus
+    description: 'Messages on a bus or queue: each verb is bound to a topic, an event and a direction'
+  - name: CLI
+    description: 'A command line (local): each verb is bound to a command'
+  - name: NamedPipe
+    description: A named pipe (local)
+  - name: IPC
+    description: Another inter-process channel on one host (local)
+  - name: JSONRPC
+    description: >-
+      JSON-RPC over a stream such as stdio (local): each verb is bound to a method name. This covers
+      language servers and stdio MCP. JSON-RPC over HTTP is instead an HTTP verb with a dispatch
+      table
+  - name: InProcess
+    description: >-
+      A library call: the verb is the contract method itself and needs no endpoint. Its optional
+      `abi` says how a foreign language links it (c for a C-ABI shared library, DLL or FFI; wasm for
+      a WebAssembly component); without one it is a native API in its project's language
+  - name: Custom
+    description: Any other wire, bound by a free-form address. Treated as a network transport
+createdAt: '2026-10-04T23:11:57.694Z'
+updatedAt: '2026-10-06T13:24:03.043Z'

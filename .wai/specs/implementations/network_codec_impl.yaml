@@ -1,0 +1,69 @@
+id: network_codec_impl
+name: Network Codec Implementation
+description: The neutral encodings and the generated policy, pure and deterministic.
+contract: inetwork_codec
+sourcePath: src/network/codec.ts
+methods:
+  - name: encodeFlows
+    narrative:
+      - stepNumber: 1
+        description: Which format?
+        type: switch
+        'on': format
+        cases:
+          - value: json
+            step: 2
+          - value: csv
+            step: 3
+        defaultStep: 4
+      - stepNumber: 2
+        description: 'JSON: the flows as a list, keys sorted, every fact kept'
+        type: return
+        outcome: json document
+      - stepNumber: 3
+        description: >-
+          CSV: a header row (from, to, transport, binding, crosses, via, evidence) and one row per
+          flow, lists joined with semicolons and every field quoted
+        type: return
+        outcome: csv document
+      - stepNumber: 4
+        description: 'Markdown: the same columns as a table, for a review comment'
+        type: return
+        outcome: markdown document
+    detail: full
+  - name: encodePolicy
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Group the flows by callee workload: the most specific binding key of the callee's project,
+          subsystem or Portal
+        type: local
+      - stepNumber: 2
+        label: workloads
+        description: For each callee workload
+        type: loop
+        loopKind: forEach
+        over: the callee workloads in name order
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Resolve each party to its binding; a name with no binding gets the placeholder label
+          wairon.dev/workload: <name> and joins the unbound list
+        type: local
+      - stepNumber: 4
+        label: workloadsEnd
+        description: >-
+          Emit one NetworkPolicy (apiVersion networking.k8s.io/v1, policyTypes Ingress): podSelector
+          from the callee's binding, namespace when bound, and one ingress rule per source (a
+          podSelector, with a namespaceSelector when the source runs in another namespace; the
+          bindings' outside blocks as ipBlock entries for a flow from outside), with the port when
+          the binding names one
+        type: local
+      - stepNumber: 5
+        description: Answer the YAML documents, separated and in name order, with the unbound names
+        type: return
+        outcome: kubernetes-network-policy document
+    detail: full
+status: complete
+createdAt: '2026-10-06T13:12:03.794Z'
+updatedAt: '2026-10-06T13:12:04.466Z'

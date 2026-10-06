@@ -9,16 +9,17 @@ methods:
   - name: sourceFileLinkage
     description: >-
       Rule source-file-linkage. Code↔spec Level 1: every source file an implementation names — its
-      own sourcePath and each method's — is checked against the code on disk, judged by whether the
-      implementation's realization has BEGUN (code_index.holdsAny over the files it names: at least
-      one exists). Before that, the design is ahead of the code and nothing is wrong: a named file
-      that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet) and
-      an implementation that names no file is unlinked design (MISSING_SOURCE_PATH, a notice), so a
-      design-only tree passes `validate --ci` and a planned sourcePath can be declared at design
-      time — which code linkage, outside the approval since format 3, costs nothing to do. Once it
-      has begun, conformance judges it: a named file that is missing is a broken link
-      (MISSING_SOURCE_FILE, an error) and a contract method that names no file while others do is
-      unlinked (METHOD_SOURCE_PATH_MISSING, a warning). A team that wants CI to demand code for
+      own sourcePath and each method's — is checked against the code on disk. A named file that is
+      not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet), at method
+      level as at implementation level and whether or not the implementation's realization has
+      begun: a design names the file a method will live in before the method is written, and code
+      linkage, outside the approval since format 3, costs nothing to declare. Whether the
+      realization has BEGUN (code_index.holdsAny over the files it names: at least one exists)
+      decides only how an unlinked method is reported: before that, an implementation that names no
+      file is unlinked design (MISSING_SOURCE_PATH, a notice), so a design-only tree passes
+      `validate --ci`; once it has begun, a contract method that names no file while others do is
+      unlinked (METHOD_SOURCE_PATH_MISSING, a warning), and a method its named, existing file does
+      not hold is method-realization's UNREALIZED_METHOD. A team that wants CI to demand code for
       every designed implementation sets rules.conformance.requireCode, which reports the two
       notices at error, naming the setting. A file that escapes the root or cannot be analyzed is
       reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript
@@ -38,12 +39,6 @@ methods:
           An implementation whose realization has not begun names no source file (for itself or for
           some contract methods) — designed, not linked to code yet; an error under
           rules.conformance.requireCode
-      - code: MISSING_SOURCE_FILE
-        severity: error
-        summary: >-
-          A source file an implementation or one of its methods names does not resolve to a file on
-          disk although the implementation's realization has begun (another file it names exists) —
-          a broken link
       - code: SOURCE_PATH_ESCAPES_ROOT
         severity: error
         summary: >-
@@ -62,9 +57,9 @@ methods:
       - code: SOURCE_FILE_PLANNED
         severity: notice
         summary: >-
-          A source file an implementation names is not on disk and none of its named files is —
-          planned, not written yet; conformance judges it once a file exists. An error under
-          rules.conformance.requireCode
+          A source file an implementation or one of its methods names is not on disk — planned, not
+          written yet, whether or not another file it names exists; method-realization judges the
+          methods in it once it does. An error under rules.conformance.requireCode
       - code: METHOD_SOURCE_PATH_MISSING
         severity: warning
         summary: >-
@@ -450,19 +445,19 @@ methods:
     description: >-
       Rule export-conformance. Code-to-contract for the SURFACE: does this file publish anything the
       components it realizes never promised, that another component then takes? The rest of the
-      conformance set reads contract-to-code — it asks whether the code holds what a spec claims —
-      so a file could export whatever it liked under a component's name and nothing looked. That is
-      one half of the same hole as a contract promising a parameter it never passes. A method's
-      `exportedVia` names the export a consumer imports to REACH it — the value that composes it,
-      which `symbol` cannot name because `symbol` names the function inside — and a listener's mount
-      names the router entry it calls to hand a portal its requests; both are declared publication,
-      and a declared handle the file does not actually export is itself a finding, so naming one can
-      never become a free-text suppression. Both questions are asked only of a file read at exact
-      grade, and a taker counts only when its own import specifier resolves to the file it is
-      accused of taking from: below that nothing separates an export from a mention, or a shared
-      word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs
-      the blocks it owns, so the owner's file, or another member of the same pattern, importing a
-      member's class is the owns relation made real.
+      conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so
+      a file could export whatever it liked under a component's name and nothing looked. That is one
+      half of the same hole as a contract promising a parameter it never passes. A method's
+      `exportedVia` names the export a consumer imports to REACH it: the value that composes it,
+      which `symbol` cannot name because `symbol` names the function inside. A Portal
+      implementation's `router` names the entry whatever serves the Portal calls to hand it its
+      requests. Both are declared publication, and a declared handle the file does not actually
+      export is itself a finding, so naming one can never become a free-text suppression. Both
+      questions are asked only of a file read at exact grade, and a taker counts only when its own
+      import specifier resolves to the file it is accused of taking from: below that nothing
+      separates an export from a mention, or a shared word from a shared module. A taker inside the
+      owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or
+      another member of the same pattern, importing a member's class is the owns relation made real.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -479,9 +474,9 @@ methods:
       - code: UNREALIZED_EXPORT_HANDLE
         severity: warning
         summary: >-
-          A declared publication handle — a method's `exportedVia`, or the router entry a listener
-          mounts a portal through — names an export its own source file does not have: the spec
-          names a route to the code that nobody can import
+          A declared publication handle (a method's `exportedVia`, or a Portal implementation's
+          `router`) names an export its own source file does not have: the spec names a route to the
+          code that nobody can import
   - name: typeShape
     description: >-
       Rule type-shape. Code-to-contract for the DATA: a type spec's `fields` are compared, name by
@@ -582,12 +577,14 @@ methods:
       Rule route-coverage. Code-to-contract for the ROUTES: does every route a router actually
       answers have a contract endpoint, and does every contract endpoint have a route that answers
       it? A portal's endpoints are what its contract promises; the router is what the code serves;
-      nothing compared the two, so a route with no contract — including a write — could run for
-      months without a single rule noticing. The listener's mount names the router function (its
-      `via`), and the routes are read out of that function's guards; the path segment the router
-      never checks is the one the mount's prefix guarantees. One idiom is read — a method comparison
-      with comparisons on the path's split segments — and a mounted router that yields no route in
-      it is reported as unread, never passed: a check that cannot see a router must say so rather
+      nothing compared the two, so a route with no contract (including a write) could run for months
+      without a single rule noticing. The Portal's own implementation names its router entry
+      (`router`, code linkage), and the routes are read out of that function's guards. A leading
+      path segment the router never checks is completed from the first segments of the Portal's own
+      HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves
+      which Portal is implementation, so no listener is consulted. One idiom is read (a method
+      comparison with comparisons on the path's split segments), and a router that yields no route
+      in it is reported as unread, never passed: a check that cannot see a router must say so rather
       than stay quiet.
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
@@ -609,7 +606,7 @@ methods:
       - code: UNREADABLE_ROUTER
         severity: warning
         summary: >-
-          A mounted portal's router yields no route this analysis can read, so its routes were not
+          A Portal's router entry yields no route this analysis can read, so its routes were not
           checked against the contract at all
   - name: portalImports
     description: >-
@@ -685,4 +682,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-06T10:11:55.313Z'
+updatedAt: '2026-10-06T13:20:52.740Z'

@@ -118,6 +118,13 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: advise
+  - name: reachModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator's reach model
+        type: call
+        targetComponent: family_validator
+        targetMethod: reachModel
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:15:55.233Z'
+updatedAt: '2026-10-06T13:00:44.812Z'

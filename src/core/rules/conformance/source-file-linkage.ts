@@ -8,17 +8,18 @@ import { RuleContext, SddRule, type Severity } from '../types.js';
 // ---------------------------------------------------------------------------
 // Code↔spec Level 1, first question: does the spec name files that exist?
 //
-// An implementation names files (its own sourcePath and each method's). They
-// are judged by whether its realization has BEGUN — code_index.holdsAny over
-// the files it names: at least one exists. Before that the design is simply
-// ahead of the code: a named file not on disk is PLANNED (a notice) and an
-// implementation naming no file is unlinked design (a notice), so a
-// design-only tree passes `validate --ci` and a planned sourcePath can be
-// declared at design time — code linkage is not part of the approval, so
-// declaring it costs no re-lock. Once realization has begun, a missing file is
-// a broken link (an error) and a contract method naming no file while others
-// do is unlinked (a warning). `rules.conformance.requireCode` reports the two
-// notices at error, for teams whose CI must demand code for every design. It
+// An implementation names files (its own sourcePath and each method's). A
+// named file not on disk is PLANNED (a notice), at method level as at
+// implementation level and whether or not another file it names exists: a
+// design names the file a method will live in before the method is written,
+// and code linkage is not part of the approval, so declaring it costs no
+// re-lock. Whether the realization has BEGUN — code_index.holdsAny over the
+// files it names: at least one exists — decides only how an UNLINKED method is
+// reported: before, an implementation naming no file is unlinked design (a
+// notice), so a design-only tree passes `validate --ci`; after, a contract
+// method naming no file while others do is unlinked (a warning).
+// `rules.conformance.requireCode` reports the two notices at error, for teams
+// whose CI must demand code for every design. It
 // consumes the pure CodeModel the source analysis adapter builds once per run
 // — the rule itself does no I/O.
 //
@@ -53,14 +54,13 @@ export const sourceFileLinkageRule: SddRule = {
   name: 'source-file-linkage',
   judges: 'code',
   description:
-    'Code↔spec Level 1: every source file an implementation names — its own sourcePath and each method\'s — is checked against the code on disk, judged by whether the implementation\'s realization has BEGUN (code_index.holdsAny over the files it names: at least one exists). Before that, the design is ahead of the code and nothing is wrong: a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet) and an implementation that names no file is unlinked design (MISSING_SOURCE_PATH, a notice), so a design-only tree passes `validate --ci` and a planned sourcePath can be declared at design time — which code linkage, outside the approval since format 3, costs nothing to do. Once it has begun, conformance judges it: a named file that is missing is a broken link (MISSING_SOURCE_FILE, an error) and a contract method that names no file while others do is unlinked (METHOD_SOURCE_PATH_MISSING, a warning). A team that wants CI to demand code for every designed implementation sets rules.conformance.requireCode, which reports the two notices at error, naming the setting. A file that escapes the root or cannot be analyzed is reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED). Implementations under chained subsystems (projectPath) validate standalone in their own project run and are skipped here.',
+    'Code↔spec Level 1: every source file an implementation names — its own sourcePath and each method\'s — is checked against the code on disk. A named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet), at method level as at implementation level and whether or not the implementation\'s realization has begun: a design names the file a method will live in before the method is written, and code linkage, outside the approval since format 3, costs nothing to declare. Whether the realization has BEGUN (code_index.holdsAny over the files it names: at least one exists) decides only how an unlinked method is reported: before that, an implementation that names no file is unlinked design (MISSING_SOURCE_PATH, a notice), so a design-only tree passes `validate --ci`; once it has begun, a contract method that names no file while others do is unlinked (METHOD_SOURCE_PATH_MISSING, a warning), and a method its named, existing file does not hold is method-realization\'s UNREALIZED_METHOD. A team that wants CI to demand code for every designed implementation sets rules.conformance.requireCode, which reports the two notices at error, naming the setting. A file that escapes the root or cannot be analyzed is reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED). Implementations under chained subsystems (projectPath) validate standalone in their own project run and are skipped here.',
   codes: [
     { code: 'MISSING_SOURCE_PATH', defaultSeverity: 'notice', summary: 'An implementation whose realization has not begun names no source file (for itself or for some contract methods) — designed, not linked to code yet; an error under rules.conformance.requireCode' },
-    { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names does not resolve to a file on disk although the implementation\'s realization has begun (another file it names exists) — a broken link' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file an implementation or one of its methods names could not be analyzed (binary/unreadable) — realization of the methods in it was not checked' },
     { code: 'CONFORMANCE_DEGRADED', defaultSeverity: 'warning', summary: 'TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) — dependency conformance skips them' },
-    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file an implementation names is not on disk and none of its named files is — planned, not written yet; conformance judges it once a file exists. An error under rules.conformance.requireCode' },
+    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file an implementation or one of its methods names is not on disk — planned, not written yet, whether or not another file it names exists; method-realization judges the methods in it once it does. An error under rules.conformance.requireCode' },
     { code: 'METHOD_SOURCE_PATH_MISSING', defaultSeverity: 'warning', summary: 'An implementation whose realization has begun leaves contract methods without a source file — structural conformance cannot link them to code' },
   ],
 
@@ -167,19 +167,16 @@ export const sourceFileLinkageRule: SddRule = {
             impl.id,
             draft,
           );
-        } else if (facts.status === 'missing' && begun) {
-          ctx.addIssue(
-            'error',
-            'MISSING_SOURCE_FILE',
-            `${owner} sourcePath "${file}" does not resolve to a file although the implementation's realization has begun — a broken link: the spec names code that does not exist.`,
-            impl.id,
-            draft,
-          );
         } else if (facts.status === 'missing') {
+          // A named file not on disk is planned, at method level as at
+          // implementation level, whether or not another file it names exists:
+          // a design names the file a method will live in before the method is
+          // written. A method nothing realizes once code exists is reported by
+          // method-realization and METHOD_SOURCE_PATH_MISSING, not here.
           ctx.addIssue(
             planned.severity,
             'SOURCE_FILE_PLANNED',
-            `${owner} sourcePath "${file}" is planned, not written yet — conformance judges it once a file the implementation names exists${planned.note}.`,
+            `${owner} sourcePath "${file}" is planned, not written yet — method-realization judges the methods in it once it exists${planned.note}.`,
             impl.id,
             draft,
           );

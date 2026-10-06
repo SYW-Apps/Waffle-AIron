@@ -29,7 +29,6 @@ publicInterfaces:
     name: Hosted MCP Data Plane
     subsystem: sdd_host
     component: host_http_portal
-    type: REST
     details: >-
       Streamable HTTP MCP endpoint exposing the sdd_* tool surface request-scoped to the
       authenticated project, plus discovery and self-service tools. The consumable surface of a
@@ -41,7 +40,6 @@ publicInterfaces:
     name: Hosted Admin API
     subsystem: sdd_host
     component: admin_portal
-    type: REST
     details: >-
       Exposure-policy-controlled control plane for project/key/pack/producer/secret/git lifecycle
       and the privileged lock. Operator-facing within a deployment.
@@ -52,7 +50,6 @@ publicInterfaces:
     component: cli_portal
     from: sdd_cli
     as: wairon-cli
-    type: Custom
     details: >-
       The `wairon` (and `wai`) binary of the @wairon/cli package (package.json bin): one CLI
       endpoint per command.
@@ -62,7 +59,6 @@ publicInterfaces:
     component: sdk_portal
     from: sdd_sdk
     as: wairon-sdk
-    type: Custom
     details: >-
       The @wairon/sdk package (sdk/, main dist/index.js): scaffold, build, inspect and safely
       extract .wpack pack archives and .waitree spec-tree archives.

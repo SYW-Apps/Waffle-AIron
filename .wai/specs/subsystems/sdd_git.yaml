@@ -9,12 +9,11 @@ description: >-
   host-agnostic.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       In-process git-backing services (enable/disable/sync/isEnabled/publish) consumed by the
       hosting server.
     component: git_portal
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T16:31:09.691Z'
-updatedAt: '2026-09-25T22:00:59.395Z'
+updatedAt: '2026-10-06T18:55:21.605Z'

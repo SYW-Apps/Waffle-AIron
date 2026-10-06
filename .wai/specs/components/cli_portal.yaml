@@ -13,7 +13,12 @@ componentType: Portal
 owns: []
 dependsOn:
   - cli_runner
-portalType: CLI
+transport: CLI
+invokedBy:
+  kind: entry
+  caller: >-
+    Developers and CI pipelines running the `wairon` (and `wai`) binary of the @wairon/cli package
+    from a shell, plus AI tools that launch `wairon mcp serve` from their MCP configuration
 status: complete
 createdAt: '2026-10-04T18:11:38.132Z'
-updatedAt: '2026-10-04T18:16:35.495Z'
+updatedAt: '2026-10-06T18:59:36.053Z'

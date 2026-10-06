@@ -9,9 +9,11 @@ component: intrinsic_rules
 methods:
   - name: portalFields
     description: >-
-      Rule portal-fields. A Portal declares its portalType. Non-Portal components carry no
-      portalType, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that
-      exposes the surface). Intrinsic to one component: no tree required.
+      Rule portal-fields. A Portal declares its transport (the retired portalType is read as it for
+      one release); only an InProcess Portal may declare an abi. Non-Portal components carry no
+      transport, abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport
+      auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is
+      entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.
     signature: 'portalFields(ctx: RuleContext): void'
     returns: void
     params:
@@ -19,17 +21,19 @@ methods:
         type: RuleContext
         description: The validation run's shared read model and issue sink
     findings:
-      - code: MISSING_PORTAL_TYPE
-        severity: error
-        summary: Portal without a portalType
       - code: UNEXPECTED_PORTAL_FIELD
         severity: error
-        summary: Non-Portal component with portalType/basePath
+        summary: >-
+          Non-Portal component with transport, abi or basePath, or an abi on a Portal whose
+          transport is not InProcess
       - code: AUTH_ON_NON_PORTAL
         severity: warning
         summary: >-
           Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a
           Portal)
+      - code: MISSING_PORTAL_TRANSPORT
+        severity: error
+        summary: Portal without a transport
   - name: durabilityDeclaration
     description: >-
       Rule durability-declaration. Every Store declares its durability (MISSING_DURABILITY) and
@@ -88,4 +92,4 @@ methods:
           dependencyClass, a Gateway is a Portal with the gateway variant
 status: complete
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-09-18T20:21:20.016Z'
+updatedAt: '2026-10-06T13:03:43.522Z'

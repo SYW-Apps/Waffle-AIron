@@ -268,7 +268,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
   it('redefining an interface preserves lint, ext, endpoints, and method ext with a notice', async () => {
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'ord-portal', name: 'Order Portal', description: 'Inbound front door',
-      subsystem: 'ord', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['ord-orch'],
+      subsystem: 'ord', componentType: 'Portal', transport: 'HTTP', dependsOn: ['ord-orch'],
     } }));
     unwrapText(await client.callTool({ name: 'sdd_define_interface', arguments: {
       id: 'iord-portal', name: 'IOrderPortal', description: 'Portal contract', component: 'ord-portal',

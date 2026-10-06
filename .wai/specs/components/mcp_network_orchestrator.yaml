@@ -1,0 +1,15 @@
+id: mcp_network_orchestrator
+name: MCP Network Orchestrator
+description: >-
+  The read-only network tools' workflows: the allowed-flows matrix (optionally filtered to the flows
+  into one project, Portal or verb) and the explanation of one flow, both through the network client
+  adapter, answered as text and structured content. Its own component beside the externals
+  workflows, because it shares no collaborator with the authoring workflows.
+subsystem: sdd_mcp
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - mcp_network_adapter
+status: complete
+createdAt: '2026-10-06T13:15:22.611Z'
+updatedAt: '2026-10-06T13:15:23.373Z'

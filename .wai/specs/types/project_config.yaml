@@ -154,6 +154,14 @@ fields:
       A directory of org- or user-level default templates, resolved after project-local templates
       and before the built-in ones
     optional: true
+  - name: network
+    type: NetworkDeclaration
+    description: >-
+      Opt-in: this project and every member below it form an isolated network (`network: true`, or
+      `{ description }`). Read by the family run's network rules and by the derived networking
+      outputs; part of the gate identity, because it changes family-run verdicts. Written by hand.
+      Absent in a part's configuration
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -251,4 +259,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T10:18:32.745Z'
+updatedAt: '2026-10-06T12:54:45.360Z'

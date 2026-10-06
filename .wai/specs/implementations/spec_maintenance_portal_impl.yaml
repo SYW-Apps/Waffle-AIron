@@ -175,6 +175,13 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: renameType
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward to the reachability migration
+        type: call
+        targetComponent: reachability_migration
+        targetMethod: migrate
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-04T13:57:07.122Z'
+updatedAt: '2026-10-06T13:07:41.363Z'

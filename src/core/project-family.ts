@@ -16,6 +16,7 @@ import {
   type ResolvedExternal,
   type SubsystemSpec,
   type TypeSpec,
+  retiredMountsOf,
 } from '../models/index.js';
 // project_family_index projects the scan the Spec Index holds — the sanctioned
 // case of an Index over another Index of the same Repository.
@@ -70,6 +71,7 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       legacyMount: root.legacyMount,
       ...(root.memberDescription !== undefined ? { memberDescription: root.memberDescription } : {}),
       hasSystem: root.system !== null,
+      ...(root.system?.targetLanguage ? { targetLanguage: root.system.targetLanguage } : {}),
       directory: root.directory,
       members: roots.filter((r) => r.parent === root.namespace && r.namespace !== root.namespace).map((r) => r.namespace),
       aliases: root.aliases,
@@ -229,7 +231,10 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
     seen.add(key);
     out.push(ref);
   };
-  const add = (specId: string, position: string, value: string | undefined, member?: string): void => {
+  // The component an implementation realizes: what makes a call its narrative writes.
+  const componentOfContract = new Map(specs.interfaces.map((i) => [i.id, i.component] as const));
+  const callerOf = new Map(specs.implementations.map((impl) => [impl.id, componentOfContract.get(impl.contract)] as const));
+  const add = (specId: string, position: string, value: string | undefined, member?: string, caller?: string): void => {
     if (!value) return;
     const consumer = family.owners.get(specId);
     if (consumer === undefined) return;
@@ -240,16 +245,18 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
     push({
       specId, position, target: value, ...(member !== undefined ? { member } : {}), consumer, producer,
       authored: authored?.authored ?? value, ...(authored?.publicName !== undefined ? { publicName: authored.publicName } : {}),
+      ...(caller !== undefined ? { caller } : {}),
     });
   };
   // A raw position: read off the scan's authored reference.
-  const addRaw = (ref: AuthoredReference, position: string, member?: string): void => {
+  const addRaw = (ref: AuthoredReference, position: string, member?: string, caller?: string): void => {
     if (ref.binding === 'outside' || ref.binding === 'unresolved' || ref.producer === undefined) return;
     const consumer = family.owners.get(ref.specId);
     if (consumer === undefined || ref.producer === consumer) return;
     push({
       specId: ref.specId, position, target: ref.resolved, ...(member !== undefined ? { member } : {}), consumer, producer: ref.producer,
       authored: ref.authored, ...(ref.publicName !== undefined ? { publicName: ref.publicName } : {}),
+      ...(caller !== undefined ? { caller } : {}),
     });
   };
   for (const sub of specs.subsystems) {
@@ -264,14 +271,14 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
   for (const comp of specs.components) {
     comp.dependsOn.forEach((d) => add(comp.id, 'dependsOn', d));
     comp.dispatch?.forEach((b) => add(comp.id, 'dispatch-table', b.component, b.method));
-    comp.mounts?.forEach((m) => add(comp.id, 'mounts', m.portal));
+    retiredMountsOf(comp).mounts.forEach((m) => add(comp.id, 'mounts', m.portal));
   }
   const calledMethod = new Map<string, string>();
   for (const impl of specs.implementations) {
     for (const method of impl.methods) {
       for (const step of method.narrative) {
-        if (step.type === 'call' || step.type === 'register') add(impl.id, step.type, step.targetComponent, step.targetMethod);
-        if (step.type === 'dispatch') add(impl.id, 'dispatch', step.targetComponent, step.capability ? `capability:${step.capability}` : undefined);
+        if (step.type === 'call' || step.type === 'register') add(impl.id, step.type, step.targetComponent, step.targetMethod, callerOf.get(impl.id));
+        if (step.type === 'dispatch') add(impl.id, 'dispatch', step.targetComponent, step.capability ? `capability:${step.capability}` : undefined, callerOf.get(impl.id));
       }
       for (const entry of method.calls ?? []) {
         const call = parseDeclaredCall(entry);
@@ -282,7 +289,8 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
   for (const ref of family.authoredReferences) {
     if (ref.position === 'type') addRaw(ref, 'type');
     else if (ref.position === 'auth') addRaw(ref, 'auth');
-    else if (ref.position === 'calls') addRaw(ref, 'calls', calledMethod.get(`${ref.specId}|${ref.authored}`));
+    else if (ref.position === 'implements') addRaw(ref, 'implements');
+    else if (ref.position === 'calls') addRaw(ref, 'calls', calledMethod.get(`${ref.specId}|${ref.authored}`), callerOf.get(ref.specId));
   }
   return out;
 }

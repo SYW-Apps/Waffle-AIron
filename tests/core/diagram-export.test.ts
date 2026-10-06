@@ -47,7 +47,7 @@ describe('editable diagram exports (draw.io / Excalidraw)', () => {
       componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[],
       createdAt: now, updatedAt: now, ...over,
     });
-    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-repo'] }) as any);
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', transport: 'HTTP', dependsOn: ['billing-repo'] }) as any);
     saveComponentSpec(comp({ id: 'billing-store', name: 'Billing Store', componentType: 'Store' }) as any);
     saveComponentSpec(comp({ id: 'billing-repo', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store'] }) as any);
     saveComponentSpec(comp({ id: 'shipping-client', name: 'Shipping Client', subsystem: 'shipping', componentType: 'Adapter', dependsOn: ['billing-portal'] }) as any);
@@ -81,7 +81,7 @@ describe('editable diagram exports (draw.io / Excalidraw)', () => {
     // subsystem is a draggable container
     expect(xml).toMatch(/id="sub_billing"[^>]*value="Billing"[^>]*style="[^"]*container=1/);
     // component labeled with its stereotype, parented to its subsystem
-    expect(xml).toMatch(/id="comp_billing-portal"[^>]*«Portal\/HTTP_API»[^>]*parent="sub_billing"/);
+    expect(xml).toMatch(/id="comp_billing-portal"[^>]*«Portal\/HTTP»[^>]*parent="sub_billing"/);
     // pattern member parented to the pattern cell (moves with it in draw.io)
     expect(xml).toMatch(/id="comp_billing-store"[^>]*parent="comp_billing-repo"/);
     // published component gets the bold border

@@ -21,7 +21,8 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CarriedDebtKind, DeclaredMember, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { RetiredReachFact } from '../../models/specs.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
@@ -291,10 +292,14 @@ export interface ImportGraph {
 
 /**
  * Where a dependsOn edge lands, decided once per edge so the rules that judge
- * it never re-derive it. The six answers are exhaustive: a ref either names a
+ * it never re-derive it. The seven answers are exhaustive: a ref either names a
  * component in this tree (`internal` when it shares the source's subsystem,
- * `cross-subsystem` when it does not), or it leaves the project and resolves
- * to a declared contract entry — a pin or a foreign snapshot (`surface`) — or
+ * `cross-subsystem` when it does not), or it leaves the project and lands on an
+ * exported InProcess Portal of another project — a contained member's or a
+ * declared external's (`library`: a library call, which any component may make
+ * directly and library-calls alone judges) — or it leaves the project and
+ * resolves to another declared contract entry — a pin or a foreign snapshot
+ * (`surface`) — or
  * foreign snapshots of several providers disagree about it (`ambiguous`), or
  * it leaves the project and does not resolve (`cross-project`: its resolution
  * is project-boundaries' single finding), or it is a local id that names
@@ -303,6 +308,7 @@ export interface ImportGraph {
 export type EdgeReach =
   | 'internal'
   | 'cross-subsystem'
+  | 'library'
   | 'surface'
   | 'ambiguous'
   | 'cross-project'
@@ -320,11 +326,11 @@ export interface DependencyEdge {
   ref: string;
   /** Where the ref lands (see EdgeReach). */
   reach: EdgeReach;
-  /** The component the ref names in this tree — set for an `internal` or `cross-subsystem` edge only. */
+  /** The component the ref names in this tree — set for an `internal` or `cross-subsystem` edge, and for a `library` edge into a contained member. */
   to?: ComponentSpec;
-  /** What the surface snapshots answered — set for a `surface` or `ambiguous` edge only, and then always carrying that kind. */
+  /** What the surface snapshots answered — set for a `surface` or `ambiguous` edge, and for a `library` edge into a pinned or foreign surface. */
   surface?: SurfaceRefResolution;
-  /** The owner's resolution of an edge that leaves the project; set for `surface`, `ambiguous` and `cross-project`. */
+  /** The owner's resolution of an edge that leaves the project; set for `library`, `surface`, `ambiguous` and `cross-project`. */
   resolution?: ReferenceResolution;
   /**
    * Either end is a retired stereotype, so no boundary or matrix rule judges
@@ -493,6 +499,24 @@ export interface RuleContext {
    */
   exportUsages?: ExportUsage[];
   /**
+   * The bound project's own network declaration (project_config.network): what
+   * network-boundaries judges. Absent when it declares none, when its
+   * configuration is unreadable, and on a candidate run.
+   */
+  network?: NetworkDeclaration;
+  /**
+   * Each scanned project's L0 targetLanguage by project key ('' for the bound
+   * root), normalized like targetLanguageFor: what library-calls judges a
+   * contained member's native library against. Absent on a candidate run.
+   */
+  projectLanguages?: Map<string, string>;
+  /**
+   * The retired reachability forms the run's scan met: the loaded specs read
+   * them compatibly, so these facts are the only place the stored form is
+   * still visible. Absent on a candidate run.
+   */
+  retiredReachFacts?: RetiredReachFact[];
+  /**
    * What the loader's signature resolution recorded — the sources it met and
    * the stored texts their params contradict. The loaded interfaces and types
    * are already resolved, so these facts are the only place the stored form is
@@ -549,6 +573,8 @@ export interface RuleContext {
    * source paths, which are relative to the member's root.
    */
   isInChainedSubproject(subsystemId: string): boolean;
+  /** The key of the project that owns a spec key of the run's scan: '' for the bound project, else the contained member's key. */
+  projectOf(specId: string): string;
   /**
    * The declared contract entry a reference that leaves the bound project
    * lands on: a declared external's pinned snapshot (by alias, or through a

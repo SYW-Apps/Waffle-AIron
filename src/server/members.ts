@@ -275,6 +275,35 @@ export function discard(plan: MemberUpgradePlan): void {
   if (plan.rehearsal) hostMigrations.drop(plan.rehearsal);
 }
 
+// ── upgrade ─────────────────────────────────────────────────────────────────
+
+/**
+ * imember_registration.upgrade — plan, and with apply commit, the stage-7
+ * member upgrade of the data dir: every hosted family's members registered as
+ * records (no grants: they inherit through their parent chain), every
+ * member-qualified API key entry rewritten to a record id, nobody's reach
+ * changed — all or nothing. A dry run or a blocked plan writes nothing.
+ */
+export function upgradeMembers(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, apply: boolean): MemberUpgradeReport {
+  // Step 1: what a crash left unfinished under the data directory — resolved
+  // (and audited) with apply, only reported without it.
+  const recovered = recoverData(cfg, apply);
+  // Step 2.
+  const planned = plan(cfg.dataDir);
+  // Steps 3-5.
+  if (apply && planned.refusals.length === 0 && planned.rehearsal) {
+    return { ...commitPlan(cfg, planned), recovered };
+  }
+  // Steps 6-7.
+  discard(planned);
+  return { plan: { ...planned, rehearsal: undefined }, applied: false, recovered };
+}
+
+/** Step 4: apply the plan — named apart because upgrade's own `apply` flag shadows the function. */
+function commitPlan(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, planned: MemberUpgradePlan): MemberUpgradeReport {
+  return apply(cfg, planned);
+}
+
 /** One best-effort upgrade audit event by the operator, under the configured audit policy. */
 function audit(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, fields: Partial<AuditEvent> & { action: string; outcome: string; level: string }): void {
   const event: AuditEvent = { id: '', timestamp: '', category: 'project', actor: OPERATOR, ...fields };

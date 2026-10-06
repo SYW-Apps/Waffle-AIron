@@ -357,7 +357,7 @@ describe('MCP write-tool schema field coverage', () => {
   it('re-adding a component carries lint, auth, variant, patterns, externalLinks and ext', async () => {
     await call('sdd_add_component', {
       id: 'cov-portal', name: 'Coverage Portal', description: 'The published surface',
-      subsystem: 'cov', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1',
+      subsystem: 'cov', componentType: 'Portal', transport: 'HTTP', basePath: '/v1',
       dependsOn: ['cov-orch'],
     });
     await call('sdd_update_spec', {
@@ -378,7 +378,7 @@ describe('MCP write-tool schema field coverage', () => {
     // of anything the input cannot express, and dependsOn deliberately omitted.
     const out = await call('sdd_add_component', {
       id: 'cov-portal', name: 'Coverage Portal', description: 'The published surface v2',
-      subsystem: 'cov', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1',
+      subsystem: 'cov', componentType: 'Portal', transport: 'HTTP', basePath: '/v1',
     });
     expect(out).toContain('Carried forward (not expressible through this tool)');
     // …and the omission of an expressed array is reported rather than silent.
@@ -435,7 +435,7 @@ describe('MCP write-tool schema field coverage', () => {
 
     await call('sdd_add_component', {
       id: 'cov-portal', name: 'Coverage Portal', description: 'The published surface v3',
-      subsystem: 'cov', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1',
+      subsystem: 'cov', componentType: 'Portal', transport: 'HTTP', basePath: '/v1',
     });
     const out = await call('sdd_define_interface', {
       id: 'icov-portal', name: 'ICovPortal', description: 'Contract v3', component: 'cov-portal',

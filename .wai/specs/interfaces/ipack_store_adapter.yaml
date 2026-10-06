@@ -68,11 +68,6 @@ methods:
     params:
       - name: packDir
         type: string
-    invokedBy:
-      kind: sibling-subsystem
-      caller: >-
-        The `wairon pack install|build` flows (sdd_cli, cli_packs_adapter) compute the identity
-        digest over sdd_core's published barrel surface rather than a modeled component edge.
   - name: listInstalledPacks
     description: >-
       Enumerate every pack installed in the store, newest version first per name. Reads each install
@@ -84,4 +79,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-29T17:41:50.550Z'
-updatedAt: '2026-10-04T10:19:12.113Z'
+updatedAt: '2026-10-06T19:08:47.563Z'

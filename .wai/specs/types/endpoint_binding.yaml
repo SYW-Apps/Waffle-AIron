@@ -16,9 +16,10 @@ fields:
   - name: transport
     type: string
     description: >-
-      The wire protocol: HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI or Custom — or the
-      Portal's portalType spelling of it (HTTP_API is HTTP), stored as the endpoint's. It must be
-      the transport the Portal's portalType implies; another is refused, naming that one.
+      The wire protocol: HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI, JSONRPC or Custom. It
+      must be the Portal's own transport; another is refused, naming that one. The retired
+      portalType spelling HTTP_API is still read as HTTP for one release. An InProcess Portal binds
+      no endpoints: its verbs are the contract methods themselves, and a binding for one is refused.
     optional: false
   - name: httpMethod
     type: string
@@ -76,6 +77,10 @@ fields:
     type: string
     description: 'Custom: the free-form address.'
     optional: true
+  - name: jsonRpcMethod
+    type: string
+    description: 'JSONRPC: the JSON-RPC method name.'
+    optional: true
 methods: []
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-05T17:31:49.083Z'
+updatedAt: '2026-10-06T12:55:07.918Z'

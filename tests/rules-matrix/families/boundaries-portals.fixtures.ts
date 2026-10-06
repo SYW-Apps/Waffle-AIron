@@ -5,9 +5,11 @@
  * src/core/rules/doctrine/non-portal-endpoints.ts).
  *
  * Documented intents pinned here:
- *  - MISSING_PORTAL_TYPE (error): a Portal declares its portalType.
+ *  - MISSING_PORTAL_TRANSPORT (error): a Portal declares its transport (the
+ *    retired MISSING_PORTAL_TYPE, renamed with the reachability model).
  *  - UNEXPECTED_PORTAL_FIELD (error): non-Portal components carry no
- *    portalType or basePath — both behaviors get a fire.
+ *    transport (the retired portalType reads as it) or basePath — both
+ *    behaviors get a fire — and only an InProcess Portal carries an abi.
  *  - AUTH_ON_NON_PORTAL (warning): auth is inbound transport auth, only
  *    meaningful on a Portal; a gateway is a Portal with the gateway variant, so
  *    it carries the auth itself, never the Orchestrator it dispatches to.
@@ -29,15 +31,15 @@ const SCHEDULING_SUB = { id: 'scheduling', description: 'Appointment booking and
 
 export default [
   // -------------------------------------------------------------------------
-  // MISSING_PORTAL_TYPE
+  // MISSING_PORTAL_TRANSPORT
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'MISSING_PORTAL_TYPE',
+    code: 'MISSING_PORTAL_TRANSPORT',
     severity: 'error',
     anchoredTo: 'patient-booking-portal',
     expectFire: true,
     scenario:
-      'The patient booking portal is declared as a Portal but never states which portalType (HTTP, gRPC, CLI, ...) it exposes.',
+      'The patient booking portal is declared as a Portal but never states which transport (HTTP, gRPC, CLI, InProcess, ...) its callers reach it over.',
     tree: {
       system: SYSTEM,
       subsystems: [SCHEDULING_SUB],
@@ -47,16 +49,59 @@ export default [
     },
   }),
   defineRuleFixture({
-    code: 'MISSING_PORTAL_TYPE',
+    code: 'MISSING_PORTAL_TRANSPORT',
     expectFire: false,
-    reason: 'The Portal declares its portalType (HTTP_API), which is all this completeness code demands.',
+    reason: 'The Portal declares its transport (HTTP), which is all this completeness code demands.',
     scenario:
-      'The patient booking portal declares itself an HTTP_API portal.',
+      'The patient booking portal declares that its callers reach it over HTTP.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [
+        { id: 'patient-booking-portal', componentType: 'Portal', transport: 'HTTP', description: 'Patient-facing surface for booking visits.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_PORTAL_TRANSPORT',
+    expectFire: false,
+    reason: 'A stored file still spelling the retired portalType HTTP_API is read as transport HTTP for one release, so it declares its transport.',
+    scenario:
+      'The patient booking portal was written before the reachability model and still declares portalType HTTP_API.',
     tree: {
       system: SYSTEM,
       subsystems: [SCHEDULING_SUB],
       components: [
         { id: 'patient-booking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Patient-facing surface for booking visits.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNEXPECTED_PORTAL_FIELD',
+    severity: 'error',
+    anchoredTo: 'patient-booking-portal',
+    expectFire: true,
+    scenario:
+      'The patient booking portal is an HTTP API but declares abi c, as if foreign languages linked it as a shared library.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [
+        { id: 'patient-booking-portal', componentType: 'Portal', transport: 'HTTP', abi: 'c', description: 'Patient-facing surface for booking visits.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'UNEXPECTED_PORTAL_FIELD',
+    expectFire: false,
+    reason: 'An abi says how a foreign language links a library, and the slot-math library is an InProcess Portal: the one place an abi belongs.',
+    scenario:
+      'The slot arithmetic library is an InProcess Portal that declares abi c so the clinic kiosk firmware can link it as a C shared library.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [
+        { id: 'slot-arithmetic-library', componentType: 'Portal', transport: 'InProcess', abi: 'c', description: 'Slot arithmetic exposed to firmware over a C ABI.' },
       ],
     },
   }),

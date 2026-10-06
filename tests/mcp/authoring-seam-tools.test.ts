@@ -18,7 +18,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
-import { invalidateSpecCache, loadInterfaceSpec, loadSubsystemSpec } from '../../src/core/specs.js';
+import { invalidateSpecCache, loadComponentSpec, loadInterfaceSpec, loadSubsystemSpec } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 
 const now = new Date().toISOString();
@@ -59,10 +59,10 @@ async function seed(call: (name: string, args: Record<string, unknown>) => Promi
   ok(await call('sdd_initialize_system', { name: 'Shop', vision: 'sells things' }));
   ok(await call('sdd_add_subsystem', { id: 'shop', name: 'Shop', description: 'the shop' }));
   ok(await call('sdd_add_component', {
-    id: 'shop_portal', name: 'Shop Portal', description: 'front door', subsystem: 'shop', componentType: 'Portal', portalType: 'HTTP_API',
+    id: 'shop_portal', name: 'Shop Portal', description: 'front door', subsystem: 'shop', componentType: 'Portal', transport: 'HTTP',
   }));
   ok(await call('sdd_add_component', {
-    id: 'shop_api', name: 'Shop API', description: 'second front door', subsystem: 'shop', componentType: 'Portal', portalType: 'HTTP_API',
+    id: 'shop_api', name: 'Shop API', description: 'second front door', subsystem: 'shop', componentType: 'Portal', transport: 'HTTP',
   }));
   ok(await call('sdd_define_interface', {
     id: 'ishop_portal', name: 'IShopPortal', description: 'the front door contract', component: 'shop_portal',
@@ -137,15 +137,15 @@ describe('sdd_set_endpoints — one gated delta, answered with the change report
     const { call } = await bound();
     await seed(call);
     await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'HTTP', httpMethod: 'POST', path: '/pay' }] });
-    // A transport follows the Portal's portalType: retype the Portal, then rebind.
-    await call('sdd_update_spec', { kind: 'component', id: 'shop_portal', delta: { portalType: 'CLI' } });
+    // A binding follows the Portal's transport: retype the Portal, then rebind.
+    await call('sdd_update_spec', { kind: 'component', id: 'shop_portal', delta: { transport: 'CLI' } });
     const rebound = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'CLI', command: 'shop pay' }] });
     expect(rebound.isError ?? false, textOf(rebound)).toBe(false);
     invalidateSpecCache();
     expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'CLI', command: 'shop pay' });
   });
 
-  it('takes the portalType spelling of a transport and stores the endpoint\'s (HTTP_API is HTTP)', async () => {
+  it('reads the retired HTTP_API spelling of a transport as HTTP', async () => {
     const { call } = await bound();
     await seed(call);
     const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'HTTP_API', httpMethod: 'POST', path: '/pay' }] });
@@ -155,12 +155,53 @@ describe('sdd_set_endpoints — one gated delta, answered with the change report
     expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/pay' });
   });
 
-  it('refuses a transport the Portal\'s portalType does not imply, naming the one it does, before anything is written', async () => {
+  it('binds a JSONRPC verb by its method name', async () => {
+    const { call } = await bound();
+    await seed(call);
+    await call('sdd_update_spec', { kind: 'component', id: 'shop_portal', delta: { transport: 'JSONRPC' } });
+    const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'JSONRPC', jsonRpcMethod: 'shop/pay' }] });
+    expect(result.isError ?? false, textOf(result)).toBe(false);
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'JSONRPC', method: 'shop/pay' });
+  });
+
+  it('refuses any binding on an InProcess Portal: its verbs are its contract methods', async () => {
+    const { call } = await bound();
+    await seed(call);
+    await call('sdd_update_spec', { kind: 'component', id: 'shop_portal', delta: { transport: 'InProcess' } });
+    const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'Custom', address: 'shop#pay' }] });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('an InProcess Portal: its verbs are its contract methods and bind no endpoint');
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toBeUndefined();
+  });
+
+  it('writes a Portal-level entry as given, never defaults one, and refuses a scope on a local transport', async () => {
+    const { call } = await bound();
+    await seed(call);
+    const read = (id: string): Record<string, unknown> => { invalidateSpecCache(); return (loadComponentSpec(id) ?? {}) as unknown as Record<string, unknown>; };
+    // shop_api was added without an entry: none is written for it.
+    expect(read('shop_api').invokedBy).toBeUndefined();
+    const entered = await call('sdd_add_component', {
+      id: 'shop_api', name: 'Shop API', description: 'second front door', subsystem: 'shop', componentType: 'Portal', transport: 'HTTP',
+      invokedBy: { kind: 'entry', caller: 'Browsers and mobile clients of the shop', scope: 'outside' },
+    });
+    expect(entered.isError ?? false, textOf(entered)).toBe(false);
+    expect(read('shop_api').invokedBy).toEqual({ kind: 'entry', caller: 'Browsers and mobile clients of the shop', scope: 'outside' });
+    const refused = await call('sdd_add_component', {
+      id: 'shop_cli', name: 'Shop CLI', description: 'the command line', subsystem: 'shop', componentType: 'Portal', transport: 'CLI',
+      invokedBy: { kind: 'entry', caller: 'Operators at a terminal', scope: 'network' },
+    });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toContain('an entry scope applies only to a network transport, and "CLI" is local');
+  });
+
+  it('refuses a transport other than the Portal\'s own, naming it, before anything is written', async () => {
     const { call } = await bound();
     await seed(call);
     const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'CLI', command: 'shop pay' }] });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('transport "CLI" does not match shop_portal\'s portalType HTTP_API, which implies transport "HTTP"');
+    expect(textOf(result)).toContain('transport "CLI" does not match shop_portal\'s transport "HTTP"');
     invalidateSpecCache();
     expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toBeUndefined();
   });

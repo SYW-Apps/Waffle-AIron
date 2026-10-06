@@ -1,0 +1,44 @@
+kind: value-object
+id: modelled_call
+name: ModelledCall
+description: >-
+  One modelled call that crosses a subsystem or project boundary into a Portal verb: a call or
+  register step, a declared `calls` entry or a dispatch routed through a table. It is the evidence a
+  flow and an entry proof rest on.
+fields:
+  - name: fromProject
+    type: string
+    description: The key of the project holding the caller
+    optional: false
+  - name: fromComponent
+    type: string
+    description: The calling component's key (the bridging Adapter, or any component for a library call)
+    optional: false
+  - name: fromNetwork
+    type: string
+    description: The innermost declared network the caller sits inside; absent when none encloses it
+    optional: true
+  - name: toPortal
+    type: string
+    description: The called Portal's component key
+    optional: false
+  - name: verb
+    type: string
+    description: The called contract method
+    optional: false
+  - name: evidence
+    type: string
+    description: >-
+      Where the call is written: <implementation>.<method>#<step>, or <implementation>.<method>
+      calls for a declared call
+    optional: false
+  - name: fromSubsystem
+    type: string
+    description: >-
+      The calling component's subsystem key, qualified like the component in a family-scoped model;
+      absent when the reference that records a cross-project call does not say
+    optional: true
+methods: []
+sourcePath: src/models/reach.ts
+createdAt: '2026-10-06T12:57:15.682Z'
+updatedAt: '2026-10-06T19:24:45.251Z'

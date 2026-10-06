@@ -574,6 +574,26 @@ methods:
           as well, or intf.status is draft or design) on intf.id, naming the method, the component
           and the invokedBy kind
         type: local
+      - stepNumber: 6
+        label: portals
+        description: >-
+          Then the Portal-level declarations: for each Portal component of ctx.components in scope
+          that declares its own invokedBy (the entry every verb inherits)
+        type: loop
+        loopKind: forEach
+        over: each Portal comp of ctx.components with comp.invokedBy set and ctx.isSpecInScope(comp.id)
+        endStep: 8
+      - stepNumber: 7
+        description: The caller prose must say who reaches the Portal and how
+        type: branch
+        condition: passesIntentFloor(comp.invokedBy.caller, comp.id) is false
+        onFalseStep: 6
+      - stepNumber: 8
+        label: portalUndescribed
+        description: >-
+          Report INVOKED_BY_UNDESCRIBED (warning; draft context when ctx.isComponentDraft(comp.id))
+          on comp.id, naming the Portal and the invokedBy kind
+        type: local
     symbol: check
     exportedVia: invokedByDescriptionRule
   - name: unusedDetection
@@ -581,62 +601,72 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Collect the base seeds from ctx.components: every Portal and every Observer, each seeding
-          all its contract methods
+          Collect the base roots: every Observer, seeding all its contract methods; each lifecycle
+          entrypoint of ctx.subsystems, seeding its one method; every method of each interface in
+          ctx.interfaces that declares `implements` (an imported extension point the producer
+          calls); and every MessageBus subscribe verb of a Portal whose topic the tree emits (an
+          emits declaration or a MessageBus publish endpoint): the emitted topic reaches it, as an
+          Observer's subscription is reached. A subscribe verb whose topic nothing in the tree emits
+          is not a root: an entry declared for its outside publisher reaches it, and
+          UNSOURCED_SUBSCRIPTION already reports the missing source. A Portal and a published
+          component are no longer roots of their own
         type: local
       - stepNumber: 2
         description: >-
-          Add the seeds from ctx.subsystems: the component behind each publicInterfaces entry that
-          names one, seeding all its contract methods, and each lifecycle entrypoint, seeding its
-          one method
-        type: local
-      - stepNumber: 3
-        description: >-
-          Phase 1, the internal walk: baseWalk = walk(ctx, seeds) with the default options, the
-          baseline an invokedBy declaration is judged redundant against
+          Phase 1, the internal walk: baseWalk = walk(ctx, base roots) with the default options, the
+          baseline a runtime declaration is judged redundant against
         type: call
         targetComponent: narrative_graph_projector
         targetMethod: walk
-      - stepNumber: 4
+      - stepNumber: 3
         label: declarations
-        description: Collect every invokedBy declaration's entrypoint seed
+        description: Collect the declared roots
         type: loop
         loopKind: forEach
         over: >-
-          each method m that declares invokedBy, on each interface intf of ctx.interfaces whose
-          component resolves in ctx.componentMap (a declaration on a dangling component is the
-          hierarchy family's finding)
-        endStep: 8
+          each contract method m of each interface intf of ctx.interfaces whose component comp
+          resolves in ctx.componentMap (a declaration on a dangling component is the hierarchy
+          family's finding)
+        endStep: 9
+      - stepNumber: 4
+        description: >-
+          A Portal verb with an entry is a root: comp.entryFor(m.invokedBy) has kind entry, whatever
+          its scope (a network-scoped entry counts as declared here; the family run proves it)
+        type: branch
+        condition: comp is a Portal and comp.entryFor(m.invokedBy) has kind entry
+        onFalseStep: 6
       - stepNumber: 5
-        description: 'Add the seed {compId: intf.component, methodName: m.name} to invokedBySeeds'
-        type: local
+        description: >-
+          Add the seed {compId: comp.id, methodName: m.name} to the declared roots and go on with
+          the next method
+        type: jump
+        toStep: 3
       - stepNumber: 6
-        description: An out-of-scope declaration still seeds the walk but is not judged
+        description: Only a runtime declaration remains to collect
         type: branch
-        condition: ctx.isSpecInScope(intf.id)
-        onFalseStep: 4
+        condition: m.invokedBy has kind runtime (or a retired kind read as runtime)
+        onFalseStep: 3
       - stepNumber: 7
-        description: A method the internal walk already reaches needs no declared entrypoint
-        type: branch
-        condition: baseWalk.reachesMethod(intf.component, m.name)
-        onFalseStep: 4
+        description: >-
+          Add the seed {compId: comp.id, methodName: m.name} to the declared roots; an out-of-scope
+          declaration still seeds the walk but is not judged
+        type: local
       - stepNumber: 8
+        description: A runtime declaration in scope that the internal walk already reaches is stale
+        type: branch
+        condition: ctx.isSpecInScope(intf.id) and baseWalk.reachesMethod(comp.id, m.name)
+        onFalseStep: 3
+      - stepNumber: 9
         label: declarationsEnd
         description: >-
-          Report INVOKED_BY_REDUNDANT (warning; draft context when
-          ctx.isComponentDraft(intf.component) or intf.status is draft or design) on intf.id, sited
-          at the method it names so an allow covers exactly that declaration: the declaration is
-          stale
+          Report INVOKED_BY_REDUNDANT (warning; draft context when ctx.isComponentDraft(comp.id) or
+          intf.status is draft or design) on intf.id, sited at the method: the runtime declaration
+          is stale. An entry is never reported here, because it also states the verb's scope
         type: local
-      - stepNumber: 9
-        description: Without invokedBy seeds the full reach is baseWalk itself
-        type: branch
-        condition: invokedBySeeds is non-empty
-        onFalseStep: 11
       - stepNumber: 10
         description: >-
-          Phase 2, the full walk: reach = walk(ctx, seeds followed by invokedBySeeds) with the
-          default options, so a declared external caller's narrative propagates reachability
+          Phase 2, the full walk: reach = walk(ctx, base roots followed by the declared roots) with
+          the default options, so an entered verb's narrative propagates reachability
         type: call
         targetComponent: narrative_graph_projector
         targetMethod: walk
@@ -654,8 +684,10 @@ methods:
         onFalseStep: 15
       - stepNumber: 13
         description: >-
-          Report UNUSED_COMPONENT (warning; draft context from ctx.isComponentDraft(comp.id), which
-          a draft or design subsystem makes true as well) on comp.id
+          Report UNUSED_COMPONENT (warning; draft context from ctx.isComponentDraft(comp.id)) on
+          comp.id. For a Portal the message names the two remedies: model the caller, or declare its
+          entry (invokedBy kind entry on the Portal or the verb, with its scope on a network
+          transport)
         type: local
       - stepNumber: 14
         description: Continue with the next component
@@ -677,9 +709,8 @@ methods:
         label: componentsEnd
         description: >-
           Report UNUSED_METHOD (warning; draft context when ctx.isComponentDraft(comp.id) or
-          intf.status is draft or design) on intf.id, the interface declaring the method, as for the
-          invokedBy findings, naming the method and the component, and sited at that method so an
-          allow covers exactly the one it names and never its neighbours on the same interface
+          intf.status is draft or design) on intf.id, sited at the method so an allow covers exactly
+          the one it names; for a Portal verb the message names the same two remedies
         type: local
     symbol: check
     exportedVia: reachabilityRule
@@ -715,18 +746,23 @@ methods:
           only by its own methods stays unmarked, the way a function that only calls itself is
         type: local
       - stepNumber: 5
+        description: >-
+          Mark the exported types: record the type every L1 and L0 export entry names as its typeDef
+          (its consumers are outside this tree, so an exported type is used by definition)
+        type: local
+      - stepNumber: 6
         label: types
         description: Judge each type against the recorded references
         type: loop
         loopKind: forEach
         over: the types t of ctx.types within scope (ctx.isSpecInScope(t.id))
-        endStep: 7
-      - stepNumber: 6
+        endStep: 8
+      - stepNumber: 7
         description: A type no field, no signature, no signatureFrom and no other type's method names is unused
         type: branch
         condition: t.id was never recorded as referenced
-        onFalseStep: 5
-      - stepNumber: 7
+        onFalseStep: 6
+      - stepNumber: 8
         label: typesEnd
         description: >-
           Report UNUSED_TYPE (warning; draft context when the subsystem in ctx.subsystems whose id
@@ -884,49 +920,93 @@ methods:
         type: local
     symbol: check
     exportedVia: invariantReferencesRule
-  - name: portalMounts
-    sourcePath: src/core/rules/wiring/portal-mounts.ts
+  - name: entryDeclarations
+    sourcePath: src/core/rules/wiring/entry-declarations.ts
     narrative:
       - stepNumber: 1
-        label: each-mount
+        label: declarations
         description: >-
-          For each Portal declaring mounts, and each mount it declares, look up the component the
-          mount names
-        type: local
+          For each invokedBy declaration in scope: each Portal component's own, and each contract
+          method's on an interface whose component resolves
+        type: loop
+        loopKind: forEach
+        over: >-
+          every invokedBy declaration decl in scope, with the component comp it belongs to and the
+          spec it is written on
+        endStep: 8
       - stepNumber: 2
-        description: Decide whether the mount names something that can serve routes
+        description: A retired kind is read as entry on a Portal, runtime elsewhere
         type: branch
-        condition: the named component exists and is a Portal
-        onTrueStep: 4
-        onFalseStep: 3
+        condition: decl.kind is external or sibling-subsystem
+        onFalseStep: 4
       - stepNumber: 3
-        label: bad-target
         description: >-
-          Report the mount, naming what it points at. A listener mounting a component that does not
-          exist, or one that is not a Portal, routes requests to nothing
+          Report INVOKED_BY_RETIRED_KIND (warning) on the spec, naming the kind it is read as, which
+          doctor --fix writes
         type: local
       - stepNumber: 4
-        label: coverage
+        description: An entry belongs to a Portal verb
+        type: branch
+        condition: decl is (read as) kind entry and comp is not a Portal
+        onFalseStep: 6
+      - stepNumber: 5
         description: >-
-          Report each HTTP endpoint of the mounted portal whose path lies under none of this mount's
-          prefixes. The contract promises that route, and the listener sends it nowhere near the
-          portal that owns it; a path lies under a prefix when it equals it or continues it past a
-          slash, which is what lets `/` cover the root and nothing else
+          Report ENTRY_ON_NON_PORTAL (error) on the spec, sited at the method: a runtime hook
+          declares kind runtime, and an outside caller of a non-Portal is a design that needs a
+          Portal
+        type: jump
+        toStep: 1
+      - stepNumber: 6
+        description: A scope describes network callers only
+        type: branch
+        condition: >-
+          decl.scope is present and (decl is a runtime declaration or comp.transport.kind() is not
+          network)
+        onFalseStep: 1
+      - stepNumber: 7
+        description: >-
+          Report ENTRY_SCOPE_NOT_NETWORK (warning) on the spec, sited at the method, naming the
+          transport
+        type: local
+      - stepNumber: 8
+        label: declarationsEnd
+        description: Continue with the next declaration
+        type: local
+    symbol: check
+    exportedVia: entryDeclarationsRule
+  - name: networkBoundaries
+    sourcePath: src/core/rules/wiring/network-boundaries.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Nothing to judge for a project that declares no network: the networks around a member are
+          the family run's
+        type: branch
+        condition: the bound project's configuration declares a network
+        onFalseStep: 5
+      - stepNumber: 2
+        description: >-
+          Project the bound project's own reach model, with no family and only its own network
+          declaration
+        type: call
+        targetComponent: reach_model_projector
+        targetMethod: project
+      - stepNumber: 3
+        description: Judge it
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: judge
+      - stepNumber: 4
+        description: >-
+          Report each finding through ctx.addIssue on the spec it names, in draft context when that
+          spec's component is draft
         type: local
       - stepNumber: 5
-        label: reachability
-        description: >-
-          Once every listener's mounts are known, report each Portal that declares HTTP endpoints,
-          declares no mounts field of its own, and is mounted by no listener. A listener is marked
-          by declaring the field, even empty, because it is the one kind of portal the host starts
-          directly rather than something else serving it
-        type: local
-      - stepNumber: 6
-        description: 'Done: every mount checked and every HTTP portal accounted for'
+        description: Done
         type: return
-        outcome: judged
+        outcome: network findings reported
     symbol: check
-    exportedVia: portalMountsRule
+    exportedVia: networkBoundariesRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-05T06:50:08.239Z'
+updatedAt: '2026-10-06T18:32:45.154Z'

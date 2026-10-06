@@ -50,10 +50,13 @@ methods:
         type: local
       - stepNumber: 8
         description: >-
-          Copy the backing Portal's authentication requirement and basePath onto each surface
-          contract entry: set the entry's `auth` to the portal's projected PortalAuth (its security
-          scheme, or none) and the entry's `basePath` to the portal's basePath, so the codec can
-          emit per-portal OpenAPI servers and securitySchemes.
+          Copy the backing Portal's authentication requirement, basePath, transport and abi onto
+          each surface contract entry: set the entry's `auth` to the portal's projected PortalAuth
+          (its security scheme, or none), its `basePath` to the portal's basePath, so the codec can
+          emit per-portal OpenAPI servers and securitySchemes, its `transport` and `abi` so a
+          consumer can tell a library from a network surface, its `type` to the transport's derived
+          export kind, and its `role` to the export entry's role. Stamp the snapshot with the
+          producer's targetLanguage
         type: local
       - stepNumber: 9
         description: >-
@@ -89,4 +92,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-10-06T10:13:35.431Z'
+updatedAt: '2026-10-06T13:01:55.363Z'

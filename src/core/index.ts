@@ -115,6 +115,9 @@ export {
   // spec_tree_portal typeSpellingFacts: what the scan's type canonicalisation
   // recorded — a passthrough read of the spec repository (spec_loader).
   typeSpellingFacts,
+  // spec_tree_portal retiredReachFacts: the retired reachability forms the
+  // scan read compatibly — a passthrough read of the spec repository.
+  retiredReachFacts,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
 export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
@@ -397,6 +400,12 @@ export type { SignatureTextRepair } from './signature-repair.js';
 // the number positions whose name says so and the positions only an author can
 // settle listed — a 1:1 forward to the core orchestrator.
 export { repairTypeSpellings } from './type-spelling-repair.js';
+// spec_maintenance_portal migrateReachability: the doctor's migration onto the
+// reachability model (transports, listener mounts into entries and routers,
+// retired invokedBy kinds, authored export types, retired allows) — a 1:1
+// forward to reachability_migration.migrate.
+export { migrate as migrateReachability } from './reachability-migration.js';
+export type { ReachabilityMigrationPlan, ReachRewrite } from './reachability-migration.js';
 
 // The approval (approval_portal captureApprovedSpecs … approvalVerdict) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.

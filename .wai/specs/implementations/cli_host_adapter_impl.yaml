@@ -285,6 +285,13 @@ methods:
         type: call
         targetComponent: local_admin_portal
         targetMethod: explain
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward to the local admin portal
+        type: call
+        targetComponent: local_admin_portal
+        targetMethod: migrateReachability
 status: complete
 createdAt: '2026-07-04T12:53:10.615Z'
-updatedAt: '2026-10-05T17:30:41.665Z'
+updatedAt: '2026-10-06T19:54:52.537Z'

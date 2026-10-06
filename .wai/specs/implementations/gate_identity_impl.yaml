@@ -28,16 +28,18 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          Take the project type, the rule config WITHOUT its code-conformance tuning, and the
-          composition block from the gate config, each null when absent. The code-conformance tuning
-          is rules.conformance together with every rules.sddRuleSeverity override of a code that a
-          code-judging rule declares: both only tune findings the approval does not certify, so
-          changing them never stales an approval, and both enter the analyzer's digest instead. What
-          stays decides what this project's approval means: a project type switch changes the
-          doctrine family, the rule config carries the design severity overrides, complexity caps
-          and design depth, and composition (requirePolicies, requireApprovedMembers) is what the
-          project requires of the projects it contains — a changed requirement stales the requiring
-          project's lock.
+          Take the project type, the rule config WITHOUT its code-conformance tuning, the
+          composition block and the network declaration from the gate config, each null when absent.
+          The code-conformance tuning is rules.conformance together with every rules.sddRuleSeverity
+          override of a code that a code-judging rule declares: both only tune findings the approval
+          does not certify, so changing them never stales an approval, and both enter the analyzer's
+          digest instead. What stays decides what this project's approval means. A project type
+          switch changes the doctrine family. The rule config carries the design severity overrides,
+          complexity caps and design depth. Composition (requirePolicies, requireApprovedMembers) is
+          what the project requires of the projects it contains: a changed requirement stales the
+          requiring project's lock. The network declaration changes the network verdicts of the
+          family run, so declaring, removing or redescribing one stales the declaring project's
+          lock.
         type: local
       - stepNumber: 3
         description: >-
@@ -78,9 +80,12 @@ methods:
       - stepNumber: 9
         description: >-
           Digest with sha256, in hex, the canonical form of {content: the own content identity's
-          digest, doctrine: the projected design doctrine with the composition block, inputs: the
-          sorted own inputs, members: the ordered subjects}: object keys sorted recursively and the
-          volatile createdAt and updatedAt stripped, serialized as JSON.
+          digest, doctrine: the projected design doctrine with the composition block, and the
+          network declaration when the project declares one, inputs: the sorted own inputs, members:
+          the ordered subjects}: object keys sorted recursively and the volatile createdAt and
+          updatedAt stripped, serialized as JSON. The network key is LEFT OUT when the project
+          declares no network, never written as null, so every lock taken before networks existed
+          keeps its identity.
         type: local
       - stepNumber: 10
         description: >-
@@ -117,4 +122,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-15T17:55:53.605Z'
-updatedAt: '2026-09-30T06:03:01.212Z'
+updatedAt: '2026-10-06T13:05:38.245Z'

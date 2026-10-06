@@ -15,9 +15,6 @@ methods:
       - name: request
         type: MigrationRequest
         description: The verb and its arguments
-    endpoint:
-      transport: Custom
-      address: in-process migration.plan
   - name: apply
     description: Apply a confirmed plan all or nothing (routed to the family migration workflow).
     signature: 'apply(plan: MigrationPlan): FamilyMigrationReport'
@@ -26,9 +23,6 @@ methods:
       - name: plan
         type: MigrationPlan
         description: The plan as plan() answered it
-    endpoint:
-      transport: Custom
-      address: in-process migration.apply
   - name: discard
     description: Drop a plan without applying it (routed to the family migration workflow).
     signature: 'discard(plan: MigrationPlan): void'
@@ -37,9 +31,6 @@ methods:
       - name: plan
         type: MigrationPlan
         description: The plan
-    endpoint:
-      transport: Custom
-      address: in-process migration.discard
   - name: recover
     description: >-
       Report or resolve the unfinished transactions under a project root — doctor's entry (routed to
@@ -53,9 +44,6 @@ methods:
       - name: fix
         type: bool
         description: Resolve, or only report
-    endpoint:
-      transport: Custom
-      address: in-process migration.recover
   - name: matchPositions
     description: >-
       The positional match (routed to position_reader.match): for each unresolved reference, the
@@ -79,9 +67,6 @@ methods:
       - name: types
         type: list<TypeSpec>
         description: Every type the family top's scan loaded
-    endpoint:
-      transport: Custom
-      address: in-process migration.matchPositions
   - name: rehearse
     description: >-
       Route to the family transaction: open a rehearsal over a scope. Published for the hosted
@@ -136,4 +121,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:36:31.021Z'
-updatedAt: '2026-10-04T10:19:05.973Z'
+updatedAt: '2026-10-06T18:55:12.466Z'

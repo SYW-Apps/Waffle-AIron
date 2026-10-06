@@ -1,4 +1,4 @@
-import { isDraftSubsystem } from '../../../models/index.js';
+import { isDraftSubsystem, methodCasingFor } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 const casingPatterns: Record<string, RegExp> = {
@@ -63,7 +63,7 @@ export const namingRule: SddRule = {
   name: 'naming-conventions',
   judges: 'design',
   description:
-    'Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns.',
+    "Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's effective targetLanguage: the configured methods casing when set, else the language's own convention, so a Rust tree is snake_case without configuring anything, and the authoring and rename tools accept exactly what this rule accepts.",
   codes: [
     { code: 'NAMING_CONVENTION_VIOLATION', defaultSeverity: 'warning', summary: 'Item name or ID does not match the configured casing pattern or regex' },
     { code: 'STEREOTYPE_NAMING_VIOLATION', defaultSeverity: 'warning', summary: 'Component name or ID does not match stereotype suffix/prefix/regex rules' },
@@ -160,10 +160,12 @@ export const namingRule: SddRule = {
         checkNamedValue(ctx, intf.name, namingConfig.interfaces, `Interface Name "${intf.name}" does not match naming convention "${namingConfig.interfaces}".`, intf.id, isDraft);
       }
 
+      // A method name follows the configured casing, else its tree's target
+      // language's convention (methodCasingFor) — the authoring and rename
+      // tools ask the same question.
+      const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(comp?.subsystem));
       for (const m of intf.methods) {
-        if (namingConfig?.methods) {
-          checkNamedValue(ctx, m.name, namingConfig.methods, `Interface method "${m.name}" on "${intf.id}" does not match naming convention "${namingConfig.methods}".`, intf.id, isDraft);
-        }
+        checkNamedValue(ctx, m.name, methodCasing, `Interface method "${m.name}" on "${intf.id}" does not match naming convention "${methodCasing}"${namingConfig?.methods ? '' : ' (its target language\'s convention)'}.`, intf.id, isDraft);
 
         // Method parameter variable naming
         if (namingConfig?.variables) {
@@ -181,10 +183,9 @@ export const namingRule: SddRule = {
       const namingConfig = ctx.namingConfigFor(comp?.subsystem);
       const isDraft = ctx.isImplementationDraft(impl);
 
-      if (namingConfig?.methods) {
-        for (const m of impl.methods) {
-          checkNamedValue(ctx, m.name, namingConfig.methods, `Implementation method "${m.name}" on "${impl.id}" does not match naming convention "${namingConfig.methods}".`, impl.id, isDraft);
-        }
+      const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(comp?.subsystem));
+      for (const m of impl.methods) {
+        checkNamedValue(ctx, m.name, methodCasing, `Implementation method "${m.name}" on "${impl.id}" does not match naming convention "${methodCasing}".`, impl.id, isDraft);
       }
     }
 
@@ -217,10 +218,9 @@ export const namingRule: SddRule = {
         }
       }
 
-      if (namingConfig?.methods) {
-        for (const m of t.methods) {
-          checkNamedValue(ctx, m.name, namingConfig.methods, `Method "${m.name}" on type "${t.id}" does not match naming convention "${namingConfig.methods}".`, t.id);
-        }
+      const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(t.subsystem));
+      for (const m of t.methods) {
+        checkNamedValue(ctx, m.name, methodCasing, `Method "${m.name}" on type "${t.id}" does not match naming convention "${methodCasing}".`, t.id);
       }
     }
   },

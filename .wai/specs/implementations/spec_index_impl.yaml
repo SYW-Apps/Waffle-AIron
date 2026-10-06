@@ -562,6 +562,19 @@ methods:
         description: Answer the type-spelling facts the scan kept on the index
         type: return
         outcome: TypeSpellingFacts
+  - name: retiredReachFacts
+    narrative:
+      - stepNumber: 1
+        description: Serve the workspace scan, rescanning when the tree's file signature no longer holds
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 2
+        description: >-
+          Answer the retired reachability forms the scan recorded on the index while it read them
+          compatibly
+        type: return
+        outcome: list<RetiredReachFact>
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-03T22:41:40.712Z'
+updatedAt: '2026-10-06T13:06:54.820Z'

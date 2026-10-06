@@ -127,7 +127,9 @@ methods:
         description: The method name as it stands
       - name: newName
         type: string
-        description: Its new name, a camel-case identifier
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage)
       - name: pinSymbol
         type: bool
         description: >-
@@ -328,6 +330,13 @@ methods:
   - name: renameType
     description: 'Forward to core_orchestrator.renameType: rename a type and every reference to it'
     signatureFrom: core_orchestrator.renameType
+  - name: migrateReachability
+    description: >-
+      Forward to reachability_migration.migrate: plan, and with apply write, the bound project's
+      migration onto the reachability model (transports, listener mounts into Portal-level entries
+      and implementation routers, retired invokedBy kinds, authored export types, in-process Custom
+      endpoints, retired lint allows). Without apply nothing is written.
+    signatureFrom: reachability_migration.migrate
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-05T23:34:33.516Z'
+updatedAt: '2026-10-06T13:07:39.340Z'

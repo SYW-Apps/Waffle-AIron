@@ -1,4 +1,5 @@
 import { SddRule } from '../types.js';
+import { familyCodes } from '../network-arbiter.js';
 
 /**
  * Audits per-spec lint suppressions (lint.allow — wairon's #[allow(...)]).
@@ -29,14 +30,17 @@ export const lintAllowsRule: SddRule = {
   name: 'lint-allows',
   judges: 'design',
   description:
-    'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings and notices; errors always surface — so an allow naming a code that is an error on its spec (it fired there as one, or its resolved severity is error) covers nothing, and the finding says plainly that an error cannot be allowed rather than that the code never fired.',
+    'Per-spec lint suppressions (lint.allow) must name real issue codes and actually suppress a finding — unknown codes and stale allows are flagged. An allow covers exactly the occurrence it names: a finding that reports a site is silenced only by an allow whose `at` is that site, a finding that reports none only by an allow that names none, and an aggregating finding only by an allow whose `covers` lists every unit it reports — a unit nobody listed is named back as new instead of inheriting a decision taken about its neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire. Allows silence warnings and notices; errors always surface — so an allow naming a code that is an error on its spec (it fired there as one, or its resolved severity is error) covers nothing, and the finding says plainly that an error cannot be allowed rather than that the code never fired. A code the family run judges over every member (network_arbiter.familyCodes, ENTRY_UNPROVEN among them) is a known code on any spec, and an allow of one this gate saw no finding of is the family run\'s to judge stale, not this gate\'s.',
   codes: [
     { code: 'UNKNOWN_LINT_ALLOW_CODE', defaultSeverity: 'warning', summary: 'lint.allow names an issue code no registered rule emits' },
     { code: 'UNUSED_LINT_ALLOW', defaultSeverity: 'warning', summary: 'lint.allow entry covers nothing this run — the code never fired, it fired at sites this allow does not name, or it is an error, which no allow can cover' },
   ],
   check(ctx) {
+    // The codes only the family run judges over every member: known here, and
+    // judged stale only there (family_validator.checkReach).
+    const family = new Set(familyCodes());
     for (const a of ctx.lintAllows) {
-      if (!ctx.knownIssueCodes.has(a.code)) {
+      if (!ctx.knownIssueCodes.has(a.code) && !family.has(a.code)) {
         ctx.addIssue(
           'warning',
           'UNKNOWN_LINT_ALLOW_CODE',
@@ -62,6 +66,8 @@ export const lintAllowsRule: SddRule = {
         continue;
       }
       if (a.used) continue;
+      // A family code this gate saw no finding of may still fire in the family run.
+      if (family.has(a.code)) continue;
 
       let why: string;
       if (a.at && reported.unsited && reported.sites.length === 0) {

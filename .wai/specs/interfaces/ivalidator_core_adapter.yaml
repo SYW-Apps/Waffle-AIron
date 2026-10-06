@@ -247,6 +247,15 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: retiredReachFacts
+    description: >-
+      Forward to the core portal: what the current scan met in the forms the reachability model
+      retired, with what each stored spec held there.
+    signature: 'retiredReachFacts(): list<RetiredReachFact>'
+    returns: list<RetiredReachFact>
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:09:01.844Z'
+updatedAt: '2026-10-06T18:01:26.495Z'

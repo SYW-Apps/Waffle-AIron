@@ -1,4 +1,4 @@
-// The design export's JSON Schema (schemas/design-export-1.json), generated from
+// The design export's JSON Schema (schemas/design-export-<major>.json), generated from
 // the zod schema in src/models/design-export.ts with the zod-to-json-schema
 // devDependency. Run AFTER `tsup` (it reads DesignExportSchema from the built
 // library entry, dist/index.js); `npm run build` does. The drift test

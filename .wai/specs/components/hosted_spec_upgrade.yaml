@@ -1,0 +1,21 @@
+id: hosted_spec_upgrade
+name: Hosted Spec Upgrade
+description: >-
+  The spec-tree rollout migrations of a hosted instance's projects, behind `wairon host doctor`:
+  today the migration onto the reachability model, planned at every hosted project's root and
+  written only with --fix. It runs operator-invoked, never at bind: the migration rewrites the
+  design itself, so it moves each project past its approval and owes a re-lock, and a bind happens
+  under every credential including read-only ones, whose write reach would refuse part of the
+  rewrite and leave a project half-migrated. The retired forms read compatibly until then, so
+  nothing breaks while a project waits. Each applied project is audited as migration.reachability.
+  It takes no credential: its authority is the operator's access to the data directory.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - project_repository
+  - audit_repository
+  - host_core_adapter
+status: complete
+createdAt: '2026-10-06T19:54:19.881Z'
+updatedAt: '2026-10-06T19:54:20.527Z'

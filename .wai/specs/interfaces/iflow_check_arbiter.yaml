@@ -1,0 +1,27 @@
+id: iflow_check_arbiter
+name: Flow Check Arbiter Interface
+description: Observed live flows judged against the allowed matrix.
+component: flow_check_arbiter
+methods:
+  - name: check
+    description: >-
+      Compare observed flows with the matrix, matching parties through the bindings: unexpected
+      flows (observed, not allowed), unexercised flows (allowed, not observed) and unknown verbs
+      (observed at L7 on an allowed pair, matching no verb). Pure.
+    signature: >-
+      check(flows: list<NetworkFlow>, observed: list<ObservedFlow>, bindings: NetworkBindings?):
+      FlowCheckReport
+    returns: FlowCheckReport
+    params:
+      - name: flows
+        type: list<NetworkFlow>
+      - name: observed
+        type: list<ObservedFlow>
+      - name: bindings
+        type: NetworkBindings?
+        description: The bindings the observed names follow; none when they are design names already
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-06T13:10:59.911Z'
+updatedAt: '2026-10-06T13:11:00.516Z'

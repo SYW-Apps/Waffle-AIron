@@ -1116,17 +1116,13 @@ methods:
         description: >-
           Rewrite every reference to a renamed id across the bound tree with the provisioning
           rewriter, the moved specs' own files included: a component's dependsOn, owns and dispatch
-          components, and the portal each of its listener mounts names; a subsystem's lifecycle
-          components and its published interfaces' component and interface; the system's published
-          interfaces' component and interface; narrative call, dispatch and register targets, and a
-          step's auth.from component source; an interface's component; an implementation's contract;
-          and an entity's componentClass. Before an L1 or L0 export entry's component or interface
-          is respelled, an entry that states no `as` — whose public name was derived from the old id
-          — gets `as: <that public name>` written, so the published name and every consumer's pin
-          stay as they were; each such public name is recorded as kept. Rename traces (previousIds,
-          previousNames) are never rewritten: they name keys that no longer exist. Record the other
-          specs it rewrote (the moved specs, matched by their old ids, are not among them).
-          References from chained subprojects are not rewritten
+          components; a subsystem's lifecycle components and its published interfaces' component and
+          interface; the system's published interfaces' component and interface; narrative call,
+          dispatch and register targets, and a step's auth.from component source; an interface's
+          component; an implementation's contract; and an entity's componentClass. Before an L1 or
+          L0 export entry's component or interface is respelled, an entry that states no `as` (whose
+          public name was derived from the old id) gets `as: <that public name>` written, so the
+          published name and every consumer's pin stay
         type: local
       - stepNumber: 17
         description: >-
@@ -1195,17 +1191,23 @@ methods:
           chained-component: the component lives in another project; rename its method from that
           project's own root, naming its folder and the session to open there
       - stepNumber: 6
-        description: 'Guard: the new name must be a camel-case identifier'
+        description: >-
+          Guard: the new name must be an identifier in the method casing of the tree's language:
+          naming_rule_config.methodCasingFor(the subsystem's effective targetLanguage), the casing
+          the naming-conventions rule and the define tools judge by, so define and rename accept the
+          same names (snake_case in a Rust tree, camelCase in a TypeScript one)
         type: branch
         condition: >-
-          newName is outside the identifier grammar: not a camel-case identifier, or carrying a
+          newName is outside the identifier grammar: not an identifier in that casing, or carrying a
           separator
         onFalseStep: 8
       - stepNumber: 7
         label: invalid-name
         description: Refuse a new name outside the grammar
         type: throw
-        error: 'invalid-name: the new name must be a camel-case identifier'
+        error: >-
+          invalid-name: the new name must be an identifier in the tree's method casing (naming the
+          casing)
       - stepNumber: 8
         description: >-
           Load every interface spec, for the component's own contracts and the names they already
@@ -2604,4 +2606,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:09:37.684Z'
+updatedAt: '2026-10-06T13:05:21.193Z'

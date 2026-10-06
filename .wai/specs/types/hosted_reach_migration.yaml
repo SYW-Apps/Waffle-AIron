@@ -1,0 +1,24 @@
+kind: value-object
+id: hosted_reach_migration
+name: HostedReachMigration
+description: >-
+  One hosted project's reachability migration as `wairon host doctor` planned or applied it: the
+  record it ran at, its plan, or why it could not run there.
+subsystem: sdd_host
+fields:
+  - name: projectId
+    type: string
+    description: The hosted project record the migration ran at
+    optional: false
+  - name: plan
+    type: ReachabilityMigrationPlan
+    description: The plan (applied with --fix); absent when it failed
+    optional: true
+  - name: failure
+    type: string
+    description: Why the migration could not be planned or written at this project; the next project continues
+    optional: true
+methods: []
+sourcePath: src/server/spec-upgrade.ts
+createdAt: '2026-10-06T19:54:13.242Z'
+updatedAt: '2026-10-06T19:54:13.996Z'

@@ -235,6 +235,9 @@ function exportEntry(e: ResolvedExport, keys: KeyTable): DesignExportEntry {
     ...(e.audience !== undefined ? { audience: e.audience } : {}),
     ...(e.version !== undefined ? { version: e.version } : {}),
     ...(e.stability !== undefined ? { stability: e.stability } : {}),
+    // The derived export kind (transport.exportKind) and the role, call by default.
+    ...(e.kind === 'component' && e.type !== undefined ? { type: e.type } : {}),
+    ...(e.role !== undefined && e.role !== 'call' ? { role: e.role } : {}),
   };
 }
 
@@ -348,7 +351,9 @@ function componentSection(c: ComponentSpec, keys: KeyTable): DesignComponent {
     ...(c.variant !== undefined ? { variant: c.variant } : {}),
     ...(c.dependencyClass !== undefined ? { dependencyClass: c.dependencyClass } : {}),
     ...(c.durability !== undefined ? { durability: c.durability } : {}),
-    ...(c.portalType !== undefined ? { portalType: c.portalType } : {}),
+    ...(c.transport !== undefined ? { transport: c.transport } : {}),
+    ...(c.abi !== undefined ? { abi: c.abi } : {}),
+    ...(c.invokedBy !== undefined ? { invokedBy: { ...c.invokedBy } } : {}),
     owns: c.owns.map((o) => keys.componentRef(o)),
     dependsOn: c.dependsOn.map((d) => keys.componentRef(d)),
     emits: (c.emits ?? []).map((e) => ({ ...e })),
@@ -356,7 +361,6 @@ function componentSection(c: ComponentSpec, keys: KeyTable): DesignComponent {
     ...(c.auth !== undefined ? { auth: c.auth } : {}),
     ...(c.basePath !== undefined ? { basePath: c.basePath } : {}),
     dispatch: (c.dispatch ?? []).map((d) => ({ ...d, component: keys.componentRef(d.component) })),
-    mounts: (c.mounts ?? []).map((m) => ({ ...m, portal: keys.componentRef(m.portal) })),
     patterns: (c.patterns ?? []).map((p) => ({ ...p })),
     externalLinks: (c.externalLinks ?? []).map((l) => ({ ...l })),
     formerly: [...(c.previousIds ?? [])],

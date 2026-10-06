@@ -5,6 +5,7 @@ export const CANVAS_SKELETON = `<header id="hdr">
     <button data-vm="components" class="active">Components</button>
     <button data-vm="types">Types</button>
     <button data-vm="databases">Databases</button>
+    <button data-vm="network" style="display:none" title="The derived network view: declared networks, gateways, outside and the allowed flows">Network</button>
   </div>
   <div class="dropdown" id="modeDd" style="display:none">
     <button class="tbtn" id="modeBtn" title="Switch between the component architecture, the type ERD, or the database schemas">Components ▾</button>

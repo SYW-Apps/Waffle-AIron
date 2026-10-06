@@ -9,7 +9,10 @@ owns: []
 dependsOn:
   - host_server
   - project_policy_orchestrator
-portalType: HTTP_API
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: Clients served through the listener admin_portal under "/projects", "/instance"
 status: complete
 createdAt: '2026-07-08T21:59:27.509Z'
-updatedAt: '2026-07-09T20:53:26.905Z'
+updatedAt: '2026-10-06T18:55:05.660Z'

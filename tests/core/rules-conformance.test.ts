@@ -101,7 +101,7 @@ const INTENT = (m: string) =>
   `  - name: ${m}\n    detail: intent\n    intent: Performs ${m} against held state and returns nothing; failures surface as thrown errors.`;
 
 describe('structural conformance — file level', () => {
-  it('flags a sourcePath that resolves to no file as an error once realization has begun', () => {
+  it('reports a named file that is not on disk as PLANNED even once realization has begun — never an error', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
@@ -112,8 +112,8 @@ describe('structural conformance — file level', () => {
     try {
       const found = conformanceIssues(validateProject());
       expect(found).toHaveLength(1);
-      expect(found[0].code).toBe('MISSING_SOURCE_FILE');
-      expect(found[0].severity).toBe('error');
+      expect(found[0].code).toBe('SOURCE_FILE_PLANNED');
+      expect(found[0].severity).toBe('notice');
       expect(found[0].specId).toBe('impl-orch-a');
     } finally { proj.cleanup(); }
   });
@@ -223,8 +223,8 @@ describe('structural conformance — file level', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
-    proj.impl('orch-a', `status: draft\nsourcePath: src/gone.ts\nmethods:\n${INTENT_AT('runFlow', 'src/run-flow.ts')}`);
-    proj.source('src/run-flow.ts', 'export function runFlow(): void {}\n');
+    proj.impl('orch-a', `status: draft\nsourcePath: src/orch.ts\nmethods:\n${INTENT('runFlow')}`);
+    proj.source('src/orch.ts', 'export function stopFlow(): void {}\n');
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
@@ -414,7 +414,7 @@ describe('structural conformance — each method against its own source file', (
     } finally { proj.cleanup(); }
   });
 
-  it('reports a missing method file once, naming the file and every method using it', () => {
+  it('reports a method file not written yet once, as PLANNED, naming the file and every method using it', () => {
     const proj = createTempProject();
     proj.component('cli-orch', 'Orchestrator');
     proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'unlockSpecs']);
@@ -423,15 +423,15 @@ describe('structural conformance — each method against its own source file', (
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
-      expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
-      expect(found[0].severity).toBe('error');
+      expect(found.map(i => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
+      expect(found[0].severity).toBe('notice');
       expect(found[0].specId).toBe('impl-cli-orch');
       expect(found[0].message).toContain('"src/commands/lock.ts"');
       expect(found[0].message).toContain('methods "lockSpecs", "unlockSpecs"');
     } finally { proj.cleanup(); }
   });
 
-  it('a missing implementation file blocks only the methods realized in it', () => {
+  it('a planned implementation file blocks only the methods realized in it', () => {
     const proj = createTempProject();
     proj.component('cli-orch', 'Orchestrator');
     proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
@@ -440,14 +440,14 @@ describe('structural conformance — each method against its own source file', (
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
-      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
+      expect(found.map(i => i.code).sort()).toEqual(['SOURCE_FILE_PLANNED', 'UNREALIZED_METHOD']);
       const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
       expect(unrealized.message).toContain('"lockSpecs"');
       expect(found.some(i => i.message.includes('"listTargets"'))).toBe(false);
     } finally { proj.cleanup(); }
   });
 
-  it('a missing method file blocks only that method — the implementation file is still checked', () => {
+  it('a planned method file blocks only that method — the implementation file is still checked', () => {
     const proj = createTempProject();
     proj.component('cli-orch', 'Orchestrator');
     proj.contract('cli-orch', ['listTargets', 'lockSpecs']);
@@ -456,7 +456,7 @@ describe('structural conformance — each method against its own source file', (
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
-      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_FILE', 'UNREALIZED_METHOD']);
+      expect(found.map(i => i.code).sort()).toEqual(['SOURCE_FILE_PLANNED', 'UNREALIZED_METHOD']);
       const unrealized = found.find(i => i.code === 'UNREALIZED_METHOD')!;
       expect(unrealized.message).toContain('"listTargets"');
       expect(unrealized.message).toContain('"src/cli.ts"');
@@ -491,7 +491,7 @@ describe('structural conformance — each method against its own source file', (
     proj.source('src/cli.ts', 'export function listTargets(): void {}\n');
     proj.activate();
     try {
-      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
     } finally { proj.cleanup(); }
   });
 
@@ -635,7 +635,7 @@ describe('UNREALIZED_FINDING — declared finding codes appear as string literal
     proj.activate();
     try {
       const res = validateProject();
-      expect(conformanceIssues(res).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(conformanceIssues(res).map(i => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
       expect(findingIssues(res)).toHaveLength(0);
     } finally { proj.cleanup(); }
   });

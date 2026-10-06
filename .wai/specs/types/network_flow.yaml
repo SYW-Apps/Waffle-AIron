@@ -1,0 +1,46 @@
+kind: value-object
+id: network_flow
+name: NetworkFlow
+description: >-
+  One allowed flow of the matrix: who reaches which verb, over which transport and binding, through
+  which networks and gateway, and on what evidence. Only network transports produce flows.
+subsystem: sdd_network
+fields:
+  - name: from
+    type: FlowParty
+    description: 'The caller: a modelled component, or a scope for unmodelled callers'
+    optional: false
+  - name: to
+    type: FlowParty
+    description: The called Portal verb
+    optional: false
+  - name: transport
+    type: Transport
+    description: The called Portal's transport
+    optional: false
+  - name: binding
+    type: string
+    description: 'The endpoint as one line: POST /orders, a gRPC method, a topic'
+    optional: true
+  - name: crosses
+    type: list<string>
+    description: The declared networks entered, outermost first
+    optional: false
+  - name: via
+    type: string
+    description: The gateway entered, when a network is crossed
+    optional: true
+  - name: evidence
+    type: list<string>
+    description: 'What allows it: each modelled call''s evidence, or the entry with its caller prose'
+    optional: false
+  - name: verbs
+    type: list<string>
+    description: >-
+      On an aggregated edge of the network view: each verb it carries, as portal.verb with its
+      binding
+    optional: true
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:30.619Z'
+updatedAt: '2026-10-06T19:24:48.854Z'

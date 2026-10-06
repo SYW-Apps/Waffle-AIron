@@ -24,6 +24,7 @@ dependsOn:
   - cli_mcp_adapter
   - user_config_store
   - cli_migration_adapter
+  - cli_network_adapter
 lint:
   allow:
     - code: GOD_COMPONENT
@@ -38,8 +39,8 @@ lint:
         behind a synthetic facade, would add a hop without separating any real responsibility.
     - code: EXCESSIVE_DEPENDENCIES
       reason: >-
-        Same deliberate shape as the GOD_COMPONENT allow: sixteen dependencies fanned out from the
-        one workflow layer cli_portal dispatches to, of which thirteen are thin command adapters and
+        Same deliberate shape as the GOD_COMPONENT allow: seventeen dependencies fanned out from the
+        one workflow layer cli_portal dispatches to, of which fourteen are thin command adapters and
         three are sdd_cli's own workflows and held state. The count tracks how many command families
         and subsystem hops the terminal exposes, not how much this component knows.
     - code: INCOHESIVE_METHODS
@@ -53,4 +54,4 @@ lint:
         responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-04T18:15:39.805Z'
+updatedAt: '2026-10-06T13:13:42.624Z'

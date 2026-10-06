@@ -7,7 +7,7 @@ owns: []
 dependsOn:
   - skills_orchestrator
   - skills_resource_orchestrator
-portalType: Custom
+transport: InProcess
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-10T12:21:26.138Z'
+updatedAt: '2026-10-06T18:55:07.748Z'

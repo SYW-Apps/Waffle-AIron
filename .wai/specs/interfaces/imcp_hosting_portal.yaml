@@ -1,0 +1,61 @@
+id: imcp_hosting_portal
+name: MCP Hosting Portal Interface
+description: >-
+  In-process contract a hosting process calls to stand up the MCP server: the stdio command and the
+  hosted data plane each build a server for the bound project with the MCP Portal's JSON-RPC verbs
+  mounted on it.
+component: mcp_hosting_portal
+methods:
+  - name: createMcpServer
+    description: >-
+      Builds a server for the bound project and mounts the MCP Portal's surface on it (tool
+      registration through the MCP server supervisor, resources, prompts). Declares its MCP
+      capabilities truthfully: resources and prompts advertise listChanged only because the
+      long-lived stdio session actually emits list-changed notifications after a successful spec
+      write that alters the agent topology or skill set (the stateless hosted transport advertises
+      none and stays correct-on-poll). A hosted caller may also ask for the seventeen hosted
+      data-plane tools to be advertised in tools/list; they are discovery only, served by the
+      hosting request orchestrator before any call reaches this server. The caller connects the
+      transport: stdio for `wairon mcp serve`, the hosted request's HTTP transport for the data
+      plane.
+    signature: 'createMcpServer(hostedTools?: bool): McpServerInstance'
+    returns: McpServerInstance
+    params:
+      - name: hostedTools
+        type: bool
+        description: >-
+          Advertise the hosted data-plane tools for discovery; false for the stdio server, which
+          cannot serve them.
+        optional: true
+    endpoint:
+      transport: Custom
+      address: 'stdio json-rpc: server bootstrap (wairon mcp serve)'
+    previousNames:
+      - imcp_portal.createMcpServer
+  - name: advertiseHostedTools
+    description: >-
+      Publish the hosted data plane's tools in this server's tool list without being able to execute
+      any of them. Seventeen `sdd_host_*` and `sdd_landscape_*` tools are registered here so an
+      agent can DISCOVER them; execution is intercepted upstream by the hosting request
+      orchestrator, which owns their contracts, and a handler reached outside a hosted request
+      answers that it is unavailable rather than doing anything. Modelled as one method rather than
+      seventeen because publishing a discovery list is one job — seventeen portal methods would
+      claim this component executes work it never touches, and would duplicate the hosted
+      orchestrator's contract to say it.
+    signature: 'advertiseHostedTools(): void'
+    returns: void
+    params: []
+    previousNames:
+      - imcp_portal.advertiseHostedTools
+  - name: serveStdio
+    description: >-
+      Serve the MCP Portal over this process's stdio until the transport closes: build a server,
+      connect it to the stdio transport, and scope the bound project to the client's workspace roots
+      (again whenever the client reports its roots changed). The stdio command's whole job once it
+      has resolved the project root.
+    signature: 'serveStdio(): async void'
+    returns: async void
+    params: []
+status: complete
+createdAt: '2026-10-06T19:01:08.252Z'
+updatedAt: '2026-10-06T19:01:42.517Z'

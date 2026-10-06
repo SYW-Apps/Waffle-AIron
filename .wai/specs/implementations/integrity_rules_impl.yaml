@@ -160,25 +160,33 @@ methods:
     sourcePath: src/core/rules/integrity/lint-allows.ts
     narrative:
       - stepNumber: 1
+        description: >-
+          Read the codes only the family run judges over every member (network_arbiter.familyCodes):
+          an allow of one is a known code here, and only the family run can tell that it covers
+          nothing
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: familyCodes
+      - stepNumber: 2
         label: laStart
         description: For each per-spec lint.allow entry gathered by the validator.
         type: loop
         loopKind: forEach
         over: ctx.lintAllows
-        endStep: 19
-      - stepNumber: 2
+        endStep: 21
+      - stepNumber: 3
         description: 'Branch: does no registered rule emit a.code?'
         type: branch
-        condition: ctx.knownIssueCodes does not contain a.code
-        onFalseStep: 5
-      - stepNumber: 3
+        condition: ctx.knownIssueCodes does not contain a.code, and neither do the family codes
+        onFalseStep: 6
+      - stepNumber: 4
         description: Report UNKNOWN_LINT_ALLOW_CODE (warning) naming the spec and the unknown allowed code.
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Continue with the next lint allow (mirrors the source's continue).
         type: jump
-        toStep: 19
-      - stepNumber: 5
+        toStep: 21
+      - stepNumber: 6
         label: laErrorCheck
         description: >-
           Ask ctx.sitesReported for what this run DID report of that code on that spec: the sites
@@ -186,15 +194,15 @@ methods:
           isError = one landed as an error, or none fired there and ctx.severityOf(a.code, a.specId)
           is error
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         label: laErrorAllow
         description: >-
           Branch: does the allow name a code that is an error on this spec? Errors always surface,
           so such an allow covers nothing whether or not it matched a finding
         type: branch
         condition: isError
-        onFalseStep: 9
-      - stepNumber: 7
+        onFalseStep: 10
+      - stepNumber: 8
         description: >-
           Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
           it names one, and its stated reason: the code is an error (and whether it fired here), and
@@ -202,63 +210,71 @@ methods:
           the finding names or remove the allow; a project may re-tune the code's severity in
           rules.sddRuleSeverity
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: Continue with the next lint allow.
         type: jump
-        toStep: 19
-      - stepNumber: 9
+        toStep: 21
+      - stepNumber: 10
         label: laKnownCode
         description: 'Branch: did the allow match no finding this run?'
         type: branch
         condition: a.used is false
-        onFalseStep: 19
-      - stepNumber: 10
+        onFalseStep: 21
+      - stepNumber: 11
+        label: laFamily
+        description: >-
+          A family code this gate saw no finding of is not judged stale here: its findings may come
+          from the family run, which judges the allow (family_validator.checkReach)
+        type: branch
+        condition: a.code is not one of the family codes
+        onFalseStep: 21
+      - stepNumber: 12
         description: >-
           Read what step 5 gathered of the run's findings of that code on that spec: the sites they
           named, and whether any of them named none.
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         label: laSiteCheck
         description: 'Branch: does the allow name a site for a code whose findings carry none?'
         type: branch
         condition: a.at is set and the run named no site, only unsited findings
-        onFalseStep: 14
-      - stepNumber: 12
+        onFalseStep: 16
+      - stepNumber: 14
         description: Explain it as an allow that must not name a site at all — drop the `at`.
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: Go to the report with that explanation.
         type: jump
-        toStep: 18
-      - stepNumber: 14
+        toStep: 20
+      - stepNumber: 16
         label: laSites
         description: 'Branch: did that code fire at sites this allow does not name?'
         type: branch
         condition: the run named one or more sites
-        onFalseStep: 17
-      - stepNumber: 15
+        onFalseStep: 19
+      - stepNumber: 17
         description: >-
           Explain it as the wrong occurrence, listing the sites that did fire: retarget an allow
           that names one, or give an `at` to an allow that names none — one per site, each with its
           own reason.
         type: local
-      - stepNumber: 16
+      - stepNumber: 18
         description: Go to the report with that explanation.
         type: jump
-        toStep: 18
-      - stepNumber: 17
+        toStep: 20
+      - stepNumber: 19
         label: laGone
         description: >-
           Explain it as a finding that did not fire at all this run — the stale allow, and the only
           shape this audit used to know.
         type: local
-      - stepNumber: 18
+      - stepNumber: 20
         label: laReport
         description: >-
           Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
           it names one, its stated reason, and that explanation.
         type: local
-      - stepNumber: 19
+      - stepNumber: 21
         label: laEnd
         description: Continue with the next lint allow.
         type: local
@@ -554,87 +570,6 @@ methods:
         type: local
     symbol: check
     exportedVia: publicSurfaceBindingRule
-  - name: publicSurfaceDeclaredType
-    sourcePath: src/core/rules/integrity/public-surface-declared-type.ts
-    narrative:
-      - stepNumber: 1
-        label: psdSubStart
-        description: >-
-          For each loaded subsystem, check what every declared public interface entry's type asks of
-          its backing component.
-        type: loop
-        loopKind: forEach
-        over: ctx.subsystems
-        endStep: 11
-      - stepNumber: 2
-        description: isDraftCtx = sub.isDraft().
-        type: local
-      - stepNumber: 3
-        label: psdPiStart
-        description: >-
-          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
-          `typeDef`; a re-export inherits its target's type and a type export has none.
-        type: loop
-        loopKind: forEach
-        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
-        endStep: 11
-      - stepNumber: 4
-        description: backing = ctx.componentMap.get(pi.component) when the entry names a component.
-        type: local
-      - stepNumber: 5
-        description: >-
-          Branch: public-surface-binding's preconditions, restated — does the entry name a component
-          that resolves? An unbound or unresolvable entry is that rule's finding and has no
-          stereotype to judge: continue with the next entry.
-        type: branch
-        condition: >-
-          the entry names a backing component and it resolves in ctx.componentMap (backing is
-          defined)
-        onFalseStep: 3
-      - stepNumber: 6
-        description: 'Branch: does the private pubTypeMatches report a mismatch?'
-        type: branch
-        condition: >-
-          the entry's declared type cannot be realized by the backing component's stereotype
-          (pubTypeMatches(pi.type, backing.componentType, backing.portalType) is false)
-        onFalseStep: 8
-      - stepNumber: 7
-        description: >-
-          Report PUBLIC_INTERFACE_TYPE_MISMATCH (error; isDraftCtx) naming the subsystem, the
-          component and its stereotype/portalType, and the expected shape for pi.type (the private
-          expectedFor).
-        type: local
-      - stepNumber: 8
-        label: psdCustomEscape
-        description: >-
-          Branch: is pi.type "Custom" and does the private EVENT_VOCAB match pi.details — the
-          escape-to-Custom hole, where an unrealized event boundary hides behind the one type that
-          carries no backing obligation?
-        type: branch
-        condition: >-
-          the entry is typed Custom and its details prose matches the event/async vocabulary
-          (EVENT_VOCAB)
-        onFalseStep: 3
-      - stepNumber: 9
-        description: >-
-          eventCapable = backing.componentType is "Observer", or backing.componentType is "Portal"
-          with portalType "MessageBus".
-        type: local
-      - stepNumber: 10
-        description: 'Branch: is eventCapable false?'
-        type: branch
-        condition: the backing component cannot realize eventing (eventCapable is false)
-        onFalseStep: 3
-      - stepNumber: 11
-        label: psdEventReport
-        description: >-
-          Report PUBLIC_INTERFACE_EVENT_MISTYPED (warning; isDraftCtx) naming the subsystem, the
-          Custom entry's description, and the backing component's stereotype/portalType,
-          recommending it be retyped MessageBus and backed by an Observer or MessageBus Portal, or
-          reworded.
-        type: local
-    symbol: check
-    exportedVia: publicSurfaceDeclaredTypeRule
   - name: publicSurfaceBoundContract
     sourcePath: src/core/rules/integrity/public-surface-bound-contract.ts
     narrative:
@@ -1454,6 +1389,48 @@ methods:
         type: return
     symbol: check
     exportedVia: renameTracesRule
+  - name: implementsContracts
+    sourcePath: src/core/rules/integrity/implements-contracts.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: For each interface in ctx.interfaces within scope that declares `implements`
+        type: loop
+        loopKind: forEach
+        over: the in-scope interfaces of ctx.interfaces that declare implements
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Resolve the reference to its contract entry (rule_context.resolveCrossProject, then the
+          entry's methods)
+        type: local
+      - stepNumber: 3
+        description: An unresolved or unexported reference is project-boundaries' finding
+        type: branch
+        condition: the reference resolved to an entry exported with role implement
+        onFalseStep: 1
+      - stepNumber: 4
+        label: methods
+        description: For each method of the extension point
+        type: loop
+        loopKind: forEach
+        over: the entry's methods
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          Does the interface declare it with the same params and returns (compared in canonical type
+          form)?
+        type: branch
+        condition: the interface lacks the method, or declares it with other params or returns
+        onFalseStep: 4
+      - stepNumber: 6
+        label: methodsEnd
+        description: >-
+          Report IMPLEMENTS_MISMATCH (error, on intf.id, sited at the method; draft context when
+          intf.status is draft or design) naming the extension point, the method and what differs
+        type: local
+    symbol: check
+    exportedVia: implementsContractsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-05T06:48:14.768Z'
+updatedAt: '2026-10-06T18:32:03.469Z'

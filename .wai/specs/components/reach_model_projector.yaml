@@ -1,0 +1,23 @@
+id: reach_model_projector
+name: Reach Model Projector
+description: >-
+  Projects the reach model (what reaches each Portal verb, and from where) from a run's read model
+  and, in the family run, the project family. A network is declared by a project and encloses that
+  project and every member below it, nested one level per declaring project; a part declares none.
+  Each Portal verb is placed in its innermost network, with its transport, its endpoint as one line,
+  its effective entry (component_spec.entryFor) and the widest audience an L0 export entry gives it.
+  Each modelled call that crosses a subsystem or project boundary into a Portal verb is collected
+  with its caller and evidence: a call or register step, a declared `calls` entry, or a
+  dispatch-table binding reached by a dispatch step. Cross-project calls come from the family's
+  cross-project references that name a method. Pure: over the values it is handed; it reads no file
+  and judges nothing. The network rules and every derived networking output read what it projects,
+  so the validator and the flow matrix can never disagree about what reaches what.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: projector
+status: complete
+createdAt: '2026-10-06T12:57:29.357Z'
+updatedAt: '2026-10-06T12:57:36.195Z'

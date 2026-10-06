@@ -27,10 +27,6 @@ fields:
       and Gateway are retired (STEREOTYPE_RETIRED): logic is an Orchestrator with a dependencyClass,
       and a gateway is a Portal with the gateway variant
     optional: false
-  - name: portalType
-    type: PortalType
-    description: Wire flavour when componentType is Portal
-    optional: true
   - name: owns
     type: list<string>
     description: Private member component ids (pattern containment, one hop)
@@ -123,13 +119,6 @@ fields:
     type: string
     description: When this spec was last written. Store-managed.
     optional: false
-  - name: mounts
-    type: list<PortalMount>
-    description: >-
-      Portal-only: the portals this LISTENER serves, each under its path prefixes and through its
-      entry point. Declaring the field — even empty — is what marks a portal as a listener, the one
-      kind of portal nothing else needs to mount.
-    optional: true
   - name: previousIds
     type: list<string>
     description: >-
@@ -139,6 +128,30 @@ fields:
       that generated from an earlier export can tell a rename from a delete plus an add. Another
       component may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand
       edit); unsetting it releases those ids.
+    optional: true
+  - name: transport
+    type: Transport
+    description: >-
+      Portal-only, and expected on every Portal: how callers reach its verbs. One vocabulary with
+      the endpoint discriminator, replacing the retired portalType (read for one release, HTTP_API
+      as HTTP; doctor --fix rewrites it). Which process serves which Portal is implementation: there
+      are no listener mounts
+    optional: true
+  - name: abi
+    type: string
+    description: >-
+      Portal-only, InProcess only: how a foreign language links this library verb set. c means a
+      C-ABI shared library, DLL or FFI; wasm means a WebAssembly component. Absent means a native
+      API in the project's targetLanguage, which a project in another language cannot call
+      (LANGUAGE_BRIDGE_MISSING)
+    optional: true
+  - name: invokedBy
+    type: DeclaredInvocation
+    description: >-
+      Portal-only: the entry every verb inherits (kind entry, with a scope on a network transport).
+      A verb's own invokedBy overrides only the scope. Never defaulted by a tool and never invented
+      by a migration: a blanket entry on a Portal that is not entered from outside would hide
+      unreached verbs
     optional: true
 methods:
   - name: defaultConformanceTier
@@ -197,12 +210,22 @@ methods:
     returns: ComponentSpec
     description: >-
       This component as the approval sees it: its design with its code linkage and volatile metadata
-      left out — each mount's `via` (the router entry exported by the portal's file, held to code by
-      UNREALIZED_EXPORT_HANDLE), its externalLinks (an implementation link stands in for a
-      sourcePath and an informative link is documentation; neither can change a design verdict) and
-      createdAt/updatedAt. A mount's portal and prefixes, and every other field, stay. Pure: over
-      the spec's own fields.
+      left out. That means its externalLinks (an implementation link stands in for a sourcePath and
+      an informative link is documentation; neither can change a design verdict) and
+      createdAt/updatedAt. Every other field stays, including transport, abi and invokedBy. Pure:
+      over the spec's own fields.
     symbol: componentDesignView
+  - name: entryFor
+    signature: 'entryFor(method: DeclaredInvocation?): DeclaredInvocation?'
+    params:
+      - name: method
+        type: DeclaredInvocation?
+        description: The verb's own declaration, when it has one
+    returns: DeclaredInvocation?
+    description: >-
+      The entry a verb of this Portal has: the verb's own invokedBy when it declares one, else the
+      component's, with the verb's scope taking precedence. None for a non-Portal. Pure
+    symbol: componentEntryFor
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T10:26:00.350Z'
+updatedAt: '2026-10-06T13:24:10.891Z'

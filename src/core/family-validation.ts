@@ -5,6 +5,7 @@ import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectB
 // identity a member's lock is compared with.
 import {
   validateProject,
+  ownReachModel,
   computeGateStateId,
   type ProjectVerdict,
   type ValidationIssue,
@@ -34,6 +35,12 @@ import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { PinState, ProjectApproval } from '../models/lock.js';
+import type { NetworkDeclaration } from '../models/project.js';
+import type { ReachModel } from '../models/reach.js';
+// reach_model_projector and network_arbiter: the family's reach model and its
+// network verdicts — pure, over the models each project's own gate projected.
+import { compose as composeReach } from './rules/reach-model-projector.js';
+import { judge as judgeNetwork, familyCodes } from './rules/network-arbiter.js';
 
 /** A project's lock record, as the core adapter reads one. */
 type LockRecord = NonNullable<ReturnType<typeof approvalRecord>>;
@@ -87,6 +94,18 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   // an adopted pack's settings is visible and never fails --ci.
   POLICY_NOT_ADOPTED: 'error',
   POLICY_DEVIATION: 'notice',
+  // Reachability and networks (checkReach): the network arbiter's codes over
+  // the family's reach model. The first three a declaring project's own gate
+  // also judges over its own tree; the family run judges the networks around
+  // its members, and alone proves network-scoped entries.
+  GATEWAY_BYPASSED: 'error',
+  MULTIPLE_GATEWAYS: 'notice',
+  EXPORT_BEYOND_NETWORK: 'warning',
+  ENTRY_SCOPE_UNBOUNDED: 'notice',
+  ENTRY_UNPROVEN: 'warning',
+  // An allow of one of those codes the family's model gives no finding at its
+  // site: the project's own gate leaves that judgement to the family run.
+  UNUSED_LINT_ALLOW: 'warning',
 };
 
 /** The ceiling a run may read up to: none (the explicit local walk), or a root and whether the caller narrowed it. */
@@ -267,6 +286,17 @@ function judgeProject(project: string, scope: string | undefined, options: Valid
   return { own, composed: compose(project) };
 }
 
+/** A project's own reach model, under its own configuration (the binding the caller holds). */
+function ownReachOf(options: ValidationOptions): ReachModel {
+  const config = configOrNull();
+  return ownReachModel({
+    rules: config?.rules,
+    projectType: config?.projectType,
+    treatAllAsComplete: options.treatAllAsComplete,
+    extensions: options.extensions,
+  });
+}
+
 /** Step 8: the project's own totals. */
 function verdictOf(node: ProjectNode, own: ValidationResult): ProjectVerdict {
   const count = (severity: IssueSeverity): number => own.issues.filter((i) => i.severity === severity).length;
@@ -306,11 +336,14 @@ export function run(options: ValidationOptions): ValidationResult {
   const issues: ValidationIssue[] = [];
   const projects: ProjectVerdict[] = [];
   const left: { project: string; alias: string }[] = [];
+  const models = new Map<string, ReachModel>();
   // Step 3: each selected project, the root first.
   for (const { node, scope } of selected) {
     // Steps 4-7: bound to the project's root within the ceiling.
     const judged = within(node.directory, ceiling, () => judgeProject(node.namespace, scope, options));
-    // Step 8: its findings verbatim under its key, the composition beside them, its totals.
+    // Step 8: the project's own reach model under the same binding, for the family's reach checks.
+    models.set(node.namespace, within(node.directory, ceiling, () => ownReachOf(options)));
+    // Step 9: its findings verbatim under its key, the composition beside them, its totals.
     issues.push(...judged.own.issues.map((i) => ({ ...i, project: node.namespace })), ...judged.composed.findings);
     projects.push(verdictOf(node, judged.own));
     left.push(...judged.composed.notSelected.map((alias) => ({ project: node.namespace, alias })));
@@ -326,6 +359,8 @@ export function run(options: ValidationOptions): ValidationResult {
   issues.push(...within(root, ceiling, () => checkMembers(narrowed(family, selected))));
   // Step 10: the governance checks — each requiring project's requirements against the members below it.
   issues.push(...within(root, ceiling, () => checkPolicies(narrowed(family, selected))));
+  // Step 12: the reachability and network checks only the family can make.
+  issues.push(...within(root, ceiling, () => checkReach(narrowed(family, selected), models)));
   // Step 11: the externals the reach left out.
   const hint = notSelectedHint(left);
   // Step 12: the family verdict, with the bound project's externals the run
@@ -1132,4 +1167,142 @@ export function policyDeviations(member: string, requirement: PackRequirement, s
   }
   // Step 12.
   return out;
+}
+
+// ---- reachability and networks ---------------------------------------------
+//
+// The proofs only the family can make. Each selected project's own gate judged
+// its own tree; this composes the family's reach model from each project's own
+// model and the family's cross-project references, and judges it: the networks
+// around a member, every call that crosses into a network, and the proof of
+// every network-scoped entry. A member's own verdict is unchanged by it.
+
+/** Each selected project's network declaration, read from its configuration under its own binding. */
+function networksOf(family: ProjectFamily): Map<string, NetworkDeclaration> {
+  const out = new Map<string, NetworkDeclaration>();
+  for (const node of family.nodes) {
+    const network = runWithProjectRoot(node.directory, configOrNull)?.network;
+    if (network) out.set(node.namespace, network);
+  }
+  return out;
+}
+
+/** A spec key qualified into the family root's key space, back to the owning project's local key. */
+function localKey(project: string, key: string): string {
+  return project !== '' && key.startsWith(`${project}::`) ? key.slice(project.length + 2) : key;
+}
+
+/**
+ * The key of the project a finding of the family's reach model sits on: the
+ * project holding the spec it names — a verb's Portal (MULTIPLE_GATEWAYS sits
+ * on its network's first gateway Portal), a call's caller. Never read from a
+ * name in the message.
+ */
+function projectOfFinding(model: ReachModel, finding: { code: string; specId?: string; at?: string; message: string }): string {
+  if (finding.specId === undefined) return '';
+  const verb = model.verbs.find((v) => v.portal === finding.specId);
+  if (verb) return verb.project;
+  const call = model.calls.find((c) => c.fromComponent === finding.specId && c.evidence === finding.at);
+  return call?.fromProject ?? '';
+}
+
+/**
+ * ifamily_validator.checkReach — the reachability and network checks only the
+ * family run can make: GATEWAY_BYPASSED, MULTIPLE_GATEWAYS and
+ * EXPORT_BEYOND_NETWORK on a member's verbs and on calls crossing into a
+ * network, ENTRY_UNPROVEN and ENTRY_SCOPE_UNBOUNDED for every network-scoped
+ * entry. A finding a project's own gate already carried is not repeated; each
+ * is stamped with the project whose spec it sits on, tuned by that project's
+ * rules.sddRuleSeverity, and dropped when a lint.allow on that spec covers it
+ * at its site.
+ */
+export function checkReach(family: ProjectFamily, models: Map<string, ReachModel>): ValidationIssue[] {
+  // Step 1: each selected project's network declaration.
+  const networks = networksOf(family);
+  // Steps 2-3: the family's reach model, judged.
+  const model = composeReach(models, family, networks);
+  const findings = judgeNetwork(model);
+  // Step 4: what each declaring project's own gate already carried (its own
+  // network over its own tree) is not repeated.
+  const carried = new Set<string>();
+  for (const [key, own] of models) {
+    if (!networks.has(key)) continue;
+    for (const f of judgeNetwork(own)) {
+      carried.add(`${key}\u0000${f.code}\u0000${f.specId ?? ''}\u0000${f.at ?? ''}`);
+    }
+  }
+  const nodeOf = new Map(family.nodes.map((n) => [n.namespace, n] as const));
+  const configs = new Map<string, ProjectConfig | null>();
+  const allows = new Map<string, { specId: string; code: string; at?: string }[]>();
+  const out: ValidationIssue[] = [];
+  for (const f of findings) {
+    const project = projectOfFinding(model, f);
+    const local = f.specId !== undefined ? localKey(project, f.specId) : undefined;
+    if (carried.has(`${project}\u0000${f.code}\u0000${local ?? ''}\u0000${f.at ?? ''}`)) continue;
+    const node = nodeOf.get(project);
+    if (!configs.has(project)) configs.set(project, node ? runWithProjectRoot(node.directory, configOrNull) : null);
+    if (!allows.has(project)) allows.set(project, node ? runWithProjectRoot(node.directory, lintAllows) : []);
+    // A lint.allow on the spec the finding sits on covers it at its site.
+    const allowed = local !== undefined && (allows.get(project) ?? []).some((a) =>
+      a.specId === local && a.code === f.code && (a.at ?? undefined) === (f.at ?? undefined));
+    if (allowed) continue;
+    const tuned = finding(configs.get(project) ?? null, f.code, f.message, project, f.specId);
+    if (tuned) out.push(tuned);
+  }
+  // Steps 5-6: an allow of a code the family judges, on a selected project's
+  // own spec, that covers no finding of the family's model at its site (carried
+  // by the project's own gate or not) is stale. The project's own gate left
+  // that judgement here, because only this run sees every finding of them.
+  const codes = new Set(familyCodes());
+  const fired = new Set(carried);
+  for (const f of findings) {
+    const project = projectOfFinding(model, f);
+    fired.add(`${project}\u0000${f.code}\u0000${f.specId !== undefined ? localKey(project, f.specId) : ''}\u0000${f.at ?? ''}`);
+  }
+  for (const key of models.keys()) {
+    const node = nodeOf.get(key);
+    if (!node) continue;
+    if (!allows.has(key)) allows.set(key, runWithProjectRoot(node.directory, lintAllows));
+    if (!configs.has(key)) configs.set(key, runWithProjectRoot(node.directory, configOrNull));
+    for (const a of allows.get(key) ?? []) {
+      // A contained member's specs are keyed under its namespace: its own run judges them.
+      if (!codes.has(a.code) || a.specId.includes('::')) continue;
+      if (fired.has(`${key}\u0000${a.code}\u0000${a.specId}\u0000${a.at ?? ''}`)) continue;
+      const at = a.at !== undefined ? ` at "${a.at}"` : '';
+      const stale = finding(
+        configs.get(key) ?? null,
+        'UNUSED_LINT_ALLOW',
+        `Spec "${a.specId}"${key === '' ? '' : ` of ${named(key)}`} allows "${a.code}"${at}, but the family run reports no such finding there — remove the stale allow (the project's own gate leaves allows of the family's reach codes to this run).`,
+        key,
+        key === '' ? a.specId : `${key}::${a.specId}`,
+      );
+      if (stale) out.push(stale);
+    }
+  }
+  // Step 7.
+  return out;
+}
+
+/**
+ * ifamily_validator.reachModel — the family's reach model at the bound root,
+ * for the derived networking outputs: the same selection and reach the family
+ * run makes, each selected project's own model (spec_validator.reachModel
+ * under its own binding), composed with the family's references. At a project
+ * without members it is that project's own model, composed. Reads; writes
+ * nothing.
+ */
+export function reachModel(options: ValidationOptions): ReachModel {
+  // Step 1: the bound root's project graph, and the selection the family run makes.
+  const family = projectFamily();
+  const root = path.resolve(getProjectRoot());
+  const ceiling = reachCeiling(root, options.family);
+  const selected = selectProjects(family, options);
+  const models = new Map<string, ReachModel>();
+  // Steps 2-4: each selected project's own model, under its own binding.
+  for (const { node } of selected) {
+    models.set(node.namespace, within(node.directory, ceiling, () => ownReachOf(options)));
+  }
+  // Steps 5-6: composed.
+  const scoped = narrowed(family, selected);
+  return within(root, ceiling, () => composeReach(models, scoped, networksOf(scoped)));
 }

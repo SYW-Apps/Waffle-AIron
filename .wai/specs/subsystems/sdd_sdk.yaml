@@ -31,8 +31,7 @@ description: >-
   over the hosted API.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       The @wairon/sdk library API (in-process facade + published package surface): scaffoldPack,
       buildPack, inspectArchive, safe extractPack, the .waitree tree archive operations, and
       defineRule. Also the home of the re-exported pack-authoring types and the
@@ -47,4 +46,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-21T17:21:22.034Z'
-updatedAt: '2026-10-04T18:23:49.000Z'
+updatedAt: '2026-10-06T18:55:25.532Z'

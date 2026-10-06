@@ -11,7 +11,13 @@ owns: []
 dependsOn:
   - extension_orchestrator
   - core_orchestrator
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js, which
+    re-exports the core barrel) and load extension packs or work the installed-pack store in their
+    own process
 status: complete
 createdAt: '2026-09-25T17:32:53.962Z'
-updatedAt: '2026-09-25T21:08:34.345Z'
+updatedAt: '2026-10-06T19:13:32.529Z'

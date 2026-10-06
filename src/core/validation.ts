@@ -32,6 +32,7 @@ import {
   signatureFacts,
   resolveSignatures,
   typeSpellingFacts,
+  retiredReachFacts,
   loadExtensionsFor,
 } from './adapters/validator-core.js';
 import type { SignatureFacts } from './signature-sources.js';
@@ -40,6 +41,8 @@ import { listSnapshots, listPinnedExternals, pinnedParent } from './adapters/val
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
+import { project as projectReach } from './rules/reach-model-projector.js';
+import type { ReachModel } from '../models/reach.js';
 import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes } from './rules/repository.js';
 
 // validator_portal: the write-boundary half of the rule set — judge one
@@ -117,6 +120,8 @@ import { getProjectRoot } from '../utils/fs.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
   ComponentSpecSchema,
+  attachRetiredMounts,
+  readRetiredReachForms,
   ImplementationSpecSchema,
   InterfaceSpecSchema,
   SubsystemSpecSchema,
@@ -465,6 +470,8 @@ export function validateProject(
 interface OwnersGateRun {
   result: ValidationResult;
   codeModel: CodeModel;
+  /** The project's own reach model, on a run that asked for it instead of the rules. */
+  reach?: ReachModel;
 }
 
 /**
@@ -474,7 +481,8 @@ interface OwnersGateRun {
  */
 function runOwnersGate(
   rulesOrOptions?: RulesConfig | ValidationOptions,
-  projectType: string = 'backend'
+  projectType: string = 'backend',
+  reachOnly = false,
 ): OwnersGateRun {
   let rules = rulesOrOptions as RulesConfig | undefined;
   let scopeSubsystem: string | undefined;
@@ -529,9 +537,10 @@ function runOwnersGate(
   // is the unclaimed-source rule's whole subject; a project that declares none
   // walks nothing and that rule stays silent.
   const conformance = rules?.conformance;
-  const codeModel = buildCodeModel(
-    implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? [],
-  );
+  // A reach-only run judges no code: it reads no source file.
+  const codeModel = reachOnly
+    ? buildCodeModel([], [], getProjectRoot(), [], [])
+    : buildCodeModel(implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
 
   // As-complete mode: flip statuses on the freshly loaded instances — these
   // are the workspace cache's own objects, loaded after the cache clear above,
@@ -624,7 +633,7 @@ function runOwnersGate(
     // relativization, same schema, no I/O), gathered here so the
     // roundtrip-serialization rule reports it from the context. It runs after
     // the loader issues were collected.
-    const roundTripIssues = dryRunSerializeSpecs(isSpecInScope);
+    const roundTripIssues = reachOnly ? [] : dryRunSerializeSpecs(isSpecInScope);
 
     // Register the built-in rules and the loaded pack rules into the rule
     // repository, and read the composed run sequence.
@@ -698,6 +707,10 @@ function runOwnersGate(
       projectIdentity: boundProjectIdentity(),
       // Stage 8: the bound root's declared members, for member-declarations.
       ...(boundConfig ? { declaredMembers: declaredMembers(boundConfig) } : {}),
+      // The bound project's own network, for network-boundaries.
+      ...(boundConfig?.network ? { network: boundConfig.network } : {}),
+      // The retired reachability forms the scan read compatibly, for entry-declarations.
+      retiredReachFacts: retiredReachFacts(),
       surfaceSnapshots,
       codeModel,
       roundTripIssues,
@@ -706,6 +719,12 @@ function runOwnersGate(
       carryableIssueCodes: carryableCodes,
       issues,
     });
+
+    // spec_validator.reachModel: the same context, no rule run — the
+    // project's own reach model, with its own network declaration.
+    if (reachOnly) {
+      return { result: { valid: true, issues }, codeModel, reach: projectReach(ctx, boundConfig?.network) };
+    }
 
     // Run the composed sequence against the context.
     for (const rule of sequence) {
@@ -732,6 +751,28 @@ function runOwnersGate(
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
   }
+}
+
+/**
+ * ispec_validator.reachModel — the bound project's own reach model: the rule
+ * context validateProject builds, from the same loaded specs, without running
+ * a rule, projected with the project's own network declaration
+ * (reach_model_projector.project). A part judged alone, or a tree with no L0,
+ * has no model of its own and answers an empty one. Reads; writes nothing.
+ */
+export function ownReachModel(options?: ValidationOptions): ReachModel {
+  return runOwnersGate(options ?? {}, options?.projectType ?? 'backend', true).reach
+    ?? { scope: 'own', networks: [], verbs: [], calls: [] };
+}
+
+/**
+ * ivalidator_portal.reachModel — forwards to family_validator.reachModel: what
+ * reaches each Portal verb of the bound project (or, at a project that
+ * declares members, of its family), and from where. The one input of every
+ * derived networking output. Writes nothing; callers grant the reach first.
+ */
+export function reachModel(options: ValidationOptions): ReachModel {
+  return familyValidator.reachModel(options);
 }
 
 /** The bound root's configuration, or null when it has none or it cannot be read. */
@@ -772,8 +813,15 @@ function readExcerptSpecs(excerpt: ParentExcerpt): ExcerptSpecs {
       const parsed = SystemSpecSchema.safeParse(doc);
       if (parsed.success) out.system = parsed.data;
     } else if ('parentSystem' in doc) take(out.subsystems, SubsystemSpecSchema.safeParse(doc));
-    else if ('componentType' in doc) take(out.components, ComponentSpecSchema.safeParse(doc));
-    else if ('component' in doc) take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
+    else if ('componentType' in doc) {
+      // Retired reachability forms read compatibly, as the loader reads them.
+      readRetiredReachForms('component', doc);
+      const parsed = ComponentSpecSchema.safeParse(doc);
+      take(out.components, parsed.success ? { success: true, data: attachRetiredMounts(parsed.data, doc) } : parsed);
+    } else if ('component' in doc) {
+      readRetiredReachForms('interface', doc);
+      take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
+    }
     else if ('contract' in doc) take(out.implementations, ImplementationSpecSchema.safeParse(doc));
     else if ('kind' in doc) take(out.types, TypeSpecSchema.safeParse(doc));
   }
@@ -1102,7 +1150,15 @@ export function computeGateStateId(): StateId {
   let gate: GateConfig = {};
   try {
     const config = loadProjectConfig();
-    if (config) gate = { projectType: config.projectType, rules: config.rules, composition: config.composition ?? null };
+    if (config) {
+      gate = {
+        projectType: config.projectType,
+        rules: config.rules,
+        composition: config.composition ?? null,
+        // Only when declared: an undeclared network leaves the digest as it was.
+        ...(config.network ? { network: config.network } : {}),
+      };
+    }
   } catch { /* a configuration that fails its schema: an empty gate config */ }
   const inputs = consumedContractInputs();
   const members = directMemberSubjects();

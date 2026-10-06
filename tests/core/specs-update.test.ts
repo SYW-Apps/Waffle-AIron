@@ -17,6 +17,7 @@ import {
   loadTypeSpec,
   loadSubsystemSpec,
   getComponentPath,
+  retiredReachFacts,
 } from '../../src/core/specs.js';
 
 const now = new Date().toISOString();
@@ -640,37 +641,29 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([]);
   });
 
-  it('listener mounts: keyed by portal, upserted and deletable', () => {
-    // A listener mounts each portal once, so the portal is the mount's identity;
-    // without it a one-mount delta replaced the whole table.
+  it('retired listener mounts: a delta naming them is refused, and an unrelated update keeps them on the file', () => {
+    // Mounts are a retired form (the reachability model): no longer typed, so
+    // no delta can author them, but read and carried until doctor --fix
+    // rewrites them — never dropped by a write that did not decide to.
     project();
     saveSpec('subsystem', { schemaVersion: '1.0.0', id: 'clinic', name: 'Clinic', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
+    const mounts = [
+      { portal: 'booking_portal', prefixes: ['/booking'], via: 'handleBookingRequest' },
+      { portal: 'referral_portal', prefixes: ['/referrals'] },
+    ];
     saveComponentSpec({
-      id: 'public_listener', name: 'Public listener', description: 'd', subsystem: 'clinic', componentType: 'Portal', portalType: 'HTTP_API',
-      owns: [], dependsOn: [],
-      mounts: [
-        { portal: 'booking_portal', prefixes: ['/booking'], via: 'handleBookingRequest' },
-        { portal: 'referral_portal', prefixes: ['/referrals'] },
-        { portal: 'share_portal', prefixes: ['/share'] },
-      ],
-      createdAt: now, updatedAt: now,
+      id: 'public_listener', name: 'Public listener', description: 'd', subsystem: 'clinic', componentType: 'Portal', transport: 'HTTP',
+      owns: [], dependsOn: [], mounts, createdAt: now, updatedAt: now,
     } as never);
     invalidateSpecCache();
 
-    updateSpec('component', 'public_listener', { mounts: [{ portal: 'booking_portal', prefixes: ['/', '/booking'], via: 'handleBookingRequest' }] });
+    expect(() => updateSpec('component', 'public_listener', { mounts: [{ portal: 'referral_portal', action: 'delete' }] })).toThrow(/unknown field\(s\) "mounts"/);
+    updateSpec('component', 'public_listener', { description: 'the public listener' });
     invalidateSpecCache();
-    expect(loadComponentSpec('public_listener')!.mounts).toEqual([
-      { portal: 'booking_portal', prefixes: ['/', '/booking'], via: 'handleBookingRequest' },
-      { portal: 'referral_portal', prefixes: ['/referrals'] },
-      { portal: 'share_portal', prefixes: ['/share'] },
-    ]);
-
-    updateSpec('component', 'public_listener', { mounts: [{ portal: 'referral_portal', action: 'delete' }] });
-    invalidateSpecCache();
-    expect(loadComponentSpec('public_listener')!.mounts).toEqual([
-      { portal: 'booking_portal', prefixes: ['/', '/booking'], via: 'handleBookingRequest' },
-      { portal: 'share_portal', prefixes: ['/share'] },
-    ]);
+    const after = loadComponentSpec('public_listener')!;
+    expect(after.description).toBe('the public listener');
+    expect((after as unknown as { mounts?: unknown }).mounts).toEqual(mounts);
+    expect(retiredReachFacts().filter((f) => f.specId === 'public_listener' && f.form === 'listener-mounts').map((f) => f.at)).toEqual(['booking_portal', 'referral_portal']);
   });
 });
 
@@ -697,7 +690,7 @@ describe('unset removes an optional field', () => {
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
     saveSpec('subsystem', { schemaVersion: '1.0.0', id: 's', name: 'S', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
-    saveComponentSpec({ id: 'p', name: 'P', description: 'd', subsystem: 's', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/v1', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
+    saveComponentSpec({ id: 'p', name: 'P', description: 'd', subsystem: 's', componentType: 'Portal', transport: 'HTTP', basePath: '/v1', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as never);
     invalidateSpecCache();
   }
 
@@ -707,7 +700,7 @@ describe('unset removes an optional field', () => {
     invalidateSpecCache();
     const after = loadComponentSpec('p')!;
     expect('basePath' in after).toBe(false);
-    expect(after.portalType).toBe('HTTP_API');
+    expect(after.transport).toBe('HTTP');
     expect(after.componentType).toBe('Portal');
   });
 

@@ -1,0 +1,18 @@
+id: mcp_hosting_portal
+name: MCP Hosting Portal
+description: >-
+  The in-process front door a hosting process uses to stand up the MCP server: the stdio command
+  (`wairon mcp serve`, through startMcpServer) and the hosted data plane (one scoped server per
+  request) both call it to build a server for the bound project, with the MCP Portal's JSON-RPC
+  verbs mounted on it. Split from mcp_portal because the two are entered differently: mcp_portal's
+  verbs are reached over MCP JSON-RPC by AI clients, while building the server is an in-process call
+  its hosts make. Realized in src/mcp/server.ts beside the Portal it hosts.
+subsystem: sdd_mcp
+componentType: Portal
+owns: []
+dependsOn:
+  - mcp_server
+transport: InProcess
+status: complete
+createdAt: '2026-10-06T19:00:56.621Z'
+updatedAt: '2026-10-06T19:00:57.226Z'

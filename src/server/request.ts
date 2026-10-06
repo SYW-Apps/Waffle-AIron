@@ -330,6 +330,8 @@ const READ_TOOL_NAMES = new Set<string>([
   'listDomains',
   'validateTopology',
   'getProjectConfig',
+  // The flow explanation: a read of the derived networking (sdd_get_network_flows reads by prefix).
+  'sdd_explain_flow',
 ]);
 
 /**

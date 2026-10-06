@@ -22,7 +22,7 @@ read back into a tree.
 |---|---|
 | CLI | `wairon export` prints the JSON to stdout, and nothing else. `wairon export --out design.json` writes the file and reports the path and the approval state. A project with member projects names them (on stderr without `--out`, when it holds no design of its own): they are dependencies, exported from their own roots. See [cli.md](cli.md#wairon-export---out-file). |
 | Library | `const { exportDesign } = require('@wairon/cli')` (or `import` from an ES module), then `exportDesign(outPath?, approval?)`, which returns the document and writes it when `outPath` is given. The package ships TypeScript declarations for the library entry (`dist/index.d.ts`, the `types` field), so `DesignExport` and `exportDesign` are typed. |
-| JSON Schema | `schemas/design-export-1.json`, shipped in the package (`require.resolve('@wairon/cli/schemas/design-export-1.json')`). It is a JSON Schema draft-07 document (it declares `$schema`) and carries no `$id`: reference it by its path in the package. It is generated from the zod schema in `src/models/design-export.ts` at build time, and a test fails if the two drift. |
+| JSON Schema | `schemas/design-export-2.json`, shipped in the package (`require.resolve('@wairon/cli/schemas/design-export-2.json')`). It is a JSON Schema draft-07 document (it declares `$schema`) and carries no `$id`: reference it by its path in the package. It is generated from the zod schema in `src/models/design-export.ts` at build time, and a test fails if the two drift. |
 
 The CLI decides the approval verdict first, the same way `wairon lock-check` does (not strict),
 and stamps it. It also exports a tree that is not approved, stamped with its state.
@@ -30,10 +30,13 @@ and stamps it. It also exports a tree that is not approved, stamped with its sta
 ## Compatibility promise
 
 - **`format`** is always `"wairon-design"`.
-- **`formatVersion`** is `MAJOR.MINOR` and is currently `1.0`.
+- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.0`. 2.0 is the reachability
+  model's: `portalType` became `transport`, listener `mounts` are gone, a Portal may carry
+  the `invokedBy` entry its verbs inherit, and `invokedBy` kinds are `entry | runtime` with a
+  `scope`.
   - **A minor version only adds.** It adds new fields, or new members of a closed set (a
     `role`, an approval state). A consumer must **ignore fields it does not know**. A 1.x
-    document validates against `design-export-1.json`.
+    document validates against `design-export-2.json`.
   - **A major version breaks.** It removes or renames a field, or changes what one means. Every
     major version is named in the CHANGELOG, and wairon emits one major version at a time.
 - **A design change is never a format change.** Two exports of different trees in the same
@@ -162,11 +165,11 @@ the resolved L0 export table, as `design_export_entry` rows.
 | Field | Meaning |
 |---|---|
 | `key`, `name`, `description`, `status`, `subsystem` | As declared. |
-| `stereotype`, `variant`, `dependencyClass`, `durability`, `portalType` | As declared. |
+| `stereotype`, `variant`, `dependencyClass`, `durability` | As declared. |
+| `transport`, `abi`, `invokedBy` | On a Portal: its transport, the `abi` of an `InProcess` Portal that declares one, and the entry its verbs inherit. |
 | `owns`, `dependsOn` | Keys. |
 | `emits`, `subscribesTo` | The topics the component publishes to and consumes from. |
 | `auth`, `basePath`, `dispatch` | A Portal's authentication, base path and dispatch table. Dispatch targets are keys. |
-| `mounts` | A listener's mounts. Each portal is a key. |
 | `patterns`, `externalLinks` | As declared. |
 | `formerly` | The rename trace. See [Renames](#renames-formerly). |
 | `ext` | Pack extension data. |
@@ -256,9 +259,11 @@ deployment. The export carries the facts a consumer needs to decide for its own 
 
 - **Lifecycle roots** (`subsystems[].lifecycle`): what the runtime invokes, with the phase
   (`init`, `shutdown`, `cyclic`, `interrupt` or `scheduled`).
-- **Endpoints and transports** (`interfaces[].methods[].endpoint`, `components[].portalType`):
-  calls that arrive from outside the process. A `Custom` endpoint can be an in-process binding.
-- **Listener mounts** (`components[].mounts`): which listener serves which portal.
+- **Transports and endpoints** (`components[].transport`, `interfaces[].methods[].endpoint`):
+  how callers reach each Portal. An `InProcess` Portal is a library and binds no endpoint;
+  its `abi` says how a foreign language links it.
+- **Entries** (`components[].invokedBy`, `interfaces[].methods[].invokedBy`): the verbs callers
+  outside the design reach, with their `scope`.
 - **The export table** (`project.exports`): what other projects link against.
 
 For example, one generator might emit a `main` that runs the `init` roots and serves the HTTP

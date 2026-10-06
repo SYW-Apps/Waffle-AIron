@@ -78,7 +78,7 @@ describe('a refusal carries one Error: prefix on every write tool', () => {
     ok(await call('sdd_initialize_system', { name: 'Shop', vision: 'sells things' }));
     ok(await call('sdd_add_subsystem', { id: 'shop', name: 'Shop', description: 'the shop', status: 'design' }));
     for (const id of ['shop_portal', 'shop_api']) {
-      ok(await call('sdd_add_component', { id, name: id, description: 'd', subsystem: 'shop', componentType: 'Portal', portalType: 'HTTP_API' }));
+      ok(await call('sdd_add_component', { id, name: id, description: 'd', subsystem: 'shop', componentType: 'Portal', transport: 'HTTP' }));
     }
     ok(await call('sdd_define_interface', {
       id: 'ishop_portal', name: 'IShopPortal', description: 'd', component: 'shop_portal',

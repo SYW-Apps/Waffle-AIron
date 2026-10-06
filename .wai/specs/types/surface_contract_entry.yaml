@@ -95,6 +95,23 @@ fields:
       provenance, never signature, so it enters neither memberDigest nor contentDigest and no
       existing pin moves. Absent when never renamed.
     optional: true
+  - name: transport
+    type: string
+    description: >-
+      The backing Portal's transport. A consumer reads it to tell a library (InProcess, called
+      directly by any component) from a network or local surface (called through an Adapter); absent
+      on snapshots written before it was carried, read then as the entry's derived kind
+    optional: true
+  - name: abi
+    type: string
+    description: 'The backing InProcess Portal''s abi, when it declares one: how a foreign language links it'
+    optional: true
+  - name: role
+    type: string
+    description: >-
+      The entry's export role, call (the default) or implement: an extension point the consumer
+      implements
+    optional: true
 methods:
   - name: sameContract
     signature: 'sameContract(other: SurfaceContractEntry): boolean'
@@ -105,4 +122,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-10-06T11:12:25.280Z'
+updatedAt: '2026-10-06T13:01:34.151Z'

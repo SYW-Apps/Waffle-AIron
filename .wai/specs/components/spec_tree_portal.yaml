@@ -20,7 +20,12 @@ dependsOn:
   - external_producers
   - part_context
   - signature_resolver
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js, which
+    re-exports the core barrel) and call the spec-tree reads in their own process
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T20:28:44.281Z'
+updatedAt: '2026-10-06T19:13:25.805Z'

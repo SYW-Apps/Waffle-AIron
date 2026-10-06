@@ -1,6 +1,7 @@
 import {
   SURFACE_AUDIENCES,
   nameKey,
+  transportExportKind,
   parseDeclaredCall,
   type AuthoredReference,
   type ComponentSpec,
@@ -55,6 +56,23 @@ import { projectFamilyGraph } from './project-family.js';
 
 /** The stereotypes a boundary caller may reach — a gateway is a Portal variant. */
 const CONSUMABLE: ReadonlySet<string> = new Set(['Portal', 'Observer']);
+
+/**
+ * The stereotypes an extension point (role implement) may be backed by: a
+ * Portal (a webhook or callback contract) or the Adapter holding the port the
+ * producer calls and consumers realize.
+ */
+const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
+
+/**
+ * The export kind an own component entry is shown as: derived from its backing
+ * Portal's transport (transport.exportKind). An authored kind is read only as
+ * the legacy value, where no transport derives one.
+ */
+function exportKindOf(comp: ComponentSpec, authored: string | undefined): string | undefined {
+  if (comp.componentType === 'Portal' && comp.transport) return transportExportKind(comp.transport);
+  return authored;
+}
 
 /** The last segment of a possibly-qualified id. */
 function localName(id: string): string {
@@ -126,17 +144,24 @@ function checkPublicName(name: string, owner: string, problems: ExportProblem[])
   }
 }
 
-/** Report a re-exported component no boundary caller can reach. */
+/**
+ * Report a re-exported component that cannot serve its role: an entry
+ * consumers call must be a Portal or an Observer; an entry consumers implement
+ * (role implement, an extension point) a Portal or an Adapter.
+ */
 function checkConsumable(entry: ResolvedExport, owner: string, problems: ExportProblem[]): void {
-  if (entry.kind === 'component' && entry.componentType && !CONSUMABLE.has(entry.componentType)) {
-    problems.push({
-      kind: 'unconsumable',
-      owner,
-      publicName: entry.publicName,
-      targets: [entry.component!],
-      detail: `"${entry.publicName}" exports ${entry.componentType} "${entry.component}", which no caller across the boundary may reach — only a Portal (a gateway is a Portal variant) or an Observer can serve one`,
-    });
-  }
+  if (entry.kind !== 'component' || !entry.componentType) return;
+  const implemented = entry.role === 'implement';
+  if ((implemented ? IMPLEMENTABLE : CONSUMABLE).has(entry.componentType)) return;
+  problems.push({
+    kind: 'unconsumable',
+    owner,
+    publicName: entry.publicName,
+    targets: [entry.component!],
+    detail: implemented
+      ? `"${entry.publicName}" exports ${entry.componentType} "${entry.component}" for consumers to implement, but an extension point is backed only by a Portal (a webhook or callback contract) or the Adapter holding the port the producer calls`
+      : `"${entry.publicName}" exports ${entry.componentType} "${entry.component}", which no caller across the boundary may reach — only a Portal (a gateway is a Portal variant) or an Observer can serve one (an Adapter only as an extension point consumers implement, with role implement)`,
+  });
 }
 
 // ---- named re-exports -------------------------------------------------------
@@ -252,8 +277,9 @@ function bindOwn(world: ExportWorld, sub: SubsystemSpec, pi: PublicInterface, pr
     component: comp.id,
     ...(narrowed ? { interface: narrowed } : {}),
     componentType: comp.componentType,
-    ...(pi.type ? { type: pi.type } : {}),
+    ...(exportKindOf(comp, pi.type) ? { type: exportKindOf(comp, pi.type)! } : {}),
     ...(pi.details !== undefined ? { details: pi.details } : {}),
+    ...(pi.role ? { role: pi.role } : {}),
     via: [],
   };
 }
@@ -286,7 +312,14 @@ function subsystemCandidates(
         group.has(source.id), problems);
       if (!bound) return;
       checkPublicName(bound.publicName, sub.id, problems);
-      const entry = { ...bound, ...(pi.type ? { type: pi.type } : {}), ...(pi.details !== undefined ? { details: pi.details } : {}) };
+      // The export kind stays the one derived from the target's transport; an
+      // authored kind is read only where none is derived (the legacy value).
+      const entry = {
+        ...bound,
+        ...(pi.type && !bound.type ? { type: pi.type } : {}),
+        ...(pi.details !== undefined ? { details: pi.details } : {}),
+        ...(pi.role ? { role: pi.role } : {}),
+      };
       checkConsumable(entry, sub.id, problems);
       out.push({ entry, explicit: true, from: index });
       return;
@@ -478,7 +511,10 @@ function withEntryMetadata(entry: ResolvedExport, e: SystemPublicInterface): Res
     ...entry,
     audience: e.audience ?? 'instance',
     ...(e.name ? { name: e.name } : {}),
-    ...(e.type ? { type: e.type } : {}),
+    // The export kind is derived from the backing Portal's transport; an
+    // authored L0 kind is read only where none is derived (the legacy value).
+    ...(e.type && !entry.type ? { type: e.type } : {}),
+    ...(e.role ? { role: e.role } : {}),
     ...(e.details !== undefined ? { details: e.details } : {}),
     ...(e.authPolicy ? { authPolicy: e.authPolicy } : {}),
     ...(e.version ? { version: e.version } : {}),

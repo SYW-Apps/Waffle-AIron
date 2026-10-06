@@ -4,7 +4,7 @@
 // The design export is one JSON document per project holding the whole design,
 // resolved (docs/design/generic-design-model/stage-4-5-export.md). Its zod
 // schemas live here; the JSON Schema shipped with the package
-// (schemas/design-export-1.json) is generated from DesignExportSchema at build
+// (schemas/design-export-<major>.json) is generated from DesignExportSchema at build
 // time (scripts/gen-design-schema.mjs), and a test fails when the two drift.
 //
 // Every object is `passthrough`: the compatibility promise is that a MINOR
@@ -21,10 +21,9 @@ import {
   EventBindingSchema,
   ExternalLinkSchema,
   PatternRefSchema,
-  PortalMountSchema,
+  DeclaredInvocationSchema as StoredDeclaredInvocationSchema,
   InvariantSchema,
   LifecycleEntrypointSchema,
-  MethodSignatureSchema,
   NarrativeStepSchema,
   PortalAuthSchema,
 } from './specs.js';
@@ -37,8 +36,11 @@ export const DESIGN_FORMAT = 'wairon-design';
  * The format version this wairon emits: `MAJOR.MINOR`. A minor only adds; a
  * major removes, renames or changes a meaning and is named in the CHANGELOG.
  * One major is emitted at a time, and a design change is never a format change.
+ * 2.0 is the reachability model's: listener mounts and portalType removed,
+ * transport, abi and the Portal-level invokedBy added, invokedBy kinds
+ * narrowed to entry and runtime with a scope.
  */
-export const DESIGN_FORMAT_VERSION = '1.0';
+export const DESIGN_FORMAT_VERSION = '2.0';
 
 /**
  * design_approval — the approval state a design export is stamped with: the
@@ -98,8 +100,8 @@ export const DesignFieldSchema = z.object({
 }).passthrough();
 export type DesignField = z.infer<typeof DesignFieldSchema>;
 
-/** declared_invocation — a caller outside the modelled graph, as the contract declares it. */
-const DeclaredInvocationSchema = MethodSignatureSchema.shape.invokedBy.unwrap().passthrough();
+/** declared_invocation — a caller outside the modelled graph, as the contract or the Portal declares it. */
+const DeclaredInvocationSchema = StoredDeclaredInvocationSchema.passthrough();
 
 /** design_method — a contract method, or a type's pure method, with its signature resolved. */
 export const DesignMethodSchema = z.object({
@@ -127,6 +129,10 @@ export const DesignExportEntrySchema = z.object({
   audience: z.string().optional(),
   version: z.string().optional(),
   stability: z.string().optional(),
+  /** The entry's export kind, derived from the backing Portal's transport; absent for a type export. */
+  type: z.string().optional(),
+  /** implement for an extension point; absent for call, the default. */
+  role: z.string().optional(),
 }).passthrough();
 export type DesignExportEntry = z.infer<typeof DesignExportEntrySchema>;
 
@@ -186,7 +192,12 @@ export const DesignComponentSchema = z.object({
   variant: z.string().optional(),
   dependencyClass: z.string().optional(),
   durability: z.string().optional(),
-  portalType: z.string().optional(),
+  /** On a Portal: its transport (format 2.0 replaces portalType and its HTTP_API spelling). */
+  transport: z.string().optional(),
+  /** On an InProcess Portal that declares one: how a foreign language links it. */
+  abi: z.string().optional(),
+  /** On a Portal that declares one: the entry its verbs inherit (format 2.0 replaces the listener mounts). */
+  invokedBy: DeclaredInvocationSchema.optional(),
   owns: z.array(z.string()),
   dependsOn: z.array(z.string()),
   emits: z.array(EventBindingSchema.passthrough()),
@@ -194,8 +205,6 @@ export const DesignComponentSchema = z.object({
   auth: PortalAuthSchema.passthrough().optional(),
   basePath: z.string().optional(),
   dispatch: z.array(DispatchBindingSchema.passthrough()),
-  /** A listener's mounts as declared, each portal as a key: entrypoint facts. */
-  mounts: z.array(PortalMountSchema.passthrough()),
   /** The pack-declared patterns the component realizes, as declared. */
   patterns: z.array(PatternRefSchema.passthrough()),
   /** The opaque external references the component documents, as declared. */

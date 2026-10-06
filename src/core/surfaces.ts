@@ -239,6 +239,14 @@ function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: I
     // OpenAPI security + per-portal servers self-contained from the snapshot.
     ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
     ...(comp.basePath ? { basePath: comp.basePath } : {}),
+    // The backing Portal's transport and abi, so a consumer tells a library
+    // (InProcess, called directly) from a network or local surface, and the
+    // entry's role (call, the default, or implement). Carried, never digested:
+    // a pin taken before they were carried lacks them and reads as derived,
+    // never as drifted (contentDigest and memberDigest leave them out).
+    ...(comp.componentType === 'Portal' && comp.transport ? { transport: comp.transport } : {}),
+    ...(comp.componentType === 'Portal' && comp.abi ? { abi: comp.abi } : {}),
+    ...(entry.role ? { role: entry.role } : {}),
     details: entry.details ?? '',
     ...(entry.version ? { version: entry.version } : {}),
     ...(entry.stability ? { stability: entry.stability } : {}),
@@ -293,11 +301,15 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
     return closure.some(d => d.id === qualifiedTypeId(spec)) ? qualifiedTypeId(spec) : spec.id;
   };
 
-  // Steps 10-12: the project's id, the StateId, and the stamp.
+  // Steps 10-12: the project's id, the StateId, and the stamp — with the
+  // producer's targetLanguage, what a consumer in another language judges a
+  // native-ABI library call against.
   const projectId = boundProjectId();
+  const targetLanguage = system.targetLanguage?.trim().toLowerCase();
   return canonicalReferences(SurfaceSnapshotSchema.parse({
     projectName: system.name,
     ...(projectId ? { projectId } : {}),
+    ...(targetLanguage ? { targetLanguage } : {}),
     origin: 'generated',
     stateId: stateIdString(),
     generatedAt: new Date().toISOString(),

@@ -21,6 +21,11 @@ import {
   runAgent,
   mcpInstallCommand,
   announceBinding,
+  runNetworkFlows,
+  runNetworkPolicy,
+  runNetworkDiagram,
+  runNetworkCheck,
+  runNetworkWhy,
 } from './runner.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
@@ -203,7 +208,7 @@ program
   .command('doctor')
   .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
   .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
-  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation); never combines with --fix")
+  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation | reachability); never combines with --fix")
   .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix); a write outside the project root also needs --global")
   .option('--global', 'consent to the --fix writes outside the project root (a machine-wide MCP config, the legacy global plugin); with --yes it answers their confirmation, and each replaced file is backed up beside itself')
   .action(async (opts) => {
@@ -1041,7 +1046,8 @@ program
   .option('--check', 'only check for updates without installing')
   .option('--channel <name>', 'switch release channel (stable|beta|preview|dev)')
   .action(async (opts) => {
-    await runUpdate({ check: opts.check, channel: opts.channel });
+    // The parsed flags are exactly runUpdate's options (--check, --channel).
+    await runUpdate(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -1107,6 +1113,65 @@ skillsCmd
   .description('Install/refresh the SDD skills into each active target tool')
   .action(() => {
     runSkillsInstall();
+  });
+
+// ---------------------------------------------------------------------------
+// network — derived from the design; deployment facts come from a bindings
+// file kept outside .wai/ (docs/network.md)
+// ---------------------------------------------------------------------------
+
+const networkCmd = program
+  .command('network')
+  .description('Derived networking: the allowed-flows matrix, generated NetworkPolicy, the network diagram, a check of observed live flows, and why one flow is allowed');
+
+networkCmd
+  .command('flows')
+  .description('Print the allowed-flows matrix: who reaches which verb, over which transport, through which networks and gateway, on what evidence')
+  .option('--format <format>', 'json | csv | markdown', 'json')
+  .option('--out <file>', 'write it to a file instead of stdout')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkFlows(opts);
+  });
+
+networkCmd
+  .command('policy')
+  .description('Generate Kubernetes NetworkPolicy from the matrix and your bindings file (design names to selectors, namespaces, ports)')
+  .option('--bindings <file>', 'the bindings file the team keeps outside .wai/ (required)')
+  .option('--format <format>', 'kubernetes-network-policy', 'kubernetes-network-policy')
+  .option('--out <file>', 'write it to a file instead of stdout')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkPolicy(opts);
+  });
+
+networkCmd
+  .command('diagram')
+  .description('Print the network picture as a Mermaid flowchart: networks as nested boundaries, gateways, outside, flows per workload pair')
+  .option('--out <file>', 'write it to a file instead of stdout')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkDiagram(opts);
+  });
+
+networkCmd
+  .command('check')
+  .description('Compare observed live flows (CSV or JSON: source, destination[, transport, method, path, count]) with the matrix; exits 1 on an unexpected flow or unknown verb')
+  .option('--observed <file>', 'the observed-flow export (required)')
+  .option('--bindings <file>', 'the bindings file the observed names follow (lets a selector label value stand for its design name)')
+  .option('--format <format>', 'text | json', 'text')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkCheck(opts);
+  });
+
+networkCmd
+  .command('why <from> <to>')
+  .description('Explain from the design why <from> (outside, network[:<id>], a project, subsystem or component) may reach <to> (a project, portal or portal.verb); exits 1 when nothing allows it')
+  .option('--format <format>', 'text | json', 'text')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (from: string, to: string, opts) => {
+    await runNetworkWhy({ ...opts, from, to });
   });
 
 // ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ it('a doubled member id never reaches a canvas label or an OpenAPI name', () => 
   writeSpecFile(s('billing', '.index.yaml'), SubsystemSpecSchema.parse({ id: 'billing', name: 'billing', description: 'd', parentSystem: 'Billing',
     publicInterfaces: [{ type: 'REST', details: 'billing api', component: 'billing' }], trustedLinks: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP }));
   writeSpecFile(s('billing', 'billing', '.index.yaml'), ComponentSpecSchema.parse({ id: 'billing', name: 'billing', description: 'd', subsystem: 'billing',
-    componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP }));
+    componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP }));
   writeSpecFile(s('billing', 'billing', '.interface.yaml'), InterfaceSpecSchema.parse({ id: 'ibilling', name: 'ibilling', description: 'd', component: 'billing',
     methods: [{ name: 'charge', description: 'd', signature: 'charge(): void', returns: 'void', endpoint: { transport: 'HTTP', method: 'POST', path: '/charge' } }],
     status: 'complete', createdAt: STAMP, updatedAt: STAMP }));

@@ -1,0 +1,25 @@
+kind: value-object
+id: network_view_model
+name: NetworkViewModel
+description: >-
+  What the hosted canvas's network view draws: the declared networks as nested boundaries, the
+  workloads inside them, the gateways on them, an outside node, and the flows aggregated per
+  workload pair, each with its transport and the verbs it carries.
+subsystem: sdd_network
+fields:
+  - name: networks
+    type: list<NetworkBoundary>
+    description: The declared networks, outermost first
+    optional: false
+  - name: workloads
+    type: list<FlowParty>
+    description: Each project or component that sends or receives a flow, with the network it sits in
+    optional: false
+  - name: edges
+    type: list<NetworkFlow>
+    description: The flows aggregated per workload pair and transport, evidence and verbs merged
+    optional: false
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:58.505Z'
+updatedAt: '2026-10-06T13:09:59.190Z'

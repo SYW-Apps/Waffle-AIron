@@ -1,7 +1,7 @@
-<!-- wairon-version: 5.1.1-dev.103 -->
+<!-- wairon-version: 5.1.1-dev.104 -->
 <!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
-# Domain Map (12 domains)
+# Domain Map (13 domains)
 
 | ID | Source | Name |
 |----|--------|------|
@@ -12,6 +12,7 @@
 | `sdd_host` | subsystem `sdd_host` | SDD Hosting Server |
 | `sdd_mcp` | subsystem `sdd_mcp` | SDD MCP Server |
 | `sdd_migrations` | subsystem `sdd_migrations` | SDD Family Migrations |
+| `sdd_network` | subsystem `sdd_network` | SDD Derived Networking |
 | `sdd_producers` | subsystem `sdd_producers` | SDD Producers |
 | `sdd_sdk` | subsystem `sdd_sdk` | SDK / Pack Authoring & Archive |
 | `sdd_skills` | subsystem `sdd_skills` | SDD Skills Exporter |
@@ -48,3 +49,4 @@ If `.wai/specs/` exists, the wairon SDD workflow is active; otherwise ignore it.
   5. **Design First, then approval**: Complete the spec and pass `sdd_validate_tree`, then ask the human to approve it with `wairon lock` before writing code. Approval is the lock record (`.wai/lock.json`), not a spec's `status` — the lock does not rewrite statuses; `sdd_get_status` reports the approval state. Code linkage (`sourcePath`, `symbol`, `simPath`, …) is not part of the approval: declare planned source paths at design time, they cost no re-lock.
   6. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
   7. **Members & References**: A project may declare **members** in its `.wai/project.yaml` `members` (create one with `sdd_add_member`). A **part** (the default) stores some of this project's subsystems in another folder or repository: local ids, this project's lock. A **project** member is an independent boundary with its own spec tree and lock, designed from its own root. Reference what another project exports as `alias::name` (the alias is a member or a declared external, the name a public name of its L0 export table); an id without `::` is local. A leading `::`, `super::`, member paths and an L1 subsystem carrying `projectPath` are deprecated: they still resolve for one release, are reported, and `wairon doctor --fix` rewrites them.
+  8. **Reachability**: every Portal verb is reached by a modelled caller or declared an entry (`invokedBy: { kind: entry }`) for real callers outside the design — never an entry invented to silence a finding.

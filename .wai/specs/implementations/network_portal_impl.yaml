@@ -1,0 +1,52 @@
+id: network_portal_impl
+name: Network Portal Implementation
+description: The portal's forwards, in the subsystem's barrel.
+contract: inetwork_portal
+sourcePath: src/network/index.ts
+simPath: tests/network/network-family.test.ts
+methods:
+  - name: flows
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network workflows
+        type: call
+        targetComponent: network_orchestrator
+        targetMethod: flows
+  - name: policy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network workflows
+        type: call
+        targetComponent: network_orchestrator
+        targetMethod: policy
+  - name: diagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network workflows
+        type: call
+        targetComponent: network_orchestrator
+        targetMethod: diagram
+  - name: view
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network workflows
+        type: call
+        targetComponent: network_orchestrator
+        targetMethod: view
+  - name: check
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network workflows
+        type: call
+        targetComponent: network_orchestrator
+        targetMethod: check
+  - name: why
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network workflows
+        type: call
+        targetComponent: network_orchestrator
+        targetMethod: why
+status: complete
+createdAt: '2026-10-06T13:11:21.884Z'
+updatedAt: '2026-10-06T19:44:43.105Z'

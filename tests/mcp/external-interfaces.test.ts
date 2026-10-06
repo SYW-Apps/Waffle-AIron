@@ -76,7 +76,7 @@ function buildChainedWorld(rootDir: string): string {
     publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
-    componentType: 'Portal', portalType: 'HTTP_API',
+    componentType: 'Portal', transport: 'HTTP',
   } as Partial<ComponentSpec>));
   saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
     {

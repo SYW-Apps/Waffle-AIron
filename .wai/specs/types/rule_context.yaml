@@ -201,6 +201,30 @@ fields:
       and types already hold canonical text, so these facts are the only place the stored spellings
       are still visible. Absent on a candidate run.
     optional: true
+  - name: network
+    type: NetworkDeclaration
+    description: >-
+      The bound project's own network declaration (project_config.network), read by the validator
+      from its configuration, so network-boundaries judges the project's own network without I/O.
+      Absent when the project declares none, when its configuration is unreadable, and on a
+      candidate run. The networks around a member are the family run's.
+    optional: true
+  - name: projectLanguages
+    type: map<string, string>
+    description: >-
+      Each scanned project's L0 targetLanguage by project key ('' for the bound root, a contained
+      member by its key), normalized like targetLanguageFor, derived from the project graph's nodes
+      (project_node.targetLanguage): what library-calls judges a contained member's native library
+      against. A project that declares none is absent. Absent on a candidate run.
+    optional: true
+  - name: retiredReachFacts
+    type: list<RetiredReachFact>
+    description: >-
+      The retired reachability forms the run's scan met (spec_loader.retiredReachFacts): the loaded
+      specs already read them compatibly (a retired invokedBy kind as entry or runtime), so these
+      facts are the only place the stored form is still visible. entry-declarations reports
+      INVOKED_BY_RETIRED_KIND from them. Absent on a candidate run.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -340,7 +364,9 @@ methods:
     description: >-
       Every dependsOn edge in the tree, resolved on first ask and kept: the prologue the five
       dependency rules each used to re-pay before they could judge anything, including the pack
-      allowedEdges escape that must relax the whole matrix or none of it
+      allowedEdges escape that must relax the whole matrix or none of it. An edge into another
+      project whose contract entry is backed by an InProcess Portal is classified library once,
+      here, so no boundary or matrix rule needs its own exemption
   - name: specIds
     signature: 'specIds(): SpecId[]'
     returns: list<SpecId>
@@ -413,6 +439,17 @@ methods:
       exports the name: the `alias::publicName` text it must be written as; null otherwise. The
       type-reference rules append it to UNDEFINED_TYPE_REFERENCE, so the finding says the project is
       another project and how to name its type.
+  - name: projectOf
+    signature: 'projectOf(specId: string): string'
+    params:
+      - name: specId
+        type: string
+        description: A spec key of the run's scan
+    returns: string
+    description: >-
+      The key of the project that owns a spec key of the run's scan: '' for the bound project, else
+      the contained member's key (its owner in the project graph, else the longest member key
+      prefixing it). Pure over the scan.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-05T23:35:59.207Z'
+updatedAt: '2026-10-06T18:01:41.918Z'

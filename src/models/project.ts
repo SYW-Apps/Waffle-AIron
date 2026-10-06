@@ -41,7 +41,12 @@ export const NamingRuleConfigSchema = z.object({
   entities: z.string().optional(),
   /** Casing style or regular expression for value-object type names/IDs */
   valueObjects: z.string().optional(),
-  /** Casing style or regular expression for interface/implementation/type method names */
+  /**
+   * Casing style or regular expression for interface/implementation/type
+   * method names. When unset, it follows the target language's convention
+   * (methodCasingFor), so a Rust tree is snake_case without configuring
+   * anything.
+   */
   methods: z.string().optional(),
   /** Casing style or regular expression for general type fields */
   fields: z.string().optional(),
@@ -58,6 +63,33 @@ export const NamingRuleConfigSchema = z.object({
   })).optional(),
 });
 export type NamingRuleConfig = z.infer<typeof NamingRuleConfigSchema>;
+
+/** The method casing each target language's convention asks for, by lowercased language name. */
+const LANGUAGE_METHOD_CASING: Readonly<Record<string, string>> = {
+  rust: 'snake_case',
+  python: 'snake_case',
+  ruby: 'snake_case',
+  c: 'snake_case',
+  elixir: 'snake_case',
+  csharp: 'PascalCase',
+  'c#': 'PascalCase',
+  go: 'PascalCase',
+};
+
+/**
+ * naming_rule_config.methodCasingFor — the casing a method name must have in a
+ * tree of this target language: the configured `methods` casing when set,
+ * else the language's convention — snake_case for rust, python, ruby, c and
+ * elixir; PascalCase for csharp and go exports; camelCase for typescript,
+ * javascript, java, kotlin, swift, dart and any language not listed. The
+ * naming-conventions rule and the authoring and rename tools ask it, so define
+ * and rename accept the same names. Pure.
+ */
+export function methodCasingFor(naming: Pick<NamingRuleConfig, 'methods'> | undefined, targetLanguage?: string): string {
+  if (naming?.methods) return naming.methods;
+  const language = targetLanguage?.trim().toLowerCase();
+  return (language && LANGUAGE_METHOD_CASING[language]) || 'camelCase';
+}
 
 export const DocumentationRuleConfigSchema = z.object({
   /** Minimum character length for description fields */
@@ -585,6 +617,25 @@ export const CompositionConfigSchema = z.object({
 });
 export type CompositionConfig = z.infer<typeof CompositionConfigSchema>;
 
+/**
+ * network_declaration — a project's declaration that it and every member below
+ * it form one isolated network boundary. Logical design, not deployment: no
+ * address, range or region. `network: true` is the short form of an empty
+ * declaration, read as `{}`; `false` reads as no declaration. Networks nest
+ * one level per declaring project; a part cannot declare one.
+ */
+export const NetworkDeclarationSchema = z.object({
+  /** What the boundary encloses, in the declaring project's words; shown on the network diagram. */
+  description: z.string().optional(),
+});
+export type NetworkDeclaration = z.infer<typeof NetworkDeclarationSchema>;
+
+/** A stored `network` value as the configuration reads it: true as `{}`, false or null as none. */
+const NetworkFieldSchema = z.preprocess(
+  (value) => (value === true ? {} : value === false || value === null ? undefined : value),
+  NetworkDeclarationSchema.optional(),
+);
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -657,6 +708,15 @@ export const ProjectConfigSchema = z.object({
    * member's own gate reads it. Written by hand.
    */
   composition: CompositionConfigSchema.optional(),
+
+  /**
+   * Opt-in: this project and every member below it form an isolated network
+   * (`network: true`, or `{ description }`). Read by the family run's network
+   * rules and by the derived networking outputs; part of the gate identity,
+   * because it changes family-run verdicts. Written by hand. Absent in a
+   * part's configuration.
+   */
+  network: NetworkFieldSchema.optional(),
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,

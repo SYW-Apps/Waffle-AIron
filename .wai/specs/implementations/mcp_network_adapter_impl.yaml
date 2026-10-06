@@ -1,0 +1,23 @@
+id: mcp_network_adapter_impl
+name: MCP Network Adapter Implementation
+description: In-process forwards onto the network portal.
+contract: imcp_network_adapter
+sourcePath: src/mcp/adapters/network.ts
+methods:
+  - name: flows
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: flows
+  - name: why
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: why
+status: complete
+createdAt: '2026-10-06T13:14:15.467Z'
+updatedAt: '2026-10-06T13:14:16.123Z'

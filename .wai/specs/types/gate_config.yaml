@@ -3,8 +3,9 @@ id: gate_config
 name: GateConfig
 description: >-
   The project-level half of the gate identity: which profile governs, how the project tuned the
-  design rules, and what it requires of the projects it contains. A lock taken under one and
-  honoured under another was never judged by the gate it claims to have passed.
+  design rules, what it requires of the projects it contains, and whether it declares a network. A
+  lock taken under one and honoured under another was never judged by the gate it claims to have
+  passed.
 fields:
   - name: projectType
     type: string
@@ -24,7 +25,14 @@ fields:
       The project's `composition` block (requirePolicies, requireApprovedMembers), null when absent.
       Stage 5: a changed requirement stales the requiring project's lock.
     optional: true
+  - name: network
+    type: NetworkDeclaration
+    description: >-
+      The project's network declaration, when it declares one: it changes the family run's network
+      verdicts (GATEWAY_BYPASSED, ENTRY_UNPROVEN, EXPORT_BEYOND_NETWORK), so a lock taken without it
+      is not a lock of the gate with it
+    optional: true
 methods: []
 sourcePath: src/core/rules/gate-identity.ts
 createdAt: '2026-09-15T10:51:01.644Z'
-updatedAt: '2026-09-30T06:03:07.439Z'
+updatedAt: '2026-10-06T12:54:47.149Z'

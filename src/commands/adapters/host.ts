@@ -43,6 +43,7 @@ export {
   upsertUnit,
   migratePermissionModel,
   upgradeMemberRecords,
+  migrateReachability,
   startHostServer,
   AdminAuthError,
   LockValidationError,

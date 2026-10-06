@@ -11,19 +11,27 @@ lives in another folder or repository is a **part**, not a project. Around that:
 approval is per project and the same on every machine, packs apply only where a
 project selects them, contract types use one language-neutral grammar, logic is an
 Orchestrator (Specialist and Gateway retire), and the validator checks readability
-and reads the code more closely.
+and reads the code more closely. Reach is modelled too: every Portal verb is either
+called by the design or declared an entry, Portals state one `transport`, listener
+`mounts` retire, projects may declare networks with gateways, and another project's
+library is called directly.
 
 Who is affected:
 
 - **Every project:** the first `validate --ci` after upgrading reports new findings,
-  and every lock reads stale once. Run the upgrade steps below.
+  and every lock reads stale once. Run the upgrade steps below. Portals are no longer
+  reached just by existing, so a Portal verb that no modelled caller reaches reports
+  `UNUSED_COMPONENT` / `UNUSED_METHOD` until its entry is declared.
 - **Families (a project with chained subprojects):** the chained mounts become
   `members`. `wairon doctor --fix` migrates them.
 - **Hosted operators:** run `wairon host doctor --fix` once. Several admin API
   answers and defaults change.
-- **CI:** `validate --ci` can newly fail. The optional `lock-check` workflow is new.
+- **CI:** `validate --ci` can newly fail. The optional `lock-check` workflow is new;
+  it also runs `validate --ci`, which belongs at the family root.
 - **MCP clients and scripts:** some tools are renamed or removed, 16 tools declare an
-  `outputSchema`, and nested unknown keys are refused.
+  `outputSchema`, and nested unknown keys are refused. `sdd_add_component` takes
+  `transport` instead of `portalType` and no longer takes `mounts`.
+- **Generators reading `wairon export`:** the design export is format 2.0.
 - **Library embedders:** `validateSddTree` is now `validateProject`, with no alias,
   and 99 exports are gone.
 
@@ -41,7 +49,11 @@ last.
    model. It also registers every member that hosted families declare as a project
    record of its own. It grants nothing: access is inherited, so everyone's reach
    stays the same, and the plan shows that before anything is written. `wairon serve`
-   warns at startup while this is pending.
+   warns at startup while this is pending. It also migrates every hosted project's
+   spec tree onto the reachability model (the same rewrites as step 5), audited per
+   project; each project it rewrote owes one re-lock by its approvers. The server
+   never applies this on its own when it binds a project, because the rewrite moves
+   the approved design.
    - To upgrade a hosted project's spec tree, pull it into a checkout
      (`wairon remote pull`), run steps 3–8 there, then push it back
      (`wairon remote push --force`, which backs up the tree it replaces).
@@ -71,6 +83,15 @@ last.
    - stored type spellings rewritten to the canonical grammar. This includes
      `Result<T, E>` → `result<T, E>`, `()` → `void`, `T[]` → `list<T>`,
      `T | null` → `T?` and `Promise<T>` → `async T`;
+   - the reachability migration. `portalType` becomes `transport` (`HTTP_API` is
+     `HTTP`; a `Custom` Portal that binds no wire address becomes `InProcess`), each
+     listener's `mounts` become a Portal-level entry on every Portal it served and
+     that Portal's implementation `router` (the mount's `via`), `invokedBy: external`
+     becomes `entry` on a Portal verb and `runtime` elsewhere, an authored export
+     `type` that agrees with the derived kind is dropped, in-process `Custom`
+     endpoint addresses are removed, and allows of retired codes are dropped or
+     renamed. It never invents design: what it cannot decide is listed for an author
+     (`wairon doctor --report reachability`);
    - the member migration. Each legacy L1 mount moves into `members`, ids are
      declared, the exports, externals and `use` imports each reference needs are
      written, deprecated reference forms are rewritten to `alias::name` or a bare
@@ -127,7 +148,13 @@ last.
    - Delete allows that name retired codes, and allows whose finding no longer
      fires (`UNUSED_LINT_ALLOW` says "no such finding fired").
    - Write a method's `calls` where its narrative shows no steps.
-   - Declare `mounts` on the listener Portal that serves each HTTP Portal.
+   - Declare the entries the migration will not invent. A Portal whose callers are
+     outside the design takes a Portal-level `invokedBy: { kind: entry, caller }`:
+     a CLI, a stdio tool surface (`transport: JSONRPC`), a library or SDK
+     (`transport: InProcess`), and any HTTP Portal no listener mounted. Never declare
+     one only to quiet a finding.
+   - Settle every other unreached verb: model the caller that really calls it, or
+     remove it.
    - Make a member's parent-relative `sourcePath`s relative to the member.
    - To soften a warning while you pay it down, set it to `notice` in
      `rules.sddRuleSeverity` (notices never fail `--ci`).
@@ -159,6 +186,10 @@ last.
 
     Pin both the ref and `wairon-version`: the gate identity's algorithm can change
     between versions. Turn on `strict: true` only once re-locking is part of review.
+    After the approval check the job runs `wairon validate --ci` (input `validate`,
+    default `true`). Point `working-directory` at the family root, the project that
+    declares the members: there it is the family run, which judges the network
+    proofs a member's own gate cannot.
 
 `.wai/transactions/` (staged family migrations) ignores itself. Never commit it.
 
@@ -263,8 +294,15 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | `UNUSED_COMPONENT`, `UNUSED_METHOD` | warning | a method with no narrative steps no longer vouches for every collaborator | write its `calls` |
 | `METHOD_SOURCE_PATH_MISSING` | warning | an implementation's realization has begun (a file it names exists) but some contract methods name no file | name each method's file, or the implementation's `sourcePath` |
 | `UNUSED_LINT_ALLOW`, `UNKNOWN_LINT_ALLOW_CODE` | warning | a coarse allow on a code that names sites, an allow naming an error, or an allow naming a retired code | one allow per site (`at:`); delete the rest |
-| `UNMOUNTED_PORTAL`, `ENDPOINT_OUTSIDE_MOUNT` | warning | an HTTP Portal no listener mounts, or an endpoint outside its mount's prefixes | declare `mounts` on the listener (an empty list on a Portal that serves itself) |
-| `MOUNT_TARGET_NOT_PORTAL` | error | a listener mounts something that is not a Portal | fix the mount |
+| `UNUSED_COMPONENT`, `UNUSED_METHOD` (on a Portal) | warning | Portals are no longer automatic reachability roots: a verb that no modelled caller reaches and that is not declared an entry | model the caller, declare the entry for real outside callers, or remove the verb |
+| `MISSING_PORTAL_TRANSPORT` | error | a Portal states no `transport` (was `MISSING_PORTAL_TYPE`) | `doctor --fix`, or state it |
+| `ENTRY_ON_NON_PORTAL` | error | `invokedBy: { kind: entry }` on a method of a non-Portal | use `kind: runtime` |
+| `GATEWAY_BYPASSED` | error | inside a declared network, a non-gateway Portal is entered from outside, or a modelled call crosses into the network onto a non-gateway | enter through the gateway, or mark the Portal `variant: gateway` |
+| `LIBRARY_CALL_IMPURE` | error | pure or read logic calls a library verb whose `effect` it may not reach (an undeclared effect counts as impure) | declare the verb's `effect`, or move the call into a workflow |
+| `LANGUAGE_BRIDGE_MISSING` | error | a native `InProcess` library (no `abi`) is called from a project in another `targetLanguage` | declare `abi: c` or `abi: wasm`, or put a network Portal in front |
+| `IMPLEMENTS_MISMATCH` | error | an interface that `implements` an extension point misses one of its methods or changes a signature | state every method with the same signature |
+| `ENTRY_SCOPE_NOT_NETWORK`, `INVOKED_BY_RETIRED_KIND` | warning | an entry `scope` on a local or in-process verb, or an `invokedBy` kind `external` / `sibling-subsystem` (read compatibly for one release) | drop the scope; `doctor --fix` for `external`, model the caller for `sibling-subsystem` |
+| `ENTRY_UNPROVEN`, `EXPORT_BEYOND_NETWORK` | warning | family run: a `network` entry no modelled caller in its boundary reaches; a network verb exported beyond the project that is not the outermost gateway entered from outside | model the caller (or a reasoned `lint.allow` for an unmodelled one); narrow the audience or export the gateway |
 | `UNTYPED_SEAM`, `UNREALIZED_CLAIM`, `UNCONDITIONAL_CALL_CYCLE` | warning | existing rules now see bare types nested in a published method, "persistence" claims, and cycles through parallel, `doWhile` and `try` steps | follow the message |
 | † `CALL_STEP_UNREALIZED` | warning | a call step (or declared call) does not land in the target method's own source file; a same-named function elsewhere no longer counts | fix the call or the target's `sourcePath`, or map it with `symbol` |
 | † `CALL_ORIGIN_UNRESOLVED`, `METHOD_BODY_NOT_FOUND`, `UNDECLARED_COLOCATED_CALL` | warning | a call site the analysis cannot follow, a declaration without a body, or an undeclared call between components sharing a file | point at the body, narrate or declare the call |
@@ -288,7 +326,12 @@ errors.
 one does nothing):
 `ARCHITECTURE_VIOLATION_SPECIALIST_DEP`, `GATEWAY_CONTAINMENT`,
 `LANGUAGE_FOREIGN_BUILTIN`, `NAMESPACE_SHADOWING`, `CROSS_TREE_REF_UNRESOLVED`,
-`SURFACE_STALE`, `UNVERIFIED_EXTERNAL_REF`, `CHAINED_SUBPROJECT_CONTEXT`. The built-in
+`SURFACE_STALE`, `UNVERIFIED_EXTERNAL_REF`, `CHAINED_SUBPROJECT_CONTEXT`, and with the
+reachability model `UNMOUNTED_PORTAL`, `ENDPOINT_OUTSIDE_MOUNT`, `MOUNT_TARGET_NOT_PORTAL`,
+`PUBLIC_INTERFACE_TYPE_MISMATCH` and `PUBLIC_INTERFACE_EVENT_MISTYPED`.
+`MISSING_PORTAL_TYPE` is renamed `MISSING_PORTAL_TRANSPORT` (`doctor --fix` rekeys an
+allow or severity naming it). Two notices are new: `MULTIPLE_GATEWAYS` and
+`ENTRY_SCOPE_UNBOUNDED` (a `network` scope with no declared network around it). The built-in
 rules are split into smaller named rules (40 → 115); a split rule kept its codes.
 
 #### Spec, configuration and lock
@@ -302,6 +345,28 @@ rules are split into smaller named rules (40 → 115); a split rule kept its cod
   order.
 - **A project's own `complexity`, `documentation` and `naming` settings override its
   profile pack's**, as its severities already did.
+- **Reachability.** A Portal states `transport` (renamed from `portalType`; one
+  vocabulary with its endpoints, `HTTP_API` read as `HTTP`, and new `JSONRPC` for
+  JSON-RPC over stdio and `InProcess` for a library, which binds no endpoint), an
+  optional `abi` (`c`, `wasm`) when `InProcess`, and an optional Portal-level
+  `invokedBy` entry its verbs inherit. Component `mounts` are gone; a Portal's L4
+  `router` names the router entry its file exports (linkage, outside the approval).
+  `invokedBy.kind` is `entry | runtime` with a `scope` (`outside | network`); `external`
+  and `sibling-subsystem` are retired. The export kind (`type`) on L1 and L0
+  `publicInterfaces` entries is derived from the backing Portal, no longer authored;
+  an entry may carry `role: implement`, and an interface may declare `implements`.
+  The method `effect` vocabulary gains `none` and `io`. `project.yaml` gains
+  `network`, which enters the gate identity only when declared.
+- **Naming follows the target language.** A method's casing defaults from
+  `targetLanguage` (camelCase for TypeScript and Java, snake_case for Rust and
+  Python) unless `rules.naming` sets it, and the rename tools validate a new name
+  against it instead of always requiring camelCase.
+- **Design export format 2.0.** `components[].portalType` is `transport`, `mounts` is
+  removed, a Portal may carry `abi` and `invokedBy`, `invokedBy` kinds are
+  `entry | runtime` with a `scope`, and export entries carry `role` and a derived
+  `type`. The schema ships as `schemas/design-export-2.json`. Surface snapshots
+  carry each entry's `transport`, `abi` and `role` and the producer's
+  `targetLanguage`; a pin taken before reads the absent fields as unchanged.
 - **Specs:** `Specialist` and `Gateway` retire. Type positions follow the grammar.
   `lint.allow` gains `at` and `covers`, and `sdd_update_spec` merges allows by code
   and `at`. A method effect can be `lifecycle`. An L1 subsystem carrying
@@ -311,7 +376,7 @@ rules are split into smaller named rules (40 → 115); a split rule kept its cod
   spec. `children` is read for one release and never written.
   - The per-spec digests and the gate identity read each spec's **design**
     (`specsReading: design`). Code linkage is left out: `sourcePath`, `symbol`,
-    `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a mount's `via`,
+    `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a Portal's `router`,
     `externalLinks`, and the `createdAt`/`updatedAt` timestamps. Linking code to an
     approved design, or a change and its revert, never stales a lock.
   - A format-2 record from an earlier v6 build still passes while unchanged, and
@@ -380,6 +445,38 @@ and rewritten by `wairon doctor --fix`:
 
 ### New
 
+**Reachability, networks and libraries.**
+
+- Every Portal verb is reached by a modelled caller or declared an entry, and the
+  unused-component and unused-method findings now name both remedies for a Portal.
+  A Portal-level entry covers every verb; a verb may override its scope.
+- **Networks.** `network: true` (or `{ description }`) in `project.yaml` makes a
+  project and its members an isolated network. Entries are scoped `outside` or
+  `network`, relative to the innermost network, so a member written alone still
+  resolves them. Inside a network only a `gateway` Portal is entered from outside,
+  one gateway per level. The family run at the root proves each `network` entry has a
+  modelled caller inside its boundary. A project that declares no network sees none
+  of this.
+- **Libraries.** An `InProcess` Portal is a library (or, with `abi`, an FFI, DLL or
+  WebAssembly surface) and needs no endpoint. Another project calls its exported
+  verbs directly from any component, with no client Adapter, checked for purity and
+  for the language bridge.
+- **Extension points.** An export entry with `role: implement` is a contract
+  consumers supply (a trait, a callback, a webhook); a consumer's interface declares
+  `implements: alias::name`, and its methods count as reached.
+- **Derived networking.** `wairon network flows | policy | diagram | check | why`
+  derives an allowed-flows matrix (JSON, CSV or Markdown), Kubernetes
+  `NetworkPolicy` from a bindings file kept outside `.wai/`, a Mermaid diagram of the
+  networks as trust boundaries, a comparison of observed live flows, and the
+  modelled chain behind one flow. The specs never hold an address. The MCP server
+  adds `sdd_get_network_flows` and `sdd_explain_flow`, and the hosted web API adds
+  `GET /web/projects/network`. See `docs/network.md`.
+- **CI at the family root.** A member validated alone says in one line that its
+  network proofs are judged at the family root. The reusable `lock-check` workflow
+  gains a `validate` input (default `true`) that runs `wairon validate --ci` in its
+  `working-directory`.
+- `wairon doctor --report reachability` prints the reachability migration's plan.
+
 **Members, parts and projects.**
 
 - A member is declared by one location key: `scheduler: services/scheduler`,
@@ -441,13 +538,15 @@ with `dryRun`. A rename keeps the old id in `previousIds` and asks for a re-lock
 
 **Code ↔ spec.**
 
-- Calls are checked where they land, and parameters, exports, type shapes, listener
-  mounts and routes are compared against the code.
+- Calls are checked where they land, and parameters, exports, type shapes and routes
+  are compared against the code. Route coverage reads a Portal's routes from its L4
+  `router`.
 - `rules.conformance.sourceRoots` reports `UNCLAIMED_SOURCE_FILE` for code no spec
   names.
 - A type can claim its file (`sourcePath`, `symbol`).
 - A method's `calls` declares what it calls when its narrative shows no steps.
-- `register` steps and `invokedBy` declare callers outside the modelled graph.
+- `register` steps and `invokedBy` (`entry` on a Portal, `runtime` anywhere) declare
+  callers outside the modelled graph.
 - `rules.conformance.carried` holds classified debt.
 
 **Design blocks.**
@@ -537,6 +636,25 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 - `wairon dev` is a local Canvas and Specs shell with no sign-in.
 
 ### Fixes
+
+- **Reachability.** No Portal is exempt from the unused findings by a field the
+  authoring tool wrote for it. A library no longer needs invented `Custom`
+  endpoint addresses to satisfy `MISSING_ENDPOINT`, and a library's consumers no
+  longer need a client Adapter per library. An exported extension point is no longer
+  refused as unconsumable. A type the project exports at L0 counts as used, and in
+  the family run so do its consumers' uses. An export's kind is no longer guessed
+  from its description prose.
+- **Rename tools and casing.** The rename tools accepted only camelCase method names
+  even in a tree whose define tools wrote snake_case; they now follow the project's
+  method casing.
+- **Lazy loads in the code analysis.** A call through a destructured
+  `require('…')` or `await import('…')` binding (`const { f } = require('./m')`)
+  resolves to the module it loads, as a static named import does, so the call it
+  realizes is no longer reported unrealized. A name two lazy loads bind differently,
+  or that a static import or a local function also binds, stays unresolved.
+- **Hosted member upgrade.** The member upgrade's plan, apply and drop are one
+  workflow of the member registration again, so the local admin entry point only
+  forwards to it.
 
 - **External sources.** A `project.yaml` external's `source` is read in either
   form: the location string (`../x`, `hosted:<id>`, `<git url>`,
@@ -679,8 +797,8 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 - **Messages and tools.**
   - `sdd_get_spec` infers the kind from a unique id, and refuses an id that names
     specs of several kinds.
-  - `sdd_set_endpoints` accepts the Portal's transport naming (`HTTP_API`, stored as
-    `HTTP`) and refuses a transport the Portal's `portalType` does not imply.
+  - `sdd_set_endpoints` refuses a transport the Portal's `transport` does not imply,
+    and an endpoint on an `InProcess` Portal, which needs none.
   - A family migration's re-lock list names the project it ran in as
     `this project (.)`, where it printed a bare `.` that read as an empty list.
   - `lock-check` on a stale lock says what moved: how many of the project's own spec
@@ -702,10 +820,11 @@ design as one deterministic JSON document (`wairon-design` 1.0,
   `.mcp.json` keep their line endings.
 - **Agent briefs.** A brief states which files the agent may write, and a brief
   can be asked for by component id.
-- **Generated guidance.** The `sdd-architect` skill no longer tells assistants to
-  give a lone Portal `mounts: []`. That marks the Portal as its own listener and
-  hid `UNMOUNTED_PORTAL`. The skill now says a service's HTTP listener is the
-  Portal that declares `mounts`, one entry for each Portal it serves.
+- **Generated guidance.** The guide and the `sdd-architect`, `sdd-implement` and
+  `sdd-delegate` skills describe the reachability model: how to declare entries and
+  networks, that an entry is never invented to quiet a finding, that libraries are
+  called directly, how to name transports, and that method names follow the
+  language's casing while wire names live on endpoints.
 - **`wairon status`.** Progress is measured per component: 80% once its
   component, contract and implementation specs are written, and 100% once its
   implementation names source files that exist. It is capped at 50% while any of

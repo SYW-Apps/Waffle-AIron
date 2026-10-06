@@ -5,7 +5,6 @@ import {
   DESIGN_VIEW_FIELDS,
   ImplementationSpecSchema,
   MethodImplementationSchema,
-  PortalMountSchema,
   TypeMethodSchema,
   TypeSpecSchema,
   componentDesignView,
@@ -28,7 +27,6 @@ const SCHEMAS: Array<[keyof typeof DESIGN_VIEW_FIELDS, z.AnyZodObject]> = [
   ['type', TypeSpecSchema],
   ['typeMethod', TypeMethodSchema],
   ['component', ComponentSpecSchema],
-  ['portalMount', PortalMountSchema],
 ];
 
 describe('the design view classifies every schema field', () => {
@@ -46,10 +44,10 @@ describe('the design view classifies every schema field', () => {
 const now = '2026-10-06T10:00:00.000Z';
 
 describe('the projections drop exactly the linkage', () => {
-  it('an implementation keeps its design and loses sourcePath, simPath, injectedParams, tiers, symbols and timestamps', () => {
+  it('an implementation keeps its design and loses sourcePath, simPath, router, injectedParams, tiers, symbols and timestamps', () => {
     const impl = {
       id: 'x_impl', name: 'X', description: 'd', contract: 'ix', status: 'complete',
-      sourcePath: 'src/x.ts', simPath: 'tests/sim/x.ts', injectedParams: ['config'], conformance: 'anchored',
+      sourcePath: 'src/x.ts', simPath: 'tests/sim/x.ts', router: 'handleX', injectedParams: ['config'], conformance: 'anchored',
       technologies: ['postgres'], detail: 'full', previousIds: ['old_impl'], lint: { allow: [] }, ext: { 'a:b': 1 },
       methods: [{
         name: 'run', narrative: [{ stepNumber: 1, description: 'go', type: 'local' }], intent: 'i',
@@ -82,12 +80,14 @@ describe('the projections drop exactly the linkage', () => {
   it('a component loses each mount\'s via and its externalLinks, keeping portal and prefixes', () => {
     const component = {
       id: 'web', name: 'Web', description: 'd', subsystem: 's', componentType: 'Portal', owns: [], dependsOn: [],
+      transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'Browsers', scope: 'outside' },
       mounts: [{ portal: 'api', prefixes: ['/api'], via: 'apiRouter' }],
       externalLinks: [{ type: 'implementation', url: 'https://example.com' }],
       createdAt: now, updatedAt: now,
     };
     expect(componentDesignView(component)).toEqual({
       id: 'web', name: 'Web', description: 'd', subsystem: 's', componentType: 'Portal', owns: [], dependsOn: [],
+      transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'Browsers', scope: 'outside' },
       mounts: [{ portal: 'api', prefixes: ['/api'] }],
     });
   });

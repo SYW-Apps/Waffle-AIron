@@ -15,8 +15,8 @@ subsystem: sdd_cli
 componentType: Adapter
 owns: []
 dependsOn:
-  - mcp_portal
+  - mcp_hosting_portal
   - project_config_portal
 status: complete
 createdAt: '2026-08-12T18:42:01.746Z'
-updatedAt: '2026-09-25T17:35:30.132Z'
+updatedAt: '2026-10-06T19:01:51.862Z'

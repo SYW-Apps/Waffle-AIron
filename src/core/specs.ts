@@ -87,6 +87,12 @@ import {
   type StoredInterfaceSpec,
   type StoredTypeSpec,
   type ProjectRelations,
+  type RetiredReachFact,
+  attachRetiredMounts,
+  carryRetiredReachForms,
+  readRetiredReachForms,
+  retiredInvocationReadAs,
+  retiredMountsOf,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -157,6 +163,14 @@ export interface SpecIndex {
    * only place the stored spellings are still visible.
    */
   typeSpellings: TypeSpellingFacts;
+  /**
+   * What the scan met in the forms the reachability model retired (each
+   * Portal's portalType and listener mounts, each invokedBy of a retired kind,
+   * each authored export type, each in-process Custom endpoint), with what the
+   * stored spec held there. The loaded specs hold the compatible reading, so
+   * this is the only place the stored form is still visible to the migration.
+   */
+  retiredReach: RetiredReachFact[];
 }
 
 // spec_index.retiredBy is pure and lives with the trace schemas
@@ -369,7 +383,58 @@ function emptyIndex(): SpecIndex {
     },
     signatures: { sources: [], staleTexts: [] },
     typeSpellings: emptyTypeSpellingFacts(),
+    retiredReach: [],
   };
+}
+
+/** A stored spec document as written, or null when there is none or it does not read as an object. */
+function storedDocument(file: string): Record<string, unknown> | null {
+  if (!pathExists(file)) return null;
+  try {
+    const doc = readSpecFile(file);
+    return doc && typeof doc === 'object' && !Array.isArray(doc) ? (doc as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A stored interface document with every method's invokedBy of one retired kind left out (a copy; the document is not touched). */
+function withoutRetiredKind(doc: Record<string, unknown> | null, kind: string): Record<string, unknown> | null {
+  if (!doc || !Array.isArray(doc.methods)) return doc;
+  const methods = doc.methods.map((m) => {
+    if (!m || typeof m !== 'object') return m;
+    const invokedBy = (m as Record<string, unknown>).invokedBy as Record<string, unknown> | undefined;
+    if (invokedBy?.kind !== kind) return m;
+    const { invokedBy: _retired, ...rest } = m as Record<string, unknown>;
+    return rest;
+  });
+  return { ...doc, methods };
+}
+
+/**
+ * The retired reachability forms only the whole family can read, once every
+ * spec is keyed and every reference bound: a method's stored `external`
+ * invokedBy is an entry when its contract belongs to a Portal (the per-file
+ * read made it a runtime hook), and a Portal whose retired portalType was
+ * Custom and that binds no endpoint on any verb is recorded as in-process,
+ * the reading the migration rewrites it to. In place, on the index.
+ */
+function readRetiredReachAcrossSpecs(index: SpecIndex): void {
+  const componentsById = new Map(index.components.map((c) => [c.id, c]));
+  for (const fact of index.retiredReach) {
+    if (fact.form !== 'invoked-by-kind' || fact.stored !== 'external' || fact.at === undefined) continue;
+    const intf = index.interfaces.find((i) => i.id === fact.specId);
+    if (!intf || componentsById.get(intf.component)?.componentType !== 'Portal') continue;
+    const method = intf.methods.find((m) => m.name === fact.at);
+    if (method?.invokedBy) method.invokedBy = { ...method.invokedBy, kind: retiredInvocationReadAs('external', true) };
+  }
+  for (const fact of [...index.retiredReach]) {
+    if (fact.form !== 'portal-type' || fact.stored !== 'Custom') continue;
+    const portal = componentsById.get(fact.specId);
+    if (!portal || portal.componentType !== 'Portal') continue;
+    const binds = index.interfaces.some((i) => i.component === portal.id && i.methods.some((m) => m.endpoint !== undefined));
+    if (!binds) index.retiredReach.push({ form: 'in-process-endpoint', specId: portal.id, stored: { transport: 'Custom', endpoints: [] } });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -692,7 +757,7 @@ function headAcross(rootDir: string, dir: string): string | undefined {
 }
 
 /** The fields a part's configuration must not declare: they are a project's (stage 8). */
-const PART_FORBIDDEN_FIELDS = ['members', 'externals', 'rules', 'extensions', 'composition', 'targets'];
+const PART_FORBIDDEN_FIELDS = ['members', 'externals', 'rules', 'extensions', 'composition', 'targets', 'network'];
 
 /** Where a part's configuration is edited: the file on disk, or — for a git part — in which repository. */
 function whereToEdit(decl: { storage: MemberStorage; source?: ExternalSource }, dir: string): string {
@@ -1033,7 +1098,9 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
         owns: (c.owns ?? []).map((o) => map('owns', o)),
         dependsOn: (c.dependsOn ?? []).map((d) => map('dependsOn', d)),
         ...(c.dispatch ? { dispatch: c.dispatch.map((b) => ({ ...b, component: map('dispatch', b.component) })) } : {}),
-        ...(c.mounts ? { mounts: c.mounts.map((m) => ({ ...m, portal: map('mounts', m.portal) })) } : {}),
+        // Retired listener mounts stay read (untyped) until the reachability
+        // migration rewrites them, so their portal references bind as before.
+        ...(retiredMountsOf(c).declared ? { mounts: retiredMountsOf(c).mounts.map((m) => ({ ...m, portal: map('mounts', m.portal) })) } : {}),
       } as unknown as T;
     }
     case 'interface': {
@@ -1112,6 +1179,8 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
     case 'interface':
     case 'type':
       typeSlotReferences(kind, spec).forEach((t) => add('type', t));
+      // The extension point a contract realizes: another project's export.
+      if (kind === 'interface') add('implements', (spec as InterfaceSpec).implements);
       break;
     case 'implementation':
       for (const m of (spec as ImplementationSpec).methods) {
@@ -1944,6 +2013,14 @@ export interface SaveSpecOptions {
    * lines per spec where the status flip alone is one.
    */
   preserveUpdatedAt?: boolean;
+  /**
+   * The reachability migration's own write: the retired reachability forms it
+   * rewrote are retired, not carried back — a component's stored listener
+   * `mounts`, an interface method's stored retired invokedBy kind, and a stored
+   * endpoint the written method leaves out (an in-process Custom address the
+   * migration dropped). Every other write keeps carrying them.
+   */
+  retireReachForms?: boolean;
 }
 
 /**
@@ -3029,7 +3106,12 @@ export class SpecWorkspace {
       index.types.push(...raw.index.types);
       index.groups.push(...raw.index.groups);
       for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) Object.assign(index.paths[kind], raw.index.paths[kind]);
+      index.retiredReach.push(...raw.index.retiredReach.map((fact) => ({ ...fact, specId: keyIn(raw.record.namespace, fact.specId) })));
     }
+    // The retired reachability forms that need the whole family to read:
+    // `external` on a Portal's contract is an entry, and a retired Custom
+    // portalType whose Portal binds no endpoint at all is an in-process one.
+    readRetiredReachAcrossSpecs(index);
     // Step 22: once every reference of the family is bound, its signatures —
     // sourced methods filled, every params-bearing method's text derived; the
     // facts kept on the index, the one place the stored form stays visible.
@@ -3172,7 +3254,9 @@ export class SpecWorkspace {
     const systemYaml = path.normalize(projectPaths.specsSystem());
     if (pathExists(systemYaml)) {
       try {
-        raw.rawSystem = SystemSpecSchema.parse(readSpecFile(systemYaml));
+        const doc = readSpecFile(systemYaml);
+        if (doc && typeof doc === 'object') raw.index.retiredReach.push(...readRetiredReachForms('system', doc as Record<string, unknown>));
+        raw.rawSystem = SystemSpecSchema.parse(doc);
       } catch {
         raw.rawSystem = null; // the bound root's L0 is reported by the loader's own read
       }
@@ -3416,14 +3500,27 @@ export class SpecWorkspace {
         if ('parentSystem' in doc) {
           detectedType = 'subsystem';
           const parsed = SubsystemSpecSchema.parse(doc);
+          if (!(parsed.projectPath && parsed.projectPath.trim() !== '')) {
+            index.retiredReach.push(...readRetiredReachForms('subsystem', doc as Record<string, unknown>));
+          }
           if (parsed.projectPath && parsed.projectPath.trim() !== '') raw.mounts.push({ spec: parsed, file });
           else keep('subsystem', index.subsystems, parsed, file);
         } else if ('componentType' in doc) {
           detectedType = 'component';
-          keep('component', index.components, ComponentSpecSchema.parse(doc), file);
+          // Retired reachability forms are read compatibly and kept as facts;
+          // a listener's mounts stay read (untyped) on the loaded spec.
+          const facts = readRetiredReachForms('component', doc as Record<string, unknown>);
+          const parsed = attachRetiredMounts(ComponentSpecSchema.parse(doc), doc as Record<string, unknown>);
+          index.retiredReach.push(...facts);
+          keep('component', index.components, parsed, file);
         } else if ('component' in doc) {
           detectedType = 'interface';
-          keep('interface', index.interfaces, InterfaceSpecSchema.parse(doc), file);
+          // A retired invokedBy kind reads as runtime here; the scan re-reads
+          // `external` as an entry once it knows the contract is a Portal's.
+          const facts = readRetiredReachForms('interface', doc as Record<string, unknown>);
+          const parsed = InterfaceSpecSchema.parse(doc);
+          index.retiredReach.push(...facts);
+          keep('interface', index.interfaces, parsed, file);
         } else if ('contract' in doc) {
           detectedType = 'implementation';
           const parsed = ImplementationSpecSchema.parse(doc);
@@ -4386,8 +4483,9 @@ export class SpecWorkspace {
     const p = this.getComponentPath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readSpecFile(p);
-      return ComponentSpecSchema.parse(raw);
+      const raw = readSpecFile(p) as Record<string, unknown>;
+      readRetiredReachForms('component', raw);
+      return attachRetiredMounts(ComponentSpecSchema.parse(raw), raw);
     } catch (e: any) {
       this.loaderIssues.push({
         severity: 'error',
@@ -4407,6 +4505,9 @@ export class SpecWorkspace {
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareComponentForWrite(spec);
+    // A caller still handing the retired portalType is read as the loader
+    // reads a stored file: the spelling becomes the transport it names.
+    readRetiredReachForms('component', specToWrite as unknown as Record<string, unknown>);
 
     const existing = this.loadComponentSpec(spec.id);
     if (existing) {
@@ -4442,7 +4543,15 @@ export class SpecWorkspace {
       );
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id), 'component');
+    const componentOut = parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id);
+    // Retired listener mounts the schema no longer types: the spec's own (read
+    // untyped by the loader), else the stored file's, until doctor --fix
+    // rewrites them — never dropped by a write that did not decide to.
+    const retainedMounts = retiredMountsOf(specToWrite).declared
+      ? { mounts: (specToWrite as unknown as Record<string, unknown>).mounts }
+      : storedDocument(p);
+    if (!opts?.retireReachForms) carryRetiredReachForms('component', retainedMounts, componentOut as unknown as Record<string, unknown>);
+    this.writeHome(p, componentOut, 'component');
     registryInvalidateCache();
     // Keep the physical layout in sync with ownership: nest owned members under
     // their pattern, and move anything an `owns` change has displaced.
@@ -4516,7 +4625,9 @@ export class SpecWorkspace {
     const p = this.getInterfacePath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readSpecFile(p);
+      const raw = readSpecFile(p) as Record<string, unknown>;
+      const owner = typeof raw.component === 'string' ? index.components.find((c) => c.id === raw.component) : undefined;
+      readRetiredReachForms('interface', raw, owner?.componentType === 'Portal');
       // A file the scan did not index is resolved alone, against the index's components and types.
       return resolveTree([interfaceCanonicalTypes(InterfaceSpecSchema.parse(raw)).spec], index.components, index.types).interfaces[0];
     } catch (e: any) {
@@ -4572,6 +4683,10 @@ export class SpecWorkspace {
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareInterfaceForWrite(spec);
+    // A caller still handing a retired invokedBy kind is read as the loader
+    // reads a stored file (the carry below keeps a stored one as stored).
+    const contractOwner = this.scanAll().components.find((c) => c.id === spec.component);
+    readRetiredReachForms('interface', specToWrite as unknown as Record<string, unknown>, contractOwner?.componentType === 'Portal');
 
     const existing = this.loadInterfaceSpec(spec.id);
     if (existing && existing.component !== spec.component
@@ -4586,8 +4701,9 @@ export class SpecWorkspace {
       if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
         specToWrite.status = existing.status;
       }
-      // Preserve endpoint bindings for matching methods that don't carry their own
-      for (const m of specToWrite.methods) {
+      // Preserve endpoint bindings for matching methods that don't carry their
+      // own — unless the reachability migration dropped them deliberately.
+      for (const m of opts?.retireReachForms ? [] : specToWrite.methods) {
         if (m.endpoint) continue;
         const existingMethod = existing.methods.find(x => x.name === m.name);
         if (existingMethod && existingMethod.endpoint) {
@@ -4596,7 +4712,14 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    this.writeHome(p, parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id), 'interface');
+    const interfaceOut = parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id);
+    // A retired invokedBy kind the author left as it was read stays as stored
+    // until doctor --fix rewrites it.
+    // The reachability migration retires a stored `external` it rewrote, but
+    // never a stored `sibling-subsystem`: that one it only reports.
+    const storedInterface = storedDocument(p);
+    carryRetiredReachForms('interface', opts?.retireReachForms ? withoutRetiredKind(storedInterface, 'external') : storedInterface, interfaceOut as unknown as Record<string, unknown>);
+    this.writeHome(p, interfaceOut, 'interface');
     registryInvalidateCache();
     return notices;
   }
@@ -4822,6 +4945,14 @@ export class SpecWorkspace {
       implementation: ImplementationSpecSchema,
       type: TypeSpecSchema,
     }[kind];
+    // The retired reachability forms are read compatibly, never stripped: a
+    // portalType becomes the transport it names, and a listener's mounts are
+    // carried by the writer until the migration rewrites them.
+    if ((kind === 'component' || kind === 'interface') && raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      raw = { ...(raw as Record<string, unknown>) };
+      readRetiredReachForms(kind, raw as Record<string, unknown>);
+      if (kind === 'component') delete (raw as Record<string, unknown>).mounts;
+    }
     const parsed = schema.safeParse(raw);
     if (!parsed.success) return [];
     const out: string[] = [];
@@ -5152,6 +5283,21 @@ export class SpecWorkspace {
     const fromFile = this.scanAll().typeSpellings.respellings.filter((r) => r.specId === merged.id && r.kind === kind
       && !respelled.has(r.path) && typePositionText(merged, r.path) === r.stored);
     return [...read.respellings, ...fromFile];
+  }
+
+  /**
+   * ispec_index.retiredReachFacts — what the current scan met in the forms the
+   * reachability model retired, with what the stored spec held there. The
+   * loader reads them compatibly for one release, so the stored value would
+   * otherwise be gone by the time the migration asks. Read from the cached
+   * scan, rescanning first when the tree changed.
+   */
+  retiredReachFacts(): RetiredReachFact[] {
+    // Step 1: serve the workspace scan, rescanning when the file signature no longer holds.
+    const index: SpecWorkspace = this;
+    index.listProjectRoots();
+    // Step 2: the retired forms the scan recorded on the index.
+    return this.cachedIndex!.retiredReach;
   }
 
   /**
@@ -7711,6 +7857,11 @@ export function signatureFacts(): SignatureFacts {
 /** ispec_loader.typeSpellingFacts — forwarded 1:1 to the index read face. */
 export function typeSpellingFacts(): TypeSpellingFacts {
   return current().typeSpellingFacts();
+}
+
+/** ispec_loader.retiredReachFacts — forwarded 1:1 to the index read face. */
+export function retiredReachFacts(): RetiredReachFact[] {
+  return current().retiredReachFacts();
 }
 
 /** Restore files captured by snapshotSpecFiles(). Caller invalidates the cache. */

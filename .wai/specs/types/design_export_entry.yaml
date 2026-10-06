@@ -28,7 +28,19 @@ fields:
   - name: stability
     type: string
     optional: true
+  - name: type
+    type: string
+    description: >-
+      The entry's export kind (REST, GraphQL, MessageBus, RPC or Custom), derived from the backing
+      Portal's transport (transport.exportKind); absent for a type export
+    optional: true
+  - name: role
+    type: string
+    description: >-
+      What consumers do with the entry: implement for an extension point; absent for call, the
+      default
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:52.929Z'
-updatedAt: '2026-10-04T23:38:36.736Z'
+updatedAt: '2026-10-06T18:15:10.698Z'

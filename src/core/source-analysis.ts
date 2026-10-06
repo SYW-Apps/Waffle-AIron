@@ -473,6 +473,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const calls = new Map<string, Map<string, CallSiteFact>>();
   const bodies = new Map<string, FunctionBodyFact[]>();
   const importBindings = new Map<string, ImportBindingFact>();
+  /**
+   * The names a destructured lazy load binds — `const { f } = require('m')`,
+   * `const { f: g } = await import('m')` — each with where it came from, or
+   * null once two of them disagree. Joined into importBindings after the walk,
+   * and only where the name is unambiguous.
+   */
+  const lazyBindings = new Map<string, ImportBindingFact | null>();
   const typeOnlyBindings = new Map<string, string>();
   const fieldTypes = new Map<string, Set<string>>();
   const localTypes = new Map<string, Set<string>>();
@@ -513,6 +520,45 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
       for (const el of name.elements) {
         if (ts.isBindingElement(el)) addBindingNames(el.name);
+      }
+    }
+  };
+
+  /**
+   * A destructured lazy load: `const { a, b: c } = require('m')` or
+   * `= await import('m')`, through any `as`/`satisfies`/parentheses/`!`.
+   * Each plain element binds its local name to the module's export, as a
+   * static named import would; a rest element, a nested pattern or a computed
+   * key binds nothing it could name.
+   */
+  const recordLazyBindings = (decl: import('typescript').VariableDeclaration): void => {
+    if (!ts.isObjectBindingPattern(decl.name) || !decl.initializer) return;
+    let init: import('typescript').Expression = decl.initializer;
+    for (;;) {
+      if (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)
+        || ts.isNonNullExpression(init) || ts.isAwaitExpression(init) || ts.isTypeAssertionExpression(init)) {
+        init = init.expression;
+      } else break;
+    }
+    if (!ts.isCallExpression(init) || init.arguments.length === 0 || !ts.isStringLiteral(init.arguments[0])) return;
+    const callee = init.expression;
+    const isRequire = ts.isIdentifier(callee) && callee.text === 'require';
+    if (!isRequire && callee.kind !== ts.SyntaxKind.ImportKeyword) return;
+    const from = (init.arguments[0] as import('typescript').StringLiteral).text;
+    for (const el of decl.name.elements) {
+      if (el.dotDotDotToken || !ts.isIdentifier(el.name)) continue;
+      let imported: string | undefined;
+      if (el.propertyName) {
+        if (ts.isIdentifier(el.propertyName) || ts.isStringLiteral(el.propertyName)) imported = el.propertyName.text;
+        else continue;
+      }
+      const local = el.name.text;
+      const fact: ImportBindingFact = { from };
+      if (imported && imported !== local) fact.imported = imported;
+      if (!lazyBindings.has(local)) lazyBindings.set(local, fact);
+      else {
+        const seen = lazyBindings.get(local);
+        if (!seen || seen.from !== fact.from || seen.imported !== fact.imported) lazyBindings.set(local, null);
       }
     }
   };
@@ -1204,6 +1250,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     } else if (ts.isVariableDeclaration(node)) {
       // nested declarations (inside functions) — parameters are deliberately excluded
       addBindingNames(node.name);
+      recordLazyBindings(node);
     } else if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node) || ts.isPropertyDeclaration(node)
       || ts.isPropertySignature(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)
       || ts.isPropertyAssignment(node)) {
@@ -1361,6 +1408,15 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // so there is nothing for a spec to claim.
   const reexportOnly = sf.statements.length > 0
     && sf.statements.every(st => ts.isExportDeclaration(st) && !!st.moduleSpecifier);
+
+  // A lazily loaded name joins the import bindings only where it is
+  // unambiguous: no two lazy loads disagree on it, no static import binds it,
+  // and the file declares no body of that name a bare call could also mean.
+  // Anything else stays silent — unresolved, as it was.
+  for (const [name, fact] of lazyBindings) {
+    if (!fact || importBindings.has(name) || typeOnlyBindings.has(name) || bodies.has(name)) continue;
+    importBindings.set(name, fact);
+  }
 
   // Only an EXPORTED object is an adapter a consumer reaches through: its
   // property aliases join the specifier aliases.

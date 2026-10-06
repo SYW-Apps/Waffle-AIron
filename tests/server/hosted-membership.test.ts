@@ -600,6 +600,14 @@ describe('the UI routes', () => {
     user('u-out');
     expect((await web(sessionFor('u-out'), '/web/projects/externals?projectId=docs')).status).toBe(403);
   });
+
+  it('GET /web/projects/network: the network view model of an authorized project; another project is Forbidden', async () => {
+    seedPeople();
+    const answer = (await web(sessionFor('u-view'), '/web/projects/network?projectId=docs')).body as { networks: unknown[]; workloads: unknown[]; edges: unknown[] };
+    expect(Array.isArray(answer.networks) && Array.isArray(answer.workloads) && Array.isArray(answer.edges)).toBe(true);
+    user('u-out');
+    expect((await web(sessionFor('u-out'), '/web/projects/network?projectId=docs')).status).toBe(403);
+  });
 });
 
 // ── the binding still resolves the detached member ──────────────────────────

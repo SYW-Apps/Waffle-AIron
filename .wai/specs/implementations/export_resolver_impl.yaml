@@ -51,8 +51,9 @@ methods:
         description: >-
           Settle each table: an own or explicit entry shadows a name a wildcard brings in; the same
           target twice under one name is one entry; two wildcards binding one name to different
-          targets is a duplicate problem and the name is left out; a re-export whose target is
-          neither a Portal nor an Observer is an unconsumable problem
+          targets is a duplicate problem and the name is left out; a re-export whose target cannot
+          serve its role is an unconsumable problem (an entry called must be a Portal or an
+          Observer; an entry implemented, role implement, may also be an Adapter)
         type: local
       - stepNumber: 8
         description: Answer every subsystem's table by key
@@ -138,9 +139,11 @@ methods:
       - stepNumber: 11
         label: bound
         description: >-
-          Carry the entry's audience, name, transport kind, details, auth policy, version and
-          stability onto every name it brought in, and record a re-exported component that is
-          neither a Portal nor an Observer as an unconsumable problem
+          Carry the entry's audience, name, role, details, auth policy, version and stability onto
+          every name it brought in, with the export kind derived from the backing Portal's transport
+          (transport.exportKind; an authored kind is read only as the legacy value), and record a
+          re-exported component that cannot serve its role (a called entry neither a Portal nor an
+          Observer; an implemented entry neither a Portal nor an Adapter) as an unconsumable problem
         type: local
       - stepNumber: 12
         description: >-
@@ -156,4 +159,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-10-05T06:50:31.440Z'
+updatedAt: '2026-10-06T13:16:20.139Z'

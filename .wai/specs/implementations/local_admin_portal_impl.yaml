@@ -274,42 +274,10 @@ methods:
   - name: upgradeMembers
     narrative:
       - stepNumber: 1
-        description: >-
-          First, the transactions a crash left unfinished under the data directory (a crashed
-          upgrade among them): resolved and audited when apply is asked, only reported otherwise —
-          they ride the report
+        description: Forward to the member registration's upgrade
         type: call
         targetComponent: member_registration
-        targetMethod: recoverData
-      - stepNumber: 2
-        description: Plan the member upgrade
-        type: call
-        targetComponent: member_registration
-        targetMethod: plan
-      - stepNumber: 3
-        description: Apply only when asked and the plan is not blocked
-        type: branch
-        condition: apply is requested and the plan has no refusals
-        onFalseStep: 6
-      - stepNumber: 4
-        description: Apply the plan, all or nothing
-        type: call
-        targetComponent: member_registration
-        targetMethod: apply
-      - stepNumber: 5
-        description: Answer the applied report
-        type: return
-        outcome: MemberUpgradeReport (applied or failed)
-      - stepNumber: 6
-        label: report
-        description: 'Drop the plan''s rehearsal: a dry run or a blocked plan writes nothing'
-        type: call
-        targetComponent: member_registration
-        targetMethod: discard
-      - stepNumber: 7
-        description: Answer the plan as a report, not applied
-        type: return
-        outcome: MemberUpgradeReport (dry run)
+        targetMethod: upgrade
     symbol: upgradeMemberRecords
   - name: explain
     narrative:
@@ -318,7 +286,14 @@ methods:
         type: call
         targetComponent: permission_admin_orchestrator
         targetMethod: explain
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward to the hosted spec upgrade
+        type: call
+        targetComponent: hosted_spec_upgrade
+        targetMethod: migrateReachability
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-10-05T17:30:38.840Z'
+updatedAt: '2026-10-06T19:59:25.815Z'

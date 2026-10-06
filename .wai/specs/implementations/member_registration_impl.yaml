@@ -971,6 +971,47 @@ methods:
         type: return
         outcome: ReachComparison[]
     detail: full
+  - name: upgrade
+    narrative:
+      - stepNumber: 1
+        description: >-
+          First, the transactions a crash left unfinished under the data directory (a crashed
+          upgrade among them): resolved and audited when apply is asked, only reported otherwise —
+          they ride the report
+        type: call
+        targetComponent: member_registration
+        targetMethod: recoverData
+      - stepNumber: 2
+        description: Plan the member upgrade
+        type: call
+        targetComponent: member_registration
+        targetMethod: plan
+      - stepNumber: 3
+        description: Apply only when asked and the plan is not blocked
+        type: branch
+        condition: apply is requested and the plan has no refusals and holds a rehearsal
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Apply the plan, all or nothing
+        type: call
+        targetComponent: member_registration
+        targetMethod: apply
+      - stepNumber: 5
+        description: Answer the applied report with what was recovered
+        type: return
+        outcome: MemberUpgradeReport (applied or failed)
+      - stepNumber: 6
+        label: report
+        description: 'Drop the plan''s rehearsal: a dry run or a blocked plan writes nothing'
+        type: call
+        targetComponent: member_registration
+        targetMethod: discard
+      - stepNumber: 7
+        description: Answer the plan as a report, not applied, with what was recovered
+        type: return
+        outcome: MemberUpgradeReport (dry run)
+    detail: full
+    symbol: upgradeMembers
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-03T17:54:24.510Z'
+updatedAt: '2026-10-06T19:59:17.017Z'

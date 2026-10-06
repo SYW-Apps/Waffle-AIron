@@ -27,7 +27,7 @@ export interface ExportModel {
     name: string;
     subsystem: string;
     componentType: string;
-    portalType?: string;
+    transport?: string;
     public: boolean;
     owner?: string;
     owns: string[];
@@ -91,7 +91,7 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
     const parentId = nestInPattern ? 'comp_' + owner!.id : 'sub_' + comp.subsystem;
     const parentBox = nestInPattern ? L.boxes[owner!.id] : L.subs[comp.subsystem];
     const colors = COLORS[stereo(comp.componentType)];
-    const label = comp.name + '\n«' + comp.componentType + (comp.portalType ? '/' + comp.portalType : '') + '»';
+    const label = comp.name + '\n«' + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
     const style = isPattern
       ? 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';dashed=1;verticalAlign=top;fontStyle=1;container=1;collapsible=1;whiteSpace=wrap;'
       : 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';whiteSpace=wrap;fontSize=11;' + (comp.public ? 'strokeWidth=3;' : '');
@@ -209,7 +209,7 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
     rect.strokeStyle = (isPattern || stereo(comp.componentType) === 'pattern') ? 'dashed' : 'solid';
     elements.push(rect);
     rectById[comp.id] = rect;
-    const label = comp.name + '\n«' + comp.componentType + (comp.portalType ? '/' + comp.portalType : '') + '»';
+    const label = comp.name + '\n«' + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
     elements.push(boundLabel(rect, label, 11, isPattern ? 'top' : 'middle'));
   });
 

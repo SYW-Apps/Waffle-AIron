@@ -1,0 +1,24 @@
+kind: value-object
+id: network_document
+name: NetworkDocument
+description: >-
+  One generated networking output: its format, the text to write, and the design names it had no
+  binding for (each given the placeholder label, never silently opened).
+subsystem: sdd_network
+fields:
+  - name: format
+    type: NetworkOutputFormat
+    description: What it is
+    optional: false
+  - name: content
+    type: string
+    description: 'The text: JSON, CSV, Markdown, YAML documents or Mermaid'
+    optional: false
+  - name: unbound
+    type: list<string>
+    description: The design names the bindings did not map
+    optional: false
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:55.363Z'
+updatedAt: '2026-10-06T13:09:55.989Z'

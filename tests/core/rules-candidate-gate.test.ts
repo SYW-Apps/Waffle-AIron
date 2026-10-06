@@ -45,8 +45,8 @@ const codes = (issues: { code: string }[]): string[] => issues.map(i => i.code);
 
 /** The component fields a create tool states — sdd_add_component's input, which is what the seam replaces. */
 const COMPONENT_FIELDS = [
-  'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'portalType', 'basePath',
-  'dispatch', 'mounts', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'ext', 'status',
+  'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'transport', 'abi', 'invokedBy', 'basePath',
+  'dispatch', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'ext', 'status',
 ] as const;
 
 describe('candidate gate — what it refuses', () => {
@@ -55,8 +55,8 @@ describe('candidate gate — what it refuses', () => {
     expect(codes(verdict.errors)).toContain('UNEXPECTED_PORTAL_FIELD');
   });
 
-  it('refuses portalType on a non-Portal', () => {
-    const verdict = validateComponentCandidate(comp({ componentType: 'Adapter', portalType: 'HTTP_API' }));
+  it('refuses a transport on a non-Portal', () => {
+    const verdict = validateComponentCandidate(comp({ componentType: 'Adapter', transport: 'HTTP' }));
     expect(codes(verdict.errors)).toContain('UNEXPECTED_PORTAL_FIELD');
   });
 
@@ -80,10 +80,10 @@ describe('candidate gate — what it must NOT refuse', () => {
     expect(verdict.warnings).toEqual([]);
   });
 
-  it('lets a draft Portal be created before its portalType is set — the authoring order is two calls', () => {
+  it('lets a draft Portal be created before its transport is set — the authoring order is two calls', () => {
     const verdict = validateComponentCandidate(comp({ componentType: 'Portal' }));
     expect(verdict.errors).toEqual([]);
-    expect(codes(verdict.warnings)).toContain('MISSING_PORTAL_TYPE');
+    expect(codes(verdict.warnings)).toContain('MISSING_PORTAL_TRANSPORT');
   });
 
   it('reports a Store with no durability as a warning, never a refusal', () => {
@@ -93,7 +93,7 @@ describe('candidate gate — what it must NOT refuse', () => {
   });
 
   it('runs NO tree rules: a Portal with no interfaces yet is not an endpoint violation', () => {
-    const verdict = validateComponentCandidate(comp({ componentType: 'Portal', portalType: 'HTTP_API' }));
+    const verdict = validateComponentCandidate(comp({ componentType: 'Portal', transport: 'HTTP' }));
     expect(verdict.errors).toEqual([]);
     expect(codes(verdict.warnings)).not.toContain('MISSING_ENDPOINT');
   });
@@ -129,7 +129,7 @@ describe('rule scope declarations', () => {
       'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR',
       'DURABILITY_ON_NON_STORE',
       'MISSING_DURABILITY',
-      'MISSING_PORTAL_TYPE',
+      'MISSING_PORTAL_TRANSPORT',
       'STEREOTYPE_RETIRED',
       'UNEXPECTED_PORTAL_FIELD',
     ]);

@@ -1,0 +1,43 @@
+id: inetwork_codec
+name: Network Codec Interface
+description: The flow matrix encoded as neutral text, or as generated policy.
+component: network_codec
+methods:
+  - name: encodeFlows
+    description: 'The matrix as JSON, CSV or Markdown: every fact of every flow, in the matrix''s order. Pure.'
+    signature: 'encodeFlows(flows: list<NetworkFlow>, format: NetworkOutputFormat): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: flows
+        type: list<NetworkFlow>
+      - name: format
+        type: NetworkOutputFormat
+        description: json, csv or markdown
+    guarantees:
+      - idempotent
+  - name: encodePolicy
+    description: >-
+      The matrix as generated policy in a target format (kubernetes-network-policy): one ingress
+      policy per callee workload, admitting exactly its matrix sources and the bindings' outside
+      blocks for a flow from outside, with the port when the binding names one. A design name with
+      no binding gets the placeholder label wairon.dev/workload: <name> and is listed as unbound; a
+      flow from outside with no outside blocks admits nothing and lists outside as unbound. The
+      unbound names also head the output as comments, so the file says what it could not bind.
+      Deterministic. Pure.
+    signature: >-
+      encodePolicy(flows: list<NetworkFlow>, bindings: NetworkBindings, format:
+      NetworkOutputFormat): NetworkDocument
+    returns: NetworkDocument
+    params:
+      - name: flows
+        type: list<NetworkFlow>
+      - name: bindings
+        type: NetworkBindings
+      - name: format
+        type: NetworkOutputFormat
+        description: 'A policy target: kubernetes-network-policy'
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-06T13:10:53.369Z'
+updatedAt: '2026-10-06T19:25:02.661Z'

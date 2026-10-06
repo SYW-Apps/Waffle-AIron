@@ -1,0 +1,55 @@
+kind: value-object
+id: verb_reach
+name: VerbReach
+description: >-
+  One Portal verb as the reach model sees it: where it sits, how it is reached, and what entry it
+  has.
+fields:
+  - name: project
+    type: string
+    description: The key of the project holding the Portal
+    optional: false
+  - name: portal
+    type: string
+    description: The Portal's component key
+    optional: false
+  - name: verb
+    type: string
+    description: The contract method's name
+    optional: false
+  - name: transport
+    type: Transport
+    description: The Portal's transport
+    optional: false
+  - name: binding
+    type: string
+    description: >-
+      The endpoint as one line (POST /orders, orders.v1.Orders/Create, topic orders.created); absent
+      for InProcess
+    optional: true
+  - name: network
+    type: string
+    description: The innermost declared network the Portal sits inside; absent when none encloses it
+    optional: true
+  - name: gateway
+    type: bool
+    description: Whether the Portal has the gateway variant
+    optional: false
+  - name: entry
+    type: DeclaredInvocation
+    description: Its effective entry (component_spec.entryFor), when it has one
+    optional: true
+  - name: audience
+    type: string
+    description: The widest audience an L0 export entry exposing this verb declares, when one does
+    optional: true
+  - name: subsystem
+    type: string
+    description: >-
+      The subsystem key holding the Portal, qualified like the portal in a family-scoped model: the
+      unit a deployment usually runs as one workload
+    optional: true
+methods: []
+sourcePath: src/models/reach.ts
+createdAt: '2026-10-06T12:57:11.849Z'
+updatedAt: '2026-10-06T19:24:43.922Z'

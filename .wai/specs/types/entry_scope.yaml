@@ -1,0 +1,25 @@
+kind: enum
+id: entry_scope
+name: EntryScope
+description: >-
+  Where the callers of an entry come from, named relative to the component so that a member judged
+  alone can write and resolve it. A project's `network` declaration encloses the project and every
+  member below it, and networks nest one level per declaring project. Inside a declared network only
+  a gateway-variant Portal may take an `outside` entry (GATEWAY_BYPASSED). A scope applies only to
+  network transports (ENTRY_SCOPE_NOT_NETWORK).
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: outside
+    description: >-
+      Callers from outside the innermost declared network around the component: the next network
+      out, or whatever surrounds the system (the internet, an intranet) when there is none. The
+      default
+  - name: network
+    description: >-
+      Callers anywhere inside the innermost declared network around the component: its sibling
+      services. Judged alone it counts as declared; the family run expects a modelled caller in that
+      network (ENTRY_UNPROVEN) and an enclosing network to exist (ENTRY_SCOPE_UNBOUNDED)
+createdAt: '2026-10-06T12:53:32.860Z'
+updatedAt: '2026-10-06T12:53:33.658Z'

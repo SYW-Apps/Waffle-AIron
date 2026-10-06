@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import { canonicalize, compareOrdinal } from '../../utils/canonical-json.js';
-import type { CompositionConfig, RulesConfig } from '../../models/project.js';
+import type { CompositionConfig, NetworkDeclaration, RulesConfig } from '../../models/project.js';
 import type { LoadedExtensions } from '../extensions.js';
 import type { StateId } from '../statehash.js';
 import { judgesCode, type SddRule } from './types.js';
@@ -36,6 +36,14 @@ export interface GateConfig {
   rules?: RulesConfig;
   /** The project's `composition` block; null/absent when it declares none. */
   composition?: CompositionConfig | null;
+  /**
+   * The project's network declaration, when it declares one: it changes the
+   * family run's network verdicts, so a lock taken without it is not a lock
+   * of the gate with it. Absent when the project declares none — and then
+   * left out of the digest entirely, so no lock taken before networks existed
+   * goes stale.
+   */
+  network?: NetworkDeclaration | null;
 }
 
 /**
@@ -142,6 +150,14 @@ function doctrineIdentity(doctrine: LoadedExtensions, builtinRules: SddRule[], g
      * changed requirement stales the requiring project's lock.
      */
     composition: gate.composition ?? null,
+    /**
+     * The network declaration changes the family run's network verdicts, so
+     * declaring, removing or redescribing one stales the declaring project's
+     * lock. The key is LEFT OUT when the project declares no network — never
+     * written as null — so every lock taken before networks existed keeps its
+     * identity.
+     */
+    ...(gate.network ? { network: gate.network } : {}),
     packs: byKey(
       doctrine.packs.map((p) => ({ name: p.name, version: p.version ?? null, scope: p.scope })),
       (p) => `${p.name}@${p.version ?? ''}#${p.scope}`,

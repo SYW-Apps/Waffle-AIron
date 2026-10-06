@@ -3,44 +3,37 @@ name: SDD Core Spec Manager
 description: Handles physical spec tree reading, parsing, writing, and dynamic agent topology resolution.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       Spec-tree reads: every spec, the project graph and diagram, the completeness report, chaining
       resolution, and tree export.
     component: spec_tree_portal
     interface: ispec_tree_portal
-  - type: Custom
-    details: >-
+  - details: >-
       Raw, ungated spec writes — save, delete, delta update, method move, chained-subsystem write —
       for the gated authoring seam.
     component: spec_store_portal
     interface: ispec_store_portal
     consumers:
       - sdd_authoring
-  - type: Custom
-    details: >-
+  - details: >-
       Mechanical spec writes: renames, subproject relocation, doctor repairs, tree import and
       provisioning.
     component: spec_maintenance_portal
     interface: ispec_maintenance_portal
-  - type: Custom
-    details: >-
+  - details: >-
       Approval: the gate identity, the lock record and lock state, the approval verdict and diff,
       and chained-child pins.
     component: approval_portal
     interface: iapproval_portal
-  - type: Custom
-    details: 'Project configuration: read, create, and change what the project selects.'
+  - details: 'Project configuration: read, create, and change what the project selects.'
     component: project_config_portal
     interface: iproject_config_portal
-  - type: Custom
-    details: >-
+  - details: >-
       Extension packs: the extensions a project loads, default selections, and the installed-pack
       store.
     component: extension_portal
     interface: iextension_portal
-  - type: Custom
-    details: >-
+  - details: >-
       Agent context: topology, briefs, generated agent files, domains, execution profile and budget,
       and the context documents written for AI tools.
     component: agent_context_portal
@@ -48,4 +41,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-25T19:36:09.750Z'
+updatedAt: '2026-10-06T18:55:20.901Z'

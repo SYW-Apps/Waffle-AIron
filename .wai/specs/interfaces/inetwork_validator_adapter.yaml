@@ -1,0 +1,14 @@
+id: inetwork_validator_adapter
+name: Network Validator Adapter Interface
+description: The reach model, from the validator.
+component: network_validator_adapter
+methods:
+  - name: reachModel
+    description: >-
+      Forward to validator_portal.reachModel: what reaches each Portal verb of the bound project, or
+      its family at a project that declares members, and from where.
+    signatureFrom: validator_portal.reachModel
+    effect: read
+status: complete
+createdAt: '2026-10-06T13:10:34.920Z'
+updatedAt: '2026-10-06T13:10:35.647Z'

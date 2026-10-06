@@ -4,7 +4,10 @@ name: Intake Portal
 description: Webhook entry point that accepts triggered record payloads and hands them to routing.
 subsystem: scenario-hub
 componentType: Portal
-portalType: MessageBus
+transport: MessageBus
+invokedBy:
+  kind: entry
+  caller: The external automation platform's trigger, which publishes each triggered record on the records topic.
 dependsOn: [routing-orchestrator]
 lint:
   allow:

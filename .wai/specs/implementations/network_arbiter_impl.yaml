@@ -1,0 +1,100 @@
+id: network_arbiter_impl
+name: Network Arbiter Implementation
+description: The network verdicts over a reach model, in their own module.
+contract: inetwork_arbiter
+sourcePath: src/core/rules/network-arbiter.ts
+methods:
+  - name: judge
+    narrative:
+      - stepNumber: 1
+        label: verbs
+        description: For each verb of model.verbs whose transport.kind() is network
+        type: loop
+        loopKind: forEach
+        over: the network-transport verbs of model.verbs
+        endStep: 9
+      - stepNumber: 2
+        description: A verb with no entry has nothing to judge for its entry
+        type: branch
+        condition: verb.entry is present with kind entry
+        onFalseStep: 1
+      - stepNumber: 3
+        description: An outside entry inside a declared network must be on a gateway
+        type: branch
+        condition: >-
+          the entry's scope is outside (or absent), verb.network is present and verb.gateway is
+          false
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report GATEWAY_BYPASSED (error) at the verb: callers from outside the network reach a
+          Portal that is not its gateway; make the Portal a gateway or route the outside callers
+          through the gateway
+        type: local
+      - stepNumber: 5
+        description: A network-scoped entry needs a boundary around it
+        type: branch
+        condition: the entry's scope is network and verb.network is absent
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report ENTRY_SCOPE_UNBOUNDED (notice) at the verb when the model is family-scoped: no
+          declared network encloses it, so the family is its implicit boundary and its flows cannot
+          be narrowed by isolation
+        type: local
+      - stepNumber: 7
+        description: A family-scoped model proves a network-scoped entry
+        type: branch
+        condition: model.scope is family and the entry's scope is network
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report ENTRY_UNPROVEN (warning) at the verb when no call in model.callersOf(verb.portal,
+          verb.verb) comes from inside the verb's boundary (its network, or the family when none is
+          declared)
+        type: local
+      - stepNumber: 9
+        label: verbsEnd
+        description: >-
+          An export wider than project on this verb needs the outermost network's gateway entered
+          from outside: report EXPORT_BEYOND_NETWORK (warning) at the verb when verb.audience is
+          wider than project, verb.network is present, and the verb is not an outside-entered
+          gateway of the outermost network in model.enclosing(verb.network)
+        type: local
+      - stepNumber: 10
+        label: calls
+        description: For each call of model.calls into a network-transport verb
+        type: loop
+        loopKind: forEach
+        over: model.calls whose target verb's transport is network
+        endStep: 11
+      - stepNumber: 11
+        label: callsEnd
+        description: >-
+          A call entering a network it is not inside must land on that network's gateway: for each
+          network of model.enclosing(the target verb's network) the caller's chain does not contain,
+          report GATEWAY_BYPASSED (error) at the call's evidence when the target Portal is not a
+          gateway of the outermost such network
+        type: local
+      - stepNumber: 12
+        description: >-
+          For each network of model.networks with more than one gateway, report MULTIPLE_GATEWAYS
+          (notice) naming them, sited on its first gateway Portal (in sorted order) so the finding
+          belongs to that gateway's project and an allow on that Portal covers it
+        type: local
+      - stepNumber: 13
+        description: Answer the findings in a stable order
+        type: return
+        outcome: the network findings
+    detail: full
+  - name: familyCodes
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the five codes judge declares, in that order: GATEWAY_BYPASSED, MULTIPLE_GATEWAYS,
+          ENTRY_SCOPE_UNBOUNDED, ENTRY_UNPROVEN, EXPORT_BEYOND_NETWORK
+        type: return
+        outcome: the family codes
+status: complete
+createdAt: '2026-10-06T12:58:27.434Z'
+updatedAt: '2026-10-06T18:50:35.479Z'

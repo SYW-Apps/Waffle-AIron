@@ -14,6 +14,7 @@ import {
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,
+  migrateReachability,
   readLockState,
   // Through the core adapter, never ../core/stamp.js or ../utils/ai-guide.js:
   // reading a stamp and refreshing the guides are sdd_core work, and doctor is
@@ -66,6 +67,7 @@ import type { FamilyMigrationReport, MigrationPlan, RecoveredTransaction } from 
 // The stage-4 upgrade report: what the owner's gate changed in each verdict.
 import * as verdictChanges from './verdict-changes.js';
 import type { UpgradeReport } from './verdict-changes.js';
+import type { ReachabilityMigrationPlan, ReachRewrite } from '../core/index.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -143,7 +145,7 @@ function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
 export interface DoctorOptions {
   /** Apply the repairs before the report: the fixed steps, then the chaining migration once confirmed. */
   fix?: boolean;
-  /** Print one section's report and nothing else, writing nothing: `chaining` or `composed-validation`. */
+  /** Print one section's report and nothing else, writing nothing: `chaining`, `composed-validation` or `reachability`. */
   report?: string;
   /** Answer the chaining migration's confirmation for a non-interactive run (not a write outside the project root). */
   yes?: boolean;
@@ -355,6 +357,27 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       if (spellings.length > 0) logger.blank();
     } catch (e) {
       line(tally, 'warn', `Could not plan the type-spelling repair: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // ── Reachability ───────────────────────────────────────────────────────
+    // The migration onto the reachability model, dry-run: the rewrites it
+    // would make by retired form, and what it will only report. Silent once
+    // the tree holds no retired form.
+    try {
+      const plan = migrateReachability(false);
+      if (plan.rewrites.length > 0 || plan.reported.length > 0) {
+        console.log(chalk.bold('Reachability'));
+        if (plan.rewrites.length > 0) {
+          line(tally, 'warn', `${plan.rewrites.length} rewrite(s) onto the reachability model: ${describeReachForms(plan.rewrites)}`);
+          line(tally, 'warn', 'Run `wairon doctor --fix` to write them (`wairon doctor --report reachability` lists each one); the design changes, so one `wairon lock` follows.');
+        }
+        if (plan.reported.length > 0) {
+          line(tally, 'warn', `${plan.reported.length} form(s) it will not fix — an author decides: ${describeReachForms(plan.reported)} (see \`wairon doctor --report reachability\`)`);
+        }
+        logger.blank();
+      }
+    } catch (e) {
+      line(tally, 'warn', `Could not plan the reachability migration: ${e instanceof Error ? e.message : String(e)}`);
     }
 
     // ── Members ────────────────────────────────────────────────────────────
@@ -814,6 +837,68 @@ function repairProjectSpecs(who: string): void {
   } catch (e) {
     console.log(`  ${icon('error')} ${at}Type-spelling repair failed: ${e instanceof Error ? e.message : String(e)}`);
   }
+
+  // Migrate onto the reachability model: transports, listener mounts into
+  // entries and routers, retired invokedBy kinds, export types, retired
+  // allows. It never invents an entry; what it cannot decide is printed.
+  try {
+    const plan = migrateReachability(true);
+    if (plan.applied) {
+      console.log(`  ${icon('ok')} ${at}Migrated onto the reachability model: ${plan.rewrites.length} rewrite(s) (${describeReachForms(plan.rewrites)}).`);
+      for (const r of plan.rewrites) console.log(`      ${r.specId}: ${r.to}`);
+      console.log(`  ${icon('warn')} ${at}The design changed: review it, then run \`wairon lock\` once.`);
+    }
+    if (plan.reported.length > 0) {
+      console.log(`  ${icon('warn')} ${at}${plan.reported.length} reachability form(s) not fixed — an author decides:`);
+      for (const r of plan.reported) console.log(`      ${r.specId}: ${r.to} — ${r.reason}`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${at}Reachability migration failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/** The labels the reachability forms read as in doctor's lines. */
+const REACH_FORM_LABELS: Record<string, string> = {
+  'portal-type': 'portalType',
+  'listener-mounts': 'listener mounts',
+  'invoked-by-kind': 'invokedBy kinds',
+  'export-type': 'export types',
+  'in-process-endpoint': 'in-process endpoints',
+  'retired-allow': 'retired allows',
+};
+
+/** A list of reachability rewrites counted by form, e.g. "12 portalType, 3 listener mounts". */
+function describeReachForms(entries: ReachRewrite[]): string {
+  const counts = new Map<string, number>();
+  for (const e of entries) counts.set(e.form, (counts.get(e.form) ?? 0) + 1);
+  return Object.keys(REACH_FORM_LABELS)
+    .filter((form) => counts.has(form))
+    .map((form) => `${counts.get(form)} ${REACH_FORM_LABELS[form]}`)
+    .join(', ');
+}
+
+/** `--report reachability`: every rewrite grouped by form, then what it will not fix, then the totals. */
+function printReachabilityPlan(plan: ReachabilityMigrationPlan): void {
+  if (plan.rewrites.length === 0 && plan.reported.length === 0) {
+    console.log(`  ${icon('ok')} Nothing to migrate: the tree holds no retired reachability form.`);
+    logger.blank();
+    return;
+  }
+  for (const form of Object.keys(REACH_FORM_LABELS)) {
+    const of = plan.rewrites.filter((r) => r.form === form);
+    if (of.length === 0) continue;
+    console.log(chalk.bold(`${REACH_FORM_LABELS[form]} (${of.length})`));
+    for (const r of of) console.log(`  ${r.specId}: ${r.to} — ${r.reason}`);
+    logger.blank();
+  }
+  if (plan.reported.length > 0) {
+    console.log(chalk.bold(`Will not fix (${plan.reported.length}) — an author decides`));
+    for (const r of plan.reported) console.log(`  ${r.specId} [${REACH_FORM_LABELS[r.form] ?? r.form}]: ${r.to} — ${r.reason}`);
+    logger.blank();
+  }
+  console.log(`Totals: ${plan.rewrites.length} rewrite(s) (${describeReachForms(plan.rewrites) || 'none'}); ${plan.reported.length} reported (${describeReachForms(plan.reported) || 'none'}).`);
+  if (plan.rewrites.length > 0) console.log('`wairon doctor --fix` writes the rewrites; the design changes, so one `wairon lock` follows.');
+  logger.blank();
 }
 
 /** A member project below the bound root: the alias it is declared under, its directory, and whether it lies inside the root. */
@@ -866,7 +951,10 @@ function reportMemberRepairs(tally: Tally): void {
     const counts = runWithProjectRoot(member.directory, () => {
       if (!projectConfigExists()) return null;
       const spellings = repairTypeSpellings(false);
+      const reach = migrateReachability(false);
       return {
+        reachRewrites: reach.rewrites.length,
+        reachReported: reach.reported.length,
         specialists: retireSpecialists(false).retyped.length,
         stepFields: repairForeignStepFields(false).length,
         signatures: repairSignatures(false).length,
@@ -883,6 +971,8 @@ function reportMemberRepairs(tally: Tally): void {
       counts.respell ? `${counts.respell} type position(s) to respell` : '',
       counts.proposals ? `${counts.proposals} proposal(s)` : '',
       counts.authorNeeded ? `${counts.authorNeeded} position(s) needing an author` : '',
+      counts.reachRewrites ? `${counts.reachRewrites} reachability rewrite(s)` : '',
+      counts.reachReported ? `${counts.reachReported} reachability form(s) for an author` : '',
     ].filter(Boolean);
     if (parts.length === 0) continue;
     const where = member.inside
@@ -1005,8 +1095,8 @@ function reportOnly(options: DoctorOptions): void {
   if (options.fix) {
     throw new DoctorOptionsError('--report prints a plan and writes nothing, so it never combines with --fix.');
   }
-  if (options.report !== 'chaining' && options.report !== 'composed-validation') {
-    throw new DoctorOptionsError(`--report knows two sections, \`chaining\` and \`composed-validation\`; "${options.report}" is not one.`);
+  if (options.report !== 'chaining' && options.report !== 'composed-validation' && options.report !== 'reachability') {
+    throw new DoctorOptionsError(`--report knows three sections, \`chaining\`, \`composed-validation\` and \`reachability\`; "${options.report}" is not one.`);
   }
   // Step 4: which section?
   if (options.report === 'composed-validation') {
@@ -1016,6 +1106,18 @@ function reportOnly(options: DoctorOptions): void {
     console.log(`${chalk.bold('wairon doctor --report composed-validation')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
     logger.blank();
     printUpgradeReport(report);
+    console.log(chalk.gray('Nothing was written.'));
+    logger.blank();
+    return;
+  }
+  if (options.report === 'reachability') {
+    // Steps 9-10: the bound project's reachability migration, planned — the
+    // same plan --fix writes, rehearsed without a write.
+    const plan = migrateReachability(false);
+    logger.blank();
+    console.log(`${chalk.bold('wairon doctor --report reachability')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
+    logger.blank();
+    printReachabilityPlan(plan);
     console.log(chalk.gray('Nothing was written.'));
     logger.blank();
     return;

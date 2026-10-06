@@ -28,6 +28,7 @@ export {
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,
+  migrateReachability,
   renderDiagram,
   generateAll,
   resolveExpectedOutputPaths,

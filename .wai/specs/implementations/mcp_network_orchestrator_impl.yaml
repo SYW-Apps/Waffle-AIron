@@ -1,0 +1,36 @@
+id: mcp_network_orchestrator_impl
+name: MCP Network Orchestrator Implementation
+description: The network read tools' workflows, beside the externals workflows.
+contract: imcp_network_orchestrator
+sourcePath: src/mcp/network.ts
+methods:
+  - name: flows
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask for the matrix as JSON, the selection being the request's (the family at a project
+          that declares members, within its reach)
+        type: call
+        targetComponent: mcp_network_adapter
+        targetMethod: flows
+      - stepNumber: 2
+        description: Parse the document's flows and keep only those into `to` when it is given
+        type: local
+      - stepNumber: 3
+        description: Answer them, as text and structured content
+        type: return
+        outcome: list<NetworkFlow>
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: Explain the pair
+        type: call
+        targetComponent: mcp_network_adapter
+        targetMethod: why
+      - stepNumber: 2
+        description: Answer the explanation, as text and structured content
+        type: return
+        outcome: FlowExplanation
+status: complete
+createdAt: '2026-10-06T13:15:29.445Z'
+updatedAt: '2026-10-06T13:15:30.089Z'

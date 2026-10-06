@@ -65,6 +65,14 @@ fields:
       may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand edit);
       unsetting it releases those ids.
     optional: true
+  - name: implements
+    type: string
+    description: >-
+      The exported extension point this contract realizes, as alias::name: another project's export
+      entry with role implement (EXTERNAL_NOT_EXPORTED when the name is not exported with that
+      role). Every method of the extension point must be declared here with the same signature
+      (IMPLEMENTS_MISMATCH); the methods count as reached, because the producer calls them
+    optional: true
 methods:
   - name: genericParameters
     signature: 'genericParameters(): Set<string>'
@@ -87,4 +95,4 @@ methods:
     symbol: interfaceCanonicalTypes
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T23:38:05.299Z'
+updatedAt: '2026-10-06T12:54:23.518Z'

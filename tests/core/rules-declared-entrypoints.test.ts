@@ -105,7 +105,7 @@ const RETURN = (n: number) =>
 function registerChainFixture(proj: ReturnType<typeof createTempProject>, opts: { portal: boolean }) {
   proj.subsystem('sub-a');
   if (opts.portal) {
-    proj.component('api-portal', 'Portal', 'portalType: Custom\ndependsOn: [sched-orch]');
+    proj.component('api-portal', 'Portal', 'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [sched-orch]');
     proj.contract('api-portal', { boot: [] });
     proj.impl('api-portal', ['methods:', '  - name: boot', '    narrative:', CALL(1, 'sched-orch', 'start'), RETURN(2)].join('\n'));
   }
@@ -367,7 +367,10 @@ describe('invokedBy — seeding, propagation, and the declaration audit', () => 
   it('flags a declaration on a method the internal walk already reaches (INVOKED_BY_REDUNDANT)', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('api-portal', 'Portal', 'portalType: Custom\ndependsOn: [run-orch]');
+    // An Observer is a base root: the internal walk reaches run-orch.run
+    // through it, so the runtime declaration there is stale. (An entered
+    // Portal is a declared root, never the baseline redundancy is judged by.)
+    proj.component('api-portal', 'Observer', 'dependsOn: [run-orch]');
     proj.contract('api-portal', { handle: [] });
     proj.impl('api-portal', ['methods:', '  - name: handle', '    narrative:', CALL(1, 'run-orch', 'run'), RETURN(2)].join('\n'));
     proj.component('run-orch', 'Orchestrator');

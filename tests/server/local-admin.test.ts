@@ -14,6 +14,8 @@ import * as identityProviderBootstrap from '../../src/server/identity-provider-b
 import * as landscape from '../../src/server/landscape.js';
 import * as migration from '../../src/server/migration.js';
 import * as http from '../../src/server/http.js';
+import * as members from '../../src/server/members.js';
+import * as specUpgrade from '../../src/server/spec-upgrade.js';
 import { listIdentityProviderRecords } from '../../src/server/policy.js';
 import type { HostConfig } from '../../src/server/types.js';
 import { listSecretKeys, resolveSecret } from '../../src/utils/secrets.js';
@@ -39,6 +41,8 @@ const OWNERS: Record<string, Record<string, unknown>> = {
   landscape,
   migration,
   http,
+  members,
+  specUpgrade,
 };
 
 const PORTAL_SOURCES: Record<string, string> = {
@@ -82,17 +86,24 @@ const PORTAL_SOURCES: Record<string, string> = {
   upsertUnit: 'landscape',
   migratePermissionModel: 'migration',
   startHostServer: 'http',
+  migrateReachability: 'specUpgrade',
 };
 
-/** The one method the portal composes itself (its narrative plans, then applies or discards). */
-const COMPOSED = ['upgradeMemberRecords'];
+/** Names the portal publishes under its own contract name: portal name -> [owner, owner's name]. */
+const RENAMED: Record<string, [string, string]> = {
+  upgradeMemberRecords: ['members', 'upgradeMembers'],
+};
+
 
 describe('local_admin_portal (sdd_host)', () => {
   it('publishes exactly the owning workflows, each by identity', () => {
-    expect(Object.keys(localAdmin).sort()).toEqual([...Object.keys(PORTAL_SOURCES), ...COMPOSED].sort());
-    for (const name of COMPOSED) expect(typeof (localAdmin as Record<string, unknown>)[name], name).toBe('function');
+    expect(Object.keys(localAdmin).sort()).toEqual([...Object.keys(PORTAL_SOURCES), ...Object.keys(RENAMED)].sort());
     for (const [name, owner] of Object.entries(PORTAL_SOURCES)) {
       expect((localAdmin as Record<string, unknown>)[name], name).toBe(OWNERS[owner][name]);
+    }
+    // No method is composed here any more: the member upgrade is the member registration's workflow.
+    for (const [name, [owner, ownName]] of Object.entries(RENAMED)) {
+      expect((localAdmin as Record<string, unknown>)[name], name).toBe(OWNERS[owner][ownName]);
     }
   });
 

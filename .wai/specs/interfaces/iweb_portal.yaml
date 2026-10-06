@@ -1572,6 +1572,26 @@ methods:
       transport: HTTP
       method: GET
       path: /web/admin/permissions/explain
+  - name: projectNetwork
+    description: >-
+      Serve one authorized project's network view as JSON: its declared networks, the workloads
+      inside them, the gateways and the allowed flows per workload pair, derived from the design.
+      Forwards to the web graph orchestrator's getProjectNetwork; session-cookie authenticated, so
+      cross-project access is Forbidden, with the same reach as the Relations tab. The canvas draws
+      it as its network view.
+    signature: 'projectNetwork(sessionId: string, projectId: string): NetworkViewModel'
+    returns: NetworkViewModel
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/network
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-04T23:38:27.130Z'
+updatedAt: '2026-10-06T13:15:06.148Z'

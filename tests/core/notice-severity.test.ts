@@ -199,13 +199,13 @@ describe('the component candidate gate', () => {
       componentType: 'Portal', owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
     } as unknown as ComponentSpec;
     const plain = validateComponentCandidate(candidate);
-    expect(plain.warnings.map((w) => w.code)).toContain('MISSING_PORTAL_TYPE');
+    expect(plain.warnings.map((w) => w.code)).toContain('MISSING_PORTAL_TRANSPORT');
     expect(plain.notices).toEqual([]);
 
-    const noticed = validateComponentCandidate(candidate, { rules: rulesOf({ MISSING_PORTAL_TYPE: 'notice' }) });
-    expect(noticed.notices.map((n) => [n.code, n.severity])).toEqual([['MISSING_PORTAL_TYPE', 'notice']]);
-    expect(noticed.warnings.map((w) => w.code)).not.toContain('MISSING_PORTAL_TYPE');
-    expect(noticed.errors.map((e) => e.code)).not.toContain('MISSING_PORTAL_TYPE');
+    const noticed = validateComponentCandidate(candidate, { rules: rulesOf({ MISSING_PORTAL_TRANSPORT: 'notice' }) });
+    expect(noticed.notices.map((n) => [n.code, n.severity])).toEqual([['MISSING_PORTAL_TRANSPORT', 'notice']]);
+    expect(noticed.warnings.map((w) => w.code)).not.toContain('MISSING_PORTAL_TRANSPORT');
+    expect(noticed.errors.map((e) => e.code)).not.toContain('MISSING_PORTAL_TRANSPORT');
   });
 });
 

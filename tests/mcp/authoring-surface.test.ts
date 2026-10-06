@@ -252,7 +252,7 @@ describe('the authoring tools say what they accepted', () => {
   it('an unknown key inside a component dispatch entry is refused by name', async () => {
     const refusal = await refuse('sdd_add_component', {
       id: 'shop-portal', name: 'Shop Portal', description: 'The surface',
-      subsystem: 'shop', componentType: 'Portal', portalType: 'HTTP_API',
+      subsystem: 'shop', componentType: 'Portal', transport: 'HTTP',
       dispatch: [{ capability: 'shop.run', component: 'shop-orch', method: 'run', descriptio: 'typo' }],
     });
     expect(refusal.toLowerCase()).toContain('descriptio');

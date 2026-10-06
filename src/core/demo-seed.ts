@@ -169,7 +169,7 @@ export function seedDemoTree(): void {
 
   // catalog
   comp('catalog-portal', 'Catalog Portal', 'catalog', 'Portal', 'HTTP front door for catalog reads.', {
-    portalType: 'HTTP_API',
+    transport: 'HTTP',
     basePath: '/catalog',
     dependsOn: ['catalog-orchestrator'],
   });
@@ -188,7 +188,7 @@ export function seedDemoTree(): void {
 
   // payments
   comp('payments-portal', 'Payments Portal', 'payments', 'Portal', 'HTTP front door for charges.', {
-    portalType: 'HTTP_API',
+    transport: 'HTTP',
     basePath: '/payments',
     dependsOn: ['payments-orchestrator'],
   });
@@ -205,7 +205,7 @@ export function seedDemoTree(): void {
 
   // ordering
   comp('ordering-portal', 'Ordering Portal', 'ordering', 'Portal', 'HTTP front door for orders.', {
-    portalType: 'HTTP_API',
+    transport: 'HTTP',
     basePath: '/orders',
     dependsOn: ['ordering-orchestrator'],
   });

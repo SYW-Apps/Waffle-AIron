@@ -5,7 +5,7 @@ import { pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
-import { loadProjectConfig, loadRegistry, findLegacySpecFiles } from '../core/index.js';
+import { loadProjectConfig, loadRegistry, findLegacySpecFiles, resolveChainingParent } from '../core/index.js';
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -98,6 +98,15 @@ export function validateRegistry(registry: Registry, rules: RulesConfig): Valida
 /** cli_validator_adapter.validateProjectConfig — the configuration check, forwarded to the validator portal. */
 export function validateProjectConfig(config: ProjectConfig): ValidationResult {
   return configRules(config);
+}
+
+/**
+ * The one line a member validated on its own prints: its network proofs
+ * (ENTRY_UNPROVEN, the gateway and cross-project reach checks) are judged at
+ * the family root, by the family run there.
+ */
+function memberNetworkLine(alias: string, parentRoot: string): string {
+  return `Member "${alias}" of ${parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there; here its network entries count as declared, not proven.`;
 }
 
 export interface ValidateOptions {
@@ -360,6 +369,11 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     waivedWarnings += tally.waived;
     noticeTotal += tally.notices;
     renderAdvisory(advised);
+    // A member judged here is judged by its own gate only: its `network`
+    // entries count as declared. The proofs that need the whole family run
+    // at the root, so a green member run is never read as a proven one.
+    const parent = resolveChainingParent();
+    if (parent) logger.info(chalk.gray(memberNetworkLine(parent.alias, parent.parentRoot)));
   }
 
   // The conformance debt register, said out loud on every run. A suppression

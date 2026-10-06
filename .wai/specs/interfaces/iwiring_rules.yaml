@@ -99,7 +99,8 @@ methods:
       Rule invoked-by-description. An invokedBy declaration names a caller outside the modeled graph
       and silences unused-detection for its method, so the claim must stay reviewable: its "caller"
       prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO
-      invokes the method and when.
+      invokes the method and when. A Portal-level invokedBy (the entry every verb of the Portal
+      inherits) is held to the same floor, on the Portal.
     signature: 'invokedByDescription(ctx: RuleContext): void'
     returns: void
     params:
@@ -113,11 +114,18 @@ methods:
   - name: unusedDetection
     description: >-
       Rule unused-detection. Walks the narrative execution graph (call steps, register handoffs,
-      dispatch-table routing, lifecycle flows) from every entrypoint (Portal/Observer/published
-      component/lifecycle entrypoint/invokedBy-declared method) and flags components and methods no
-      execution chain reaches. An interface method declaring invokedBy (a real caller outside the
-      modeled graph) seeds the walk, so its narrative propagates reachability; a declaration the
-      INTERNAL walk (without those seeds) already reaches is stale and is reported.
+      dispatch-table routing, lifecycle flows) from every declared root and flags the components and
+      methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer;
+      each method of an interface that implements an imported extension point (the producer calls
+      it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic
+      reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its
+      Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its
+      own and a published component is not either, so a Portal verb that no modelled caller reaches
+      and nobody declared an entry for is reported: the message names the two remedies, modelling
+      the caller or declaring the entry with its scope. A network-scoped entry counts as declared
+      here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared
+      roots) already reaches is stale and is reported. An entry never is, because it also states the
+      verb's scope for the network rules and the flow matrix.
     signature: 'unusedDetection(ctx: RuleContext): void'
     returns: void
     params:
@@ -127,24 +135,29 @@ methods:
     findings:
       - code: UNUSED_COMPONENT
         severity: warning
-        summary: Component never reached by any narrative call chain
+        summary: >-
+          Component never reached by any narrative call chain from a declared root; for a Portal,
+          none of its verbs is called by a modelled caller or declared an entry
       - code: UNUSED_METHOD
         severity: warning
-        summary: Method never called by any narrative step
+        summary: >-
+          Method never called by any narrative step; for a Portal verb, no modelled caller reaches
+          it and no entry is declared for it
       - code: INVOKED_BY_REDUNDANT
         severity: warning
         summary: >-
-          invokedBy declaration on a method the internal narrative walk already reaches — stale,
-          remove it
+          A runtime invokedBy declaration on a method the internal narrative walk already reaches:
+          stale, remove it
   - name: unusedTypes
     description: >-
       Rule unused-types. Flags types no field of any type, no interface method signature, no
-      contract method's signatureFrom and no other type's method signature references. References
-      are matched through the type-reference grammar (generic arguments, collections, qualified
-      ids), and the declaring type's own generic parameters are left out — a type parameter is not a
-      reference to a type. A signature type is used when a method names it as its signatureFrom or a
-      param is typed by it. A type named only by its OWN methods stays unused, the way a function
-      that only calls itself is.
+      contract method's signatureFrom, no other type's method signature and no export table
+      references. References are matched through the type-reference grammar (generic arguments,
+      collections, qualified ids), and the declaring type's own generic parameters are left out: a
+      type parameter is not a reference to a type. A signature type is used when a method names it
+      as its signatureFrom or a param is typed by it. A type exported by an L1 or L0 export entry
+      (typeDef) is used by definition: its consumers are outside this tree. A type named only by its
+      OWN methods stays unused, the way a function that only calls itself is.
     signature: 'unusedTypes(ctx: RuleContext): void'
     returns: void
     params:
@@ -154,7 +167,7 @@ methods:
     findings:
       - code: UNUSED_TYPE
         severity: warning
-        summary: Type never referenced by fields, signatures or type methods
+        summary: Type never referenced by fields, signatures, type methods or an export table
   - name: durabilityRoundTrip
     description: >-
       Rule durability-round-trip. A durable Store (persisted RAM projection) must carry
@@ -297,40 +310,70 @@ methods:
       - code: UNSOURCED_SUBSCRIPTION
         severity: warning
         summary: Topic is subscribed to but nothing in the tree emits it
-  - name: portalMounts
+  - name: entryDeclarations
     description: >-
-      Rule portal-mounts. Which listener serves which portal: a portal's routes are its methods'
-      endpoint bindings, but nothing said which listener hands it its requests, so a portal no
-      listener serves was unreachable without anyone noticing, and the call that mounts one crossed
-      a boundary no contract described. A listener Portal declares its mounts — each a portal, the
-      path prefixes routed to it, and optionally the router entry it calls — and this rule checks
-      them against the tree: a mount must name a Portal, every HTTP endpoint of a mounted portal
-      must lie under one of its prefixes, and every portal with HTTP endpoints must be mounted by
-      some listener unless it is one. A path lies under a prefix when it equals it or continues it
-      past a slash, so `/` covers only the root. Whether the named entry is really exported is the
-      code's question, and export-conformance asks it.
-    signature: 'portalMounts(ctx: RuleContext): void'
+      Rule entry-declarations. Holds every invokedBy declaration, on a contract method or on a
+      Portal component, to the shape the reachability model gives it. An entry belongs to a Portal
+      verb: a caller outside the design reaches it over the Portal's transport, so kind entry on
+      anything but a Portal is reported. A scope describes where network callers come from, so a
+      scope on a local or in-process verb, or on a runtime declaration, is reported. The kinds
+      retired with the reachability model (external, sibling-subsystem) are read compatibly for one
+      release and reported with the kind they are read as, which doctor --fix writes. A prose check
+      of the declaration itself: it neither walks the graph nor reads the family.
+    signature: 'entryDeclarations(ctx: RuleContext): void'
     returns: void
     params:
       - name: ctx
         type: RuleContext
         description: The validation run's shared read model and issue sink
     findings:
-      - code: MOUNT_TARGET_NOT_PORTAL
+      - code: ENTRY_ON_NON_PORTAL
         severity: error
         summary: >-
-          A listener mounts something that is not a Portal — an unknown component, or one whose type
-          cannot serve routes
-      - code: ENDPOINT_OUTSIDE_MOUNT
+          An entry (invokedBy kind entry) declared on a method of a component that is not a Portal;
+          a runtime hook declares kind runtime
+      - code: ENTRY_SCOPE_NOT_NETWORK
         severity: warning
         summary: >-
-          A mounted portal declares an HTTP endpoint under none of the prefixes its listener routes
-          to it — a route the contract promises that no request can reach
-      - code: UNMOUNTED_PORTAL
+          A scope on an entry whose Portal's transport crosses no network (local or in-process), or
+          on a runtime declaration
+      - code: INVOKED_BY_RETIRED_KIND
         severity: warning
         summary: >-
-          A portal declares HTTP endpoints but no listener mounts it and it declares no mounts of
-          its own — a whole surface nothing serves
+          An invokedBy declaration of a retired kind (external, sibling-subsystem), read as entry or
+          runtime for one release
+  - name: networkBoundaries
+    description: >-
+      Rule network-boundaries. It judges what the bound project's own gate can see: its own network
+      declaration and the components of its own tree. When the project declares a network, it
+      projects the project's own reach model (reach_model_projector) and reports the network
+      arbiter's findings on it: GATEWAY_BYPASSED, MULTIPLE_GATEWAYS and EXPORT_BEYOND_NETWORK, whose
+      codes the arbiter declares. The rule registers them in the catalog under this rule's name. A
+      project that declares no network has nothing to judge here. The networks around a member, and
+      the proofs that need its siblings, are the family run's to judge
+      (family_validator.checkReach).
+    signature: 'networkBoundaries(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: GATEWAY_BYPASSED
+        severity: error
+        summary: >-
+          Inside a declared network, a non-gateway Portal takes an entry from outside it, or a
+          modelled call from outside the network lands on one
+      - code: MULTIPLE_GATEWAYS
+        severity: notice
+        summary: >-
+          A declared network has more than one gateway Portal taking entries from outside it:
+          allowed, not recommended
+      - code: EXPORT_BEYOND_NETWORK
+        severity: warning
+        summary: >-
+          An export at an audience wider than project on a network-transport verb that callers
+          beyond the network cannot reach
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-05T06:49:57.067Z'
+updatedAt: '2026-10-06T18:32:49.374Z'

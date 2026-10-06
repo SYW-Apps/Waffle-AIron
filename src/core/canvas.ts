@@ -45,7 +45,7 @@ export interface CanvasModel {
     vision?: string;
     targetLanguage?: string;
     databases?: { id: string; name: string; engine: string; description?: string; tables?: string[] }[];
-    diagram?: { lineStyle?: 'bezier' | 'straight' | 'taxi'; defaultView?: 'architecture' | 'types' | 'databases'; showDatabases?: boolean };
+    diagram?: { lineStyle?: 'bezier' | 'straight' | 'taxi'; defaultView?: 'architecture' | 'types' | 'databases' | 'network'; showDatabases?: boolean };
   };
   generatedAt: string;
   subsystems: {
@@ -81,7 +81,7 @@ export interface CanvasModel {
     description: string;
     subsystem: string;
     componentType: string;
-    portalType?: string;
+    transport?: string;
     status?: string;
     public: boolean;
     /** The L0 gateway entry id this component backs (the OpenAPI operation tag),
@@ -412,7 +412,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
       description: comp.description,
       subsystem: comp.subsystem,
       componentType: comp.componentType,
-      ...(comp.portalType ? { portalType: comp.portalType } : {}),
+      ...(comp.transport ? { transport: comp.transport } : {}),
       ...(comp.status ? { status: comp.status } : {}),
       public: publicComponents.has(comp.id),
       ...(apiTagOf.has(comp.id) ? { apiTag: apiTagOf.get(comp.id) } : {}),
@@ -901,6 +901,7 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
     <button data-vm="components" class="active">Components</button>
     <button data-vm="types">Types</button>
     <button data-vm="databases">Databases</button>
+    <button data-vm="network" style="display:none" title="The derived network view: declared networks, gateways, outside and the allowed flows">Network</button>
   </div>
   <div class="dropdown" id="modeDd" style="display:none">
     <button class="tbtn" id="modeBtn" title="Switch between the component architecture, the type ERD, or the database schemas">Components ▾</button>
@@ -2597,7 +2598,7 @@ var MODEL = __MODEL_JSON__;
       } else {
         var c = compById[e.id];
         classes = stereoClass(c.componentType);
-        label = c.name + '\\n\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB' + (e.hasKids && !inner ? ' \\u25B8' : '');
+        label = c.name + '\\n\\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\\u00BB' + (e.hasKids && !inner ? ' \\u25B8' : '');
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
         + (dim ? ' dimmed' : '')
@@ -3446,9 +3447,14 @@ var MODEL = __MODEL_JSON__;
         if (b.getAttribute('data-vm') === 'databases' && !showDatabaseTab) {
           b.style.display = 'none';
         }
+        // The network view is the host's (the web app's /canvas/<project>/network):
+        // shown only when the host can open it.
+        var canOpenNetwork = typeof opts !== 'undefined' && opts && typeof opts.onOpenNetwork === 'function';
+        if (b.getAttribute('data-vm') === 'network' && canOpenNetwork) b.style.display = '';
         b.addEventListener('click', function () {
           var vm = b.getAttribute('data-vm');
-          if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
+          if (vm === 'network' && canOpenNetwork) opts.onOpenNetwork();
+          else if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
           else if (vm === 'types') navigateTo('types', typesScopeFromView());
           else if (vm === 'components') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
         });
@@ -4705,7 +4711,7 @@ var MODEL = __MODEL_JSON__;
     if (focusKind === 'component' && compById[focusId]) {
       var c = compById[focusId];
       head = '<h2>' + esc(c.name) + '</h2>'
-        + staticChip('\\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\\u00BB')
+        + staticChip('\\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
@@ -4785,7 +4791,7 @@ var MODEL = __MODEL_JSON__;
         var xt = compById[pd.extId];
         head = '<h2>' + esc(xt ? xt.name : pd.extId) + '</h2>'
           + staticChip(pd.dir === 'in' ? '\\u21E0 external caller' : 'external dependency \\u21E2')
-          + (xt ? staticChip('\\u00AB' + xt.componentType + (xt.portalType ? '/' + xt.portalType : '') + '\\u00BB') : '')
+          + (xt ? staticChip('\\u00AB' + xt.componentType + (xt.transport ? '/' + xt.transport : '') + '\\u00BB') : '')
           + (xt ? chip(xt.subsystem, 'subsystem', xt.subsystem) : '');
         body += '<p class="desc">' + (pd.dir === 'in'
           ? 'Lives outside this box and depends on something inside it. The dashed line shows the actual cross-boundary link while this port is selected.'

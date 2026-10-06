@@ -1,0 +1,17 @@
+id: network_diagram_projector
+name: Network Diagram Projector
+description: >-
+  Projects the network picture from a reach model and its flows: the declared networks as nested
+  boundaries, the gateways on them, an outside node, and the flows aggregated per workload pair with
+  their transport and verb count. It answers it as Mermaid text, and as the view model the hosted
+  canvas's network view draws. It is a data-flow diagram with trust boundaries, which is what a
+  threat-modelling session starts from. Pure.
+subsystem: sdd_network
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: projector
+status: complete
+createdAt: '2026-10-06T13:10:18.120Z'
+updatedAt: '2026-10-06T13:10:31.594Z'

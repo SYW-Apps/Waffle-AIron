@@ -106,7 +106,7 @@ function buildTree(root: string): void {
     }));
     saveSpec('subsystem', subsystem('ledger'));
     saveComponentSpec(component('billing-portal', 'billing', {
-      componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-orch'], basePath: '/billing',
+      componentType: 'Portal', transport: 'HTTP', dependsOn: ['billing-orch'], basePath: '/billing',
       previousIds: ['invoice-portal'],
       ext: { acme: { owner: 'team-a' } },
       lint: { allow: [{ code: 'SOME_CODE', reason: 'fixture' }] },
@@ -304,7 +304,7 @@ describe('the design export projector', () => {
     });
 
     it('resolves the export tables to their targets', () => {
-      expect(design.project.exports).toEqual([{ publicName: 'billing-api', targetKind: 'component', target: 'billing-portal', audience: 'external' }]);
+      expect(design.project.exports).toEqual([{ publicName: 'billing-api', targetKind: 'component', target: 'billing-portal', audience: 'external', type: 'REST' }]);
       expect(design.subsystems.find((s) => s.key === 'billing')!.exports.map((e) => e.target)).toEqual(['billing-portal']);
     });
   });
@@ -453,6 +453,6 @@ describe('entrypoint facts on real trees', () => {
     expect(d.source.projectId).toBe('flowops-demo');
     const intake = d.interfaces.find((i) => i.key === 'iintake-portal')!.methods.find((m) => m.name === 'onRecordReceived')!;
     expect(intake.endpoint).toEqual({ transport: 'MessageBus', topic: 'records', event: 'record.received', direction: 'subscribe' });
-    expect(d.components.find((c) => c.key === 'intake-portal')!.portalType).toBe('MessageBus');
+    expect(d.components.find((c) => c.key === 'intake-portal')!.transport).toBe('MessageBus');
   }, REAL_TREE_TIMEOUT);
 });

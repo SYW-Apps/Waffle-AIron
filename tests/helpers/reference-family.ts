@@ -79,7 +79,7 @@ function subsystem(dir: string, parentSystem: string, id: string, extra: Record<
 function component(dir: string, sub: string, id: string, componentType: string, dependsOn: string[] = [], extra: Record<string, unknown> = {}): void {
   writeSpecFile(specs(dir, sub, id, '.index.yaml'), ComponentSpecSchema.parse({
     id, name: id, description: `The ${id} component`, subsystem: sub, componentType,
-    ...(componentType === 'Portal' ? { portalType: 'Custom' } : {}),
+    ...(componentType === 'Portal' ? { transport: 'Custom' } : {}),
     owns: [], dependsOn, status: 'complete', createdAt: STAMP, updatedAt: STAMP, ...extra,
   }));
 }
@@ -137,7 +137,7 @@ export function buildReferenceFamily(): ReferenceFamily {
     { from: 'engine', component: 'engine-portal', audience: 'project' },
     { typeDef: 'engine-mode', audience: 'project' },
   ]);
-  subsystem(core, 'Core', 'engine', { publicInterfaces: [{ type: 'Custom', details: 'The engine surface', component: 'engine-portal' }] });
+  subsystem(core, 'Core', 'engine', { publicInterfaces: [{ details: 'The engine surface', component: 'engine-portal' }] });
   // A local subsystem whose id is also a member alias: shadowed, still reachable.
   subsystem(core, 'Core', 'transpiler');
   component(core, 'engine', 'engine-portal', 'Portal', ['transpiler::lowering-portal']);
@@ -151,7 +151,7 @@ export function buildReferenceFamily(): ReferenceFamily {
   // ── transpiler: a member two levels down ─────────────────────────────────
   projectYaml(transpiler, ['id: transpiler', 'name: Transpiler']);
   system(transpiler, 'Transpiler', [{ from: 'lowering', component: 'lowering-portal', audience: 'project' }]);
-  subsystem(transpiler, 'Transpiler', 'lowering', { publicInterfaces: [{ type: 'Custom', details: 'The lowering surface', component: 'lowering-portal' }] });
+  subsystem(transpiler, 'Transpiler', 'lowering', { publicInterfaces: [{ details: 'The lowering surface', component: 'lowering-portal' }] });
   component(transpiler, 'lowering', 'lowering-portal', 'Portal');
   // `super::` climbs to core; a member path read from the bound root lands
   // back in transpiler; a leading `::` walks from the top to core again — two
@@ -303,7 +303,7 @@ export function buildContractFamily(): ContractFamily {
 
   projectYaml(ledger, ['id: ledger', 'name: Ledger']);
   system(ledger, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'project' }]);
-  subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ type: 'Custom', details: 'The ledger surface', component: 'ledger-portal' }] });
+  subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ details: 'The ledger surface', component: 'ledger-portal' }] });
   component(ledger, 'books', 'ledger-portal', 'Portal');
   const setLedgerContract = (postName: string, balanceReturns = 'number'): void => contract(ledger, 'books', 'ledger-portal', [
     { name: postName, description: 'Post an amount', signature: `${postName}(amount: number): void`, returns: 'void',
@@ -371,7 +371,7 @@ export function buildPathExternalPair(source: 'object' | 'string' = 'object'): P
 
   projectYaml(ledger, ['id: ledger', 'name: Ledger']);
   system(ledger, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'instance' }]);
-  subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ type: 'Custom', details: 'The ledger surface', component: 'ledger-portal' }] });
+  subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ details: 'The ledger surface', component: 'ledger-portal' }] });
   component(ledger, 'books', 'ledger-portal', 'Portal');
   const setLedgerContract: PathExternalPair['setLedgerContract'] = ({ postName = 'post', amountType = 'number', balanceReturns = 'number', formerly } = {}) => contract(ledger, 'books', 'ledger-portal', [
     { name: postName, description: 'Post an amount', signature: `${postName}(amount: ${amountType}): void`, returns: 'void',

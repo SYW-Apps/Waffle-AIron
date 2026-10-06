@@ -17,10 +17,10 @@ export const portalFieldsRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    'A Portal declares its portalType. Non-Portal components carry no portalType, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that exposes the surface). Intrinsic to one component: no tree required.',
+    "A Portal declares its transport (the retired portalType is read as it for one release); only an InProcess Portal may declare an abi. Non-Portal components carry no transport, abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
   codes: [
-    { code: 'MISSING_PORTAL_TYPE', defaultSeverity: 'error', summary: 'Portal without a portalType' },
-    { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with portalType/basePath' },
+    { code: 'MISSING_PORTAL_TRANSPORT', defaultSeverity: 'error', summary: 'Portal without a transport' },
+    { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with transport, abi or basePath, or an abi on a Portal whose transport is not InProcess' },
     { code: 'AUTH_ON_NON_PORTAL', defaultSeverity: 'warning', summary: 'Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a Portal)' },
   ],
   check(ctx) {
@@ -29,12 +29,23 @@ export const portalFieldsRule: SddRule = {
 
       if (comp.componentType === 'Portal') {
         // A completeness code (draft-downgraded to a warning), so authoring a
-        // Portal and setting its portalType on the next call stays legal.
-        if (!comp.portalType) {
+        // Portal and setting its transport on the next call stays legal.
+        if (!comp.transport) {
           ctx.addIssue(
             'error',
-            'MISSING_PORTAL_TYPE',
-            `Component "${comp.id}" has type "Portal" but is missing "portalType" field.`,
+            'MISSING_PORTAL_TRANSPORT',
+            `Component "${comp.id}" has type "Portal" but declares no "transport" (HTTP, gRPC, GraphQL, MessageBus, CLI, IPC, NamedPipe, JSONRPC, InProcess or Custom).`,
+            comp.id,
+            isDraftCtx,
+          );
+        }
+        if (comp.abi !== undefined && comp.transport !== 'InProcess') {
+          // An abi says how a foreign language links a library: it belongs on
+          // an InProcess Portal only.
+          ctx.addIssue(
+            'error',
+            'UNEXPECTED_PORTAL_FIELD',
+            `Portal "${comp.id}" has ${comp.transport ? `transport "${comp.transport}"` : 'no transport'} but declares an abi ("${comp.abi}"). An abi says how a foreign language links a library, so it belongs on an InProcess Portal only — drop it, or make the Portal InProcess.`,
             comp.id,
             isDraftCtx,
           );
@@ -42,11 +53,11 @@ export const portalFieldsRule: SddRule = {
         continue;
       }
 
-      if (comp.portalType !== undefined || comp.basePath !== undefined) {
+      if (comp.transport !== undefined || comp.abi !== undefined || comp.basePath !== undefined) {
         ctx.addIssue(
           'error',
           'UNEXPECTED_PORTAL_FIELD',
-          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but has "portalType" or "basePath" configured. Both are Portal-only — drop them, or make this component a Portal.`,
+          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but has "transport", "abi" or "basePath" configured. They are Portal-only — drop them, or make this component a Portal.`,
           comp.id,
           isDraftCtx,
         );

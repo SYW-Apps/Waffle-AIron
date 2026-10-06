@@ -1,0 +1,81 @@
+id: reach_model_projector_impl
+name: Reach Model Projector Implementation
+description: One pure projection in its own module, beside the narrative graph projector it mirrors.
+contract: ireach_model_projector
+sourcePath: src/core/rules/reach-model-projector.ts
+methods:
+  - name: project
+    narrative:
+      - stepNumber: 1
+        description: >-
+          The project's own network: a NetworkBoundary named by the project key, with no parent,
+          when network is present; none otherwise
+        type: local
+      - stepNumber: 2
+        label: portals
+        description: For each Portal component of ctx.components
+        type: loop
+        loopKind: forEach
+        over: the Portal components of ctx.components
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          For each contract method of each of its interfaces (ctx.interfacesByComponent), add a
+          VerbReach: the project key, the Portal, the verb, the Portal's transport, the endpoint as
+          one line (none for InProcess), the own network when there is one, whether the variant is
+          gateway, comp.entryFor(the method's own invokedBy), and the widest audience among the L0
+          export entries whose backing component (and narrowed interface, when it narrows) is this
+          Portal
+        type: local
+      - stepNumber: 4
+        label: portalsEnd
+        description: A gateway Portal with an outside entry is recorded among the own network's gateways
+        type: local
+      - stepNumber: 5
+        description: >-
+          Collect the project's own cross-subsystem calls: every call or register step, declared
+          `calls` entry and dispatch-table binding reached by a dispatch step whose target is a
+          Portal verb in another subsystem of the same project, as a ModelledCall with its caller,
+          the caller's network and its evidence
+        type: local
+      - stepNumber: 6
+        description: Answer the ReachModel with scope own, every list in a stable order
+        type: return
+        outcome: the project's own reach model
+    detail: full
+  - name: compose
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Nest the networks: for every project key in networks, a NetworkBoundary whose parent is
+          the nearest ancestor project (through the family's membership) that is itself a key of
+          networks; outermost first
+        type: local
+      - stepNumber: 2
+        description: >-
+          Place each project: its innermost network is its own when it declares one, else its
+          nearest ancestor's, else none
+        type: local
+      - stepNumber: 3
+        description: >-
+          Carry every verb and every call of each project's own model, re-placed in that project's
+          innermost network, and gather each network's gateways from its projects' outside-entered
+          gateway Portals
+        type: local
+      - stepNumber: 4
+        description: >-
+          Add the cross-project calls: every reference in family.references at position call, calls,
+          register or dispatch that names a method on a Portal of another project, as a ModelledCall
+          from the reference's caller (the component whose implementation writes the step, never a
+          guess from a matching dependsOn; the referring spec when the reference records none),
+          placed in the consumer's innermost network, to the producer's verb, with the referring
+          spec as its evidence
+        type: local
+      - stepNumber: 5
+        description: Answer the ReachModel with scope family, every list in a stable order
+        type: return
+        outcome: the family's reach model
+    detail: full
+status: complete
+createdAt: '2026-10-06T12:58:16.938Z'
+updatedAt: '2026-10-06T18:31:09.578Z'

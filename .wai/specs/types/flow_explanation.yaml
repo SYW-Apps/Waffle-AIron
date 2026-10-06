@@ -1,0 +1,27 @@
+kind: value-object
+id: flow_explanation
+name: FlowExplanation
+description: >-
+  Why one party may reach another, from the design: the flows that allow it, each with its chain
+  from the entry or modelled call through every gateway it crosses. Empty when nothing allows it,
+  which is itself the answer.
+subsystem: sdd_network
+fields:
+  - name: allowed
+    type: bool
+    description: Whether any flow allows it
+    optional: false
+  - name: flows
+    type: list<NetworkFlow>
+    description: The flows that allow it
+    optional: false
+  - name: chain
+    type: list<string>
+    description: >-
+      Each step of the justification as one line: the entry and its caller prose, the gateway
+      entered, the Adapter's call step
+    optional: false
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:52.485Z'
+updatedAt: '2026-10-06T13:09:53.090Z'

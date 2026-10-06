@@ -145,11 +145,12 @@ methods:
       - stepNumber: 21
         description: >-
           Project the L0 into DesignProject (boundaries and requirements as text, the resolved
-          project export table as DesignExportEntry rows), each subsystem (lifecycle roots, its
-          resolved L1 table, trusted links) and each component (stereotype, variant, dependency
-          class, durability, portal type, owns and dependsOn, topics, a Portal's auth, base path and
-          dispatch table, a listener's mounts, its patterns and external links, previousIds as
-          formerly), every reference as a key
+          project export table as DesignExportEntry rows with each entry's derived export kind and
+          role), each subsystem (lifecycle roots, its resolved L1 table, trusted links) and each
+          component (stereotype, variant, dependency class, durability, a Portal's transport, abi
+          and Portal-level invokedBy entry, owns and dependsOn, topics, a Portal's auth, base path
+          and dispatch table, its patterns and external links, previousIds as formerly), every
+          reference as a key
         type: local
       - stepNumber: 22
         description: >-
@@ -170,12 +171,14 @@ methods:
         type: local
       - stepNumber: 24
         description: >-
-          Leave out what is not this project's design — a member project's specs (ids carrying its
+          Leave out what is not this project's design: a member project's specs (ids carrying its
           namespace; the member is a dependency, never inlined), lint allows, conformance tiers,
-          symbol and exportedVia, simPath, finding declarations, createdAt and updatedAt; keep ext
-          untouched under each pack's key — then sort every element list and the dependencies by
-          key, keep inner lists in declared order, and stamp format `wairon-design`, the
-          formatVersion and the generating wairon version
+          symbol, exportedVia and router, simPath, finding declarations, createdAt and updatedAt.
+          Keep ext untouched under each pack's key. Then sort every element list and the
+          dependencies by key, keep inner lists in declared order, and stamp format `wairon-design`,
+          the formatVersion (2.0: the reachability model's MAJOR, which removed the listener mounts
+          and portalType and narrowed invokedBy to entry and runtime) and the generating wairon
+          version
         type: local
       - stepNumber: 25
         description: Return the design export
@@ -183,4 +186,4 @@ methods:
         outcome: DesignExport
 status: complete
 createdAt: '2026-10-04T13:54:26.399Z'
-updatedAt: '2026-10-04T17:40:34.293Z'
+updatedAt: '2026-10-06T13:05:18.957Z'

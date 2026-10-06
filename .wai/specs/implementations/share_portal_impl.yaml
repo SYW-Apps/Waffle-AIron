@@ -9,6 +9,7 @@ contract: ishare_portal
 sourcePath: src/server/sharehttp.ts
 injectedParams:
   - cfg
+router: handleShareRequest
 methods:
   - name: getSharedView
     narrative:
@@ -52,4 +53,4 @@ methods:
 conformance: declared
 status: complete
 createdAt: '2026-07-18T09:31:51.087Z'
-updatedAt: '2026-10-03T17:53:42.925Z'
+updatedAt: '2026-10-06T18:55:18.208Z'

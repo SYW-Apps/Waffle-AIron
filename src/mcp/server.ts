@@ -29,7 +29,7 @@ import {
   TypeSpecSchema,
   storedMethodSignature,
 } from '../models/specs.js';
-import { EndpointSchema, type Endpoint, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
+import { EndpointSchema, transportKind, transportRequiresEndpoint, type Endpoint, type EndpointTransport, type Transport, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import type { ComponentSpec, Technology } from '../models/specs.js';
 import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
 import type { SpecChange, SpecChangeReport } from '../core/specs.js';
@@ -73,6 +73,9 @@ import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp 
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
+// The read-only network tools' workflows (mcp_network_orchestrator).
+import { flows as networkFlows, explain as explainNetworkFlow } from './network.js';
+import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
 import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
@@ -432,6 +435,49 @@ function additionAnswer(request: ExternalRequest, addition: ExternalAddition): C
   return structured(summary, { ...addition });
 }
 
+/** One end of a flow, as sdd_get_network_flows and sdd_explain_flow answer it. */
+const flowPartyOutput = z.object({
+  project: z.string().optional(),
+  subsystem: z.string().optional(),
+  component: z.string().optional(),
+  verb: z.string().optional(),
+  scope: z.enum(['outside', 'network']).optional(),
+  network: z.string().optional(),
+});
+
+/** One allowed flow of the matrix. */
+const networkFlowOutput = z.object({
+  from: flowPartyOutput,
+  to: flowPartyOutput,
+  transport: z.string(),
+  binding: z.string().optional(),
+  crosses: z.array(z.string()),
+  via: z.string().optional(),
+  evidence: z.array(z.string()),
+  verbs: z.array(z.string()).optional(),
+});
+
+/** sdd_get_network_flows' structured answer: the allowed flows, filtered when asked. */
+const networkFlowsOutput = {
+  flows: z.array(networkFlowOutput).describe('One allowed flow per row: who reaches which Portal verb, over which transport and binding, through which networks and gateway, on what evidence.'),
+  ...staleServerOutput,
+};
+
+/** sdd_explain_flow's structured answer. */
+const flowExplanationOutput = {
+  allowed: z.boolean().describe('Whether any flow of the design allows it.'),
+  flows: z.array(networkFlowOutput).describe('The flows that allow it.'),
+  chain: z.array(z.string()).describe('Each step of the justification, one line each; when not allowed, what reaches the callee instead.'),
+  ...staleServerOutput,
+};
+
+/** One flow as one line. */
+function flowLine(f: NetworkFlow): string {
+  const from = f.from.scope !== undefined ? (f.from.scope === 'network' ? `network${f.from.network ? `:${f.from.network}` : ''}` : 'outside') : (f.from.component ?? '?');
+  return `${from} -> ${f.to.component}.${f.to.verb} over ${f.transport}${f.binding ? ` (${f.binding})` : ''}`
+    + `${f.crosses.length ? `, entering ${f.crosses.map((n) => n || '(root network)').join(' > ')}` : ''}${f.via ? ` via ${f.via}` : ''}`;
+}
+
 /** sdd_get_externals_status' structured answer: one status per declared external. */
 const externalStatusesOutput = {
   statuses: z.array(z.object({
@@ -509,17 +555,6 @@ function specKindsHolding(id: string): SpecKind[] {
   };
   return SPEC_KINDS.filter((k) => held[k]);
 }
-
-/**
- * A Portal's portalType → the endpoint transport its methods bind with: the two
- * vocabularies name one set, and only HTTP is spelled differently (HTTP_API).
- * The same table the gate's portal-endpoints rule checks bindings against;
- * Custom is free-form and implies none.
- */
-const PORTAL_TYPE_TRANSPORT: Record<string, string | undefined> = {
-  HTTP_API: 'HTTP', gRPC: 'gRPC', GraphQL: 'GraphQL', MessageBus: 'MessageBus',
-  NamedPipe: 'NamedPipe', IPC: 'IPC', CLI: 'CLI', Custom: undefined,
-};
 
 /**
  * The lifecycle statuses a tool's input may state, as the zod vocabulary its
@@ -1472,7 +1507,7 @@ export interface McpServerOptions {
 }
 
 /**
- * mcp_portal.createMcpServer — the entry every caller uses: the bare server the
+ * mcp_hosting_portal.createMcpServer — the entry every caller uses: the bare server the
  * MCP server supervisor builds (mcp_server.create), with the portal's own
  * surface mounted on it (resources, prompts, and the hosted-tool advertisement).
  */
@@ -1681,13 +1716,15 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   );
 
   // One entry of a subsystem's export table, shared by sdd_add_subsystem and
-  // sdd_set_public_interfaces: an own item (type + details + the component or
-  // type it owns) or a re-export (`from` another subsystem, one component,
-  // interface or type, optionally renamed with `as`; `from` alone re-exports
-  // everything it exports). type/details are required on an own component item
-  // — the canonical schema refuses one without them at the write.
+  // sdd_set_public_interfaces: an own item (details + the component or type it
+  // owns) or a re-export (`from` another subsystem, one component, interface or
+  // type, optionally renamed with `as`; `from` alone re-exports everything it
+  // exports). details are required on an own component item — the canonical
+  // schema refuses one without them at the write. The export kind is derived
+  // from the backing Portal's transport; `type` is legacy.
   const publicInterfaceItemInput = z.object({
-    type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']).optional().describe('Transport kind of an own item (required on an own component item); a re-export inherits its target\'s'),
+    type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']).optional().describe('LEGACY, no longer authored: the export kind is derived from the backing Portal\'s transport. Accepted for one release and carried as written; doctor --fix drops it'),
+    role: z.enum(['call', 'implement']).optional().describe('What consumers do with the entry: call it (the default) or implement it — an extension point (a trait, callback or webhook contract) whose realization consumers supply; an Adapter may back an implement entry'),
     details: z.string().optional().describe('Consumer-facing description of an own item (required on an own component item); a re-export inherits its target\'s'),
     component: z.string().optional().describe('For an own item, the L2 component that realizes it (this subsystem\'s published surface); for a re-export, the component re-exported from `from`'),
     interface: z.string().optional().describe('Optional L3 interface id the entry narrows to'),
@@ -1759,10 +1796,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; publicInterfaces: { type?: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[] }>(server,
+  reg<{ subsystem: string; publicInterfaces: { type?: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[] }>(server,
     'sdd_set_public_interfaces',
     {
-      description: 'Set (replace) an existing subsystem\'s export table (its publicInterfaces). An OWN item binds type + details to the component (and optional interface) that realizes it, or exports a type the subsystem owns (typeDef). A RE-EXPORT names another subsystem of the project in `from` and one component (optionally narrowed with `interface`) or one typeDef from what it exports, optionally renamed with `as` — `from` alone re-exports everything it exports; type and details are optional on a re-export, which inherits its target\'s. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a component its owning subsystem publishes; a re-export is a name, not a licence. A replacement, not a merge: an entry left out is removed. An own entry\'s identity is its component and interface, a re-export\'s its source, item and name, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
+      description: 'Set (replace) an existing subsystem\'s export table (its publicInterfaces). An OWN item binds details to the component (and optional interface) that realizes it, or exports a type the subsystem owns (typeDef). A RE-EXPORT names another subsystem of the project in `from` and one component (optionally narrowed with `interface`) or one typeDef from what it exports, optionally renamed with `as` — `from` alone re-exports everything it exports; details are optional on a re-export, which inherits its target\'s. The export kind is derived from the backing Portal\'s transport, so `type` is no longer authored; `role: implement` exports an extension point consumers implement. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a component its owning subsystem publishes; a re-export is a name, not a licence. A replacement, not a merge: an entry left out is removed. An own entry\'s identity is its component and interface, a re-export\'s its source, item and name, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         subsystem: z.string().describe('The L1 subsystem id to update'),
         publicInterfaces: z.array(publicInterfaceItemInput).describe('The full replacement list of the subsystem\'s export table: own items and re-exports'),
@@ -2035,11 +2072,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; newName: string; pinSymbol?: boolean }>(server,
     'sdd_rename_method',
     {
-      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not a camel-case identifier (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
+      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
       inputSchema: {
         id: z.string().describe('The component whose method is renamed (namespaced if needed)'),
         method: z.string().describe('The method name as it stands'),
-        newName: z.string().describe('Its new name: a camel-case identifier'),
+        newName: z.string().describe('Its new name: an identifier in the method casing of the tree (snake_case in a Rust or Python tree, camelCase in a TypeScript one)'),
         pinSymbol: z.boolean().optional().describe('Whether an implementation that declares no symbol is pinned to the old name so its function still binds; true when omitted'),
       },
     },
@@ -2113,7 +2150,13 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry', 'Adapter', 'Observer', 'Repository']).describe('The building block, or the pattern Repository. Specialist and Gateway are retired and cannot be authored: logic is an Orchestrator with a dependencyClass, a gateway is a Portal with the gateway variant'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
-        portalType: z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']).optional().describe('Portal-only, and expected on every Portal. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
+        transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']).optional().describe('Portal-only, and expected on every Portal: how callers reach its verbs, one vocabulary with the endpoint discriminator. Network: HTTP, gRPC, GraphQL, MessageBus, Custom. Local: CLI, NamedPipe, IPC, JSONRPC (JSON-RPC over stdio, e.g. a language server or stdio MCP). InProcess: a library (or FFI/DLL with an abi), whose verbs are its contract methods and bind no endpoint. Replaces the retired portalType (HTTP_API is HTTP). OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
+        abi: z.string().optional().describe('Portal-only, InProcess only: how a foreign language links this library — "c" (a C-ABI shared library, DLL or FFI) or "wasm" (a WebAssembly component). Omit for a native API in the project\'s targetLanguage.'),
+        invokedBy: z.object({
+          kind: z.enum(['entry']).describe('entry: callers outside the design reach every verb of this Portal over its transport'),
+          caller: z.string().optional().describe('WHO calls it and from where, as reviewable prose (e.g. "Browsers and mobile clients of the shop") — missing or placeholder-thin prose is INVOKED_BY_UNDESCRIBED'),
+          scope: z.enum(['outside', 'network']).optional().describe('Network transports only: where the callers come from — outside the innermost declared network (the default) or inside it (sibling services). Refused on a local or in-process transport'),
+        }).strict().optional().describe('Portal-only: the entry every verb inherits, declared ONLY when callers outside the design reach this Portal (a verb may override just the scope). Never defaulted: a blanket entry the author did not decide would hide unreached verbs. Omit it when modelled callers reach the verbs.'),
         basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         dispatch: z.array(z.object({
           capability: z.string().describe('Capability name exactly as dispatched at runtime (e.g. "shadow_module.get")'),
@@ -2121,11 +2164,6 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           method: z.string().describe('Method name on the serving component\'s interface'),
           description: z.string().optional(),
         }).strict()).optional().describe('Portal-only: capability → component.method dispatch table for generic-handle portals. Gives the reachability walker real edges and is validated against target interfaces (UNSERVED_CAPABILITY).'),
-        mounts: z.array(z.object({
-          portal: z.string().describe('The mounted Portal\'s component id'),
-          prefixes: z.array(z.string()).describe('The path prefixes this listener routes to the portal. A path lies under a prefix when it equals it or continues it past a slash, so "/" covers only the root itself'),
-          via: z.string().optional().describe('The router entry the listener calls to hand the portal its request, exported by the PORTAL\'s own file (held to it: UNREALIZED_EXPORT_HANDLE). Omit when the listener calls the portal\'s contract methods directly, route by route'),
-        }).strict()).optional().describe('Portal-only: the portals this LISTENER serves, each under its path prefixes and through its router entry. Declaring the field — even as an empty array — marks this portal as a listener, the one kind of portal nothing else needs to mount. Checked by portal-mounts: a mount must name a Portal (MOUNT_TARGET_NOT_PORTAL), every HTTP endpoint of a mounted portal must lie under one of its prefixes (ENDPOINT_OUTSIDE_MOUNT), and a portal with HTTP endpoints that is neither a listener nor mounted by one is reported (UNMOUNTED_PORTAL).'),
         durability: z.enum(['ram-projection', 'durable', 'read-through', 'cache']).optional().describe('Store-only — OMIT IT on any other componentType, where it is refused at the write (DURABILITY_ON_NON_STORE) and nothing is saved. Every Store should declare one (MISSING_DURABILITY): durable = persisted RAM projection (hydration read-back from a lifecycle init entrypoint required — MISSING_HYDRATION); read-through = persisted with no RAM copy (every read is the read-back, hydration exempt); ram-projection = rebuilt not restored; cache = evictable loss-safe memo state.'),
         dependencyClass: z.enum(['pure', 'read']).optional().describe('Orchestrator-only — OMIT IT on any other componentType, where it is refused at the write (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR) and nothing is saved. Declares what logic may depend on, enforced as a Store\'s durability is (DEPENDENCY_CLASS_VIOLATION): pure = depends only on pure Orchestrators (a computation over the values it is handed, e.g. an arbiter or codec); read = also on read Orchestrators, Repositories, Indexes and Adapters, never calling their write methods; unset = a workflow.'),
         emits: z.array(z.object({
@@ -2143,15 +2181,21 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const componentInputFields = Object.keys(componentInput);
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; portalType?: 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'CLI' | 'NamedPipe' | 'IPC' | 'Custom'; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; mounts?: { portal: string; prefixes: string[]; via?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; transport?: Transport; abi?: string; invokedBy?: { kind: 'entry'; caller?: string; scope?: 'outside' | 'network' }; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; status?: StatedStatus }>(server,
     'sdd_add_component',
     {
-      description: 'Add an L2 Component under a subsystem. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (set variant with sdd_update_spec). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read), plus a Query for computed reads over the Store, owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, variant, patterns and externalLinks are carried forward — edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
+      description: 'Add an L2 Component under a subsystem. A Portal states its `transport` (the retired portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess, and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its scope; the tool never defaults an entry, because a blanket entry the author did not decide would hide unreached verbs. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (set variant with sdd_update_spec). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read), plus a Query for computed reads over the Store, owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, variant, patterns and externalLinks are carried forward — edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
       inputSchema: componentInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, portalType, basePath, dispatch, mounts, durability, dependencyClass, emits, subscribesTo, ext, status }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, transport, abi, invokedBy, basePath, dispatch, durability, dependencyClass, emits, subscribesTo, ext, status }) => {
       try {
+        // A scope says where a NETWORK verb's callers come from; on a local or
+        // in-process transport no network is crossed, so it is refused here
+        // rather than written (ENTRY_SCOPE_NOT_NETWORK on a hand edit).
+        if (invokedBy?.scope !== undefined && transport !== undefined && transportKind(transport) !== 'network') {
+          return errText(`Component "${id}": an entry scope applies only to a network transport, and "${transport}" is ${transportKind(transport)} — drop the scope.`);
+        }
         // mcp_orchestrator.addComponent step 1: the restatement. Re-adding an
         // existing component used to erase everything this input cannot express
         // — lint.allow above all, whose only symptom is the suppressed warning
@@ -2166,11 +2210,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             componentType,
             owns: owns ?? [],
             dependsOn: dependsOn ?? [],
-            ...(portalType ? { portalType } : {}),
+            ...(transport ? { transport } : {}),
+            ...(abi ? { abi } : {}),
+            ...(invokedBy ? { invokedBy } : {}),
             ...(basePath ? { basePath } : {}),
             ...(dispatch ? { dispatch } : {}),
-            // An EMPTY list is kept: declaring the field is what marks a listener.
-            ...(mounts ? { mounts } : {}),
             ...(durability ? { durability } : {}),
             ...(dependencyClass ? { dependencyClass } : {}),
             ...(emits ? { emits } : {}),
@@ -2223,11 +2267,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           ),
           params: z.array(methodParamItem).optional().describe('Structured parameters — authoritative for type checking, and the signature text is derived from them. Strongly preferred.'),
           guarantees: z.array(z.string().min(1)).optional().describe('Semantic guarantees the method promises (combinable); any guarantee a narrative step asserts must be declared here. Builtin tokens: idempotent | atomic | transactional | exactly-once; extension packs may declare more (any other token is UNKNOWN_GUARANTEE)'),
-          effect: z.enum(['read', 'write', 'lifecycle']).optional().describe('What the method does to the component\'s held state: read observes it; write modifies an entity\'s domain fields; lifecycle creates, destroys, or (un)registers an entity\'s existence or membership without modifying its fields, and calls only read and lifecycle methods (LIFECYCLE_CALLS_WRITE). Required on a durable Store\'s contract methods so the durability round-trip rule can pair mutations with hydration read-backs; a Supervisor may call a data component it does not own only through read and lifecycle methods (SUPERVISOR_WRITE_SHORTCUT)'),
+          effect: z.enum(['none', 'read', 'write', 'lifecycle', 'io']).optional().describe('What the method does to the component\'s held state, and whether it reaches outside the process: none computes over its arguments only (the one effect pure logic may call on a library); io reaches files, the network, the clock or randomness; read observes held state; write modifies an entity\'s domain fields; lifecycle creates, destroys, or (un)registers an entity\'s existence or membership without modifying its fields, and calls only read and lifecycle methods (LIFECYCLE_CALLS_WRITE). Required on a durable Store\'s contract methods so the durability round-trip rule can pair mutations with hydration read-backs; a Supervisor may call a data component it does not own only through read and lifecycle methods (SUPERVISOR_WRITE_SHORTCUT)'),
           invokedBy: z.object({
-            kind: z.enum(['runtime', 'external', 'sibling-subsystem']).describe('Who owns the out-of-graph invocation: runtime (timer/signal/shutdown hook), external (a system outside this project), sibling-subsystem (a modeled sibling whose edge is not narrated here)'),
+            kind: z.enum(['entry', 'runtime']).describe('entry: callers outside the design reach this Portal verb over the Portal\'s transport (a Portal only; under a Portal-level entry, a verb\'s own overrides just the scope). runtime: the process\'s own runtime invokes it: a composition root, scheduler, signal or shutdown hook, framework callback. The retired kinds external and sibling-subsystem are no longer accepted'),
             caller: z.string().optional().describe('WHO invokes it and when, as reviewable prose — missing or placeholder-thin prose is INVOKED_BY_UNDESCRIBED'),
-          }).strict().optional().describe('Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph. Unused-detection seeds the method as an entrypoint so reachability propagates through its narrative (unlike lint.allow); a method the internal walk already reaches is flagged stale (INVOKED_BY_REDUNDANT). Prefer a `register` narrative step when the wiring is internal.'),
+            scope: z.enum(['outside', 'network']).optional().describe('entry on a network transport only: outside (the default) or network (sibling services inside the innermost declared network)'),
+          }).strict().optional().describe('Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph. Unused-detection seeds the method as an entrypoint so reachability propagates through its narrative (unlike lint.allow); a runtime method the internal walk already reaches is flagged stale (INVOKED_BY_REDUNDANT). Prefer a `register` narrative step when the wiring is internal.'),
           findings: z.array(z.object({
             code: z.string().describe('UPPER_SNAKE finding code, unique within the method; a pack\'s codes carry the pack prefix (<PACK>_<CODE>)'),
             severity: z.enum(['error', 'warning', 'notice']).describe('Default severity, before project severity overrides and draft-context downgrades. A notice is reported but never fails the gate'),
@@ -2241,19 +2286,20 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     name: z.string().describe('Human-readable contract name'),
     description: z.string().describe('Contract description and obligations'),
     component: z.string().describe('The L2 component ID this interface belongs to'),
+    implements: z.string().min(1).optional().describe('The exported extension point this contract realizes, as alias::name: another project\'s export entry with role implement (a trait, callback or webhook contract). Declare every method of the extension point here with the same signature (IMPLEMENTS_MISMATCH); the methods count as reached, because the producer calls them'),
     methods: z.array(z.object(interfaceMethodShape).strict()).optional().describe('List of method signature contracts'),
     status: statusInput,
   };
   const interfaceInputFields = Object.keys(interfaceInput);
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature?: string; returns?: string; signatureFrom?: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'read' | 'write' | 'lifecycle'; invokedBy?: { kind: 'runtime' | 'external' | 'sibling-subsystem'; caller?: string }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[]; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature?: string; returns?: string; signatureFrom?: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'none' | 'read' | 'write' | 'lifecycle' | 'io'; invokedBy?: { kind: 'entry' | 'runtime'; caller?: string; scope?: 'outside' | 'network' }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[]; implements?: string; status?: StatedStatus }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component. Each method states its signature ONE of three ways: structured `params` with `returns` (strongly preferred — authoritative for type checking, and the signature text is then DERIVED and written by the server; a text you pass is ignored and a notice names one that differed), a `signatureFrom` naming its source — a signature type, or `component.method` along a dependsOn/owns edge — with neither params nor returns (both together are refused, SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose `signature` with `returns`. A method declares the finding codes it reports in `findings` ({code, severity, summary}); each code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). Re-defining an existing id REPLACES the method list: a method left out of the input is REMOVED (and reported); spec-level lint/ext and each method\'s endpoint binding are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
       inputSchema: interfaceInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, component, methods, status }) => {
+    ({ id, name, description, component, implements: implementsPoint, methods, status }) => {
       try {
         // mcp_orchestrator.defineInterface step 1: the restatement. The input
         // cannot express spec-level lint/ext or a method's endpoint binding
@@ -2261,7 +2307,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // those at BOTH levels, keyed off this input's own field lists.
         const restatement: SpecRestatement = {
           kind: 'interface',
-          spec: { id, name, description, component, methods: methods ?? [] } as unknown as InterfaceSpec,
+          spec: { id, name, description, component, ...(implementsPoint ? { implements: implementsPoint } : {}), methods: methods ?? [] } as unknown as InterfaceSpec,
           fields: interfaceInputFields,
           memberFields: interfaceMethodInputFields,
           status,
@@ -2280,22 +2326,22 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  /** The endpoint vocabulary a binding is stored in. */
-  type StoredTransport = 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom';
+  /** The endpoint vocabulary a binding is stored in: every transport but InProcess, whose verbs bind none. */
+  type StoredTransport = EndpointTransport;
   // One generic tool for ALL public-facing wire endpoints — HTTP, gRPC, GraphQL,
-  // MessageBus, NamedPipe, IPC, CLI, Custom — binding each interface method to a
+  // MessageBus, NamedPipe, IPC, CLI, JSONRPC, Custom — binding each interface method to a
   // concrete `endpoint`. This is what a Portal needs to satisfy the gate's
   // MISSING_ENDPOINT / ENDPOINT_TRANSPORT_MISMATCH rules. Run it after
   // sdd_define_interface (the methods must already exist).
-  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; address?: string }> }>(server,
+  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }> }>(server,
     'sdd_set_endpoints',
     {
-      description: 'Bind concrete wire endpoints to existing L3 interface methods (required for every Portal). Pick `transport` and fill that transport\'s address fields. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
+      description: 'Bind concrete wire endpoints to existing L3 interface methods, for a Portal whose transport requires them (every transport but InProcess and Custom). Pick the Portal\'s own `transport` and fill that transport\'s address fields. A binding for an InProcess Portal is refused: its verbs are its contract methods. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
           method: z.string().describe('The NAME of the interface method to bind (not the HTTP verb)'),
-          transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom']).describe('Wire protocol; must be the one the Portal\'s portalType implies. Either vocabulary is accepted: the endpoint\'s (HTTP) or the portalType\'s (HTTP_API), stored as HTTP; any other transport is refused, naming the one the portalType implies'),
+          transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom']).describe('Wire protocol; must be the Portal\'s own transport. The retired spelling HTTP_API is still read as HTTP for one release; any other transport is refused, naming the Portal\'s'),
           httpMethod: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']).optional().describe('HTTP: verb'),
           path: z.string().optional().describe('HTTP: route path, e.g. "/v1/checkout"'),
           service: z.string().optional().describe('gRPC: service name'),
@@ -2309,6 +2355,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           pipe: z.string().optional().describe('NamedPipe: pipe name, e.g. "\\\\.\\pipe\\gk-events"'),
           channel: z.string().optional().describe('IPC: channel name'),
           command: z.string().optional().describe('CLI: command/subcommand'),
+          jsonRpcMethod: z.string().optional().describe('JSONRPC: the JSON-RPC method name'),
           address: z.string().optional().describe('Custom: free-form address'),
         }).strict()).describe('One binding per method'),
       },
@@ -2319,10 +2366,13 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
         const intf = loadInterfaceSpec(interfaceId);
         if (!intf) return errText(`Interface "${interfaceId}" does not exist.`);
-        // Step 2: the Portal the contract belongs to, for the transport its portalType implies.
+        // Step 2: the Portal the contract belongs to, and its own transport.
         const owner = intf.component ? loadComponentSpec(intf.component) : null;
-        const implied = owner?.componentType === 'Portal' && owner.portalType
-          ? PORTAL_TYPE_TRANSPORT[owner.portalType]
+        if (owner?.componentType === 'Portal' && owner.transport === 'InProcess') {
+          return errText(`Interface "${interfaceId}" belongs to "${owner.id}", an InProcess Portal: its verbs are its contract methods and bind no endpoint.`);
+        }
+        const implied = owner?.componentType === 'Portal' && owner.transport && transportRequiresEndpoint(owner.transport)
+          ? owner.transport
           : undefined;
 
         const buildRaw = (e: typeof endpoints[number], transport: StoredTransport): Record<string, unknown> => {
@@ -2334,6 +2384,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             case 'NamedPipe':  return { transport: 'NamedPipe', pipe: e.pipe };
             case 'IPC':        return { transport: 'IPC', channel: e.channel };
             case 'CLI':        return { transport: 'CLI', command: e.command };
+            case 'JSONRPC':    return { transport: 'JSONRPC', method: e.jsonRpcMethod };
             case 'Custom':     return { transport: 'Custom', address: e.address };
           }
         };
@@ -2346,12 +2397,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         for (const e of endpoints) {
           const m = intf.methods.find(x => x.name === e.method);
           if (!m) return errText(`Method "${e.method}" not found on interface "${interfaceId}". Define it via sdd_define_interface first.`);
-          // Step 3: one vocabulary — a portalType spelling maps to the endpoint's.
+          // Step 3: one vocabulary — the retired HTTP_API spelling is read as HTTP.
           const transport: StoredTransport = e.transport === 'HTTP_API' ? 'HTTP' : e.transport;
           if (implied && transport !== implied) {
             return errText(
-              `Method "${e.method}": transport "${e.transport}" does not match ${owner!.id}'s portalType `
-              + `${owner!.portalType}, which implies transport "${implied}". Bind it as "${implied}", or change the Portal's portalType.`,
+              `Method "${e.method}": transport "${e.transport}" does not match ${owner!.id}'s transport `
+              + `"${implied}". Bind it as "${implied}", or change the Portal's transport.`,
             );
           }
           const parsed = EndpointSchema.safeParse(buildRaw(e, transport));
@@ -2435,6 +2486,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     contract: z.string().describe('The L3 Interface contract ID this implements'),
     sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root — for a chained subproject\'s implementation (qualified id), relative to that subproject\'s root; a path given relative to this root that lands inside the subproject is re-expressed for you'),
     simPath: z.string().optional().describe('Optional: the committed integration-sim harness file (project-relative; N:1 sharing allowed). The validator proves it exists and its import graph wires the REAL modules (this component + each direct dependency; technology adapters may stay faked) — running it is CI\'s job. Declaring the first simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf implementations'),
+    router: z.string().min(1).optional().describe('Portal-only code linkage: the router entry this Portal\'s own file exports, through which whatever process serves the Portal hands it its requests (replaces the retired listener mount\'s `via`). Route coverage reads the routes out of it and export conformance holds the file to it. Outside the approval, like sourcePath'),
     technologies: z.array(z.union([z.string(), z.object({ name: z.string(), matches: z.array(z.string()).min(1).describe('The tokens the leakage and contract checks match INSTEAD of the name — for a technology whose name is also an ordinary word of the tree (the yaml package, the YAML format)') }).strict()])).optional().describe('External technologies this implementation binds to (e.g. ["mysql"], or [{ "name": "yaml", "matches": ["yaml package", "parseDocument"] }] when the bare name would match a common word) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
     injectedParams: z.array(z.string()).optional().describe('The parameter names this realization takes BEFORE the ones its contract declares — a config object, a data root, the transport handles a portal is handed. Supplied by whatever wires the component up, never by the caller the contract describes, which is why they belong here and not to the contract: another realization may hold them as fields instead. Declared rather than guessed, because a leading parameter the contract does not name cannot be told from one it named under a different name (`seed(config)` realized as `bootstrapInstance(cfg)`); a leading parameter this list does not name is reported (UNDECLARED_PARAM). Only a LEADING run is dropped — one of these names appearing after the contract\'s own parameters is an argument in the middle of the caller\'s list, not wiring'),
     detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
@@ -2444,14 +2496,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const implInputFields = Object.keys(implInput);
 
-  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; technologies?: Technology[]; injectedParams?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; exportedVia?: string; ext?: Record<string, unknown>; narrative?: NarrativeStepIn[]; calls?: string[] }[]; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; router?: string; technologies?: Technology[]; injectedParams?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; exportedVia?: string; ext?: Record<string, unknown>; narrative?: NarrativeStepIn[]; calls?: string[] }[]; status?: StatedStatus }>(server,
     'sdd_write_narrative',
     {
       description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). A method whose narrative shows no steps declares the calls it makes in `calls` (one "<component>.<method>" each): the reachability walk takes exactly those edges and no others, so an intent-level method that reaches a collaborator must name it or that collaborator is reported unused. Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in their source file (omitted = Portal: anchored, else declared). A method whose body lives in its own file names it in the method\'s sourcePath; the implementation\'s sourcePath is the default for every method that names none. Parameters the realization takes BEFORE its contract\'s own — a config object, a data root, a portal\'s transport handles — are wiring, and are declared once for the spec in injectedParams; a leading parameter it does not name is reported against the contract (UNDECLARED_PARAM). Re-authoring an existing id REPLACES the method list: a method left out of the input is REMOVED together with its narrative (and reported); spec-level lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
       inputSchema: implInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, contract, sourcePath, simPath, technologies, injectedParams, detail, conformance, methods, status }) => {
+    ({ id, name, description, contract, sourcePath, simPath, router, technologies, injectedParams, detail, conformance, methods, status }) => {
       try {
         // mcp_orchestrator.writeNarrative step 1: the restatement, each step
         // numbered by its position where the input left the number out. The
@@ -2466,6 +2518,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             contract,
             sourcePath,
             simPath,
+            ...(router ? { router } : {}),
             technologies,
             injectedParams,
             detail,
@@ -2793,7 +2846,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports, and a legacy {id, subsystem} reads as {as, from})'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The partial fields to merge into the spec. ARRAYS UPSERT, they do not replace: an array whose elements carry an identity is merged element-by-element, so a delta naming ONE element leaves the others intact. Identity is "name" or "id" by default, and per field: dispatch by "capability", a listener\'s mounts by "portal", lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by "subsystem", a subsystem\'s publicInterfaces by component+interface (or type+details for an entry not yet bound to a component, and by from+item+interface+as for a re-export or a type export), invariants and patterns by "id", lint.allow by "code" AND "at" (an allow covers one occurrence, so several may share a code on one spec), an interface method\'s findings by "code", boundaries by "name", globalRequirements by "description", switch cases by "value", try catches by "error". Identity merging applies at EVERY depth, including an array INSIDE an element (a method\'s params, a step\'s catches). Add "action: \'delete\'" (or "remove: true") alongside that identity to REMOVE an element — including a stale lint allow. Arrays of plain STRINGS (owns, dependsOn, guarantees) carry no per-element identity and are replaced wholesale; pass [] to clear any array outright. To REMOVE an optional field entirely, list it in "unset": e.g. {"unset": ["basePath", "variant"]} — passing null/undefined means "no change" (they are skipped), and writing "" would leave the field present but empty, which is a different and usually wrong spec. Unsetting a required field is refused by schema validation, which names it. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Step entries apply in ASCENDING stepNumber order, each against the numbering the earlier entries of the SAME delta left behind — delete step 3 and step 7 becomes step 6 — so prefer labels, and restate the step\'s "label" or "description" on a delete to have it checked against the step actually addressed. Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative. Only STORED jumps relocate: a jump the delta itself writes (on an inserted, appended or edited step) names its target in the numbering the WHOLE delta leaves behind, after all of its inserts and deletes, and no later step of the same delta moves it. A method the delta ADDS without a narrative is an intent-level method with none ([]). An element the delta NAMES merges field by field: a field it leaves out, or passes as null, keeps its stored value at EVERY depth (a method named without "narrative" keeps its steps, a step named without "catches" keeps them), while "narrative": [] CLEARS that method\'s steps \u2014 so leave a method you are not editing out of the delta. A delete is REJECTED when the narrative has no such step, when a jump still targets it (retarget the referrers first), when a restated label/description does not match, or when it is a loop/try/parallel header whose body would be left standing (retype the header first to dissolve the region, then delete it). Changing a step\'s "type" REBUILDS it for the new type: its description and label are kept and every field the new type cannot carry is dropped (returned as a NOTICE); a delta that retypes AND sets such a field is refused. A step delta is also refused when it carries a marker the merge does not recognise: a non-boolean "remove", an "action" that is neither "insert" nor "delete", a "captureJumps" outside an insert, or no "stepNumber" to address. Inserting AT a jump target relocates those jumps past the inserted step by default (a NOTICE is returned) — add "captureJumps": true on the inserted step to retarget entry jumps onto it (loop/try endStep region tails always relocate with the body and are never captured). Every jump field has a "*Label" twin (toLabel, onFalseLabel, endLabel, …, and "label" on a cases/catches entry) resolved against step labels AFTER the merge, so a delta may anchor on a label only pre-existing steps carry; a label the delta supplies REPLACES the stored number it twins, while setting the number and its label together in one delta is refused as a contradiction. Reference ids in deltas may use LOCAL names — they are qualified against the spec\'s namespace exactly as the loader would. Per-spec lint suppression: set "lint: { allow: [{ code, at, covers, reason }] }" to silence a WARNING or NOTICE code on this spec only (errors always surface; stale allows are flagged). An allow covers EXACTLY the occurrence it names: "at" is the site the finding names (a contract method, an import edge "from -> to", a declared edge "component -> target") and is REQUIRED for a code whose findings report one, while a finding that reports no site is covered only by an allow that names none; "covers" lists the units an aggregating finding reports, and the allow silences it only when every one is listed. This delta is deliberately OPEN below its top level — the shapes nest further than a schema here should restate — so a key that is not a field at its depth is not refused, it is NAMED BACK under NO EFFECT in the answer, together with any value the spec already held and any "unset" that removed nothing. Read that list: it is where a nested typo shows up.'),
+        delta: z.record(z.any()).describe('The partial fields to merge into the spec. ARRAYS UPSERT, they do not replace: an array whose elements carry an identity is merged element-by-element, so a delta naming ONE element leaves the others intact. Identity is "name" or "id" by default, and per field: dispatch by "capability", lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by "subsystem", a subsystem\'s publicInterfaces by component+interface (or type+details for an entry not yet bound to a component, and by from+item+interface+as for a re-export or a type export), invariants and patterns by "id", lint.allow by "code" AND "at" (an allow covers one occurrence, so several may share a code on one spec), an interface method\'s findings by "code", boundaries by "name", globalRequirements by "description", switch cases by "value", try catches by "error". Identity merging applies at EVERY depth, including an array INSIDE an element (a method\'s params, a step\'s catches). Add "action: \'delete\'" (or "remove: true") alongside that identity to REMOVE an element — including a stale lint allow. Arrays of plain STRINGS (owns, dependsOn, guarantees) carry no per-element identity and are replaced wholesale; pass [] to clear any array outright. To REMOVE an optional field entirely, list it in "unset": e.g. {"unset": ["basePath", "variant"]} — passing null/undefined means "no change" (they are skipped), and writing "" would leave the field present but empty, which is a different and usually wrong spec. Unsetting a required field is refused by schema validation, which names it. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Step entries apply in ASCENDING stepNumber order, each against the numbering the earlier entries of the SAME delta left behind — delete step 3 and step 7 becomes step 6 — so prefer labels, and restate the step\'s "label" or "description" on a delete to have it checked against the step actually addressed. Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative. Only STORED jumps relocate: a jump the delta itself writes (on an inserted, appended or edited step) names its target in the numbering the WHOLE delta leaves behind, after all of its inserts and deletes, and no later step of the same delta moves it. A method the delta ADDS without a narrative is an intent-level method with none ([]). An element the delta NAMES merges field by field: a field it leaves out, or passes as null, keeps its stored value at EVERY depth (a method named without "narrative" keeps its steps, a step named without "catches" keeps them), while "narrative": [] CLEARS that method\'s steps \u2014 so leave a method you are not editing out of the delta. A delete is REJECTED when the narrative has no such step, when a jump still targets it (retarget the referrers first), when a restated label/description does not match, or when it is a loop/try/parallel header whose body would be left standing (retype the header first to dissolve the region, then delete it). Changing a step\'s "type" REBUILDS it for the new type: its description and label are kept and every field the new type cannot carry is dropped (returned as a NOTICE); a delta that retypes AND sets such a field is refused. A step delta is also refused when it carries a marker the merge does not recognise: a non-boolean "remove", an "action" that is neither "insert" nor "delete", a "captureJumps" outside an insert, or no "stepNumber" to address. Inserting AT a jump target relocates those jumps past the inserted step by default (a NOTICE is returned) — add "captureJumps": true on the inserted step to retarget entry jumps onto it (loop/try endStep region tails always relocate with the body and are never captured). Every jump field has a "*Label" twin (toLabel, onFalseLabel, endLabel, …, and "label" on a cases/catches entry) resolved against step labels AFTER the merge, so a delta may anchor on a label only pre-existing steps carry; a label the delta supplies REPLACES the stored number it twins, while setting the number and its label together in one delta is refused as a contradiction. Reference ids in deltas may use LOCAL names — they are qualified against the spec\'s namespace exactly as the loader would. Per-spec lint suppression: set "lint: { allow: [{ code, at, covers, reason }] }" to silence a WARNING or NOTICE code on this spec only (errors always surface; stale allows are flagged). An allow covers EXACTLY the occurrence it names: "at" is the site the finding names (a contract method, an import edge "from -> to", a declared edge "component -> target") and is REQUIRED for a code whose findings report one, while a finding that reports no site is covered only by an allow that names none; "covers" lists the units an aggregating finding reports, and the allow silences it only when every one is listed. This delta is deliberately OPEN below its top level — the shapes nest further than a schema here should restate — so a key that is not a field at its depth is not refused, it is NAMED BACK under NO EFFECT in the answer, together with any value the spec already held and any "unset" that removed nothing. Read that list: it is where a nested typo shows up.'),
         dryRun: z.boolean().optional().describe('Ask what this delta WOULD do instead of doing it. The whole write runs, the candidate gate included, and the answer is the change report it would have produced — marked DRY RUN, with nothing stamped and not one byte of the stored file moved. Use it before a delta that renumbers a long narrative.'),
       },
       outputSchema: specChangeReportOutput,
@@ -2943,6 +2996,47 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  reg<{ to?: string }>(server,
+    'sdd_get_network_flows',
+    {
+      description: 'The allowed-flows matrix derived from the design: who reaches which Portal verb, over which transport and binding, through which declared networks and gateway, on what evidence (a modelled call, or a declared entry with its caller). Only network transports (HTTP, gRPC, GraphQL, MessageBus, Custom) produce flows; in-process and local verbs never do. At a project that declares members it is the matrix of the whole family, and a network-scoped entry the family proves is narrowed to its modelled callers. Optionally filtered to the flows into one project, Portal or verb. A tree-scoped read: writes nothing.',
+      inputSchema: {
+        to: z.string().optional().describe('Keep only the flows into this project, project::portal or project::portal.verb'),
+      },
+      outputSchema: networkFlowsOutput,
+    },
+    ({ to }) => {
+      try {
+        const flows = networkFlows(to ?? null);
+        const text = flows.length ? flows.map(flowLine).join('\n') : (to ? `No flow reaches ${to}.` : 'No network-transport flows: in-process and local verbs never produce one.');
+        return structured(text, { flows });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ from: string; to: string }>(server,
+    'sdd_explain_flow',
+    {
+      description: 'Why one party may reach another, from the design: each allowing flow with its chain from the declared entry or the modelled call through every network and gateway it crosses, or that nothing allows it (with what reaches the callee instead). The parties are design names: from is outside, network[:<id>], a project, a subsystem or a component; to is a project, a Portal or a portal.verb. A tree-scoped read: writes nothing.',
+      inputSchema: {
+        from: z.string().describe('The caller: outside, network[:<id>], a project, a subsystem, or a (project::)component'),
+        to: z.string().describe('The callee: a project, a (project::)portal, or a (project::)portal.verb'),
+      },
+      outputSchema: flowExplanationOutput,
+    },
+    ({ from, to }) => {
+      try {
+        const explanation = explainNetworkFlow(from, to);
+        const head = explanation.allowed ? `${from} may reach ${to}:` : `${from} may NOT reach ${to}:`;
+        return structured([head, ...explanation.chain.map((l) => `  ${l}`)].join('\n'), { ...explanation });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
   reg<{ agentId: string }>(server,
     'sdd_get_agent_brief',
     {
@@ -3000,7 +3094,7 @@ function mountMcpPortal(server: McpServer, options: McpServerOptions): McpServer
 }
 
 // ---------------------------------------------------------------------------
-// mcp_portal.advertiseHostedTools — ONE method for the seventeen sdd_host_* and
+// mcp_hosting_portal.advertiseHostedTools — ONE method for the seventeen sdd_host_* and
 // sdd_landscape_* entries, because publishing a discovery list is one job.
 // Execution is intercepted upstream by the hosting request orchestrator, which
 // owns their contracts; these registrations exist so an MCP client can FIND the
@@ -3139,6 +3233,11 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
   }
 }
 
+/**
+ * mcp_hosting_portal.serveStdio — serve the MCP Portal over this process's stdio:
+ * build a server, connect the stdio transport, and scope the bound project to the
+ * client's workspace roots (again whenever the client reports they changed).
+ */
 export async function startMcpServer(): Promise<void> {
   const server    = createMcpServer();
   const transport = new StdioServerTransport();

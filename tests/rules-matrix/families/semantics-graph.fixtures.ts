@@ -6,15 +6,18 @@
  * Documented intents pinned here:
  *  - CIRCULAR_DEPENDENCY (error): "The component dependsOn graph must be a DAG."
  *  - UNUSED_COMPONENT / UNUSED_METHOD / UNUSED_TYPE (warnings): reachability is
- *    walked from every entrypoint — Portals, Observers, published components,
- *    declared lifecycle entrypoints, and invokedBy-declared methods — over
- *    call steps, register handoffs, and dispatch-table routing. Types are
+ *    walked from every declared root — Observers, declared lifecycle
+ *    entrypoints, entered Portal verbs (invokedBy kind entry, on the Portal or
+ *    the verb) and runtime-declared methods — over call steps, register
+ *    handoffs, and dispatch-table routing. A Portal is no longer a root of its
+ *    own: the Portals below declare the entry their outside callers take. Types are
  *    referenced by fields, contract signatures and other types' method
  *    signatures — a type naming only ITSELF stays unused.
  *  - INVOKED_BY_UNDESCRIBED (warning): invokedBy caller prose missing or
  *    placeholder-thin — the entrypoint claim must stay reviewable.
- *  - INVOKED_BY_REDUNDANT (warning): invokedBy on a method the INTERNAL walk
- *    already reaches — a stale declaration.
+ *  - INVOKED_BY_REDUNDANT (warning): a runtime invokedBy on a method the
+ *    INTERNAL walk (Observers, lifecycle roots) already reaches — a stale
+ *    declaration. An entry is never redundant: it also states the scope.
  *
  * Reachability shapes deliberately covered (recent-feature origin questions):
  * Portal-rooted chains, dispatch-table flooding, lifecycle entrypoints,
@@ -137,6 +140,7 @@ export default [
         {
           id: 'checkout-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Public HTTP entry for placing orders.',
           dependsOn: ['checkout-orchestrator'],
@@ -227,6 +231,7 @@ export default [
         {
           id: 'checkout-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Public HTTP entry for placing orders.',
           dependsOn: ['checkout-orchestrator'],
@@ -330,6 +335,7 @@ export default [
         {
           id: 'ops-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Generic operations portal dispatching admin capabilities inward.',
           dependsOn: ['ledger-rebuilder'],
@@ -401,6 +407,7 @@ export default [
         {
           id: 'login-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Public authentication endpoint.',
         },
@@ -472,6 +479,7 @@ export default [
         {
           id: 'login-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Public authentication endpoint.',
         },
@@ -689,6 +697,7 @@ export default [
         {
           id: 'billing-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Back-office HTTP entry for accounting operations.',
           dependsOn: ['billing-orchestrator'],
@@ -781,6 +790,7 @@ export default [
         {
           id: 'billing-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Back-office HTTP entry for accounting operations.',
           dependsOn: ['billing-orchestrator'],
@@ -874,6 +884,7 @@ export default [
         {
           id: 'billing-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Back-office HTTP entry for accounting operations.',
           dependsOn: ['billing-orchestrator'],
@@ -1044,6 +1055,7 @@ export default [
         {
           id: 'checkout-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Public HTTP entry for placing orders.',
           dependsOn: ['checkout-orchestrator'],
@@ -1117,6 +1129,7 @@ export default [
         {
           id: 'checkout-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Public HTTP entry for placing and aborting orders.',
           dependsOn: ['checkout-orchestrator'],
@@ -1206,6 +1219,7 @@ export default [
         {
           id: 'ops-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'Generic operations portal dispatching admin capabilities inward.',
           dependsOn: ['ledger-rebuilder'],
@@ -1576,15 +1590,14 @@ export default [
     anchoredTo: 'iwebhook_orchestrator',
     expectFire: true,
     scenario:
-      'The webhook handler declares an external invoker, but the events portal narrative already calls it, so the internal walk reaches the method and the declaration is stale.',
+      'The webhook handler declares a runtime invoker, but the provider-events observer already calls it for every delivery off the bus, so the internal walk reaches the method and the declaration is stale.',
     tree: {
       subsystems: [{ id: 'webhooks', description: 'Inbound webhook processing from external providers.' }],
       components: [
         {
           id: 'events-portal',
-          componentType: 'Portal',
-          portalType: 'HTTP_API',
-          description: 'HTTP ingress for provider webhook deliveries.',
+          componentType: 'Observer',
+          description: 'Subscribes to provider webhook deliveries on the event bus.',
           dependsOn: ['webhook-orchestrator'],
         },
         {
@@ -1607,9 +1620,9 @@ export default [
               name: 'processEvent',
               description: 'Verify and apply one signed webhook event.',
               invokedBy: {
-                kind: 'external',
+                kind: 'runtime',
                 caller:
-                  'The upstream payment provider POSTs signed webhook events directly to this handler during regional failover.',
+                  'The process\'s failover hook calls this handler directly with signed webhook events during regional failover.',
               },
             },
           ],
@@ -1651,15 +1664,16 @@ export default [
     code: 'INVOKED_BY_REDUNDANT',
     expectFire: false,
     reason:
-      'No internal narrative reaches the handler — the external provider genuinely is its only caller, so the declaration is exactly what invokedBy exists for.',
+      'No internal narrative reaches the handler — the runtime failover hook genuinely is its only caller, so the declaration is exactly what invokedBy exists for.',
     scenario:
-      'The events portal only acknowledges deliveries into an async queue, so the webhook handler\'s declared external caller is its sole entry.',
+      'The events portal only acknowledges deliveries into an async queue, so the webhook handler\'s declared runtime caller is its sole entry.',
     tree: {
       subsystems: [{ id: 'webhooks', description: 'Inbound webhook processing from external providers.' }],
       components: [
         {
           id: 'events-portal',
           componentType: 'Portal',
+          invokedBy: { kind: 'entry', caller: 'Customers and partner systems outside this design call it over its transport.' },
           portalType: 'HTTP_API',
           description: 'HTTP ingress for provider webhook deliveries.',
         },
@@ -1683,9 +1697,9 @@ export default [
               name: 'processEvent',
               description: 'Verify and apply one signed webhook event.',
               invokedBy: {
-                kind: 'external',
+                kind: 'runtime',
                 caller:
-                  'The upstream payment provider POSTs signed webhook events directly to this handler during regional failover.',
+                  'The process\'s failover hook calls this handler directly with signed webhook events during regional failover.',
               },
             },
           ],

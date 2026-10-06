@@ -1,0 +1,32 @@
+id: inetwork_file_adapter
+name: Network File Adapter Interface
+description: The deployment-side inputs, read from files the team keeps outside .wai/. Both reads are I/O.
+component: network_file_adapter
+methods:
+  - name: readBindings
+    description: >-
+      Read and parse a bindings file (YAML): workloads by design name, each with its selector,
+      namespace and port, and the outside address blocks. A malformed file is refused naming the
+      line; nothing is half-read.
+    signature: 'readBindings(path: string): NetworkBindings'
+    returns: NetworkBindings
+    params:
+      - name: path
+        type: string
+        description: The bindings file, absolute or relative to the working directory
+    effect: io
+  - name: readObservedFlows
+    description: >-
+      Read and parse an observed-flow export: CSV with a header row (source, destination, transport,
+      method, path, count) or a JSON list of the same fields, already named with the bindings. A
+      malformed row is refused naming the row.
+    signature: 'readObservedFlows(path: string): list<ObservedFlow>'
+    returns: list<ObservedFlow>
+    params:
+      - name: path
+        type: string
+        description: The export file
+    effect: io
+status: complete
+createdAt: '2026-10-06T13:10:44.461Z'
+updatedAt: '2026-10-06T19:24:55.441Z'

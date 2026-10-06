@@ -3,6 +3,7 @@ import { get } from '../api';
 import { AsyncView, useAsync } from '../ui';
 import { CanvasView } from './CanvasView';
 import { Environment } from './Environment';
+import { NetworkView } from './NetworkView';
 
 interface GNode {
   id: string;
@@ -72,6 +73,15 @@ export function CanvasRouter() {
         const unitPrefix = segments.slice(0, boundary).join('/');
         const projectId = segments[boundary];
         const internal = segments.slice(boundary + 1).join('/');
+        const projectBase = '/canvas/' + (unitPrefix ? unitPrefix + '/' : '') + encodeURIComponent(projectId);
+        // The network view (DiagramView `network`) is the app's own, beside the engine.
+        if (internal === 'network') {
+          return (
+            <div className="canvas-view">
+              <NetworkView projectId={projectId} onComponents={() => navigate(projectBase, { state: { components: true } })} />
+            </div>
+          );
+        }
         return (
           <div className="canvas-view">
             <div className="canvas-bar">

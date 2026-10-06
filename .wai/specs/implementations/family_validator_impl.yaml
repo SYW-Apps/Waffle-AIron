@@ -40,7 +40,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the selected projects of the graph, root first, then members in scan order
-        endStep: 8
+        endStep: 9
       - stepNumber: 4
         description: Bind the project's root for the next calls, restoring the caller's binding afterwards
         type: local
@@ -66,27 +66,42 @@ methods:
         targetMethod: compose
       - stepNumber: 8
         description: >-
+          Collect the project's own reach model under the same binding, for the family's reach
+          checks
+        type: call
+        targetComponent: spec_validator
+        targetMethod: reachModel
+      - stepNumber: 9
+        description: >-
           Carry the project's own findings verbatim, each stamped with the project's key (spec ids
           shown under it), add the composition findings, and record the project's totals
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Run the family checks over the root's graph
         type: call
         targetComponent: family_validator
         targetMethod: checkMembers
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Run the governance checks over the root's graph: each requiring project's
           composition.requirePolicies judged against the members below it
         type: call
         targetComponent: family_validator
         targetMethod: checkPolicies
-      - stepNumber: 11
+      - stepNumber: 12
+        description: >-
+          Run the reachability and network checks only the family can make: the networks around each
+          member, the proof of every network-scoped entry, and every call that crosses into a
+          network
+        type: call
+        targetComponent: family_validator
+        targetMethod: checkReach
+      - stepNumber: 13
         description: >-
           When externals were left out because their producers lie outside the reach, add a one-line
           hint counting them and naming `validate --family` from the member that declares them
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Return the family verdict: valid when no project's gate and no family finding holds an
           error, with every project's totals and the aliases of the bound project's externals it
@@ -717,6 +732,76 @@ methods:
           project's sddRuleSeverity override, else the default)
         type: return
         outcome: ValidationIssue[] (advisory)
+  - name: checkReach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read each selected project's network declaration from its configuration, as the run read
+          it
+        type: local
+      - stepNumber: 2
+        description: Compose the family's reach model from each project's own model and the family's references
+        type: call
+        targetComponent: reach_model_projector
+        targetMethod: compose
+      - stepNumber: 3
+        description: Judge it
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: judge
+      - stepNumber: 4
+        description: >-
+          Drop each finding a project's own gate already carried; stamp the rest with the key of the
+          project whose spec they sit on (a call's caller, a verb's Portal, a MULTIPLE_GATEWAYS
+          finding's first gateway Portal: always the project holding that spec, never a guess from a
+          name in the message), tune each by that project's rules.sddRuleSeverity and drop one a
+          lint.allow on that spec covers at its site
+        type: local
+      - stepNumber: 5
+        description: Read the codes the family judges over every member
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: familyCodes
+      - stepNumber: 6
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) for each lint.allow of one of those codes on a selected
+          project's own spec that covers no finding of the family's model (carried by its own gate
+          or not) at its site: the project's own gate left that judgement to this run
+        type: local
+      - stepNumber: 7
+        description: Answer them
+        type: return
+        outcome: the family's reach findings
+  - name: reachModel
+    narrative:
+      - stepNumber: 1
+        description: 'Read the bound root''s project graph: the selection the family run makes'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: For each selected project, root first
+        type: loop
+        loopKind: forEach
+        over: the selected projects of the graph
+        endStep: 4
+      - stepNumber: 3
+        description: Bind the project's root for the next call, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 4
+        description: Collect its own reach model
+        type: call
+        targetComponent: spec_validator
+        targetMethod: reachModel
+      - stepNumber: 5
+        description: Compose the family's model
+        type: call
+        targetComponent: reach_model_projector
+        targetMethod: compose
+      - stepNumber: 6
+        description: Answer it
+        type: return
+        outcome: the family's reach model
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-06T11:12:23.088Z'
+updatedAt: '2026-10-06T18:32:23.879Z'

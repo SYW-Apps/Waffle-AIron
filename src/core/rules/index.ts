@@ -135,11 +135,10 @@ const COMPLETENESS_RULES = new Set([
   'INTENT_FLOOR',
   'MISSING_ENDPOINT',
   'ENDPOINT_TRANSPORT_MISMATCH',
-  'MISSING_PORTAL_TYPE',
+  'MISSING_PORTAL_TRANSPORT',
   'UNEXPECTED_IMPLEMENTATION_METHOD',
   'ORPHANED_SUBSYSTEM',
   'PUBLIC_INTERFACE_UNBOUND',
-  'PUBLIC_INTERFACE_TYPE_MISMATCH',
   // Structural conformance: a draft tree is allowed to name code that does
   // not exist yet — the findings gate only once the specs claim completeness.
   'MISSING_SOURCE_PATH',
@@ -254,6 +253,10 @@ export interface BuildContextOptions {
   projectIdentity?: ProjectIdentity;
   /** The bound root's declared members (see RuleContext.declaredMembers); absent when its configuration is unreadable. */
   declaredMembers?: DeclaredMember[];
+  /** The bound project's own network declaration (see RuleContext.network); absent when it declares none. */
+  network?: import('../../models/project.js').NetworkDeclaration;
+  /** The retired reachability forms the scan met (see RuleContext.retiredReachFacts). */
+  retiredReachFacts?: import('../../models/specs.js').RetiredReachFact[];
   /** The resolved export tables (see RuleContext.exportTables); absent when none were gathered. */
   exportTables?: import('../../models/exports.js').ResolvedExportTable[];
   /** The project graph of the run's scan (see RuleContext.projectFamily); absent on a candidate run. */
@@ -412,6 +415,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   };
 
   const isInChainedSubproject = (subsystemId: string): boolean => memberOf(subsystemId) !== undefined;
+  /** rule_context.projectOf — '' for the bound project, else the contained member owning the key. */
+  const projectOf = (specId: string): string => memberOf(specId) ?? '';
   /**
    * Whether a finding's spec is one a contained member owns: its owner in the
    * graph, else a key strictly under a member's key. A member's own key names
@@ -1020,6 +1025,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     targetLanguageFor,
     isSpecInScope,
     isInChainedSubproject,
+    projectOf,
     resolveSurfaceRef,
     resolveCrossProject,
     importHint,
@@ -1040,6 +1046,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),
     ...(opts.declaredMembers ? { declaredMembers: opts.declaredMembers } : {}),
+    ...(opts.network ? { network: opts.network } : {}),
+    // Each scanned project's L0 language, from the project graph's nodes.
+    ...(family
+      ? { projectLanguages: new Map(family.nodes.filter((n) => n.targetLanguage).map((n) => [n.namespace, normalizeLanguage(n.targetLanguage!)] as const)) }
+      : {}),
+    ...(opts.retiredReachFacts ? { retiredReachFacts: opts.retiredReachFacts } : {}),
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),

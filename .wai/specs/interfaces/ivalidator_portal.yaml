@@ -200,6 +200,23 @@ methods:
       EXTERNAL_LIVE_UNCOMPARED, every one marked advisory. Plain `validate`, `status` and their MCP
       twins append it beside the gate's own findings; it never decides `valid` or `--ci`.
     signatureFrom: family_validator.advise
+  - name: reachModel
+    description: >-
+      Forward to family_validator.reachModel: what reaches each Portal verb of the bound project
+      (or, at a project that declares members, of its family), and from where. It is the one input
+      of every derived networking output (the flow matrix, policies, diagrams, the observed-flow
+      check, a flow's explanation), so those outputs and the validator's network verdicts read the
+      same facts. Writes nothing. Callers grant the reach first (a hosted request keeps its
+      credential's).
+    signature: 'reachModel(options: ValidationOptions): ReachModel'
+    returns: ReachModel
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The selection: member depth and reach'
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:15:50.733Z'
+updatedAt: '2026-10-06T13:00:43.535Z'

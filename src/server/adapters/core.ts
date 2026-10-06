@@ -14,7 +14,6 @@ export {
   // The shared lock verdict (unlocked | locked | stale), resolved against the
   // gate identity the caller computed now.
   readLockState,
-  readLockRecord,
   writeLockRecord,
   // The approval: the per-spec digests a lock RECORDS.
   captureApprovedSpecs,
@@ -53,4 +52,7 @@ export {
   // A member's path resolved within the root that declares it — the hosted
   // member-resolution seam. The adapter names it for what it answers.
   assertContainedProjectPath as resolveContainedProjectPath,
+  // The bound project's migration onto the reachability model, for the
+  // operator's `wairon host doctor` (hosted_spec_upgrade).
+  migrateReachability,
 } from '../../core/index.js';

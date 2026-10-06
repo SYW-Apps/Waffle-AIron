@@ -89,7 +89,9 @@ methods:
         description: The method name as it stands
       - name: newName
         type: string
-        description: Its new name, a camel-case identifier
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage)
       - name: pinSymbol
         type: bool
         description: >-
@@ -155,7 +157,7 @@ methods:
     returns: list<Domain>
     params: []
     invokedBy:
-      kind: external
+      kind: runtime
       caller: >-
         A connected AI client calling the MCP server's listDomains tool, which createMcpServer
         registers but mcp_portal does not yet model, so no narrative carries this hop.
@@ -230,4 +232,4 @@ methods:
         description: Its new id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:57:01.242Z'
+updatedAt: '2026-10-06T18:55:14.453Z'

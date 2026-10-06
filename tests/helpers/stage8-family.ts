@@ -98,7 +98,7 @@ export function subsystem(dir: string, parentSystem: string, id: string, extra: 
 export function component(dir: string, sub: string, id: string, componentType: string, dependsOn: string[] = [], extra: Record<string, unknown> = {}): void {
   writeSpecFile(specs(dir, sub, id, '.index.yaml'), ComponentSpecSchema.parse({
     id, name: id, description: `The ${id} component`, subsystem: sub, componentType,
-    ...(componentType === 'Portal' ? { portalType: 'Custom' } : {}),
+    ...(componentType === 'Portal' ? { transport: 'Custom' } : {}),
     owns: [], dependsOn, status: 'complete', createdAt: STAMP, updatedAt: STAMP, ...extra,
   }));
 }

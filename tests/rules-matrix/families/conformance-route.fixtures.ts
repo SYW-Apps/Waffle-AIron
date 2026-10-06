@@ -7,24 +7,25 @@
  *    design never promised, which is how a write ran with no contract.
  *  - UNROUTED_ENDPOINT (warning): a contract endpoint no route of the portal's
  *    router answers — the contract promises a route no request can reach.
- *  - UNREADABLE_ROUTER (warning): the router a listener's mount names yields
- *    no route in the one idiom read, so its routes were not checked at all —
- *    reported as unread, never passed.
+ *  - UNREADABLE_ROUTER (warning): the router a Portal implementation names
+ *    (`router`) yields no route in the one idiom read, so its routes were not
+ *    checked at all — reported as unread, never passed.
  *
  * The quiet shapes, each with a control that is ONE mechanism away from
  * firing:
  *  - ROUTERS NEST: a route only fully formed by an ENCLOSING `if` — the outer
  *    guard fixes the resource segment, the inner one the verb and count — is
  *    read as the conjunction of both, so it matches its endpoint;
- *  - THE LEADING SEGMENT COMES FROM THE MOUNT: the router never checks
- *    `parts[0]`, and the mount's prefix is what completes it;
+ *  - THE LEADING SEGMENT COMES FROM THE PORTAL'S OWN PATHS: the router never
+ *    checks `parts[0]`, and the first segment of the Portal's own HTTP
+ *    endpoint paths is what completes it;
  *  - an endpoint's TEMPLATE segment (`{visitId}`) is answered by a route
  *    segment nothing constrains;
  *  - a route that pins no segment count covers a longer endpoint path under
  *    the same leading segments;
- *  - a mount with no `via` calls the portal's methods directly and has no
- *    router to read, so neither an undeclared route in the portal's file nor
- *    a file written outside the idiom is judged.
+ *  - a Portal implementation naming no `router` is served method by method
+ *    and has no router to read, so neither an undeclared route in the
+ *    portal's file nor a file written outside the idiom is judged.
  */
 import { defineRuleFixture, type FixtureTree } from '../harness.js';
 
@@ -94,12 +95,13 @@ const NESTED_ROUTES = [
 ];
 
 /**
- * A clinic host whose public listener mounts the booking portal under
+ * A clinic host whose public listener serves the booking portal under
  * `/booking` through the router entry `handleBookingRequest` that the booking
- * portal's module exports — or, given `null`, with no `via` at all. Everything but the portal's endpoints,
- * its module and the mount's `via` is identical from tree to tree.
+ * portal's module exports and its implementation names as its `router` — or,
+ * given `null`, with no router at all. Everything but the portal's endpoints,
+ * its module and its `router` is identical from tree to tree.
  */
-function bookingTree(endpoints: BookingEndpoint[], bookingModule: string, via: string | null = 'handleBookingRequest'): FixtureTree {
+function bookingTree(endpoints: BookingEndpoint[], bookingModule: string, router: string | null = 'handleBookingRequest'): FixtureTree {
   return {
     subsystems: [{ id: 'clinic', description: 'Patient booking for an outpatient clinic.' }],
     components: [
@@ -109,7 +111,6 @@ function bookingTree(endpoints: BookingEndpoint[], bookingModule: string, via: s
         portalType: 'HTTP_API',
         subsystem: 'clinic',
         description: 'The clinic host\'s public HTTP listener; routes each request to the portal that owns its path.',
-        mounts: [{ portal: 'booking-portal', prefixes: ['/booking'], ...(via ? { via } : {}) }],
       },
       {
         id: 'booking-portal',
@@ -153,6 +154,7 @@ function bookingTree(endpoints: BookingEndpoint[], bookingModule: string, via: s
         id: 'booking_portal_impl',
         contract: 'ibooking_portal',
         sourcePath: 'src/clinic/booking-portal.ts',
+        ...(router ? { router } : {}),
         methods: endpoints.map(endpoint => ({
           name: endpoint.name,
           narrative: [{ stepNumber: 1, type: 'local', description: `${endpoint.description.replace(/\.$/, '')} from the request.` }],
@@ -206,7 +208,7 @@ export default [
     anchoredTo: 'booking_portal_impl',
     expectFire: true,
     scenario:
-      'The booking portal\'s router, mounted by the clinic listener, also answers DELETE /booking/visits/{visitId} and cancels the visit — a write no contract of the booking portal declares, so no brief and no review ever read it.',
+      'The booking portal\'s router, which the clinic listener hands its requests, also answers DELETE /booking/visits/{visitId} and cancels the visit — a write no contract of the booking portal declares, so no brief and no review ever read it.',
     tree: bookingTree([BOOK_VISIT, DESCRIBE_VISIT], WITH_CANCELLATION),
   }),
 
@@ -229,15 +231,16 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // UNDECLARED_ROUTE — control: the leading segment comes from the MOUNT.
+  // UNDECLARED_ROUTE — control: the leading segment comes from the Portal's
+  // own endpoint paths.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'UNDECLARED_ROUTE',
     expectFire: false,
     reason:
-      'The router never checks the first segment — the listener routed /booking to it already — so the mount\'s prefix completes it. Without that the route reads as POST /*/visits, which no endpoint declares.',
+      'The router never checks the first segment — the listener routed /booking to it already — so the first segment of the Portal\'s own endpoint paths completes it. Without that the route reads as POST /*/visits, which no endpoint declares.',
     scenario:
-      'The booking portal\'s flat router answers POST on the visits collection without re-checking the /booking segment its listener mounts it under.',
+      'The booking portal\'s flat router answers POST on the visits collection without re-checking the /booking segment every one of its endpoints starts with.',
     tree: bookingTree([BOOK_VISIT], router([
       'if (req.method === \'POST\' && parts[1] === \'visits\' && parts.length === 2) return bookVisit(req.body);',
     ])),
@@ -260,13 +263,13 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // UNDECLARED_ROUTE — control: a mount with no `via` has no router to read.
+  // UNDECLARED_ROUTE — control: a Portal naming no router has none to read.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'UNDECLARED_ROUTE',
     expectFire: false,
     reason:
-      'The mount names no router entry: the listener calls the booking portal\'s contract methods directly, so the portal\'s module holds no router this rule is asked to read — the very file that fires with `via` set stays quiet without it.',
+      'The booking portal\'s implementation names no router entry: the listener calls its contract methods directly, so the portal\'s module holds no router this rule is asked to read — the very file that fires with `router` set stays quiet without it.',
     scenario:
       'The clinic listener calls the booking portal\'s methods one by one rather than through a router entry, and the portal\'s module still carries an old cancellation branch.',
     tree: bookingTree([BOOK_VISIT, DESCRIBE_VISIT], WITH_CANCELLATION, null),
@@ -313,7 +316,7 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // UNREADABLE_ROUTER — fire: the mounted router is written outside the idiom.
+  // UNREADABLE_ROUTER — fire: the named router is written outside the idiom.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'UNREADABLE_ROUTER',
@@ -321,7 +324,7 @@ export default [
     anchoredTo: 'booking_portal_impl',
     expectFire: true,
     scenario:
-      'The clinic listener mounts the booking portal through handleBookingRequest, which dispatches on the whole method-and-path string — no route can be read out of it, so its routes are checked against nothing.',
+      'The booking portal names handleBookingRequest as its router, which dispatches on the whole method-and-path string — no route can be read out of it, so its routes are checked against nothing.',
     tree: bookingTree([BOOK_VISIT], WHOLE_PATH_ROUTER),
   }),
 
@@ -332,20 +335,20 @@ export default [
     code: 'UNREADABLE_ROUTER',
     expectFire: false,
     reason: 'The router compares the method and the split path\'s segments, which is the idiom read, so its routes are judged rather than reported as unread.',
-    scenario: 'The clinic listener mounts the booking portal through handleBookingRequest, a router that checks the method and each path segment.',
+    scenario: 'The booking portal names handleBookingRequest as its router, a router that checks the method and each path segment.',
     tree: bookingTree([BOOK_VISIT, DESCRIBE_VISIT], router(NESTED_ROUTES)),
   }),
 
   // -------------------------------------------------------------------------
-  // UNREADABLE_ROUTER — control: a mount with no `via` has no router at all.
+  // UNREADABLE_ROUTER — control: a Portal naming no router has none at all.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'UNREADABLE_ROUTER',
     expectFire: false,
     reason:
-      'Without a `via` the listener calls the portal\'s methods directly, so there is no router to have failed to read — the same module that fires when the mount names it stays quiet when the mount does not.',
+      'Without a `router` the listener calls the portal\'s methods directly, so there is no router to have failed to read — the same module that fires when the implementation names it stays quiet when it does not.',
     scenario:
-      'The clinic listener calls the booking portal\'s methods one by one, and the portal\'s module keeps a whole-path dispatcher nothing mounts.',
+      'The clinic listener calls the booking portal\'s methods one by one, and the portal\'s module keeps a whole-path dispatcher its implementation names nowhere.',
     tree: bookingTree([BOOK_VISIT], WHOLE_PATH_ROUTER, null),
   }),
 ];

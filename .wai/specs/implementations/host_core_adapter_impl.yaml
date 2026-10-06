@@ -20,13 +20,6 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: computeStateId
-  - name: readLockRecord
-    narrative:
-      - stepNumber: 1
-        description: Forward lock-record read to the core portal
-        type: call
-        targetComponent: approval_portal
-        targetMethod: readLockRecord
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
@@ -226,6 +219,13 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: describeProject
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward the reachability migration to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: migrateReachability
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-10-03T17:10:11.406Z'
+updatedAt: '2026-10-06T19:54:03.430Z'

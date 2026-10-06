@@ -350,6 +350,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: repairTypeSpellings
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward the reachability migration, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: migrateReachability
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T22:07:21.954Z'
+updatedAt: '2026-10-06T13:07:48.366Z'

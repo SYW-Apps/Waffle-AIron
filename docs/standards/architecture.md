@@ -299,7 +299,9 @@ The **Adapter** is the single boundary to the outside world, in two shapes:
 
 **Inbound vs outbound:** the **Portal** is *our* front door (others call us); the
 **Adapter** is *our* client to external systems (we call/connect out, including
-publishing). They are different roles, not duplicates.
+publishing). They are different roles, not duplicates. One edge needs no
+Adapter: a call into another project's **library** (an `InProcess` Portal) is
+made directly, from any component (§9, *Libraries are called directly*).
 
 **Emission has no special block, and is optional.** Events are a pattern for
 **decoupled reactions** — used when a producer should not know its consumers.
@@ -513,6 +515,10 @@ Repository whose Store it reads (`UNOWNED_QUERY`).
 > checks are Orchestrators it depends on — typically read logic that gathers the
 > caller's grants and pure logic that rules on them — never members it owns. A
 > Portal with no ingress checks needs no variant.
+>
+> Inside a declared **network**, the gateway is also the only Portal that may be
+> entered from outside it, and the only one a modelled call from outside may land
+> on (`GATEWAY_BYPASSED`; §9, *Networks and gateways*).
 
 The variant carries the implementation guidance (§8). The Gateway *pattern*
 (`Portal + ingress Orchestrator + interceptor Specialists`) is retired
@@ -631,17 +637,94 @@ may — a dependency from any other subsystem is `CROSS_SUBSYSTEM_UNLISTED_CONSU
 (an error). When several entries publish the same component, each naming
 consumers, the union of their lists is the whole set.
 
-### Listeners mount Portals
-A Portal's routes are its methods' endpoint bindings; the **listener** that
-hands the Portal its requests declares that with **`mounts`** on its own L2
-spec — each mount names the `portal`, the path `prefixes` it routes there, and
-optionally `via`, the router entry the Portal's file exports for it. An HTTP
-Portal that no listener mounts, and that declares no `mounts` itself (which
-marks it as a listener, even with `mounts: []`), is `UNMOUNTED_PORTAL`: nothing
-would ever reach it. `mounts: []` is honest only on a Portal that IS the whole
-HTTP server and serves just its own routes; a service with several HTTP
-Portals has one listener that mounts each of them. A prefix matches whole path segments (`/web` covers
-`/web/admin`, not `/webhooks`). Only HTTP endpoints are judged.
+### Transports: how callers reach a Portal
+A Portal states its **`transport`**, one vocabulary shared with its endpoint
+bindings: **network** (`HTTP`, `gRPC`, `GraphQL`, `MessageBus`, and `Custom` as
+the escape hatch), **local** (`CLI`, `IPC`, `NamedPipe`, and `JSONRPC` for
+JSON-RPC over stdio — a language server, a stdio MCP tool surface) or
+**`InProcess`**: a library, whose verbs are its contract methods and bind no
+endpoint. A Portal has one transport, one `auth` and one entry posture; a surface
+that needs two is two Portals. JSON-RPC over HTTP is an `HTTP` verb with a
+dispatch table. Which process hosts which Portal is implementation: the Portal's
+L4 **`router`** names the router entry its own file exports, through which
+whatever serves it hands it requests (route coverage reads the routes there).
+
+### Entries: every verb is reached
+Every Portal verb must be **reached**. Either a modelled caller reaches it — a
+`call` step along a `dependsOn` edge, `alias::portal.verb` across projects, a
+`dispatch` table, a `register` step — or the verb is an **entry**: callers
+outside the design reach it over the Portal's transport. A Portal is not reached
+merely by existing, so one nothing calls and nothing enters is
+`UNUSED_COMPONENT` / `UNUSED_METHOD`, with both remedies named.
+
+- Declare an entry with `invokedBy: { kind: entry, caller: "…" }` — on the
+  Portal (every verb inherits it) or on one verb. The `caller` says who, as
+  reviewable prose (browsers of the shop, the operator's terminal, an AI tool
+  over stdio, the applications that link the crate).
+- `kind: runtime` is for the process's own runtime invoking a method — a
+  composition root, a timer, a signal, a framework callback — on any component.
+- **Never invent an entry to silence a finding.** An entry says real callers
+  exist outside the design. When the caller is inside the design, model the
+  call; when there is none, remove the verb.
+- An `Observer`'s subscriptions and the subsystem `lifecycle` roots reach their
+  methods as before, and a contract that `implements` an imported extension
+  point is reached by its producer.
+
+### Networks and gateways
+A project may declare **`network`** in `.wai/project.yaml` (`true`, or
+`{ description }`): it and every member below it sit inside that network.
+Networks nest, one level per declaring project; parts cannot declare one.
+
+- An entry's **`scope`** is relative: `outside` (the default: callers from
+  outside the innermost network containing the Portal) or `network` (sibling
+  services inside it). A scope on a local or in-process verb means nothing
+  (`ENTRY_SCOPE_NOT_NETWORK`).
+- **Gateways.** Inside a declared network, only a Portal with the `gateway`
+  variant may be entered from `outside`, and a modelled call crossing into a
+  network must land on its gateway (`GATEWAY_BYPASSED`, an error). Traffic from
+  the outermost network to the innermost passes one gateway per level.
+- **Proof.** A `network` entry claims sibling callers, so the family run at the
+  root proves each one has a modelled caller inside its boundary
+  (`ENTRY_UNPROVEN`). A member validated alone counts it as declared.
+- **Audience is a different axis.** An export's `audience` says who may design
+  against a contract; scope says who can reach a verb at runtime. They meet in
+  one place: a network verb exported beyond the project must be the outermost
+  gateway, entered from `outside` (`EXPORT_BEYOND_NETWORK`).
+- A project that declares no network never sees any of this: its entries are
+  `outside` and any Portal may take them. Addresses never appear in specs —
+  `wairon network` derives flows, policy and diagrams from this reach.
+
+### Libraries are called directly
+A library — a crate, a package, a jar, or an FFI/DLL surface — is a project whose
+Portals are `InProcess`. Another project calls its exported verbs **directly**,
+from any component: `alias::portal` in `dependsOn` and `alias::portal.verb` in a
+`call` step. No client Adapter is required (`CROSS_SUBSYSTEM_NON_ADAPTER` and
+`ARCHITECTURE_VIOLATION_PORTAL_DEP` exempt exactly this edge). Two checks take
+the Adapter's place:
+
+- **Purity** (`LIBRARY_CALL_IMPURE`): `pure` logic may call only library verbs
+  declared `effect: none`, and `read` logic also `effect: read`; a verb that does
+  I/O or writes (`io`, `write`, `lifecycle`), or declares no effect, is for
+  workflows.
+- **The language bridge** (`LANGUAGE_BRIDGE_MISSING`): an `InProcess` Portal
+  with no `abi` is a native API in its project's `targetLanguage`. Called from
+  another language it needs `abi: c` (a C-ABI shared library, DLL or FFI) or
+  `abi: wasm`, or a network Portal in front.
+
+Within one project nothing changes: a sibling subsystem's Portal is reached
+through a client Adapter or a `trustedLink`. Wrapping a volatile third-party
+API in an Adapter of your own — an anti-corruption layer that absorbs upstream
+contract changes — remains a recommended pattern; it is never enforced.
+
+### Extension points: contracts consumers implement
+A producer that *calls* a contract its consumers *supply* — a trait, a
+callback, a webhook — exports it with **`role: implement`** (typically the
+Adapter holding the port). A consumer's L3 interface declares
+**`implements: alias::name`** and states every method of it with the same
+signature (`IMPLEMENTS_MISMATCH` otherwise); those methods count as reached,
+because the producer calls them. In-process, the consumer registers its
+implementation with a `register` step; over a network, the implementing
+component is a Portal the producer calls through an Adapter.
 
 ### Forwarding a contract: `signatureFrom`
 A method that takes its params and returns from somewhere else names the source
@@ -951,3 +1034,9 @@ tell apart components that share a noun, and it matches the block:
 14. A gateway is a Portal with the `gateway` variant. Variants load built-in →
     global → project and carry guidance, not rules. `Specialist` and `Gateway` are
     retired (`STEREOTYPE_RETIRED`) until migrated.
+15. Every Portal verb is reached: by a modelled caller, or as a declared entry
+    (`invokedBy: { kind: entry }`) whose callers are outside the design — never an
+    entry invented to silence a finding. A Portal states one `transport`; entries
+    are scoped `outside | network` by the networks projects declare, and inside a
+    network only a gateway is entered from outside. A library (`InProcess`) of
+    another project is called directly, checked for purity and language bridge.

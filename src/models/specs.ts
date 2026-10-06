@@ -53,7 +53,7 @@ export const DiagramLineStyleSchema = z.enum(['bezier', 'straight', 'taxi']);
 export type DiagramLineStyle = z.infer<typeof DiagramLineStyleSchema>;
 
 /** Which view the canvas opens on (and the view a share link captures). */
-export const DiagramViewSchema = z.enum(['architecture', 'types', 'databases']);
+export const DiagramViewSchema = z.enum(['architecture', 'types', 'databases', 'network']);
 export type DiagramView = z.infer<typeof DiagramViewSchema>;
 
 export const DiagramConfigSchema = z.object({
@@ -62,6 +62,119 @@ export const DiagramConfigSchema = z.object({
   showDatabases: z.boolean().optional(),
 });
 export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
+
+// ---------------------------------------------------------------------------
+// Reachability vocabulary: how a Portal's verbs are reached, and from where.
+// ---------------------------------------------------------------------------
+
+/**
+ * How callers reach a Portal's verbs. ONE vocabulary: the Portal's own
+ * `transport` and the endpoint's discriminator. Network transports (HTTP,
+ * gRPC, GraphQL, MessageBus, Custom) cross a network, take scoped entries and
+ * produce flows; local ones (CLI, NamedPipe, IPC, JSONRPC) stay on one host;
+ * InProcess is a library call that binds no endpoint. The retired portalType
+ * spelling HTTP_API is read as HTTP for one release (readRetiredReachForms).
+ */
+export const TransportSchema = z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']);
+export type Transport = z.infer<typeof TransportSchema>;
+
+/** What crossing a transport makes: only network transports take scopes, fall under the gateway rule and produce flows. */
+export const TransportKindSchema = z.enum(['network', 'local', 'in-process']);
+export type TransportKind = z.infer<typeof TransportKindSchema>;
+
+/**
+ * transport.kind — network for HTTP, gRPC, GraphQL, MessageBus and Custom;
+ * local for CLI, NamedPipe, IPC and JSONRPC; in-process for InProcess. Pure.
+ */
+export function transportKind(transport: Transport): TransportKind {
+  switch (transport) {
+    case 'CLI':
+    case 'NamedPipe':
+    case 'IPC':
+    case 'JSONRPC':
+      return 'local';
+    case 'InProcess':
+      return 'in-process';
+    default:
+      return 'network';
+  }
+}
+
+/**
+ * transport.requiresEndpoint — whether each verb of a Portal on this transport
+ * needs an endpoint binding: every transport except InProcess (the verb is the
+ * contract method itself) and Custom (the free-form escape hatch). Pure.
+ */
+export function transportRequiresEndpoint(transport: Transport): boolean {
+  return transport !== 'InProcess' && transport !== 'Custom';
+}
+
+/** The derived export kinds an entry is shown as (the legacy authored `type`). */
+export const PublicInterfaceTypeSchema = z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']);
+export type PublicInterfaceType = z.infer<typeof PublicInterfaceTypeSchema>;
+
+/**
+ * transport.exportKind — the export kind a published entry backed by a Portal
+ * on this transport is shown as, derived instead of authored: HTTP is REST,
+ * gRPC and JSONRPC are RPC, GraphQL and MessageBus are themselves, and
+ * InProcess, CLI, IPC, NamedPipe and Custom are Custom. Pure.
+ */
+export function transportExportKind(transport: Transport): PublicInterfaceType {
+  switch (transport) {
+    case 'HTTP': return 'REST';
+    case 'gRPC':
+    case 'JSONRPC': return 'RPC';
+    case 'GraphQL': return 'GraphQL';
+    case 'MessageBus': return 'MessageBus';
+    default: return 'Custom';
+  }
+}
+
+/**
+ * The retired portalType spellings and the transport each is read as. Only
+ * HTTP was spelled differently; the others keep their names.
+ */
+export const RETIRED_PORTAL_TYPE_SPELLINGS: Readonly<Record<string, Transport>> = { HTTP_API: 'HTTP' };
+
+/**
+ * Where the callers of an entry come from, relative to the component: outside
+ * the innermost declared network around it (the default), or inside it.
+ */
+export const EntryScopeSchema = z.enum(['outside', 'network']);
+export type EntryScope = z.infer<typeof EntryScopeSchema>;
+
+/** What consumers do with an exported contract: call it (the default) or implement it (an extension point). */
+export const ExportRoleSchema = z.enum(['call', 'implement']);
+export type ExportRole = z.infer<typeof ExportRoleSchema>;
+
+/**
+ * Who invokes a method from outside the modelled narrative graph: `entry`
+ * (callers outside the design reach a Portal verb over its transport) or
+ * `runtime` (the process's own runtime: a composition root, scheduler, signal
+ * or framework callback). The retired kinds `external` and `sibling-subsystem`
+ * are read compatibly for one release (readRetiredReachForms) and never
+ * authored.
+ */
+export const InvocationKindSchema = z.enum(['entry', 'runtime']);
+export type InvocationKind = z.infer<typeof InvocationKindSchema>;
+
+/** The invokedBy kinds the reachability model retired, read compatibly for one release. */
+export const RETIRED_INVOCATION_KINDS: ReadonlySet<string> = new Set(['external', 'sibling-subsystem']);
+
+/**
+ * A declared invocation from outside the modelled narrative graph, on an L3
+ * contract method or on a Portal component (the entry every verb inherits; a
+ * verb may override only its scope). Seeds unused-detection. The caller prose
+ * is checked by INVOKED_BY_UNDESCRIBED, so a missing one parses and is
+ * reported rather than refused.
+ */
+export const DeclaredInvocationSchema = z.object({
+  kind: InvocationKindSchema,
+  caller: z.string().optional(),
+  /** Entry on a network transport only: outside (the default) or network. */
+  scope: EntryScopeSchema.optional(),
+});
+export type DeclaredInvocation = z.infer<typeof DeclaredInvocationSchema>;
 
 /**
  * Ascending audience reach for L0 gateway entries. An entry travels only as
@@ -95,7 +208,11 @@ export const SystemPublicInterfaceSchema = z.object({
   typeDef: z.string().optional(),
   /** The public name: defaults to `id`, then `interface`, then `component` or `typeDef`. */
   as: z.string().optional(),
-  /** Surface kind: REST, GraphQL, MessageBus, RPC, or Custom. */
+  /**
+   * LEGACY, no longer authored: the export kind is derived from the backing
+   * Portal's transport (transportExportKind). Read compatibly for one release
+   * and recorded as a retired reach fact; doctor --fix drops or reports it.
+   */
   type: z.string().optional(),
   details: z.string().optional(),
   /** Exposure ceiling (see SurfaceAudienceSchema). Defaults to 'instance' at projection time. */
@@ -103,6 +220,8 @@ export const SystemPublicInterfaceSchema = z.object({
   authPolicy: z.string().optional(),
   version: z.string().optional(),
   stability: z.string().optional(),
+  /** What consumers do with the entry: call it (the default) or implement it (an extension point). */
+  role: ExportRoleSchema.optional(),
 });
 export type SystemPublicInterface = z.infer<typeof SystemPublicInterfaceSchema>;
 
@@ -141,19 +260,21 @@ export type SystemSpec = z.infer<typeof SystemSpecSchema>;
 // ---------------------------------------------------------------------------
 // Level 1: Subsystem / Service Spec (subsystems/*.yaml)
 // ---------------------------------------------------------------------------
-export const PublicInterfaceTypeSchema = z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']);
-export type PublicInterfaceType = z.infer<typeof PublicInterfaceTypeSchema>;
-
 /**
- * One entry of a subsystem's export table. An OWN item binds a transport kind
- * and details to a component (or a type) the subsystem owns; a RE-EXPORT names
- * another subsystem of the project in `from` and one component, interface
- * narrowing or type from that subsystem's table, optionally renamed with `as` —
- * `from` alone re-exports everything it exports. A re-export inherits its
- * target's type and details, so only an own component item must state them.
+ * One entry of a subsystem's export table. An OWN item binds details to a
+ * component (or a type) the subsystem owns; a RE-EXPORT names another
+ * subsystem of the project in `from` and one component, interface narrowing or
+ * type from that subsystem's table, optionally renamed with `as` — `from` alone
+ * re-exports everything it exports. A re-export inherits its target's details,
+ * so only an own component item must state them. The export kind is derived
+ * from the backing Portal's transport; an authored `type` is legacy.
  */
 export const PublicInterfaceSchema = z.object({
-  /** Transport kind of an own item; a re-export inherits its target's. */
+  /**
+   * LEGACY, no longer authored: derived from the backing Portal's transport
+   * (transportExportKind). Read compatibly for one release and recorded as a
+   * retired reach fact.
+   */
   type: PublicInterfaceTypeSchema.optional(),
   /** Consumer-facing description of an own item; a re-export inherits its target's. */
   details: z.string().optional(),
@@ -173,9 +294,11 @@ export const PublicInterfaceSchema = z.object({
    * component names consumers, the union of those lists is the whole set.
    */
   consumers: z.array(SpecIdSchema).optional(),
-}).refine(pi => pi.from !== undefined || pi.typeDef !== undefined || (pi.type !== undefined && pi.details !== undefined), {
-  message: 'An own component entry states its `type` and `details`; only a re-export (`from`) or a type export (`typeDef`) may leave them out.',
-  path: ['type'],
+  /** What consumers do with the entry: call it (the default) or implement it (an extension point an Adapter may back). */
+  role: ExportRoleSchema.optional(),
+}).refine(pi => pi.from !== undefined || pi.typeDef !== undefined || pi.details !== undefined, {
+  message: 'An own component entry states its `details`; only a re-export (`from`) or a type export (`typeDef`) may leave them out. Its export kind is derived from the backing Portal\'s transport, so `type` is no longer authored.',
+  path: ['details'],
 });
 
 export type PublicInterface = z.infer<typeof PublicInterfaceSchema>;
@@ -372,9 +495,6 @@ export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 
 /** Retired component types: a tree still loads them, and STEREOTYPE_RETIRED reports each until it is migrated. */
 export const RETIRED_STEREOTYPES: ReadonlySet<ComponentType> = new Set(['Specialist', 'Gateway']);
 
-export const PortalTypeSchema = z.enum(['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom']);
-export type PortalType = z.infer<typeof PortalTypeSchema>;
-
 /**
  * One entry of a generic-dispatch Portal's machine-readable dispatch table:
  * maps a runtime capability name to the component.method serving it. Makes
@@ -506,38 +626,6 @@ export const PortalAuthSchema = z.object({
 export type PortalAuth = z.infer<typeof PortalAuthSchema>;
 
 /**
- * One portal a LISTENER serves: which portal, under which path prefixes, and
- * through which router entry. A portal's routes are its methods' endpoint
- * bindings, but those say nothing about which listener hands it its requests,
- * and while that was unmodelled three things went wrong at once: the call that
- * mounts a portal crossed a boundary no contract described (UNDECLARED_EXPORT
- * carried as debt), a portal no listener served was unreachable with nobody
- * noticing, and a route belonging to no contract had nowhere to be missed from.
- * A mount states that fact where the code decides it — in the listener's router
- * — so the portal-mounts rule can judge it and export-conformance can accept the
- * router entry as declared publication rather than a crossing.
- */
-export const PortalMountSchema = z.object({
-  /** The mounted Portal's component id. */
-  portal: z.string(),
-  /**
-   * The path prefixes this listener routes to the portal. A path lies under a
-   * prefix when it EQUALS it or continues it past a slash — so `/` covers the
-   * root itself and nothing else, which is what lets an app shell sit at `GET /`
-   * without swallowing every other route.
-   */
-  prefixes: z.array(z.string()),
-  /**
-   * The router entry the listener calls to hand the portal its request,
-   * exported by the PORTAL's own file (so export-conformance holds that file to
-   * it). Absent when the listener calls the portal's contract methods directly,
-   * route by route — then there is no entry to name.
-   */
-  via: z.string().optional(),
-});
-export type PortalMount = z.infer<typeof PortalMountSchema>;
-
-/**
  * A spec's RENAME TRACE: every id it held before, oldest first. Written only by
  * the rename tools (renameComponent, renameType), never by an author, and never
  * rewritten or bound as a reference — it names keys that no longer exist, so it
@@ -606,7 +694,26 @@ export const ComponentSpecSchema = z.object({
   owns: z.array(z.string()).default([]),
   /** Other L2 component ids this component collaborates with (facades / standalone blocks). */
   dependsOn: z.array(z.string()).default([]),
-  portalType: PortalTypeSchema.optional(),
+  /**
+   * Portal-only, and expected on every Portal: how callers reach its verbs (see
+   * TransportSchema). Replaces the retired portalType, which the loader reads
+   * compatibly for one release (HTTP_API as HTTP). Which process serves which
+   * Portal is implementation: there are no listener mounts.
+   */
+  transport: TransportSchema.optional(),
+  /**
+   * Portal-only, InProcess only: how a foreign language links this library
+   * verb set — `c` (a C-ABI shared library, DLL or FFI) or `wasm` (a
+   * WebAssembly component). Absent means a native API in the project's
+   * targetLanguage.
+   */
+  abi: z.string().optional(),
+  /**
+   * Portal-only: the entry every verb inherits (kind entry, with a scope on a
+   * network transport); a verb's own invokedBy overrides only the scope. Never
+   * defaulted by a tool and never invented by a migration.
+   */
+  invokedBy: DeclaredInvocationSchema.optional(),
   basePath: z.string().optional(),
   /** Portal-only: the API's authentication scheme (see PortalAuthSchema) — projected
    *  into the generated OpenAPI's securitySchemes/security. Portals with different auth
@@ -614,13 +721,6 @@ export const ComponentSpecSchema = z.object({
   auth: PortalAuthSchema.optional(),
   /** Portal-only: capability → component.method dispatch table (see DispatchBindingSchema). */
   dispatch: z.array(DispatchBindingSchema).optional(),
-  /**
-   * Portal-only: the portals this LISTENER serves (see PortalMountSchema).
-   * Declaring the field — even as an empty array — is what marks a portal as a
-   * listener: the one kind of portal the host starts directly, so nothing else
-   * needs to mount it. Absent means "a portal something else must serve".
-   */
-  mounts: z.array(PortalMountSchema).optional(),
   /** Store-only: whether held state survives restart (see DurabilitySchema). */
   durability: DurabilitySchema.optional(),
   /** Orchestrator-only: what the logic may depend on; unset means a workflow (see DependencyClassSchema). */
@@ -757,12 +857,9 @@ export function conceptNoun(component: Pick<ComponentSpec, 'id'>): string {
 export const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']);
 export type HttpMethod = z.infer<typeof HttpMethodSchema>;
 
-/** The wire protocols a Portal can expose. Mirrors PortalType (sans the *_API suffix). */
-export const TransportSchema = z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom']);
-export type Transport = z.infer<typeof TransportSchema>;
-
-// A method's concrete wire endpoint — ONE generic field, discriminated by `transport`,
-// so HTTP / gRPC / GraphQL / MessageBus / NamedPipe / IPC / CLI / Custom all bind
+// A method's concrete wire endpoint — ONE generic field, discriminated by `transport`
+// (the Portal's own transport, see TransportSchema), so HTTP / gRPC / GraphQL /
+// MessageBus / NamedPipe / IPC / CLI / JSONRPC / Custom all bind
 // through the same slot (set via the `sdd_set_endpoints` MCP tool). Each transport keeps
 // its own precise address fields, so the gate validates exact shape, not just presence.
 export const EndpointSchema = z.discriminatedUnion('transport', [
@@ -773,8 +870,11 @@ export const EndpointSchema = z.discriminatedUnion('transport', [
   z.object({ transport: z.literal('NamedPipe'), pipe: z.string() }),
   z.object({ transport: z.literal('IPC'), channel: z.string() }),
   z.object({ transport: z.literal('CLI'), command: z.string() }),
+  z.object({ transport: z.literal('JSONRPC'), method: z.string() }),
   z.object({ transport: z.literal('Custom'), address: z.string() }),
 ]);
+/** The transports a verb can bind an endpoint for: every transport but InProcess, whose verb is the contract method itself. */
+export type EndpointTransport = Endpoint['transport'];
 export type Endpoint = z.infer<typeof EndpointSchema>;
 
 /**
@@ -829,12 +929,13 @@ export const FindingDeclarationSchema = z.object({
 });
 export type FindingDeclaration = z.infer<typeof FindingDeclarationSchema>;
 
-/** Who invokes a method from outside the modeled narrative graph. */
-export const InvocationKindSchema = z.enum(['runtime', 'external', 'sibling-subsystem']);
-export type InvocationKind = z.infer<typeof InvocationKindSchema>;
-
-/** What a contract method does to its component's held state. */
-export const MethodEffectSchema = z.enum(['read', 'write', 'lifecycle']);
+/**
+ * What a contract method does to its component's held state, and whether it
+ * reaches outside the process: `none` computes over its arguments only, `read`
+ * observes held state, `write` modifies it, `lifecycle` creates or destroys an
+ * entity's existence, `io` reaches files, the network, the clock or randomness.
+ */
+export const MethodEffectSchema = z.enum(['none', 'read', 'write', 'lifecycle', 'io']);
 export type MethodEffect = z.infer<typeof MethodEffectSchema>;
 
 /**
@@ -892,18 +993,16 @@ export const MethodSignatureSchema = z.object({
   effect: MethodEffectSchema.optional(),
   /**
    * Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph
-   * (runtime timer/hook, external system, sibling subsystem). Unused-detection
-   * seeds the method as an entrypoint, so reachability PROPAGATES through its
+   * (see DeclaredInvocationSchema): an `entry` on a Portal verb (overriding the
+   * Portal-level entry's scope), or a `runtime` hook. Unused-detection seeds
+   * the method as an entrypoint, so reachability PROPAGATES through its
    * narrative — unlike a lint.allow, which only silences the finding. `caller`
    * states WHO invokes it (placeholder-thin prose is INVOKED_BY_UNDESCRIBED;
-   * a method the internal walk already reaches is INVOKED_BY_REDUNDANT).
+   * a runtime method the internal walk already reaches is INVOKED_BY_REDUNDANT).
    * Prefer a `register` narrative step when the wiring is internal — the
    * registration itself is then a modeled, checkable edge.
    */
-  invokedBy: z.object({
-    kind: InvocationKindSchema,
-    caller: z.string().optional(),
-  }).optional(),
+  invokedBy: DeclaredInvocationSchema.optional(),
   /**
    * The finding codes this method can report, each with its default severity
    * and summary (see FindingDeclarationSchema). Each declared code must be
@@ -1055,6 +1154,14 @@ export const InterfaceSpecSchema = z.object({
   lint: LintConfigSchema.optional(),
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
+  /**
+   * The exported extension point this contract realizes, as alias::name:
+   * another project's export entry with role implement. Every method of the
+   * extension point is declared here with the same signature
+   * (IMPLEMENTS_MISMATCH), and the methods count as reached, because the
+   * producer calls them.
+   */
+  implements: z.string().min(1).optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -1387,6 +1494,14 @@ export const ImplementationSpecSchema = z.object({
    * list.
    */
   injectedParams: z.array(z.string()).optional(),
+  /**
+   * Portal-only code linkage: the router entry this Portal's own file exports.
+   * Whatever process serves the Portal hands it its requests through this
+   * entry, which replaces the retired listener mount's `via`. Route coverage
+   * reads the routes out of it, and export conformance holds the file to it.
+   * Outside the approval, like every linkage field.
+   */
+  router: z.string().min(1).optional(),
   methods: z.array(MethodImplementationSchema).default([]).superRefine((methods, ctx) => {
     // `calls` is the NARRATIVE-LESS spelling of a call. A method that has a
     // narrative already says what it calls, in steps the flow rules check; a
@@ -1776,7 +1891,7 @@ export function typeSourceFiles(
 /** Each schema's fields, split into the design (approved) and the code linkage (not approved). */
 export const DESIGN_VIEW_FIELDS = {
   implementation: {
-    linkage: ['sourcePath', 'simPath', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
+    linkage: ['sourcePath', 'simPath', 'router', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
     design: ['id', 'name', 'description', 'contract', 'technologies', 'methods', 'detail', 'previousIds', 'lint', 'ext', 'status'],
   },
   implementationMethod: {
@@ -1797,12 +1912,17 @@ export const DESIGN_VIEW_FIELDS = {
   component: {
     linkage: ['externalLinks', 'createdAt', 'updatedAt'],
     design: [
-      'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'portalType', 'basePath', 'auth',
-      'dispatch', 'mounts', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'patterns', 'variant',
+      'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'transport', 'abi', 'invokedBy',
+      'basePath', 'auth', 'dispatch', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'patterns', 'variant',
       'previousIds', 'lint', 'ext', 'status',
     ],
   },
-  portalMount: {
+  /**
+   * A retired listener mount as a stored file may still hold it until doctor
+   * --fix migrates it: its `via` was linkage (the router entry, now the
+   * Portal implementation's `router`), so a raw file still digests as it did.
+   */
+  retiredMount: {
     linkage: ['via'],
     design: ['portal', 'prefixes'],
   },
@@ -1851,15 +1971,256 @@ export function typeDesignView<T extends object>(type: T): T {
 }
 
 /**
- * component_spec.designView — this component as the approval sees it: each
- * mount's `via` (the router entry the portal's file exports, held to code by
- * UNREALIZED_EXPORT_HANDLE), its externalLinks and the timestamps left out. A
- * mount's portal and prefixes, and every other field, stay. Pure.
+ * component_spec.designView — this component as the approval sees it: its
+ * externalLinks and the timestamps left out; every other field stays,
+ * including transport, abi and invokedBy. Pure. It reads a stored (raw) file
+ * as readily as a loaded spec, so a file still holding a retired listener
+ * mount (until doctor --fix migrates it) keeps that mount's `via` out, as the
+ * approval always did: an unmigrated file digests as it did when it was locked.
  */
 export function componentDesignView<T extends object>(component: T): T {
   const view = withoutFields(component, DESIGN_VIEW_FIELDS.component.linkage) as Record<string, unknown>;
-  if ('mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.portalMount.linkage));
+  if ('mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.retiredMount.linkage));
   return view as T;
+}
+
+/**
+ * component_spec.entryFor — the entry a verb of this Portal has: the verb's
+ * own invokedBy when it declares one, else the component's, with the verb's
+ * scope taking precedence over the component's. None for a non-Portal. Pure.
+ */
+export function componentEntryFor(
+  component: Pick<ComponentSpec, 'componentType' | 'invokedBy'>,
+  method?: DeclaredInvocation,
+): DeclaredInvocation | undefined {
+  if (component.componentType !== 'Portal') return undefined;
+  const own = component.invokedBy;
+  if (method) {
+    if (method.kind === 'entry' && own?.kind === 'entry') {
+      const scope = method.scope ?? own.scope;
+      return { ...own, ...method, ...(scope !== undefined ? { scope } : {}) };
+    }
+    return method;
+  }
+  return own;
+}
+
+// ---------------------------------------------------------------------------
+// Retired reachability forms — read compatibly for one release
+// ---------------------------------------------------------------------------
+
+/**
+ * A form the reachability model retired, as the scan met it in a stored spec.
+ * `retired-allow` (a lint allow of a retired code) is never recorded by the
+ * scan: the reachability migration reads the allows itself and names its
+ * rewrites with it.
+ */
+export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'in-process-endpoint', 'retired-allow']);
+export type RetiredReachForm = z.infer<typeof RetiredReachFormSchema>;
+
+/**
+ * One retired reachability form the current scan met, with what the stored
+ * spec held, so the migration can rewrite it and the doctor report can explain
+ * it without reading files again. Nothing the loader reads compatibly is
+ * dropped: the stored value lives on here.
+ */
+export interface RetiredReachFact {
+  /** Which retired form. */
+  form: RetiredReachForm;
+  /** The key of the spec holding it (`system` for an L0). */
+  specId: string;
+  /** Where in the spec: a method name, an export entry's public name, a mounted portal's id. */
+  at?: string;
+  /** What the stored spec held there, exactly as read. */
+  stored: unknown;
+}
+
+/** The spec kinds that can hold a retired reachability form. */
+export type RetiredReachHolder = 'system' | 'subsystem' | 'component' | 'interface';
+
+/**
+ * Whether a Custom endpoint's address names an in-process call rather than a
+ * wire: `in-process …`, or a `<package>#<function>` library symbol.
+ */
+export function isInProcessAddress(address: string): boolean {
+  const text = address.trim();
+  return /^in-process\b/i.test(text) || /^[^\s#]+#[A-Za-z_$][\w$]*$/.test(text);
+}
+
+/** An export entry's public name, as far as a stored entry spells it. */
+function storedExportName(entry: Record<string, unknown>): string | undefined {
+  for (const key of ['as', 'id', 'interface', 'component', 'typeDef', 'from'] as const) {
+    const value = entry[key];
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  return undefined;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Read one stored spec document's retired reachability forms compatibly, IN
+ * PLACE, and answer what it held. Pure over the document; the caller parses it
+ * afterwards with the current schema, which no longer carries the retired
+ * forms.
+ *
+ * - A component's `portalType` becomes `transport` (HTTP_API as HTTP) unless
+ *   the document already states a transport; the stored value is a fact.
+ * - A component's listener `mounts` are kept as facts, one per mounted portal
+ *   (or one holding the stored value for a listener that mounted nothing). The
+ *   schema no longer types them, so the parse drops them; the caller keeps
+ *   them READ but untyped on the loaded spec (attachRetiredMounts) for the
+ *   rules that still judge them until the reachability rules replace them, and
+ *   the writer carries them back onto the file (carryRetiredReachForms), so
+ *   nothing is silently dropped before the migration rewrites them.
+ * - An interface method's invokedBy of a retired kind is read as `runtime`
+ *   (`isPortalContract` true reads `external` as `entry`); the stored kind is a
+ *   fact. Without the contract's component at hand the caller re-reads
+ *   `external` once it knows (the scan does, after every spec is keyed).
+ * - A Custom endpoint naming an in-process call is a fact; it still parses.
+ * - An authored `type` on an L1 or L0 export entry is a fact; it still parses
+ *   as the legacy value.
+ */
+export function readRetiredReachForms(
+  holder: RetiredReachHolder,
+  doc: Record<string, unknown>,
+  isPortalContract?: boolean,
+): RetiredReachFact[] {
+  const facts: RetiredReachFact[] = [];
+  const specId = holder === 'system' ? 'system' : String(doc.id ?? '');
+  if (holder === 'component') {
+    if ('portalType' in doc) {
+      const stored = doc.portalType;
+      facts.push({ form: 'portal-type', specId, stored });
+      if (doc.transport === undefined && typeof stored === 'string') {
+        doc.transport = RETIRED_PORTAL_TYPE_SPELLINGS[stored] ?? stored;
+      }
+      delete doc.portalType;
+    }
+    if ('mounts' in doc) {
+      const stored = doc.mounts;
+      if (Array.isArray(stored) && stored.length > 0) {
+        for (const mount of stored) {
+          const portal = isRecord(mount) && typeof mount.portal === 'string' ? mount.portal : undefined;
+          facts.push({ form: 'listener-mounts', specId, ...(portal !== undefined ? { at: portal } : {}), stored: mount });
+        }
+      } else {
+        facts.push({ form: 'listener-mounts', specId, stored });
+      }
+    }
+    return facts;
+  }
+  if (holder === 'interface') {
+    for (const method of Array.isArray(doc.methods) ? doc.methods : []) {
+      if (!isRecord(method)) continue;
+      const name = typeof method.name === 'string' ? method.name : undefined;
+      const invokedBy = method.invokedBy;
+      if (isRecord(invokedBy) && typeof invokedBy.kind === 'string' && RETIRED_INVOCATION_KINDS.has(invokedBy.kind)) {
+        facts.push({ form: 'invoked-by-kind', specId, ...(name !== undefined ? { at: name } : {}), stored: invokedBy.kind });
+        method.invokedBy = { ...invokedBy, kind: retiredInvocationReadAs(invokedBy.kind, isPortalContract === true) };
+      }
+      const endpoint = method.endpoint;
+      if (isRecord(endpoint) && endpoint.transport === 'Custom' && typeof endpoint.address === 'string' && isInProcessAddress(endpoint.address)) {
+        facts.push({ form: 'in-process-endpoint', specId, ...(name !== undefined ? { at: name } : {}), stored: { ...endpoint } });
+      }
+    }
+    return facts;
+  }
+  for (const entry of Array.isArray(doc.publicInterfaces) ? doc.publicInterfaces : []) {
+    if (!isRecord(entry) || entry.type === undefined) continue;
+    const at = storedExportName(entry);
+    facts.push({ form: 'export-type', specId, ...(at !== undefined ? { at } : {}), stored: entry.type });
+  }
+  return facts;
+}
+
+/**
+ * A retired listener mount as a stored file may still hold it: the portal a
+ * listener served, under which path prefixes, through which router entry.
+ * Read, never typed on ComponentSpec, and never authored.
+ */
+export interface RetiredMount {
+  portal: string;
+  prefixes: string[];
+  via?: string;
+}
+
+/**
+ * Keep a stored component's retired listener `mounts` READ on the parsed spec,
+ * untyped: the schema drops them, and until the reachability rules replace
+ * the ones that judge them (and doctor --fix rewrites them) they stay where
+ * the loader's reference binding, the rules and the writer's carry can see
+ * them. Answers the parsed spec.
+ */
+export function attachRetiredMounts<T extends object>(parsed: T, doc: Record<string, unknown>): T {
+  if (Array.isArray(doc.mounts)) (parsed as Record<string, unknown>).mounts = doc.mounts;
+  return parsed;
+}
+
+/**
+ * A loaded component's retired listener mounts, as far as each is well formed
+ * (a portal id, its prefixes, its router entry); none when it declares none.
+ * `declared` says whether the field is present at all — even empty, it marked
+ * a listener.
+ */
+export function retiredMountsOf(component: object): { declared: boolean; mounts: RetiredMount[] } {
+  const raw = (component as Record<string, unknown>).mounts;
+  if (!Array.isArray(raw)) return { declared: raw !== undefined, mounts: [] };
+  const mounts: RetiredMount[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry) || typeof entry.portal !== 'string') continue;
+    const prefixes = Array.isArray(entry.prefixes) ? entry.prefixes.filter((p): p is string => typeof p === 'string') : [];
+    mounts.push({ portal: entry.portal, prefixes, ...(typeof entry.via === 'string' ? { via: entry.via } : {}) });
+  }
+  return { declared: true, mounts };
+}
+
+/**
+ * The kind a retired invokedBy kind is read as: `external` is an entry on a
+ * Portal's contract and a runtime hook elsewhere; `sibling-subsystem` is a
+ * runtime hook (its caller is in the same tree, so the call should be
+ * modelled — INVOKED_BY_RETIRED_KIND says so).
+ */
+export function retiredInvocationReadAs(kind: string, isPortalContract: boolean): InvocationKind {
+  return kind === 'external' && isPortalContract ? 'entry' : 'runtime';
+}
+
+/**
+ * The retired forms a stored component or interface file holds that the
+ * document about to be written over it would erase without anyone deciding
+ * to: a Portal's listener `mounts`, and an interface method's retired
+ * invokedBy kind when the written method still declares the kind it was read
+ * as. Carried onto `out` IN PLACE, so a write through any tool keeps them until
+ * the reachability migration rewrites them. A deliberate change (the method's
+ * invokedBy rewritten or removed, the component no longer a Portal) is the
+ * author's, and is not undone. Pure.
+ */
+export function carryRetiredReachForms(
+  holder: 'component' | 'interface',
+  stored: Record<string, unknown> | null | undefined,
+  out: Record<string, unknown>,
+): void {
+  if (!isRecord(stored)) return;
+  if (holder === 'component') {
+    if ('mounts' in stored && !('mounts' in out) && out.componentType === 'Portal') out.mounts = stored.mounts;
+    return;
+  }
+  const storedMethods = new Map<string, Record<string, unknown>>();
+  for (const method of Array.isArray(stored.methods) ? stored.methods : []) {
+    if (isRecord(method) && typeof method.name === 'string') storedMethods.set(method.name, method);
+  }
+  for (const method of Array.isArray(out.methods) ? out.methods : []) {
+    if (!isRecord(method) || typeof method.name !== 'string') continue;
+    const before = storedMethods.get(method.name)?.invokedBy;
+    const now = method.invokedBy;
+    if (!isRecord(before) || !isRecord(now) || typeof before.kind !== 'string' || !RETIRED_INVOCATION_KINDS.has(before.kind)) continue;
+    const readAs = before.kind === 'external' ? ['entry', 'runtime'] : ['runtime'];
+    const sameCaller = now.caller === before.caller;
+    if (typeof now.kind === 'string' && readAs.includes(now.kind) && sameCaller && now.scope === undefined) {
+      method.invokedBy = { ...now, kind: before.kind };
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1922,7 +2283,7 @@ export const SurfaceContractEntrySchema = z.object({
   name: z.string(),
   /** Exposure level of the L0 entry (see SurfaceAudienceSchema). */
   audience: z.string().default('instance'),
-  /** Transport kind: REST, GraphQL, MessageBus, RPC, or Custom. */
+  /** Export kind: REST, GraphQL, MessageBus, RPC, or Custom — derived from the backing Portal's transport. */
   type: z.string().default('Custom'),
   /** Local name of the backing Portal in the producing project. */
   component: z.string(),
@@ -1955,6 +2316,16 @@ export const SurfaceContractEntrySchema = z.object({
    * memberDigest nor contentDigest. Absent when never renamed.
    */
   formerly: z.array(z.string()).optional(),
+  /**
+   * The backing Portal's transport: a consumer tells a library (InProcess,
+   * called directly) from a network or local surface by it. Absent on
+   * snapshots written before it was carried, read then as the derived kind.
+   */
+  transport: z.string().optional(),
+  /** The backing InProcess Portal's abi, when it declares one. */
+  abi: z.string().optional(),
+  /** The entry's export role, call (the default) or implement. */
+  role: z.string().optional(),
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
@@ -1980,6 +2351,12 @@ export const SurfaceSnapshotSchema = z.object({
    * source.path; absent on surfaces written before externals and on imports.
    */
   audience: z.string().optional(),
+  /**
+   * The producer's targetLanguage (L0), lowercased: what a consumer in another
+   * language judges a native-ABI library call against. Absent when the
+   * producer declares none, or on snapshots written before it was carried.
+   */
+  targetLanguage: z.string().optional(),
 });
 export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
 
