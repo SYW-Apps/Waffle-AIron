@@ -23,7 +23,7 @@ import {
   listFamilyPins,
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
-import { toOpenApi, toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
+import { toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
@@ -160,9 +160,15 @@ describe('OpenAPI codec — portal auth + honest multi-spec', () => {
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const snap = (entries: any[]): any => ({ projectName: 'multi', origin: 'generated', generatedAt: now, interfaces: entries, types: [] });
+  /** The one document a single-portal snapshot renders to: toOpenApiSet renders one per portal. */
+  const singlePortalDocument = (snapshot: SurfaceSnapshot): string => {
+    const specs = toOpenApiSet(snapshot);
+    expect(specs).toHaveLength(1);
+    return specs[0].document;
+  };
 
   it('emits securitySchemes + per-operation security from a portal auth', () => {
-    const doc = JSON.parse(toOpenApi(snap([
+    const doc = JSON.parse(singlePortalDocument(snap([
       { id: 'ext', name: 'Ext API', audience: 'external', type: 'REST', component: 'ext-portal',
         auth: { scheme: 'bearer', bearerFormat: 'JWT' }, methods: [httpMethod('a', '/a')] },
     ])));
@@ -171,7 +177,7 @@ describe('OpenAPI codec — portal auth + honest multi-spec', () => {
   });
 
   it('a none/absent auth emits no security', () => {
-    const doc = JSON.parse(toOpenApi(snap([
+    const doc = JSON.parse(singlePortalDocument(snap([
       { id: 'ext', name: 'Ext', audience: 'external', type: 'REST', component: 'ext', methods: [httpMethod('a', '/a')] },
     ])));
     expect(doc.components?.securitySchemes).toBeUndefined();
@@ -199,7 +205,7 @@ describe('OpenAPI codec — portal auth + honest multi-spec', () => {
   });
 
   it('round-trips a bearer auth through fromOpenApi', () => {
-    const doc = toOpenApi(snap([
+    const doc = singlePortalDocument(snap([
       { id: 'ext', name: 'Ext', audience: 'external', type: 'REST', component: 'ext',
         auth: { scheme: 'bearer', bearerFormat: 'JWT' }, methods: [httpMethod('a', '/a')] },
     ]));
@@ -304,7 +310,7 @@ describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('guarantees, effect, and method ext survive toOpenApi → fromOpenApi identically to the native snapshot path', () => {
+  it('guarantees, effect, and method ext survive toOpenApiSet → fromOpenApi identically to the native snapshot path', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
 
@@ -353,7 +359,7 @@ describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
     expect(() => JSON.parse(fs.readFileSync(jsonPath, 'utf8'))).not.toThrow();
     expect(importSurface(jsonPath, 'exchanged').interfaces).toEqual(native.interfaces);
 
-    // OpenAPI path: toOpenApi render → consumer import via fromOpenApi.
+    // OpenAPI path: toOpenApiSet render → consumer import via fromOpenApi.
     const apiPath = path.join(rootDir, 'exchange', 'via-openapi.json');
     const { rendered } = exportSurface('external', 'openapi', apiPath);
     const doc = JSON.parse(rendered!);

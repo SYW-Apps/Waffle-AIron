@@ -12,7 +12,7 @@ componentType: Portal
 owns: []
 dependsOn:
   - surface_orchestrator
-portalType: Custom
+transport: InProcess
 status: complete
 createdAt: '2026-10-04T18:29:12.140Z'
-updatedAt: '2026-10-04T18:29:47.789Z'
+updatedAt: '2026-10-06T18:55:03.765Z'

@@ -1461,7 +1461,7 @@ export interface McpServerOptions {
 }
 
 /**
- * mcp_portal.createMcpServer — the entry every caller uses: the bare server the
+ * mcp_hosting_portal.createMcpServer — the entry every caller uses: the bare server the
  * MCP server supervisor builds (mcp_server.create), with the portal's own
  * surface mounted on it (resources, prompts, and the hosted-tool advertisement).
  */
@@ -3007,7 +3007,7 @@ function mountMcpPortal(server: McpServer, options: McpServerOptions): McpServer
 }
 
 // ---------------------------------------------------------------------------
-// mcp_portal.advertiseHostedTools — ONE method for the seventeen sdd_host_* and
+// mcp_hosting_portal.advertiseHostedTools — ONE method for the seventeen sdd_host_* and
 // sdd_landscape_* entries, because publishing a discovery list is one job.
 // Execution is intercepted upstream by the hosting request orchestrator, which
 // owns their contracts; these registrations exist so an MCP client can FIND the
@@ -3146,6 +3146,11 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
   }
 }
 
+/**
+ * mcp_hosting_portal.serveStdio — serve the MCP Portal over this process's stdio:
+ * build a server, connect the stdio transport, and scope the bound project to the
+ * client's workspace roots (again whenever the client reports they changed).
+ */
 export async function startMcpServer(): Promise<void> {
   const server    = createMcpServer();
   const transport = new StdioServerTransport();

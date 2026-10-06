@@ -20,7 +20,13 @@ dependsOn:
   - domain_projector
   - execution_profiler
   - version_stamp
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js, which
+    re-exports the core barrel) and resolve the agent topology, briefs, generated agent files and
+    context documents in their own process
 status: complete
 createdAt: '2026-09-25T17:32:56.472Z'
-updatedAt: '2026-09-25T17:33:38.162Z'
+updatedAt: '2026-10-06T19:13:33.830Z'

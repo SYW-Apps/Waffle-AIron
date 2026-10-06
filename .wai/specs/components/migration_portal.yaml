@@ -18,7 +18,7 @@ dependsOn:
   - family_migration_orchestrator
   - position_reader
   - family_transaction
-portalType: Custom
+transport: InProcess
 status: complete
 createdAt: '2026-09-30T20:36:26.062Z'
-updatedAt: '2026-10-01T16:28:28.267Z'
+updatedAt: '2026-10-06T18:55:01.782Z'

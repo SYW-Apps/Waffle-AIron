@@ -26,7 +26,7 @@ methods:
       - name: projectRoot
         type: string
     invokedBy:
-      kind: external
+      kind: runtime
       caller: >-
         Wrapper products embedding wairon as a library call load directly as the public library
         entry point (docs/extending-wairon.md); no internal call chain exists by design.
@@ -264,4 +264,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-10-04T10:27:30.807Z'
+updatedAt: '2026-10-06T18:55:13.829Z'

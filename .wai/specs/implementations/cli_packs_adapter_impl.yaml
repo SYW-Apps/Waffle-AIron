@@ -10,9 +10,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the pack source to an absolute path and require a pack entry: a missing path or a
-          directory without a pack entry file fails the command before anything is touched.
-        type: local
+          Resolve the pack source to an absolute path and require a pack entry (the core surface's
+          packDirEntry): a missing path or a directory without a pack entry file fails the command
+          before anything is touched.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packDirEntry
       - stepNumber: 2
         description: Probe-load the pack (scope-aware) to verify it parses BEFORE vendoring anything.
         type: local
@@ -149,11 +152,18 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 3
         description: >-
+          Decide whether machine-wide packs apply to this configuration (off by default; an absent
+          configuration reads as the defaults).
+        type: call
+        targetComponent: extension_portal
+        targetMethod: globalPacksEnabled
+      - stepNumber: 4
+        description: >-
           Probe each configured pack ref — the global tier (packs dir) then the project tier (the
           loaded extensions.packs entries) — for its manifest summary (name, scope, what it
           provides) and any load error, via the core extension loader's per-pack probe.
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Print each pack with its name, scope, version, and what it provides (profiles, languages,
           rules, skills, patterns), plus any load errors.
@@ -388,7 +398,9 @@ methods:
         description: >-
           Install the materialized directory into the pack store via the core surface, recording the
           origin it came from.
-        type: local
+        type: call
+        targetComponent: extension_portal
+        targetMethod: installPackFromDirectory
       - stepNumber: 11
         description: >-
           Report what was installed (name, version, path, digest) and state plainly that it applies
@@ -407,6 +419,28 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Split the name@version spec and remove the pack from the store via the core surface: that
+          version, or every version when none is named.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: uninstallPack
+      - stepNumber: 2
+        description: Did the removal match anything?
+        type: branch
+        condition: nothing in the store matched the spec
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Error naming the store directory that holds no such pack.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 4
+        description: Stop.
+        type: return
+        outcome: no-such-pack error; nothing removed
+      - stepNumber: 5
+        description: >-
           Report the removal and warn that any project still selecting the pack will now fail its
           gate with PACK_NOT_INSTALLED — a loud failure, not a silently weakened rule set.
         type: local
@@ -419,6 +453,26 @@ methods:
   - name: whichPack
     narrative:
       - stepNumber: 1
+        description: Does the spec resolve anywhere?
+        type: branch
+        condition: neither a committed bundle nor the store resolves the spec
+        onTrueStep: 2
+        onFalseStep: 5
+      - stepNumber: 2
+        description: Error naming the store directory that holds no such pack.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 3
+        description: Name the installed packs so a typo is obvious.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: listInstalledPacks
+      - stepNumber: 4
+        description: Stop.
+        type: return
+        outcome: no-such-pack error
+      - stepNumber: 5
         description: >-
           Print where the pack resolves for THIS project, in the order a project resolves it: a
           selection this project commits a bundle of resolves to that bundled copy (printed as
@@ -460,24 +514,31 @@ methods:
         type: branch
         condition: no installed pack matches
         onTrueStep: 6
-        onFalseStep: 7
+        onFalseStep: 8
       - stepNumber: 6
+        description: >-
+          Read the installed packs to name them beside the store directory (packStoreDir) in the
+          error.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: listInstalledPacks
+      - stepNumber: 7
         description: Report the installed pack names and stop.
         type: return
         outcome: no-such-pack error; exit code 1, nothing written
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Build the selection to record: the name; the resolved version when one was requested or
           --pin was passed; the digest under --pin; the source from --source or the recorded origin,
           only when it is a fetchable URL; the bundle flag when asked
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
         type: branch
         condition: '--yes was passed or stdin/stdout is not a terminal'
-        onTrueStep: 13
-        onFalseStep: 9
-      - stepNumber: 9
+        onTrueStep: 14
+        onFalseStep: 10
+      - stepNumber: 10
         description: >-
           Measure the selection before writing it: the pack's doctrine against wairon's defaults,
           the profiles of it that would govern, and the findings that change on this project (a dry
@@ -485,21 +546,21 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Print the impact report — on an update, also what the replaced version changed — and ask
           whether to apply it
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Installing a pack is intentional
         type: branch
         condition: the answer is not yes
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 14
+      - stepNumber: 13
         description: Stop without writing
         type: return
         outcome: declined; nothing written
-      - stepNumber: 13
+      - stepNumber: 14
         label: record
         description: >-
           Record the selection: any same-name selection is dropped and this one is appended last,
@@ -508,7 +569,7 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: upsertPackSelection
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Report "Re-selected" when a selection was replaced and "Selected" otherwise — an
           unattended run adds that it applied without showing the impact and names `wairon pack
@@ -768,7 +829,9 @@ methods:
           than the expanded URL so a later sync re-expands it, and verify a pinned integrity digest
           immediately — a substituted pack is caught here rather than later by the gate. One failed
           selection never stops the others, and every temporary file is removed on both paths.
-        type: local
+        type: call
+        targetComponent: extension_portal
+        targetMethod: installPackFromDirectory
       - stepNumber: 14
         description: Report how many packs were synced.
         type: return
@@ -813,29 +876,34 @@ methods:
         description: Only an installed pack can be measured
         type: branch
         condition: no installed pack matches
-        onFalseStep: 7
+        onFalseStep: 8
       - stepNumber: 6
+        description: Read the installed packs to name them beside the store directory in the error.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: listInstalledPacks
+      - stepNumber: 7
         description: Report the installed pack names and stop
         type: return
         outcome: no-such-pack error; exit code 1
-      - stepNumber: 7
+      - stepNumber: 8
         label: config
         description: 'Read this project''s configuration: does it already apply the pack exactly as asked?'
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Build the candidate: when the pack is applied exactly as asked, its stored entry with
           `remove` (the report then reads as what the pack accounts for now); otherwise the
           selection `pack use` would record for the request
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Measure it, writing nothing
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Print the report: the doctrine changes grouped by profile, the profiles that govern here,
           and the introduced, resolved and regraded findings with both runs' totals
@@ -845,4 +913,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-10-05T23:51:48.494Z'
+updatedAt: '2026-10-06T19:11:59.884Z'

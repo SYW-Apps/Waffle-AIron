@@ -8,6 +8,7 @@ contract: iidentity_portal
 sourcePath: src/server/identity-portal.ts
 injectedParams:
   - cfg
+router: handleIdentityRequest
 methods:
   - name: mintToken
     narrative:
@@ -121,4 +122,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T17:41:06.029Z'
-updatedAt: '2026-10-04T19:46:11.503Z'
+updatedAt: '2026-10-06T18:55:15.779Z'

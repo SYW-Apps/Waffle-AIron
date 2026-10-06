@@ -19,8 +19,7 @@ description: >-
   otherwise have written, and they are judged like it.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       In-process gated spec authoring: author a new L2 component, or patch any stored spec through
       the same judgement. Each answers with a structured report of exactly what changed, or that
       nothing did and nothing was written.
@@ -29,4 +28,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-09-18T21:40:20.265Z'
-updatedAt: '2026-09-26T21:28:03.779Z'
+updatedAt: '2026-10-06T18:55:19.632Z'

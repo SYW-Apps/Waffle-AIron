@@ -13,7 +13,13 @@ componentType: Portal
 owns: []
 dependsOn:
   - core_orchestrator
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js, which
+    re-exports the core barrel) and call its raw spec writes in their own process; inside the design
+    only sdd_authoring may depend on it
 status: complete
 createdAt: '2026-09-25T17:32:45.576Z'
-updatedAt: '2026-09-25T17:33:23.058Z'
+updatedAt: '2026-10-06T19:13:27.181Z'

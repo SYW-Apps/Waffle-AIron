@@ -103,6 +103,14 @@ methods:
         targetMethod: implementationPath
       - stepNumber: 16
         description: >-
+          Only for a component whose implementations name no source file: infer one as a fallback,
+          resolving the project root its subsystem lives in (a member's root, else this one) through
+          the spec loader and matching that project's files against the component's name
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveSubprojectForNamespace
+      - stepNumber: 17
+        description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per member project this project declares (in `members`, or for
           one release a legacy L1 mount) that routes work into the member without enumerating its
@@ -246,4 +254,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T10:57:58.978Z'
+updatedAt: '2026-10-06T19:13:03.255Z'

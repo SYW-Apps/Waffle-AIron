@@ -4,45 +4,6 @@ description: Snapshot ↔ OpenAPI 3.1 conversion.
 contract: iopenapi_codec
 sourcePath: src/core/openapi.ts
 methods:
-  - name: toOpenApi
-    narrative:
-      - stepNumber: 1
-        description: Select the snapshot's HTTP-transport entries (REST endpoints)
-        type: local
-      - stepNumber: 2
-        description: >-
-          Map each contract method to an OpenAPI operation: endpoint method+path, params to
-          parameters/requestBody, returns to responses, guarantees and effect noted as extensions;
-          each param and return type is parsed (type_expression.parse) and rendered from its
-          canonical expression — `async T` as T, `T?` admitting null, collections, primitives and
-          formats as the contract lists them
-        type: local
-      - stepNumber: 3
-        description: >-
-          Render the embedded type closure as JSON-Schema component schemas, each field's schema
-          from its parsed canonical expression; an enum becomes a string component with its values
-          as `enum`; a named scalar becomes the schema of the primitive it holds, titled with the
-          type's name and carrying no properties; a signature type becomes a component with no type
-          constraint, a description saying it is a function type with no JSON form, and an
-          x-wairon-signature extension holding its params (name, the type as written and as a $ref
-          or schema, optional) and returns
-        type: local
-      - stepNumber: 4
-        description: >-
-          Derive security from the entries' projected auth: for each entry whose auth.scheme is a
-          real scheme (apiKey | bearer | basic | oauth2 | openIdConnect | custom), add a
-          components.securitySchemes entry — deduplicating structurally identical schemes under a
-          shared scheme name — and attach the matching security requirement (including oauth2 scopes
-          when present) to that entry's operations; entries with no auth or scheme 'none' emit
-          neither a scheme nor operation-level security.
-        type: local
-      - stepNumber: 5
-        description: Emit the info block with project identity, version or StateId, and generatedAt
-        type: local
-      - stepNumber: 6
-        description: Return the serialized OpenAPI 3.1 document
-        type: return
-        outcome: OpenAPI document
   - name: fromOpenApi
     narrative:
       - stepNumber: 1
@@ -93,7 +54,7 @@ methods:
   - name: toOpenApiSet
     narrative:
       - stepNumber: 1
-        description: Select the snapshot's HTTP-transport entries (same selection rule as toOpenApi).
+        description: Select the snapshot's HTTP-transport entries (REST endpoints).
         type: local
       - stepNumber: 2
         description: >-
@@ -108,10 +69,21 @@ methods:
         endStep: 5
       - stepNumber: 4
         description: >-
-          Render this partition as a standalone OpenAPI 3.1 document: reuse the operation-mapping
-          and JSON-Schema type-closure logic over only this partition's entries, set `servers` from
-          the partition's basePath, and emit only this partition's components.securitySchemes with
-          the matching per-operation security.
+          Render this partition as a standalone OpenAPI 3.1 document over only its own entries: map
+          each contract method to an operation (endpoint method+path, params to
+          parameters/requestBody, returns to responses, guarantees and effect noted as extensions),
+          each param and return type parsed (type_expression.parse) and rendered from its canonical
+          expression — `async T` as T, `T?` admitting null, collections, primitives and formats as
+          the contract lists them; render the embedded type closure as JSON-Schema components (an
+          enum a string component with its values as `enum`; a named scalar the schema of the
+          primitive it holds, titled with its name; a signature type a component with no type
+          constraint, a description saying it is a function type with no JSON form, and an
+          x-wairon-signature extension holding its params and returns); derive
+          components.securitySchemes from the entries' projected auth (deduplicating structurally
+          identical schemes, attaching each matching requirement — with oauth2 scopes — to its
+          operations; no auth or scheme 'none' emits neither); set `servers` from the partition's
+          basePath, and the info block from the portal's name, the project's version or StateId and
+          generatedAt.
         type: local
       - stepNumber: 5
         description: >-
@@ -136,4 +108,4 @@ methods:
     symbol: isOpenApiDocument
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-04T10:53:07.593Z'
+updatedAt: '2026-10-06T19:09:10.953Z'

@@ -5,39 +5,20 @@ description: >-
   exposed over MCP stdio (JSON-RPC).
 component: mcp_portal
 methods:
-  - name: createMcpServer
-    description: >-
-      Initializes and registers the MCP server (tool registration + stdio transport). Declares its
-      MCP capabilities truthfully: resources and prompts advertise listChanged only because the
-      long-lived stdio session actually emits list-changed notifications after a successful spec
-      write that alters the agent topology or skill set (the stateless hosted transport advertises
-      none and stays correct-on-poll). A hosted caller may also ask for the seventeen hosted
-      data-plane tools to be advertised in tools/list; they are discovery only, served by the
-      hosting request orchestrator before any call reaches this server.
-    signature: 'createMcpServer(hostedTools?: bool): McpServerInstance'
-    returns: McpServerInstance
-    params:
-      - name: hostedTools
-        type: bool
-        description: >-
-          Advertise the hosted data-plane tools for discovery; false for the stdio server, which
-          cannot serve them.
-        optional: true
-    endpoint:
-      transport: Custom
-      address: 'stdio json-rpc: server bootstrap (wairon mcp serve)'
-  - name: sdd_initialize_system
+  - name: initializeSystem
     description: >-
       Tool: initialize the L0 system specification. The answer carries the write receipt as
       structured content beside the sentence, so a caller learns what was written without parsing
       English; the sentence itself is unchanged, for a client that understands no structured
       content.
-    signature: 'sdd_initialize_system(spec: SystemSpec): SpecWriteReceipt'
+    signature: 'initializeSystem(spec: SystemSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_initialize_system
-  - name: sdd_add_subsystem
+      transport: JSONRPC
+      method: tools/call sdd_initialize_system
+    previousNames:
+      - imcp_portal.sdd_initialize_system
+  - name: addSubsystem
     description: >-
       Tool: add an L1 subsystem under the system boundary. A subsystem is never a mount: a
       `projectPath` in the input is refused, naming sdd_add_member, which declares a member project
@@ -48,12 +29,14 @@ methods:
       reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
       as structured content beside the sentence, so a caller learns the status written and whether a
       spec already held that id without parsing English; the sentence itself is unchanged.
-    signature: 'sdd_add_subsystem(spec: SubsystemSpec): SpecWriteReceipt'
+    signature: 'addSubsystem(spec: SubsystemSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_subsystem
-  - name: sdd_add_component
+      transport: JSONRPC
+      method: tools/call sdd_add_subsystem
+    previousNames:
+      - imcp_portal.sdd_add_subsystem
+  - name: addComponent
     description: >-
       Tool: add an L2 component under a subsystem. A Portal states its `transport` (the retired
       portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess,
@@ -66,12 +49,14 @@ methods:
       reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
       as structured content beside the sentence, so a caller learns the status written and whether a
       spec already held that id without parsing English; the sentence itself is unchanged.
-    signature: 'sdd_add_component(spec: ComponentSpec): SpecWriteReceipt'
+    signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_component
-  - name: sdd_define_interface
+      transport: JSONRPC
+      method: tools/call sdd_add_component
+    previousNames:
+      - imcp_portal.sdd_add_component
+  - name: defineInterface
     description: >-
       Tool: define an L3 interface contract for a component. Each method states its signature one of
       three ways: structured params with returns (the signature text is then DERIVED and written by
@@ -90,12 +75,14 @@ methods:
       reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
       as structured content beside the sentence, so a caller learns the status written and whether a
       spec already held that id without parsing English; the sentence itself is unchanged.
-    signature: 'sdd_define_interface(spec: InterfaceSpec): SpecWriteReceipt'
+    signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_define_interface
-  - name: sdd_write_narrative
+      transport: JSONRPC
+      method: tools/call sdd_define_interface
+    previousNames:
+      - imcp_portal.sdd_define_interface
+  - name: writeNarrative
     description: >-
       Tool: write an L4 implementation spec with L5 method narratives. The input may state the
       spec's lifecycle status, so an implementation can be authored straight at design or complete
@@ -105,12 +92,14 @@ methods:
       restatement. The answer carries the write receipt as structured content beside the sentence,
       so a caller learns the status written and whether a spec already held that id without parsing
       English; the sentence itself is unchanged.
-    signature: 'sdd_write_narrative(spec: ImplementationSpec): SpecWriteReceipt'
+    signature: 'writeNarrative(spec: ImplementationSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_write_narrative
-  - name: sdd_validate_tree
+      transport: JSONRPC
+      method: tools/call sdd_write_narrative
+    previousNames:
+      - imcp_portal.sdd_write_narrative
+  - name: validateTree
     description: >-
       Tool: validate and answer with every finding, split into errors, warnings and notices (three
       separate lists, in the structured content and the text block alike). Notices never make the
@@ -123,7 +112,7 @@ methods:
       run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
       one member by its key. An unfinished family-migration transaction under the bound root adds a
       notice naming it and pointing at `wairon doctor --fix` (the pending-transaction banner).
-    signature: 'sdd_validate_tree(subsystem?: string, recursive?: bool, family?: bool): ValidationResult'
+    signature: 'validateTree(subsystem?: string, recursive?: bool, family?: bool): ValidationResult'
     returns: ValidationResult
     params:
       - name: subsystem
@@ -143,9 +132,11 @@ methods:
           their live producers, within the request's reach
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_validate_tree
-  - name: sdd_get_status
+      transport: JSONRPC
+      method: tools/call sdd_validate_tree
+    previousNames:
+      - imcp_portal.sdd_validate_tree
+  - name: getStatus
     description: >-
       Tool: the spec tree as a structure, with each level's completeness; each member prints as a
       project holding its own subsystems. Optionally narrowed to one subsystem, and optionally
@@ -154,7 +145,7 @@ methods:
       first call of a session surfaces it before anything is written; an unfinished family-migration
       transaction under the bound root leads likewise, one notice line each, pointing at `wairon
       doctor --fix`.
-    signature: 'sdd_get_status(subsystem?: string, recursive?: bool): string'
+    signature: 'getStatus(subsystem?: string, recursive?: bool): string'
     returns: string
     params:
       - name: subsystem
@@ -166,9 +157,11 @@ methods:
         description: Descend into the members this project declares
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_get_status
-  - name: sdd_externalize_subsystem
+      transport: JSONRPC
+      method: tools/call sdd_get_status
+    previousNames:
+      - imcp_portal.sdd_get_status
+  - name: externalizeSubsystem
     description: >-
       Tool: move an internal subsystem out to the path. By default (stage 8) into a PART — a storage
       move: the subsystem's specs move to that directory (a new part, or the existing part there),
@@ -180,7 +173,7 @@ methods:
       made public refuses the plan). dryRun answers the plan and writes nothing; run it first and
       show the plan. Never locks: the answer names the projects to re-lock.
     signature: >-
-      sdd_externalize_subsystem(subsystem: string, path: string, as?: string, dryRun?: bool):
+      externalizeSubsystem(subsystem: string, path: string, as?: string, dryRun?: bool):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -199,8 +192,10 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_externalize_subsystem
+      transport: JSONRPC
+      method: tools/call sdd_externalize_subsystem
+    previousNames:
+      - imcp_portal.sdd_externalize_subsystem
   - name: listResources
     description: >-
       MCP resource: list everything the server publishes as read-only resources — the built-in SDD
@@ -210,8 +205,8 @@ methods:
     returns: list<SkillResourceDescriptor>
     params: []
     endpoint:
-      transport: Custom
-      address: mcp resources/list (SDD skills + live agent briefs)
+      transport: JSONRPC
+      method: resources/list
   - name: readResource
     description: >-
       MCP resource: read one published resource by id — a wairon-skill:// id returns the
@@ -224,28 +219,30 @@ methods:
         type: string
         description: The MCP resource id — a skill id or wairon-agent:// agent id.
     endpoint:
-      transport: Custom
-      address: mcp resources/read (SDD skill or agent brief)
-  - name: sdd_get_agent_brief
+      transport: JSONRPC
+      method: resources/read
+  - name: getAgentBrief
     description: >-
       Tool: compose the LIVE delegation brief for one resolved agent (rendered instructions +
       ownedPaths/readPaths scope). The dynamic replacement for generated per-component agent files:
       an orchestrating session fetches a brief and spawns a generic subagent with it — always fresh
       after a re-lock, no session restart, identical over stdio and the hosted data plane.
-    signature: 'sdd_get_agent_brief(agentId: string): AgentBrief'
+    signature: 'getAgentBrief(agentId: string): AgentBrief'
     returns: AgentBrief
     params:
       - name: agentId
         type: string
         description: The resolved agent id (list via listAgents or resources/list).
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_get_agent_brief
-  - name: sdd_rename_component
+      transport: JSONRPC
+      method: tools/call sdd_get_agent_brief
+    previousNames:
+      - imcp_portal.sdd_get_agent_brief
+  - name: renameComponent
     description: >-
       Tool: rename a component and rewrite every reference to it; the interfaces and implementations
       named after it move too. Reports the specs moved and the specs rewritten.
-    signature: 'sdd_rename_component(id: string, newId: string): ComponentRename'
+    signature: 'renameComponent(id: string, newId: string): ComponentRename'
     returns: ComponentRename
     params:
       - name: id
@@ -255,14 +252,16 @@ methods:
         type: string
         description: Its new id
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_rename_component
-  - name: sdd_rename_method
+      transport: JSONRPC
+      method: tools/call sdd_rename_component
+    previousNames:
+      - imcp_portal.sdd_rename_component
+  - name: renameMethod
     description: >-
       Tool: rename a contract method and retarget every reference to it; the method moves on the
       component's interfaces and their implementations, carrying its narrative and bindings. Reports
       the specs moved, the specs retargeted, and the specs whose prose still names it.
-    signature: 'sdd_rename_method(id: string, method: string, newName: string, pinSymbol?: bool): MethodRename'
+    signature: 'renameMethod(id: string, method: string, newName: string, pinSymbol?: bool): MethodRename'
     returns: MethodRename
     params:
       - name: id
@@ -283,9 +282,11 @@ methods:
           function still binds; true when omitted
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_rename_method
-  - name: sdd_update_spec
+      transport: JSONRPC
+      method: tools/call sdd_rename_method
+    previousNames:
+      - imcp_portal.sdd_rename_method
+  - name: updateSpec
     description: >-
       Tool: patch an existing spec with a granular delta. The delta merges onto the spec as STORED —
       a sourced method carries only its signatureFrom — and a method's signature text is derived
@@ -300,7 +301,7 @@ methods:
       carries the change report as structured content beside the rendered sentence, from the one
       report, so the prose can never disagree with the data.
     signature: >-
-      sdd_update_spec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
       SpecChangeReport
     returns: SpecChangeReport
     params:
@@ -320,16 +321,18 @@ methods:
           included, and not one byte of the stored file moves
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_update_spec
-  - name: sdd_set_endpoints
+      transport: JSONRPC
+      method: tools/call sdd_update_spec
+    previousNames:
+      - imcp_portal.sdd_update_spec
+  - name: setEndpoints
     description: >-
       Tool: bind concrete wire endpoints to existing L3 contract methods, for a Portal whose
       transport requires them (every transport but InProcess and Custom), run after
       sdd_define_interface. The caller picks the Portal's own transport and fills that transport's
       address fields; the binding is checked against the endpoint schema before the contract is
       saved. A binding for an InProcess Portal is refused: its verbs are its contract methods.
-    signature: 'sdd_set_endpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
+    signature: 'setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
     returns: SpecChangeReport
     params:
       - name: interfaceId
@@ -341,9 +344,11 @@ methods:
           One binding per method: the method NAME (not the HTTP verb), the transport, and that
           transport's address fields
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_set_endpoints
-  - name: sdd_set_public_interfaces
+      transport: JSONRPC
+      method: tools/call sdd_set_endpoints
+    previousNames:
+      - imcp_portal.sdd_set_endpoints
+  - name: setPublicInterfaces
     description: >-
       Tool: set — replace — an existing subsystem's export table: own items binding a component (and
       optionally the contract) that realizes them, or a type the subsystem owns, and re-exports
@@ -353,7 +358,7 @@ methods:
       its target's. The tool for backfilling bindings once a subsystem's components exist, because a
       cross-subsystem dependency may only target a published public component.
     signature: >-
-      sdd_set_public_interfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
+      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
       SpecChangeReport
     returns: SpecChangeReport
     params:
@@ -364,9 +369,11 @@ methods:
         type: list<PublicInterface>
         description: The full replacement list of published surfaces for this subsystem
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_set_public_interfaces
-  - name: sdd_get_spec
+      transport: JSONRPC
+      method: tools/call sdd_set_public_interfaces
+    previousNames:
+      - imcp_portal.sdd_set_public_interfaces
+  - name: getSpec
     description: >-
       Tool: read the parsed contents of one stored spec, without filesystem path searching. A
       contract's methods come back in their STORED form — a method that takes its signature from a
@@ -380,7 +387,7 @@ methods:
       returns and text, and the source they came from). The structured content keeps every derived
       marker SEPARATE from the stored spec, so nothing derived can be written back by accident; the
       text block folds them in as it always has.
-    signature: 'sdd_get_spec(kind: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
+    signature: 'getSpec(kind: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
       - name: kind
@@ -396,9 +403,11 @@ methods:
         description: Return only these methods by name; omit it for the whole spec
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_get_spec
-  - name: sdd_add_type
+      transport: JSONRPC
+      method: tools/call sdd_get_spec
+    previousNames:
+      - imcp_portal.sdd_get_spec
+  - name: addType
     description: >-
       Tool: define a type — an entity or value-object, the data the components operate on, a
       signature, a named function type, or an enum, a closed ordered set of named values (`values:
@@ -419,7 +428,7 @@ methods:
       CLAIM code: a sourcePath names the file holding its declaration and a symbol binds the
       code-level name, and the file must then resolve with the declaration anchored in it. The
       answer carries the write receipt as structured content beside the sentence.
-    signature: 'sdd_add_type(spec: TypeSpec): SpecWriteReceipt'
+    signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
       - name: spec
@@ -428,9 +437,11 @@ methods:
           The type to define: its kind, id, name, owning subsystem, fields, pure methods,
           invariants, database bindings and code claim
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_type
-  - name: sdd_move_methods
+      transport: JSONRPC
+      method: tools/call sdd_add_type
+    previousNames:
+      - imcp_portal.sdd_add_type
+  - name: moveMethods
     description: >-
       Tool: move contract methods from one component to another, carrying each method's narrative,
       calls and bindings, and re-pointing every reference that named the old home. A target without
@@ -440,9 +451,7 @@ methods:
       the move, nothing is written and the report names the rule plus where these methods could live
       instead, cheapest legal home first. A dry run runs the whole move, gate included, and reports
       what it would have done.
-    signature: >-
-      sdd_move_methods(from: string, to: string, methods: list<string>, dryRun?: bool):
-      MethodMoveReport
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
       - name: from
@@ -459,16 +468,18 @@ methods:
         description: Answer with what the move would do and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_move_methods
-  - name: sdd_delete_spec
+      transport: JSONRPC
+      method: tools/call sdd_move_methods
+    previousNames:
+      - imcp_portal.sdd_move_methods
+  - name: deleteSpec
     description: >-
       Tool: delete a specification document from the spec tree and prune the parent directories the
       deletion left empty. Answers whether a document was actually removed — a spec that was not
       there is reported as such rather than as a failure. Deleting a spec other specs still
       reference leaves the tree invalid by design: the validator is what says so, and this tool does
       not refuse on its behalf.
-    signature: 'sdd_delete_spec(kind: WritableSpecKind, id: string): SpecDeletion'
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
@@ -478,21 +489,10 @@ methods:
         type: string
         description: The id of the spec to delete (namespaced if needed)
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_delete_spec
-  - name: advertiseHostedTools
-    description: >-
-      Publish the hosted data plane's tools in this server's tool list without being able to execute
-      any of them. Seventeen `sdd_host_*` and `sdd_landscape_*` tools are registered here so an
-      agent can DISCOVER them; execution is intercepted upstream by the hosting request
-      orchestrator, which owns their contracts, and a handler reached outside a hosted request
-      answers that it is unavailable rather than doing anything. Modelled as one method rather than
-      seventeen because publishing a discovery list is one job — seventeen portal methods would
-      claim this component executes work it never touches, and would duplicate the hosted
-      orchestrator's contract to say it.
-    signature: 'advertiseHostedTools(): void'
-    returns: void
-    params: []
+      transport: JSONRPC
+      method: tools/call sdd_delete_spec
+    previousNames:
+      - imcp_portal.sdd_delete_spec
   - name: getProjectConfig
     description: >-
       Tool: the bound project's configuration as it was resolved — the rule severities, project type
@@ -503,15 +503,15 @@ methods:
     returns: ProjectConfig?
     params: []
     endpoint:
-      transport: Custom
-      address: mcp tools/call getProjectConfig
-  - name: sdd_pin_externals
+      transport: JSONRPC
+      method: tools/call getProjectConfig
+  - name: pinExternals
     description: >-
       Tool (scope: tree, a write): pin the bound project's declared externals — the named aliases,
       else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording each used
       member's signature digest. Answers one outcome per alias (pinned, unchanged, unresolved,
       unreachable) with its unexported references.
-    signature: 'sdd_pin_externals(aliases?: list<string>): list<ExternalPin>'
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
     returns: list<ExternalPin>
     params:
       - name: aliases
@@ -519,22 +519,26 @@ methods:
         description: The aliases to pin; all declared externals when omitted
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_pin_externals
-  - name: sdd_get_externals_status
+      transport: JSONRPC
+      method: tools/call sdd_pin_externals
+    previousNames:
+      - imcp_portal.sdd_pin_externals
+  - name: getExternalsStatus
     description: >-
       Tool (scope: tree, a read): each declared external's pin compared with its live producer at
       signature level — unchanged, changed, renamed (with the name it was renamed to, from the
       producer's rename trace), removed, unlocked — each external's health (incompatible |
       unavailable | drifted | ok), and EXTERNAL_CHECK_UNAVAILABLE for anything that cannot be
       compared, never a pass. Writes nothing.
-    signature: 'sdd_get_externals_status(): list<ExternalStatus>'
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params: []
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_get_externals_status
-  - name: sdd_add_member
+      transport: JSONRPC
+      method: tools/call sdd_get_externals_status
+    previousNames:
+      - imcp_portal.sdd_get_externals_status
+  - name: addMember
     description: >-
       Tool: create a member of the bound project at `source`, in the one members grammar:
       `services/scheduler` (contained), `../admin` (a sibling checkout),
@@ -550,9 +554,7 @@ methods:
       Boundaries are earned: create a part unless the piece needs its own team, release, approval or
       public surface; `sdd_promote_member` makes one later. The answer states what was created and
       applied.
-    signature: >-
-      sdd_add_member(alias: string, source: string, description?: string, as?: string):
-      MemberCreation
+    signature: 'addMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
     returns: MemberCreation
     params:
       - name: alias
@@ -570,13 +572,15 @@ methods:
         description: project to create the project content; omitted creates a part
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_member
-  - name: sdd_move_member
+      transport: JSONRPC
+      method: tools/call sdd_add_member
+    previousNames:
+      - imcp_portal.sdd_add_member
+  - name: moveMember
     description: >-
       Tool: relocate a member's directory on disk and point its `members` entry there (a member
       still declared in the legacy L1 form is moved into `members` first).
-    signature: 'sdd_move_member(alias: string, newPath: string): void'
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
     params:
       - name: alias
@@ -586,9 +590,11 @@ methods:
         type: string
         description: The member's new root, relative to the bound project
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_move_member
-  - name: sdd_internalize_member
+      transport: JSONRPC
+      method: tools/call sdd_move_member
+    previousNames:
+      - imcp_portal.sdd_move_member
+  - name: internalizeMember
     description: >-
       Tool: fold a member — every subsystem of it — back into the bound project, sending its own
       metadata to the destination (its L0 vision to the `into` subsystem's description; its
@@ -599,7 +605,7 @@ methods:
       All-or-nothing; dryRun answers the plan and writes nothing; run it first and show the plan.
       Never locks.
     signature: >-
-      sdd_internalize_member(alias: string, into?: string, packs?: string, exports?: list<string>,
+      internalizeMember(alias: string, into?: string, packs?: string, exports?: list<string>,
       dryRun?: bool): FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -623,16 +629,18 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_internalize_member
-  - name: sdd_pack_impact
+      transport: JSONRPC
+      method: tools/call sdd_internalize_member
+    previousNames:
+      - imcp_portal.sdd_internalize_member
+  - name: packImpact
     description: >-
       Tool: what selecting (or updating to) an installed pack would change on the bound project,
       writing nothing — the pack's doctrine against wairon's defaults (rules loosened, raised,
       turned off or added; profiles, stereotype fencing, edge licenses, patterns, guarantees and
       language tables added, redefined or removed), which of its profiles would govern, and the
       findings that change here. Nothing in it is a finding.
-    signature: 'sdd_pack_impact(pack: string, version?: string): PackImpact'
+    signature: 'packImpact(pack: string, version?: string): PackImpact'
     returns: PackImpact
     params:
       - name: pack
@@ -643,16 +651,18 @@ methods:
         description: An exact version; omitted, the latest installed
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_pack_impact
-  - name: sdd_attach_member
+      transport: JSONRPC
+      method: tools/call sdd_pack_impact
+    previousNames:
+      - imcp_portal.sdd_pack_impact
+  - name: attachMember
     description: >-
       Tool: make an existing project at the path a member of the bound project, keeping its L0,
       subsystems, packs and lock (sdd_add_member scaffolds a new one instead). Refused when its id
       collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing.
       Never locks.
     signature: >-
-      sdd_attach_member(alias: string, path: string, description?: string, dryRun?: bool):
+      attachMember(alias: string, path: string, description?: string, dryRun?: bool):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -671,16 +681,18 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_attach_member
-  - name: sdd_rename_project
+      transport: JSONRPC
+      method: tools/call sdd_attach_member
+    previousNames:
+      - imcp_portal.sdd_attach_member
+  - name: renameProject
     description: >-
       Tool: move a project's id — the bound project's, or a member's named by its alias path — and
       every reference to the old id across the family (aliases that were the id, their references
       and re-exports, externals naming it, pins). The whole family must be in reach. Every project
       it writes must be re-locked; the answer names them. All-or-nothing; dryRun answers the plan
       and writes nothing; run it first and show the plan.
-    signature: 'sdd_rename_project(newId: string, project?: string, dryRun?: bool): FamilyMigrationReport'
+    signature: 'renameProject(newId: string, project?: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: newId
@@ -695,14 +707,16 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_rename_project
-  - name: sdd_rename_member_alias
+      transport: JSONRPC
+      method: tools/call sdd_rename_project
+    previousNames:
+      - imcp_portal.sdd_rename_project
+  - name: renameMemberAlias
     description: >-
       Tool: rename one alias of the bound project (a member or an external) and respell the bound
       project's references through it; nothing in any member or sibling changes. All-or-nothing;
       dryRun answers the plan and writes nothing. Never locks.
-    signature: 'sdd_rename_member_alias(alias: string, newAlias: string, dryRun?: bool): FamilyMigrationReport'
+    signature: 'renameMemberAlias(alias: string, newAlias: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -716,9 +730,11 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_rename_member_alias
-  - name: sdd_detach_member
+      transport: JSONRPC
+      method: tools/call sdd_rename_member_alias
+    previousNames:
+      - imcp_portal.sdd_rename_member_alias
+  - name: detachMember
     description: >-
       Tool: take a member out of the family; the bound project and every family consumer then reach
       it as an external by path, pinned. No reference text changes. Refused (audience-too-narrow,
@@ -726,7 +742,7 @@ methods:
       family alone, unless widen is set: then exactly those used exports are widened to the instance
       audience in the member's L0, each shown in the plan. All-or-nothing; dryRun answers the plan
       and writes nothing. Never locks.
-    signature: 'sdd_detach_member(alias: string, widen?: bool, dryRun?: bool): FamilyMigrationReport'
+    signature: 'detachMember(alias: string, widen?: bool, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -741,15 +757,17 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_detach_member
-  - name: sdd_adopt_member
+      transport: JSONRPC
+      method: tools/call sdd_detach_member
+    previousNames:
+      - imcp_portal.sdd_detach_member
+  - name: adoptMember
     description: >-
       Tool: make the bound project's external a member — sdd_detach_member's inverse. Locally the
       external is found by a path inside the bound project; on a hosted instance it names a project
       by source.hosted and path says where to adopt it (the hosting server relocates it there).
       All-or-nothing; dryRun answers the plan and writes nothing. Never locks.
-    signature: 'sdd_adopt_member(alias: string, path?: string, dryRun?: bool): FamilyMigrationReport'
+    signature: 'adoptMember(alias: string, path?: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -766,9 +784,11 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_adopt_member
-  - name: sdd_promote_member
+      transport: JSONRPC
+      method: tools/call sdd_adopt_member
+    previousNames:
+      - imcp_portal.sdd_adopt_member
+  - name: promoteMember
     description: >-
       Tool: promote a part of the bound project to an independent project in place (stage 8) — its
       files stay where they are; it gets an id, an L0 exporting exactly what the rest of the project
@@ -778,7 +798,7 @@ methods:
       subsystem does not publish, or an id already taken. All-or-nothing; dryRun answers the plan
       and writes nothing — run it first and show the plan. Never locks: the answer names the project
       to re-lock and the new one to lock.
-    signature: 'sdd_promote_member(alias: string, id?: string, dryRun?: bool): FamilyMigrationReport'
+    signature: 'promoteMember(alias: string, id?: string, dryRun?: bool): FamilyMigrationReport'
     returns: FamilyMigrationReport
     params:
       - name: alias
@@ -793,9 +813,11 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_promote_member
-  - name: sdd_demote_member
+      transport: JSONRPC
+      method: tools/call sdd_promote_member
+    previousNames:
+      - imcp_portal.sdd_promote_member
+  - name: demoteMember
     description: >-
       Tool: demote a project member of the bound project to a part in place (stage 8) —
       sdd_promote_member's inverse: its files stay where they are; its own metadata goes to the
@@ -806,7 +828,7 @@ methods:
       All-or-nothing; dryRun answers the plan and writes nothing — run it first and show the plan.
       Never locks.
     signature: >-
-      sdd_demote_member(alias: string, destination?: InternalizeDestination, dryRun?: bool):
+      demoteMember(alias: string, destination?: InternalizeDestination, dryRun?: bool):
       FamilyMigrationReport
     returns: FamilyMigrationReport
     params:
@@ -822,16 +844,18 @@ methods:
         description: Answer the plan and write nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_demote_member
-  - name: sdd_rename_type
+      transport: JSONRPC
+      method: tools/call sdd_demote_member
+    previousNames:
+      - imcp_portal.sdd_demote_member
+  - name: renameType
     description: >-
       Tool: rename a type and rewrite every type position, signatureFrom and export entry naming it;
       the old id joins the type's rename trace (previousIds), and an export entry that derived its
       public name from the old id keeps it through `as`. Refuses an id another type of the same
       owner holds or retired. Reports the specs rewritten, the public names kept and the
       debt-register edits.
-    signature: 'sdd_rename_type(id: string, newId: string): TypeRename'
+    signature: 'renameType(id: string, newId: string): TypeRename'
     returns: TypeRename
     params:
       - name: id
@@ -841,9 +865,11 @@ methods:
         type: string
         description: Its new id
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_rename_type
-  - name: sdd_add_external
+      transport: JSONRPC
+      method: tools/call sdd_rename_type
+    previousNames:
+      - imcp_portal.sdd_rename_type
+  - name: addExternal
     description: >-
       Tool (scope: tree, a write): declare one external of the bound project in .wai/project.yaml —
       the alias its specs will reference as `alias::name` and where the producer is, in the one
@@ -852,7 +878,7 @@ methods:
       exports) and pin it unless pin is false. Refusals are one sentence naming the accepted form.
       Use it instead of editing .wai/project.yaml by hand.
     signature: >-
-      sdd_add_external(alias: string, source?: string, project?: string, ref?: string, dir?: string,
+      addExternal(alias: string, source?: string, project?: string, ref?: string, dir?: string,
       use?: list<string>, description?: string, pin?: bool, dryRun?: bool): ExternalAddition
     returns: ExternalAddition
     params:
@@ -896,30 +922,34 @@ methods:
         description: Answer what would be declared, writing nothing
         optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_external
-  - name: sdd_get_network_flows
+      transport: JSONRPC
+      method: tools/call sdd_add_external
+    previousNames:
+      - imcp_portal.sdd_add_external
+  - name: getNetworkFlows
     description: >-
       Tool (scope: tree, a read): the allowed-flows matrix derived from the design. It lists who
       reaches which Portal verb, over which transport and binding, through which networks and
       gateway, on what evidence (a modelled call, or a declared entry). It is optionally filtered to
       the flows into one project, Portal or verb. Only network transports produce flows. Writes
       nothing.
-    signature: 'sdd_get_network_flows(to: string?): list<NetworkFlow>'
+    signature: 'getNetworkFlows(to: string?): list<NetworkFlow>'
     returns: list<NetworkFlow>
     params:
       - name: to
         type: string?
         description: Keep only the flows into this project, project::portal or project::portal.verb
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_get_network_flows
-  - name: sdd_explain_flow
+      transport: JSONRPC
+      method: tools/call sdd_get_network_flows
+    previousNames:
+      - imcp_portal.sdd_get_network_flows
+  - name: explainFlow
     description: >-
       Tool (scope: tree, a read): why one party may reach another, from the design: each allowing
       flow with its chain from the entry or modelled call through every gateway, or that nothing
       allows it. Writes nothing.
-    signature: 'sdd_explain_flow(from: string, to: string): FlowExplanation'
+    signature: 'explainFlow(from: string, to: string): FlowExplanation'
     returns: FlowExplanation
     params:
       - name: from
@@ -929,8 +959,10 @@ methods:
         type: string
         description: A project, a project::portal or a project::portal.verb
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_explain_flow
+      transport: JSONRPC
+      method: tools/call sdd_explain_flow
+    previousNames:
+      - imcp_portal.sdd_explain_flow
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T13:15:58.614Z'
+updatedAt: '2026-10-06T19:07:10.620Z'

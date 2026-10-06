@@ -1,10 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { fromOpenApi, toOpenApi } from '../../src/core/openapi.js';
+import { fromOpenApi, toOpenApiSet } from '../../src/core/openapi.js';
 import type { SurfaceSnapshot } from '../../src/models/index.js';
+
+/** The one OpenAPI document a single-portal snapshot renders to (toOpenApiSet, one spec per portal). */
+function singlePortalDocument(snapshot: SurfaceSnapshot): string {
+  const specs = toOpenApiSet(snapshot);
+  if (specs.length !== 1) throw new Error(`expected one portal's document, got ${specs.length}`);
+  return specs[0].document;
+}
 
 // ---------------------------------------------------------------------------
 // Stage 2 type grammar, wave 5: the OpenAPI codec maps the whole grammar both
-// ways (iopenapi_codec.toOpenApi / fromOpenApi). Every type is read as its
+// ways (iopenapi_codec.toOpenApiSet / fromOpenApi). Every type is read as its
 // parsed canonical expression, never by pattern, and every schema is read back
 // into canonical text — so each form round-trips.
 // ---------------------------------------------------------------------------
@@ -41,12 +48,12 @@ const bodyProps = (doc: any): Record<string, any> => doc.paths['/op'].post.reque
 
 /** The canonical text each form comes back as, through a request body. */
 function roundTrip(type: string): string {
-  const back = fromOpenApi(toOpenApi(snapshotOf([{ name: 'value', type }])), 'shop');
+  const back = fromOpenApi(singlePortalDocument(snapshotOf([{ name: 'value', type }])), 'shop');
   return back.interfaces[0].methods[0].params!.find((p) => p.name === 'value')!.type;
 }
 
-describe('toOpenApi — every form from its parsed expression', () => {
-  const schemaOf = (type: string): any => bodyProps(JSON.parse(toOpenApi(snapshotOf([{ name: 'value', type }])))).value;
+describe('toOpenApiSet — every form from its parsed expression', () => {
+  const schemaOf = (type: string): any => bodyProps(JSON.parse(singlePortalDocument(snapshotOf([{ name: 'value', type }])))).value;
 
   it('maps the primitives and their formats', () => {
     expect(schemaOf('string')).toEqual({ type: 'string' });
@@ -80,21 +87,21 @@ describe('toOpenApi — every form from its parsed expression', () => {
   });
 
   it('unwraps async on a returns, and an async void has no response body', () => {
-    const doc = JSON.parse(toOpenApi(snapshotOf([], 'async list<Invoice>')));
+    const doc = JSON.parse(singlePortalDocument(snapshotOf([], 'async list<Invoice>')));
     expect(doc.paths['/op'].post.responses['200'].content['application/json'].schema)
       .toEqual({ type: 'array', items: { $ref: '#/components/schemas/invoice' } });
-    const none = JSON.parse(toOpenApi(snapshotOf([], 'async void')));
+    const none = JSON.parse(singlePortalDocument(snapshotOf([], 'async void')));
     expect(none.paths['/op'].post.responses['200'].content).toBeUndefined();
   });
 
   it("renders a named scalar as its primitive's schema under the type's name", () => {
-    const doc = JSON.parse(toOpenApi(snapshotOf([])));
+    const doc = JSON.parse(singlePortalDocument(snapshotOf([])));
     expect(doc.components.schemas.order_id).toEqual({ type: 'string', title: 'OrderId' });
     expect(doc.components.schemas.issued_on).toEqual({ type: 'string', format: 'date', title: 'IssuedOn' });
   });
 
   it('renders an enum as a string component with its values, their descriptions in its description', () => {
-    const doc = JSON.parse(toOpenApi(snapshotOf([])));
+    const doc = JSON.parse(singlePortalDocument(snapshotOf([])));
     const channel = doc.components.schemas.channel;
     expect(channel).toMatchObject({ type: 'string', title: 'Channel', enum: ['stable', 'beta', 'dev'] });
     expect(channel.description).toContain('`stable`: Releases only.');
@@ -114,18 +121,18 @@ describe('fromOpenApi — every schema read back canonical', () => {
   });
 
   it('round-trips a returns', () => {
-    const back = fromOpenApi(toOpenApi(snapshotOf([], 'async map<string, invoice>')), 'shop');
+    const back = fromOpenApi(singlePortalDocument(snapshotOf([], 'async map<string, invoice>')), 'shop');
     expect(back.interfaces[0].methods[0].returns).toBe('map<string, invoice>');
   });
 
   it('decodes a named primitive component into a named scalar holding it', () => {
-    const back = fromOpenApi(toOpenApi(snapshotOf([])), 'shop');
+    const back = fromOpenApi(singlePortalDocument(snapshotOf([])), 'shop');
     expect(back.types.find((t) => t.id === 'order_id')).toEqual({ id: 'order_id', name: 'OrderId', kind: 'value-object', fields: [], holds: 'string' });
     expect(back.types.find((t) => t.id === 'issued_on')).toEqual({ id: 'issued_on', name: 'IssuedOn', kind: 'value-object', fields: [], holds: 'date' });
   });
 
   it('decodes a named string component carrying enum into an enum type, descriptions kept', () => {
-    const back = fromOpenApi(toOpenApi(snapshotOf([])), 'shop');
+    const back = fromOpenApi(singlePortalDocument(snapshotOf([])), 'shop');
     expect(back.types.find((t) => t.id === 'channel')).toEqual({
       id: 'channel', name: 'Channel', kind: 'enum', fields: [],
       values: [{ name: 'stable', description: 'Releases only.' }, { name: 'beta' }, { name: 'dev' }],

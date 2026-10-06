@@ -12,11 +12,18 @@ import {
   saveTypeSpec,
 } from '../../src/core/specs.js';
 import { projectOwnSurface } from '../../src/core/surfaces.js';
-import { fromOpenApi, toOpenApi } from '../../src/core/openapi.js';
+import { fromOpenApi, toOpenApiSet } from '../../src/core/openapi.js';
 import { buildCanvasModel } from '../../src/core/canvas.js';
 import { project } from '../../src/producers/projection.js';
 import { contentDigest, memberDigest } from '../../src/models/surface-references.js';
-import type { ComponentSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
+import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SurfaceSnapshot, TypeSpec } from '../../src/models/index.js';
+
+/** The OpenAPI document (toOpenApiSet renders one per portal) of the portal that serves `/subscriptions`. */
+function subscriptionsDocument(snapshot: SurfaceSnapshot): string {
+  const spec = toOpenApiSet(snapshot).find((s) => JSON.parse(s.document).paths?.['/subscriptions']);
+  if (!spec) throw new Error('no portal document serves /subscriptions');
+  return spec.document;
+}
 
 // ---------------------------------------------------------------------------
 // Stage 1 signatures, wave 6: every consumer shows the resolved signature. A
@@ -194,7 +201,7 @@ describe('surface snapshots carry a named scalar', () => {
 describe('OpenAPI codec — signature types', () => {
   it('renders a signature type with no type constraint, a function-type description and x-wairon-signature', () => {
     buildTree();
-    const doc = JSON.parse(toOpenApi(projectOwnSurface('external')));
+    const doc = JSON.parse(subscriptionsDocument(projectOwnSurface('external')));
     const component = doc.components.schemas['change-listener'];
     expect(component.type).toBeUndefined();
     expect(component.properties).toBeUndefined();
@@ -211,7 +218,7 @@ describe('OpenAPI codec — signature types', () => {
   it('decodes x-wairon-signature back into a signature type (round trip)', () => {
     buildTree();
     const snap = projectOwnSurface('external');
-    const back = fromOpenApi(toOpenApi(snap), 'sig-system');
+    const back = fromOpenApi(subscriptionsDocument(snap), 'sig-system');
     const listener = back.types.find((t) => t.id === 'change-listener')!;
     expect(listener).toEqual({
       id: 'change-listener', name: 'ChangeListener', kind: 'signature', fields: [],

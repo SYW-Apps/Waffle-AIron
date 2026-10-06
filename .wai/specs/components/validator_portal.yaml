@@ -14,7 +14,13 @@ dependsOn:
   - spec_validator
   - family_validator
   - pack_impact
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and wrappers that import the @wairon/cli package's library entry (main dist/index.js) and
+    run the gate (validateProject, validateFamily) and the rest of the validator contract in their
+    own process
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-29T15:53:54.827Z'
+updatedAt: '2026-10-06T19:13:35.080Z'

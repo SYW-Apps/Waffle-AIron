@@ -14,8 +14,11 @@ owns: []
 dependsOn:
   - share_access_orchestrator
   - host_server
-portalType: HTTP_API
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: Clients served through the listener host_http_portal under "/share"
 basePath: /share
 status: complete
 createdAt: '2026-07-17T22:09:53.934Z'
-updatedAt: '2026-07-18T13:16:50.767Z'
+updatedAt: '2026-10-06T18:55:07.074Z'

@@ -9,10 +9,9 @@ description: >-
   every write lock would refuse.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: Provides spec validation services.
+  - details: Provides spec validation services.
     component: validator_portal
 trustedLinks: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-08-11T15:25:47.291Z'
+updatedAt: '2026-10-06T18:55:27.438Z'

@@ -1,0 +1,102 @@
+id: mcp_hosting_portal_impl
+name: MCP Hosting Portal Implementation
+description: >-
+  Realized inside src/mcp/server.ts: createMcpServer composes the MCP server supervisor's bare
+  server with the MCP Portal's mount (its resource handlers and prompts), and for a hosted caller
+  advertises the hosted data-plane tools.
+contract: imcp_hosting_portal
+sourcePath: src/mcp/server.ts
+methods:
+  - name: createMcpServer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the bare server through the MCP server supervisor: instructions, build stamp, and
+          the sdd_* tools behind the freshness guard
+        type: call
+        targetComponent: mcp_server
+        targetMethod: create
+      - stepNumber: 2
+        description: >-
+          Mount the MCP Portal's resource verbs on it through that Portal's registrar
+          (registerSkillResources, mcp_portal.listResources): resources/list and resources/read
+          handed to the SDK as their request handlers, so a client's JSON-RPC request reaches
+          mcp_portal.listResources and mcp_portal.readResource. Serving a Portal is not calling it,
+          and a Portal may not depend on a Portal, so this hand-off is described rather than
+          modelled as a register step
+        type: local
+      - stepNumber: 3
+        description: >-
+          Register the PROMPTS capability over the same skill set the resources publish: resources
+          are pull-only, so prompts are what makes a skill discoverable to a human driving an agent,
+          mirrored from the same descriptor list so the two surfaces cannot drift
+        type: local
+      - stepNumber: 4
+        description: For a hosted caller, advertise the hosted data-plane tools
+        type: call
+        targetComponent: mcp_hosting_portal
+        targetMethod: advertiseHostedTools
+      - stepNumber: 5
+        description: Return the mounted server
+        type: return
+        outcome: McpServer
+  - name: advertiseHostedTools
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Decide whether this server advertises the hosted surface at all — the local stdio server
+          started without it publishes none of these
+        type: branch
+        condition: the server was created with hosted tools enabled
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Register each hosted and landscape tool as a discovery entry bound to a handler that
+          answers 'dispatched by the hosting data plane before reaching this server, unavailable
+          outside a hosted request' — the entry exists so the tool can be FOUND, and the hosting
+          request orchestrator is what executes it
+        type: local
+      - stepNumber: 3
+        description: Done; the tool list now carries what this server can advertise
+        type: return
+        outcome: advertised
+  - name: serveStdio
+    narrative:
+      - stepNumber: 1
+        description: Build the server for the bound project, hosted tools not advertised
+        type: call
+        targetComponent: mcp_hosting_portal
+        targetMethod: createMcpServer
+      - stepNumber: 2
+        description: 'Connect it to a stdio transport: stdout is the JSON-RPC channel from here on'
+        type: local
+      - stepNumber: 3
+        description: >-
+          Prefer the client's workspace over the launch cwd: ask the client for its roots and rebind
+          the project root to the first one holding a .wai tree, logging the choice on stderr
+        type: local
+      - stepNumber: 4
+        description: >-
+          Re-scope the same way whenever the client reports its roots changed; a client without
+          roots notifications is ignored. The server then runs until the process is ended
+        type: local
+    symbol: startMcpServer
+lint:
+  allow:
+    - code: UNDECLARED_COLOCATED_CALL
+      at: createMcpServer
+      covers:
+        - mcp_portal.listResources
+      reason: >-
+        createMcpServer serves the MCP Portal: through mountMcpPortal it hands
+        registerSkillResources (mcp_portal.listResources's registrar) the server, which installs the
+        resources/list and resources/read request handlers. That is the host mounting a Portal's
+        JSON-RPC verbs, the same hand-off a listener makes to an HTTP Portal through its router, not
+        one Portal calling another; and the model cannot narrate it as a register step, because that
+        needs a dependency of this Portal on mcp_portal, which a Portal may not have
+        (ARCHITECTURE_VIOLATION_PORTAL_DEP). Step 2 of createMcpServer describes the mount; the
+        verbs it installs are reached as mcp_portal's own entries.
+status: complete
+createdAt: '2026-10-06T19:01:08.253Z'
+updatedAt: '2026-10-06T19:14:47.530Z'

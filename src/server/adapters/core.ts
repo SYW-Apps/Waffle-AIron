@@ -14,7 +14,6 @@ export {
   // The shared lock verdict (unlocked | locked | stale), resolved against the
   // gate identity the caller computed now.
   readLockState,
-  readLockRecord,
   writeLockRecord,
   // The approval: the per-spec digests a lock RECORDS.
   captureApprovedSpecs,

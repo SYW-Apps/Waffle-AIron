@@ -17,25 +17,13 @@ dependsOn:
   - pack_orchestrator
   - project_lifecycle_orchestrator
   - policy_repository
-portalType: HTTP_API
-mounts:
-  - portal: identity_portal
-    prefixes:
-      - /identity
-    via: handleIdentityRequest
-  - portal: project_policy_portal
-    prefixes:
-      - /projects
-      - /instance
-    via: handlePolicyRequest
-  - portal: landscape_portal
-    prefixes:
-      - /landscape
-    via: handleLandscapeRequest
-  - portal: operations_portal
-    prefixes:
-      - /operations
-    via: handleOperationsRequest
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: >-
+    Clients the host's listener admin_portal serves directly, routing "/identity" to
+    identity_portal; "/projects", "/instance" to project_policy_portal; "/landscape" to
+    landscape_portal; "/operations" to operations_portal
 status: complete
 createdAt: '2026-07-04T12:33:47.174Z'
-updatedAt: '2026-10-04T19:49:03.984Z'
+updatedAt: '2026-10-06T18:54:53.851Z'

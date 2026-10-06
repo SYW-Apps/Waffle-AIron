@@ -15,7 +15,13 @@ dependsOn:
   - core_orchestrator
   - tree_transfer_orchestrator
   - reachability_migration
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js, which
+    re-exports the core barrel) and call its mechanical spec writes (renames, relocation, doctor
+    repairs, tree import, provisioning) in their own process
 status: complete
 createdAt: '2026-09-25T17:32:49.056Z'
-updatedAt: '2026-10-06T13:07:40.277Z'
+updatedAt: '2026-10-06T19:13:28.631Z'

@@ -21,8 +21,7 @@ description: >-
   time. It holds no state and writes no spec.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       The derived networking front door, consumed in-process by the CLI (`wairon network
       flows|policy|diagram|check|why`), the MCP read tools and the hosted canvas's network view.
     component: network_portal
@@ -33,4 +32,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-10-06T13:09:22.380Z'
-updatedAt: '2026-10-06T13:09:22.383Z'
+updatedAt: '2026-10-06T18:55:24.215Z'

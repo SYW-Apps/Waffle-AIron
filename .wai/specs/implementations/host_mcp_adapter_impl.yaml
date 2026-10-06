@@ -9,8 +9,8 @@ methods:
       - stepNumber: 1
         description: Instantiate the reused sdd_* MCP server via the MCP portal
         type: call
-        targetComponent: mcp_portal
+        targetComponent: mcp_hosting_portal
         targetMethod: createMcpServer
 status: complete
 createdAt: '2026-07-04T12:53:08.365Z'
-updatedAt: '2026-09-25T20:49:33.639Z'
+updatedAt: '2026-10-06T19:01:11.033Z'

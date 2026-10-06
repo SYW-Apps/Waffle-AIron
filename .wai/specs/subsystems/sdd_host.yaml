@@ -21,8 +21,7 @@ description: >-
   snapshots.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: REST
-    details: >-
+  - details: >-
       Streamable HTTP MCP endpoint (POST /mcp) exposing the sdd_* tool surface request-scoped to the
       authenticated project, plus hosted landscape discovery tools and execute-primary
       project-lifecycle tools (initialize/lock/approval status/await). Discovery first lists only
@@ -31,35 +30,30 @@ publicInterfaces:
       caller's resolved permission is yes, create an approval request only when it resolves to
       'approval', and forbid on 'no'. Includes /healthz and /readyz.
     component: host_http_portal
-  - type: REST
-    details: >-
+  - details: >-
       Control-plane admin API (separately bound and exposure-policy controlled): project lifecycle,
       API-key lifecycle, pack management, producers, secrets, git backing, the privileged lock
       action, and the approval decision endpoints. Reached by operators and by the wairon CLI when
       HTTP admin is enabled.
     component: admin_portal
-  - type: REST
-    details: >-
+  - details: >-
       Identity/audit control-plane API for hosted users, role bindings, user-bound MCP/API tokens,
       admin-only redacted audit access, identity-provider configuration, and headless SSO onboarding
       (start/callback minting a user-bound token shown once).
     component: identity_portal
     interface: iidentity_portal
-  - type: REST
-    details: >-
+  - details: >-
       Hosted landscape control-plane API for organization hierarchy, project placement,
       public-surface snapshots, cross-project relations, and landscape graph retrieval. It reads
       public snapshots and hosted metadata only, never target project internals.
     component: landscape_portal
     interface: ilandscape_portal
-  - type: REST
-    details: >-
+  - details: >-
       Project policy control-plane API for profile-aware project initialization, required/default
       pack enforcement, policy evaluation, and allowed pack/profile reconciliation.
     component: project_policy_portal
     interface: iproject_policy_portal
-  - type: REST
-    details: >-
+  - details: >-
       Unified role-based browser web UI (REST/HTTP), exposure-gated by
       HostExposurePolicy.adminUiEnabled (the browser web UI flag; a rename to webUiEnabled is noted
       for a future revision). Serves the client app shell and static assets at the root and thin
@@ -70,16 +64,14 @@ publicInterfaces:
       permissions allow. No per-page server endpoints are added.
     component: web_portal
     interface: iweb_portal
-  - type: REST
-    details: >-
+  - details: >-
       Operations control-plane API (read-only) for instance health reports, resource usage
       snapshots, and advisory quota observations. Exposure is controlled by HostExposurePolicy;
       durable backups are handled out-of-band via platform data-volume snapshots rather than this
       API.
     component: operations_portal
     interface: ioperations_portal
-  - type: Custom
-    details: >-
+  - details: >-
       In-process administration for the local operator's CLI: project, key, producer, secret,
       git-backing and lock workflows, instance and project packs, permission assignments, and the
       two boot-time writes of `wairon serve` and `wairon dev`. Each method is the owning workflow
@@ -96,4 +88,4 @@ lifecycle:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-04T12:33:06.563Z'
-updatedAt: '2026-09-26T14:15:43.576Z'
+updatedAt: '2026-10-06T18:55:22.291Z'

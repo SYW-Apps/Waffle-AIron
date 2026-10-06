@@ -37,7 +37,10 @@ dependsOn:
   - landscape_orchestrator
   - operations_orchestrator
   - project_lifecycle_orchestrator
-portalType: HTTP_API
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: Clients served through the listener host_http_portal under "/web", "/"
 status: complete
 createdAt: '2026-07-11T11:31:55.624Z'
-updatedAt: '2026-09-24T20:54:25.364Z'
+updatedAt: '2026-10-06T18:55:11.771Z'

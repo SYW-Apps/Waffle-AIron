@@ -7,6 +7,7 @@ contract: ilandscape_portal
 sourcePath: src/server/landscape-portal.ts
 injectedParams:
   - cfg
+router: handleLandscapeRequest
 methods:
   - name: upsertUnit
     narrative:
@@ -76,4 +77,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:59.746Z'
-updatedAt: '2026-10-04T19:47:57.934Z'
+updatedAt: '2026-10-06T18:55:16.403Z'

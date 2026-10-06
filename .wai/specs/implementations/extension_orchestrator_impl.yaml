@@ -97,22 +97,30 @@ methods:
           and CI resolve with an empty store and no network.
         type: local
       - stepNumber: 4
+        description: >-
+          When a bundled copy was found, verify a pinned integrity digest over its content (a
+          mismatch resolves to nothing) and compare it with the store copy's digest to report drift;
+          a store copy found at step 7 is verified the same way
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: computePackDigest
+      - stepNumber: 5
         description: Prefer the committed copy when there is one — it is the repository's own truth.
         type: branch
         condition: a bundled copy was found
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 7
+      - stepNumber: 6
         description: Return the bundled pack's directory.
         type: return
         outcome: the bundle path
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Otherwise resolve the selection against this wairon install's pack store — the exact
           version when pinned, else the newest installed.
         type: call
         targetComponent: pack_store_adapter
         targetMethod: resolveInstalledPack
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Return the installed pack's directory, or null when nothing satisfies the selection — the
           caller decides whether that is an error it reports or an entry it skips.
@@ -439,11 +447,19 @@ methods:
         targetComponent: pack_store_adapter
         targetMethod: resolveInstalledPack
       - stepNumber: 2
+        description: >-
+          Verify each resolved selection's pinned integrity from the CONTENT it resolved to (bundle
+          or store copy alike), never from a recorded digest; when a committed bundle shadows a
+          store copy, compare the two digests and report the drift without blocking the bundle
+        type: call
+        targetComponent: pack_store_adapter
+        targetMethod: computePackDigest
+      - stepNumber: 3
         description: Resolve the global packs directory.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: globalPacksDir
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Discover the global packs there when the configuration enables machine-wide packs
           (globalPacksEnabled — off by default) to seed the global-scoped refs, then append the
@@ -451,12 +467,12 @@ methods:
         type: call
         targetComponent: pack_source_adapter
         targetMethod: discoverPacks
-      - stepNumber: 4
+      - stepNumber: 5
         description: Resolve each gathered ref (global then project) to a concrete load target.
         type: call
         targetComponent: pack_source_adapter
         targetMethod: resolvePackRef
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Read each target's raw manifest, then parse/validate it against the pack schema and merge
           it (project packs win on collision) into the accumulated result; at the candidate entry's
@@ -466,7 +482,7 @@ methods:
         type: call
         targetComponent: pack_source_adapter
         targetMethod: readManifest
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Return the merged LoadedExtensions — empty when the configuration declares no packs and
           enables none machine-wide.
@@ -527,4 +543,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-10-04T19:55:36.739Z'
+updatedAt: '2026-10-06T19:08:46.162Z'

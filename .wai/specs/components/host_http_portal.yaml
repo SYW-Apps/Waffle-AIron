@@ -12,17 +12,12 @@ dependsOn:
   - host_server
   - host_request_orchestrator
   - policy_repository
-portalType: HTTP_API
-mounts:
-  - portal: web_portal
-    prefixes:
-      - /web
-      - /
-    via: handleWebRequest
-  - portal: share_portal
-    prefixes:
-      - /share
-    via: handleShareRequest
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: >-
+    Clients the host's listener host_http_portal serves directly, routing "/web", "/" to web_portal;
+    "/share" to share_portal
 status: complete
 createdAt: '2026-07-04T12:33:41.703Z'
-updatedAt: '2026-10-04T19:49:04.650Z'
+updatedAt: '2026-10-06T18:54:58.479Z'

@@ -113,6 +113,13 @@ methods:
         error: the lock's inputs changed while it ran
       - stepNumber: 14
         description: >-
+          A scoped lock (--subsystem) covers only its subsystem: read the spec paths in that scope
+          through the core portal, so every spec outside it keeps the approval it already had
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: specPathsInScope
+      - stepNumber: 15
+        description: >-
           Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
           lockedAt, lockedBy, validatorVersion, validationResult = the design half's counts
           (gate.designOnly()), status ready, projectId when there is one, specs = the design-reading
@@ -121,12 +128,12 @@ methods:
           part, contentDigest, commit when known, state approved}, and `code` = gate.analysis
           without its codes list. No `children`, no `reexpressed` (a human approved this one)
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Persist the commit-scoped lock record — the only file this lock writes
         type: call
         targetComponent: approval_portal
         targetMethod: writeLockRecord
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the written lock record
         type: return
         outcome: LockRecord
@@ -361,4 +368,4 @@ methods:
     symbol: reexpressLock
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-06T10:10:51.621Z'
+updatedAt: '2026-10-06T19:12:43.224Z'

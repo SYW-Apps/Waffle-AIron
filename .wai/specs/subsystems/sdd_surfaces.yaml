@@ -8,13 +8,11 @@ description: >-
   against declared external contracts instead of trusting prose.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       Surface export/import/query front door consumed in-process by the CLI, validator, and core
       flows, and published on the package's library entry.
     component: surface_portal
-  - type: Custom
-    details: >-
+  - details: >-
       The family migrations' internal seam: carry a pin without re-pinning, remove a pin, list the
       stage-1 family pins. Published to sdd_migrations only, never on the library entry.
     component: pin_maintenance_portal
@@ -23,4 +21,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-07-10T23:11:28.081Z'
-updatedAt: '2026-10-04T22:34:33.952Z'
+updatedAt: '2026-10-06T18:55:26.808Z'

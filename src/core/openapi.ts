@@ -298,8 +298,8 @@ function httpEntriesOf(snapshot: SurfaceSnapshot): SurfaceContractEntry[] {
     e.type === 'REST' || e.methods.some(m => m.endpoint?.transport === 'HTTP'));
 }
 
-/** Render ONE OpenAPI document from a chosen subset of entries — all of them for
- *  toOpenApi, one portal's for toOpenApiSet (the latter also emits `servers`). */
+/** Render ONE OpenAPI document from a chosen subset of entries: one portal's, for
+ *  toOpenApiSet, which also asks for `servers`. */
 function renderDoc(
   snapshot: SurfaceSnapshot,
   entries: SurfaceContractEntry[],
@@ -368,11 +368,6 @@ function renderDoc(
     paths,
     ...(Object.keys(components).length ? { components } : {}),
   };
-}
-
-export function toOpenApi(snapshot: SurfaceSnapshot): string {
-  const closureIds = new Set(snapshot.types.map(t => t.id));
-  return JSON.stringify(renderDoc(snapshot, httpEntriesOf(snapshot), closureIds), null, 2);
 }
 
 /**
@@ -498,7 +493,7 @@ function describedWith(description: string | undefined, note: string | undefined
   return text ? { description: text } : {};
 }
 
-/** Reconstruct a PortalAuth from an OpenAPI securityScheme (round-trips toOpenApi). */
+/** Reconstruct a PortalAuth from an OpenAPI securityScheme (round-trips toOpenApiSet). */
 function authFromSecurityScheme(scheme: Record<string, unknown>): PortalAuth | undefined {
   const desc = typeof scheme.description === 'string' ? { description: scheme.description } : {};
   if (scheme.type === 'apiKey') {
@@ -588,7 +583,7 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
       const responseSchema = ((okResponse?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema) as Record<string, unknown> | undefined;
       const returns = responseSchema ? typeRefFromSchema(responseSchema) : 'void';
 
-      // Read back the x-wairon-* keys toOpenApi emits, so an OpenAPI-format
+      // Read back the x-wairon-* keys toOpenApiSet emits, so an OpenAPI-format
       // exchange preserves the same contract the native YAML snapshot does.
       // All three are optional: documents from other producers simply lack
       // them, and a malformed value is ignored rather than failing the import.
@@ -650,7 +645,7 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
     });
   }
 
-  // Read the first securityScheme back into the entry's auth (round-trips toOpenApi).
+  // Read the first securityScheme back into the entry's auth (round-trips toOpenApiSet).
   const securitySchemes = ((parsed.components as Record<string, unknown>)?.securitySchemes ?? {}) as Record<string, Record<string, unknown>>;
   const firstScheme = Object.values(securitySchemes)[0];
   const importedAuth = firstScheme ? authFromSecurityScheme(firstScheme) : undefined;

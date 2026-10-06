@@ -25,8 +25,7 @@ description: >-
   not modelled here. The caller must gate on reach itself.
 parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: Custom
-    details: >-
+  - details: >-
       In-process family migrations: plan a verb (attach, rename, rename-alias, detach, adopt,
       internalize, externalize), apply a confirmed plan all or nothing, discard one, and report or
       roll back unfinished transactions.
@@ -35,4 +34,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-09-30T20:23:45.351Z'
-updatedAt: '2026-09-30T22:58:24.282Z'
+updatedAt: '2026-10-06T18:55:23.585Z'

@@ -20,13 +20,6 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: computeStateId
-  - name: readLockRecord
-    narrative:
-      - stepNumber: 1
-        description: Forward lock-record read to the core portal
-        type: call
-        targetComponent: approval_portal
-        targetMethod: readLockRecord
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
@@ -228,4 +221,4 @@ methods:
         targetMethod: describeProject
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-10-03T17:10:11.406Z'
+updatedAt: '2026-10-06T19:14:10.292Z'
