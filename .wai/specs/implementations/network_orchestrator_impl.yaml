@@ -1,0 +1,160 @@
+id: network_orchestrator_impl
+name: Network Orchestrator Implementation
+description: The derived networking workflows.
+contract: inetwork_orchestrator
+sourcePath: src/network/orchestrator.ts
+methods:
+  - name: flows
+    narrative:
+      - stepNumber: 1
+        description: Read the reach model of the selection
+        type: call
+        targetComponent: network_validator_adapter
+        targetMethod: reachModel
+      - stepNumber: 2
+        description: Derive the matrix
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: project
+      - stepNumber: 3
+        description: Encode it in the asked format
+        type: call
+        targetComponent: network_codec
+        targetMethod: encodeFlows
+      - stepNumber: 4
+        description: Answer the document
+        type: return
+        outcome: NetworkDocument
+  - name: policy
+    narrative:
+      - stepNumber: 1
+        description: Read the team's bindings first, so a malformed file refuses before any derivation
+        type: call
+        targetComponent: network_file_adapter
+        targetMethod: readBindings
+      - stepNumber: 2
+        description: Read the reach model of the selection
+        type: call
+        targetComponent: network_validator_adapter
+        targetMethod: reachModel
+      - stepNumber: 3
+        description: Derive the matrix
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: project
+      - stepNumber: 4
+        description: Generate the policy in the target format, listing every unbound name
+        type: call
+        targetComponent: network_codec
+        targetMethod: encodePolicy
+      - stepNumber: 5
+        description: Answer the document
+        type: return
+        outcome: NetworkDocument
+  - name: diagram
+    narrative:
+      - stepNumber: 1
+        description: Read the reach model of the selection
+        type: call
+        targetComponent: network_validator_adapter
+        targetMethod: reachModel
+      - stepNumber: 2
+        description: Derive the matrix
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: project
+      - stepNumber: 3
+        description: Project the picture
+        type: call
+        targetComponent: network_diagram_projector
+        targetMethod: view
+      - stepNumber: 4
+        description: Draw it as Mermaid
+        type: call
+        targetComponent: network_diagram_projector
+        targetMethod: mermaid
+      - stepNumber: 5
+        description: Answer the document
+        type: return
+        outcome: NetworkDocument
+  - name: view
+    narrative:
+      - stepNumber: 1
+        description: Read the reach model of the selection
+        type: call
+        targetComponent: network_validator_adapter
+        targetMethod: reachModel
+      - stepNumber: 2
+        description: Derive the matrix
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: project
+      - stepNumber: 3
+        description: Project the picture the canvas draws
+        type: call
+        targetComponent: network_diagram_projector
+        targetMethod: view
+      - stepNumber: 4
+        description: Answer it
+        type: return
+        outcome: NetworkViewModel
+  - name: check
+    narrative:
+      - stepNumber: 1
+        description: Read the observed flows, refusing a malformed row before any derivation
+        type: call
+        targetComponent: network_file_adapter
+        targetMethod: readObservedFlows
+      - stepNumber: 2
+        description: Bindings are needed only when the observed names follow them
+        type: branch
+        condition: bindingsPath is given
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Read the bindings the observed names follow
+        type: call
+        targetComponent: network_file_adapter
+        targetMethod: readBindings
+      - stepNumber: 4
+        description: Read the reach model of the selection
+        type: call
+        targetComponent: network_validator_adapter
+        targetMethod: reachModel
+      - stepNumber: 5
+        description: Derive the matrix
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: project
+      - stepNumber: 6
+        description: Judge the observed flows against it
+        type: call
+        targetComponent: flow_check_arbiter
+        targetMethod: check
+      - stepNumber: 7
+        description: Answer the report
+        type: return
+        outcome: FlowCheckReport
+  - name: why
+    narrative:
+      - stepNumber: 1
+        description: Read the reach model of the selection
+        type: call
+        targetComponent: network_validator_adapter
+        targetMethod: reachModel
+      - stepNumber: 2
+        description: Derive the matrix
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: project
+      - stepNumber: 3
+        description: Explain the asked pair from it
+        type: call
+        targetComponent: flow_matrix_projector
+        targetMethod: explain
+      - stepNumber: 4
+        description: Answer the explanation
+        type: return
+        outcome: FlowExplanation
+status: complete
+createdAt: '2026-10-06T13:11:35.270Z'
+updatedAt: '2026-10-06T13:11:35.845Z'

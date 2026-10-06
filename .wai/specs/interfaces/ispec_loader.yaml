@@ -247,6 +247,13 @@ methods:
     signatureFrom: spec_index.typeSpellingFacts
     guarantees:
       - idempotent
+  - name: retiredReachFacts
+    description: >-
+      What the current scan met in the forms the reachability model retired
+      (spec_index.retiredReachFacts).
+    signatureFrom: spec_index.retiredReachFacts
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T10:19:37.579Z'
+updatedAt: '2026-10-06T13:06:56.177Z'

@@ -1,0 +1,30 @@
+kind: value-object
+id: reach_rewrite
+name: ReachRewrite
+description: >-
+  One rewrite of the reachability migration: the spec, the retired form it replaces, what it
+  becomes, and a line saying why.
+subsystem: sdd_core
+fields:
+  - name: specId
+    type: string
+    description: The spec rewritten (or reported)
+    optional: false
+  - name: form
+    type: RetiredReachForm
+    description: The retired form it replaces
+    optional: false
+  - name: to
+    type: string
+    description: >-
+      What it becomes, as one line (transport HTTP; invokedBy entry outside on <portal>; router
+      handleWebRequest on <impl>; type dropped)
+    optional: false
+  - name: reason
+    type: string
+    description: Why, in one sentence
+    optional: false
+methods: []
+sourcePath: src/core/reachability-migration.ts
+createdAt: '2026-10-06T13:06:46.982Z'
+updatedAt: '2026-10-06T13:06:47.558Z'

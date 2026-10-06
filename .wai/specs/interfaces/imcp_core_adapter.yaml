@@ -89,7 +89,9 @@ methods:
         description: The method name as it stands
       - name: newName
         type: string
-        description: Its new name, a camel-case identifier
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage)
       - name: pinSymbol
         type: bool
         description: >-
@@ -230,4 +232,4 @@ methods:
         description: Its new id
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:57:01.242Z'
+updatedAt: '2026-10-06T13:04:20.436Z'

@@ -55,14 +55,17 @@ methods:
       address: mcp tools/call sdd_add_subsystem
   - name: sdd_add_component
     description: >-
-      Tool: add an L2 component under a subsystem. The input may state the spec's lifecycle status,
-      so a component can be authored straight at design or complete instead of being born draft and
-      needing a follow-up edit nobody remembers. An unstated status means draft for a new spec and
-      the stored status for a re-authoring, and a stated status that would lower the stored one is
-      refused by name — reopening a frozen spec is an update, not a restatement. The answer carries
-      the write receipt as structured content beside the sentence, so a caller learns the status
-      written and whether a spec already held that id without parsing English; the sentence itself
-      is unchanged.
+      Tool: add an L2 component under a subsystem. A Portal states its `transport` (the retired
+      portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess,
+      and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its
+      scope. The tool never defaults an entry: a blanket entry the author did not decide would hide
+      unreached verbs. The input may state the spec's lifecycle status, so a component can be
+      authored straight at design or complete instead of being born draft and needing a follow-up
+      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
+      a re-authoring, and a stated status that would lower the stored one is refused by name:
+      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
+      as structured content beside the sentence, so a caller learns the status written and whether a
+      spec already held that id without parsing English; the sentence itself is unchanged.
     signature: 'sdd_add_component(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -270,7 +273,9 @@ methods:
         description: The method name as it stands
       - name: newName
         type: string
-        description: Its new name, a camel-case identifier
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage)
       - name: pinSymbol
         type: bool
         description: >-
@@ -319,10 +324,11 @@ methods:
       address: mcp tools/call sdd_update_spec
   - name: sdd_set_endpoints
     description: >-
-      Tool: bind concrete wire endpoints to existing L3 contract methods — required for every
-      Portal, and run after sdd_define_interface. The caller picks a transport and fills that
-      transport's address fields; the binding is checked against the endpoint schema before the
-      contract is saved.
+      Tool: bind concrete wire endpoints to existing L3 contract methods, for a Portal whose
+      transport requires them (every transport but InProcess and Custom), run after
+      sdd_define_interface. The caller picks the Portal's own transport and fills that transport's
+      address fields; the binding is checked against the endpoint schema before the contract is
+      saved. A binding for an InProcess Portal is refused: its verbs are its contract methods.
     signature: 'sdd_set_endpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
     returns: SpecChangeReport
     params:
@@ -892,6 +898,39 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_add_external
+  - name: sdd_get_network_flows
+    description: >-
+      Tool (scope: tree, a read): the allowed-flows matrix derived from the design. It lists who
+      reaches which Portal verb, over which transport and binding, through which networks and
+      gateway, on what evidence (a modelled call, or a declared entry). It is optionally filtered to
+      the flows into one project, Portal or verb. Only network transports produce flows. Writes
+      nothing.
+    signature: 'sdd_get_network_flows(to: string?): list<NetworkFlow>'
+    returns: list<NetworkFlow>
+    params:
+      - name: to
+        type: string?
+        description: Keep only the flows into this project, project::portal or project::portal.verb
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_get_network_flows
+  - name: sdd_explain_flow
+    description: >-
+      Tool (scope: tree, a read): why one party may reach another, from the design: each allowing
+      flow with its chain from the entry or modelled call through every gateway, or that nothing
+      allows it. Writes nothing.
+    signature: 'sdd_explain_flow(from: string, to: string): FlowExplanation'
+    returns: FlowExplanation
+    params:
+      - name: from
+        type: string
+        description: A project, a project::component, or outside
+      - name: to
+        type: string
+        description: A project, a project::portal or a project::portal.verb
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_explain_flow
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:17:33.305Z'
+updatedAt: '2026-10-06T13:15:58.614Z'

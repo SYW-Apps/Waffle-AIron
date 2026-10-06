@@ -1335,20 +1335,20 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          Add the declared publication handles — each method's `exportedVia`, the export a consumer
+          Add the declared publication handles: each method's `exportedVia`, the export a consumer
           imports to REACH the method, which `symbol` cannot name because `symbol` names the
-          function inside it; and each listener mount's `via`, the router entry the listener calls
-          to hand the mounted portal its requests, which belongs to the mounted portal's own files.
-          Read a handle only where its file was analysed at exact grade; below that nothing
-          separates an export from a mention, so no verdict on it could be backed, and a handle
-          whose file the run never read at all is skipped rather than guessed at. A portal may be
-          realized across several files, and a mount's entry may live in any of them: it is reported
-          missing only when EVERY one of those files was read at exact grade and none exports it,
-          since a file read below that, or not at all, may be the one holding it. A handle the file
-          does export becomes promised surface. One that is missing is reported against the spec
-          that declares it, naming the handle and the file, and does not count as allowed — a route
-          nobody can import cannot be the reason a name is promised, and without that the field
-          would be a free-text way to silence the rule
+          function inside it; and each Portal implementation's `router`, the entry whatever serves
+          the Portal calls to hand it its requests, which belongs to the Portal's own files. Read a
+          handle only where its file was analysed at exact grade; below that nothing separates an
+          export from a mention, so no verdict on it could be backed, and a handle whose file the
+          run never read at all is skipped rather than guessed at. A portal may be realized across
+          several files, and its router entry may live in any of them: it is reported missing only
+          when EVERY one of those files was read at exact grade and none exports it, since a file
+          read below that, or not at all, may be the one holding it. A handle the file does export
+          becomes promised surface. One that is missing is reported against the spec that declares
+          it, naming the handle and the file, and does not count as allowed: a route nobody can
+          import cannot be the reason a name is promised, and without that the field would be a
+          free-text way to silence the rule
         type: local
       - stepNumber: 3
         description: >-
@@ -1632,9 +1632,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          For each listener mount that names a router entry, find the routes the analyzer read from
-          that function in the mounted portal's files. A mount with no entry calls the portal's
-          methods one by one, and has no router of its own to read
+          For each Portal implementation that names a router entry, find the routes the analyzer
+          read from that function in the Portal's files. A Portal with no router entry is served
+          method by method, and has no router of its own to read
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
@@ -1652,22 +1652,21 @@ methods:
       - stepNumber: 4
         label: unread
         description: >-
-          Report the router as unread, naming the mount and the entry. Silence here would read as a
+          Report the router as unread, naming the Portal and the entry. Silence here would read as a
           clean router; it is only one this analysis cannot see
         type: return
         outcome: unread
       - stepNumber: 5
         label: compare
         description: >-
-          Complete each route with the mount's prefixes: a leading segment the router never checks
-          is the one the mount guarantees, and a portal mounted under several prefixes is served
-          under each. Match routes against the portal's HTTP endpoints that lie under this mount —
-          one outside it is already `ENDPOINT_OUTSIDE_MOUNT`'s finding — by verb and path. A
-          template parameter in an endpoint matches a segment the router leaves unconstrained, and
-          only that: a literal the router compares against is a distinct handler, and a template
-          endpoint beside it does not declare it, or the one route this check exists to find would
-          hide behind its neighbour. A route that pins no segment count also covers a longer path
-          with the same leading segments
+          Complete each route from the Portal's own endpoints: a leading segment the router never
+          checks is the one whatever serves the Portal routes on, so it is completed with each first
+          segment of the Portal's HTTP endpoint paths. Match routes against the Portal's HTTP
+          endpoints by verb and path. A template parameter in an endpoint matches a segment the
+          router leaves unconstrained, and only that: a literal the router compares against is a
+          distinct handler, and a template endpoint beside it does not declare it, or the one route
+          this check exists to find would hide behind its neighbour. A route that pins no segment
+          count also covers a longer path with the same leading segments
         type: local
       - stepNumber: 6
         description: >-
@@ -1817,4 +1816,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-06T10:12:33.817Z'
+updatedAt: '2026-10-06T13:04:58.563Z'

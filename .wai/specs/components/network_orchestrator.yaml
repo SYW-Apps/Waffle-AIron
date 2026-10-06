@@ -1,0 +1,21 @@
+id: network_orchestrator
+name: Network Orchestrator
+description: >-
+  The derived networking workflows. Each one reads the reach model through the validator adapter,
+  derives the flow matrix, and then encodes it, draws it, checks observed flows against it, or
+  explains one flow. Each also reads the bindings or observed-flow file through the file adapter
+  when its output needs deployment facts. It holds no state and writes nothing: every output is
+  answered for its caller to print or save.
+subsystem: sdd_network
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - network_validator_adapter
+  - network_file_adapter
+  - flow_matrix_projector
+  - network_codec
+  - network_diagram_projector
+  - flow_check_arbiter
+status: complete
+createdAt: '2026-10-06T13:10:24.026Z'
+updatedAt: '2026-10-06T13:10:24.675Z'

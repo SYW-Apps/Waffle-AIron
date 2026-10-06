@@ -2,13 +2,20 @@ kind: enum
 id: method_effect
 name: MethodEffect
 description: >-
-  What a contract method does to its component's held state. Required on a durable Store's contract
-  methods for the durability round-trip pairing; a Supervisor may call a data component it does not
-  own only through read and lifecycle methods (SUPERVISOR_WRITE_SHORTCUT).
+  What a contract method does to its component's held state, and whether it reaches outside the
+  process. Required on a durable Store's contract methods for the durability round-trip pairing. A
+  Supervisor may call a data component it does not own only through read and lifecycle methods
+  (SUPERVISOR_WRITE_SHORTCUT). A library verb's effect decides which logic may call it directly
+  (LIBRARY_CALL_IMPURE): pure logic may call only none, read logic none and read, and an undeclared
+  effect counts as neither.
 fields: []
 methods: []
 sourcePath: src/models/specs.ts
 values:
+  - name: none
+    description: >-
+      Computes over its arguments only: no held state, no I/O. The one effect pure logic may call on
+      a library
   - name: read
     description: Observes held state
   - name: write
@@ -18,5 +25,9 @@ values:
       Creates, destroys, or (un)registers an entity's existence or membership without modifying its
       domain fields; closed under composition: it calls only read and lifecycle methods
       (LIFECYCLE_CALLS_WRITE)
+  - name: io
+    description: >-
+      Reaches outside the process: files, the network, the clock, randomness. Never callable from
+      pure or read logic
 createdAt: '2026-10-04T23:33:01.790Z'
-updatedAt: '2026-10-04T23:33:02.222Z'
+updatedAt: '2026-10-06T12:53:36.083Z'

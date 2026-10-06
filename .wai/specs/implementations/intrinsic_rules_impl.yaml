@@ -8,12 +8,12 @@ methods:
     sourcePath: src/core/rules/intrinsic/portal-fields.ts
     narrative:
       - stepNumber: 1
-        label: pfStart
+        label: component
         description: For each component, check its Portal-only wire fields against its own stereotype.
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 11
+        endStep: 13
       - stepNumber: 2
         description: isDraftCtx = ctx.isComponentDraft(comp.id).
         type: local
@@ -21,47 +21,58 @@ methods:
         description: 'Branch: is the component a Portal?'
         type: branch
         condition: comp.componentType is "Portal"
-        onFalseStep: 7
+        onFalseStep: 9
       - stepNumber: 4
-        description: 'Branch (Portal only): is portalType missing?'
+        description: 'Branch (Portal only): is its transport missing?'
         type: branch
-        condition: comp.portalType is unset
-        onFalseStep: 11
+        condition: comp.transport is unset
+        onFalseStep: 6
       - stepNumber: 5
         description: >-
-          Report MISSING_PORTAL_TYPE (error; isDraftCtx) naming the component as a Portal with no
-          portalType.
+          Report MISSING_PORTAL_TRANSPORT (error; isDraftCtx) naming the component as a Portal with
+          no transport.
         type: local
       - stepNumber: 6
+        label: abi
         description: >-
-          Continue with the next component (mirrors the source's unconditional continue after the
-          Portal branch).
-        type: jump
-        toStep: 11
-      - stepNumber: 7
-        label: pfNotPortal
-        description: 'Branch (non-Portal): is portalType or basePath set?'
+          Branch (Portal only): an abi says how a foreign language links a library, so it belongs on
+          an InProcess Portal only
         type: branch
-        condition: comp.portalType is set or comp.basePath is set
-        onFalseStep: 9
+        condition: comp.abi is set and comp.transport is not InProcess
+        onFalseStep: 13
+      - stepNumber: 7
+        description: >-
+          Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's transport and
+          that abi is for InProcess Portals only.
+        type: local
       - stepNumber: 8
+        description: Continue with the next component.
+        type: jump
+        toStep: 13
+      - stepNumber: 9
+        label: nonPortal
+        description: 'Branch (non-Portal): is a transport, abi or basePath set?'
+        type: branch
+        condition: comp.transport, comp.abi or comp.basePath is set
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's actual
-          componentType and that portalType/basePath are Portal-only.
+          componentType and that transport, abi and basePath are Portal-only.
         type: local
-      - stepNumber: 9
-        label: pfAfterUnexpected
+      - stepNumber: 11
+        label: auth
         description: 'Branch (non-Portal): is auth declared?'
         type: branch
         condition: comp.auth is set
-        onFalseStep: 11
-      - stepNumber: 10
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
           Report AUTH_ON_NON_PORTAL (warning; isDraftCtx) naming the component's componentType and
           that auth is inbound transport auth, meaningful only on a Portal.
         type: local
-      - stepNumber: 11
-        label: pfEnd
+      - stepNumber: 13
+        label: next
         description: Continue with the next component.
         type: local
     symbol: check
@@ -210,4 +221,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-09-23T17:52:46.454Z'
+updatedAt: '2026-10-06T13:03:51.265Z'

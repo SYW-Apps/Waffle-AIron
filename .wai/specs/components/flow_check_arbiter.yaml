@@ -1,0 +1,24 @@
+id: flow_check_arbiter
+name: Flow Check Arbiter
+description: >-
+  Compares observed live flows with the allowed matrix and decides nothing else. It reports three
+  things:
+
+  - unexpected flows: seen, but no flow allows them;
+
+  - unexercised flows: allowed, but not seen in the window;
+
+  - unknown verbs: seen at L7 on an allowed pair, but matching no verb of the called Portal by
+  method and path.
+
+  Observed parties are matched to flows through the same bindings the policy was generated from.
+  Pure.
+subsystem: sdd_network
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: arbiter
+status: complete
+createdAt: '2026-10-06T13:10:21.109Z'
+updatedAt: '2026-10-06T13:10:32.346Z'

@@ -1,0 +1,30 @@
+kind: value-object
+id: flow_check_report
+name: FlowCheckReport
+description: >-
+  Observed live flows compared with the allowed matrix: what runs that the design does not have,
+  what the design allows that never ran, and calls to verbs no contract declares.
+subsystem: sdd_network
+fields:
+  - name: unexpected
+    type: list<ObservedFlow>
+    description: >-
+      Observed, but no flow of the matrix allows it: an undocumented dependency, a misconfiguration
+      or an intrusion
+    optional: false
+  - name: unexercised
+    type: list<NetworkFlow>
+    description: >-
+      Allowed, but never observed in the window: a dead dependency, a stale design, or a rule to
+      tighten
+    optional: false
+  - name: unknownVerbs
+    type: list<ObservedFlow>
+    description: >-
+      Observed at L7 on an allowed workload pair, but no verb of the called Portal has that method
+      and path
+    optional: false
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:49.170Z'
+updatedAt: '2026-10-06T13:09:49.797Z'

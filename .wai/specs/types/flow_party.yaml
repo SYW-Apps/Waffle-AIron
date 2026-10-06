@@ -1,0 +1,32 @@
+kind: value-object
+id: flow_party
+name: FlowParty
+description: >-
+  One end of an allowed flow, named by stable design names: a component of a project, a Portal verb,
+  or a scope (callers outside a network, or anywhere inside one) when the callers are not modelled.
+subsystem: sdd_network
+fields:
+  - name: project
+    type: string
+    description: The project key, for a modelled party
+    optional: true
+  - name: component
+    type: string
+    description: 'The component key: the calling component, or the called Portal'
+    optional: true
+  - name: verb
+    type: string
+    description: The called contract method, on the called end
+    optional: true
+  - name: scope
+    type: EntryScope
+    description: 'For unmodelled callers: outside, or network'
+    optional: true
+  - name: network
+    type: string
+    description: The declared network the party sits in, or that a network scope names
+    optional: true
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:26.411Z'
+updatedAt: '2026-10-06T13:09:27.063Z'

@@ -1,0 +1,87 @@
+id: flow_matrix_projector_impl
+name: Flow Matrix Projector Implementation
+description: The matrix derivation and the flow explanation, pure.
+contract: iflow_matrix_projector
+sourcePath: src/network/flow-matrix.ts
+methods:
+  - name: project
+    narrative:
+      - stepNumber: 1
+        label: verbs
+        description: For each verb of model.verbs whose transport.kind() is network
+        type: loop
+        loopKind: forEach
+        over: the network-transport verbs of model.verbs
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          callers = model.callersOf(verb.portal, verb.verb); add one flow per caller: from its
+          project and component, to the verb, with the transport, the binding, the networks of
+          model.enclosing(verb.network) the caller is not inside (outermost first), the gateway
+          entered when one is crossed, and the call's evidence
+        type: local
+      - stepNumber: 3
+        description: Does the verb have an entry of its own?
+        type: branch
+        condition: verb.entry is present with kind entry
+        onFalseStep: 1
+      - stepNumber: 4
+        description: >-
+          An outside entry is a flow from outside: from scope outside, crossing every enclosing
+          network, via the verb's Portal when it is a gateway, with the entry's caller prose as
+          evidence
+        type: branch
+        condition: the entry's scope is network
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          A network entry is a flow from the whole network, unless the model is family-scoped and
+          callers is non-empty: then the modelled callers' flows already stand for it, and no
+          blanket flow is added (least privilege)
+        type: local
+      - stepNumber: 6
+        label: verbsEnd
+        description: Add the outside flow when the entry's scope is outside
+        type: local
+      - stepNumber: 7
+        description: 'Answer the flows in a stable order: by callee, then caller'
+        type: return
+        outcome: list<NetworkFlow>
+    detail: full
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Parse both parties: a project, a project::component (or portal, or portal.verb), or
+          outside
+        type: local
+      - stepNumber: 2
+        description: >-
+          Select the flows whose caller lies within the first party and whose callee lies within the
+          second
+        type: local
+      - stepNumber: 3
+        description: Nothing allows it
+        type: branch
+        condition: the selection is empty
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Answer not allowed, naming the nearest flows to the callee so the asker sees what is
+          allowed instead
+        type: return
+        outcome: not allowed
+      - stepNumber: 5
+        description: >-
+          Build each flow's chain as lines: the entry with its caller prose or the modelled call's
+          evidence, each network crossed with the gateway entered, and the verb with its binding
+        type: local
+      - stepNumber: 6
+        description: Answer allowed with the flows and their chains
+        type: return
+        outcome: allowed
+    detail: full
+status: complete
+createdAt: '2026-10-06T13:11:56.327Z'
+updatedAt: '2026-10-06T13:11:57.018Z'

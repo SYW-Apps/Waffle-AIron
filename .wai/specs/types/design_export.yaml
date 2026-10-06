@@ -23,7 +23,10 @@ fields:
     optional: false
   - name: formatVersion
     type: string
-    description: '`MAJOR.MINOR`; 1.0 at first release'
+    description: >-
+      `MAJOR.MINOR`; 1.0 at first release, 2.0 with the reachability model (a MAJOR: listener mounts
+      and portalType removed, transport and the Portal-level invokedBy added, invokedBy kinds
+      narrowed to entry and runtime with a scope)
     optional: false
   - name: generator
     type: string
@@ -58,4 +61,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:37.463Z'
-updatedAt: '2026-10-04T15:39:04.032Z'
+updatedAt: '2026-10-06T12:54:17.506Z'

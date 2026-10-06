@@ -22,8 +22,8 @@ fields:
   - name: components
     type: list<any>
     description: >-
-      Each component's id, name, subsystem, componentType, portalType, whether it is public, the
-      pattern that owns it, and what it owns.
+      Each component's id, name, subsystem, componentType, transport (on a Portal), whether it is
+      public, the pattern that owns it, and what it owns.
     optional: false
   - name: edges
     type: list<any>
@@ -32,4 +32,4 @@ fields:
 methods: []
 sourcePath: src/core/diagram-export.ts
 createdAt: '2026-09-20T16:40:55.173Z'
-updatedAt: '2026-10-04T10:20:06.558Z'
+updatedAt: '2026-10-06T12:55:11.472Z'

@@ -554,87 +554,6 @@ methods:
         type: local
     symbol: check
     exportedVia: publicSurfaceBindingRule
-  - name: publicSurfaceDeclaredType
-    sourcePath: src/core/rules/integrity/public-surface-declared-type.ts
-    narrative:
-      - stepNumber: 1
-        label: psdSubStart
-        description: >-
-          For each loaded subsystem, check what every declared public interface entry's type asks of
-          its backing component.
-        type: loop
-        loopKind: forEach
-        over: ctx.subsystems
-        endStep: 11
-      - stepNumber: 2
-        description: isDraftCtx = sub.isDraft().
-        type: local
-      - stepNumber: 3
-        label: psdPiStart
-        description: >-
-          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
-          `typeDef`; a re-export inherits its target's type and a type export has none.
-        type: loop
-        loopKind: forEach
-        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
-        endStep: 11
-      - stepNumber: 4
-        description: backing = ctx.componentMap.get(pi.component) when the entry names a component.
-        type: local
-      - stepNumber: 5
-        description: >-
-          Branch: public-surface-binding's preconditions, restated — does the entry name a component
-          that resolves? An unbound or unresolvable entry is that rule's finding and has no
-          stereotype to judge: continue with the next entry.
-        type: branch
-        condition: >-
-          the entry names a backing component and it resolves in ctx.componentMap (backing is
-          defined)
-        onFalseStep: 3
-      - stepNumber: 6
-        description: 'Branch: does the private pubTypeMatches report a mismatch?'
-        type: branch
-        condition: >-
-          the entry's declared type cannot be realized by the backing component's stereotype
-          (pubTypeMatches(pi.type, backing.componentType, backing.portalType) is false)
-        onFalseStep: 8
-      - stepNumber: 7
-        description: >-
-          Report PUBLIC_INTERFACE_TYPE_MISMATCH (error; isDraftCtx) naming the subsystem, the
-          component and its stereotype/portalType, and the expected shape for pi.type (the private
-          expectedFor).
-        type: local
-      - stepNumber: 8
-        label: psdCustomEscape
-        description: >-
-          Branch: is pi.type "Custom" and does the private EVENT_VOCAB match pi.details — the
-          escape-to-Custom hole, where an unrealized event boundary hides behind the one type that
-          carries no backing obligation?
-        type: branch
-        condition: >-
-          the entry is typed Custom and its details prose matches the event/async vocabulary
-          (EVENT_VOCAB)
-        onFalseStep: 3
-      - stepNumber: 9
-        description: >-
-          eventCapable = backing.componentType is "Observer", or backing.componentType is "Portal"
-          with portalType "MessageBus".
-        type: local
-      - stepNumber: 10
-        description: 'Branch: is eventCapable false?'
-        type: branch
-        condition: the backing component cannot realize eventing (eventCapable is false)
-        onFalseStep: 3
-      - stepNumber: 11
-        label: psdEventReport
-        description: >-
-          Report PUBLIC_INTERFACE_EVENT_MISTYPED (warning; isDraftCtx) naming the subsystem, the
-          Custom entry's description, and the backing component's stereotype/portalType,
-          recommending it be retyped MessageBus and backed by an Observer or MessageBus Portal, or
-          reworded.
-        type: local
-    symbol: check
-    exportedVia: publicSurfaceDeclaredTypeRule
   - name: publicSurfaceBoundContract
     sourcePath: src/core/rules/integrity/public-surface-bound-contract.ts
     narrative:
@@ -1454,6 +1373,47 @@ methods:
         type: return
     symbol: check
     exportedVia: renameTracesRule
+  - name: implementsContracts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: For each interface in ctx.interfaces within scope that declares `implements`
+        type: loop
+        loopKind: forEach
+        over: the in-scope interfaces of ctx.interfaces that declare implements
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Resolve the reference to its contract entry (rule_context.resolveCrossProject, then the
+          entry's methods)
+        type: local
+      - stepNumber: 3
+        description: An unresolved or unexported reference is project-boundaries' finding
+        type: branch
+        condition: the reference resolved to an entry exported with role implement
+        onFalseStep: 1
+      - stepNumber: 4
+        label: methods
+        description: For each method of the extension point
+        type: loop
+        loopKind: forEach
+        over: the entry's methods
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          Does the interface declare it with the same params and returns (compared in canonical type
+          form)?
+        type: branch
+        condition: the interface lacks the method, or declares it with other params or returns
+        onFalseStep: 4
+      - stepNumber: 6
+        label: methodsEnd
+        description: >-
+          Report IMPLEMENTS_MISMATCH (error, on intf.id, sited at the method; draft context when
+          intf.status is draft or design) naming the extension point, the method and what differs
+        type: local
+    symbol: check
+    exportedVia: implementsContractsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-05T06:48:14.768Z'
+updatedAt: '2026-10-06T13:03:09.154Z'

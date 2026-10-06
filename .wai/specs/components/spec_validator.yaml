@@ -22,6 +22,7 @@ dependsOn:
   - source_analysis_adapter
   - rule_repository
   - gate_identity
+  - reach_model_projector
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-09-28T17:17:10.219Z'
+updatedAt: '2026-10-06T13:00:09.087Z'

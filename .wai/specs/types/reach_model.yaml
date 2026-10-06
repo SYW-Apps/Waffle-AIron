@@ -1,0 +1,49 @@
+kind: value-object
+id: reach_model
+name: ReachModel
+description: >-
+  What reaches each Portal verb and from where, projected from a tree or a whole family. It is the
+  one input of the network rules (network_arbiter) and of every derived networking output: the flow
+  matrix, policies, diagrams, the observed-flow check and the explanation of a flow. Deterministic:
+  the same tree gives the same model, in a stable order.
+fields:
+  - name: scope
+    type: string
+    description: >-
+      What it was projected from: own (one project's own gate) or family (the family run at its
+      root)
+    optional: false
+  - name: networks
+    type: list<NetworkBoundary>
+    description: Every declared network in scope, outermost first
+    optional: false
+  - name: verbs
+    type: list<VerbReach>
+    description: Every Portal verb in scope
+    optional: false
+  - name: calls
+    type: list<ModelledCall>
+    description: Every modelled call into a Portal verb that crosses a subsystem or project boundary
+    optional: false
+methods:
+  - name: callersOf
+    signature: 'callersOf(portal: string, verb: string): list<ModelledCall>'
+    params:
+      - name: portal
+        type: string
+      - name: verb
+        type: string
+    returns: list<ModelledCall>
+    description: The modelled calls that land on one Portal verb. Pure
+  - name: enclosing
+    signature: 'enclosing(network: string?): list<string>'
+    params:
+      - name: network
+        type: string?
+    returns: list<string>
+    description: >-
+      The chain of declared networks around a network, innermost first, ending at the outermost.
+      Pure
+sourcePath: src/models/reach.ts
+createdAt: '2026-10-06T12:57:20.910Z'
+updatedAt: '2026-10-06T12:57:21.468Z'

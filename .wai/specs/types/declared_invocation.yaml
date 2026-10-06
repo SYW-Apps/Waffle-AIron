@@ -2,32 +2,42 @@ kind: value-object
 id: declared_invocation
 name: DeclaredInvocation
 description: >-
-  A declared external invocation on an L3 contract method — the typed, reviewable acknowledgment
-  that a real caller exists OUTSIDE the modeled narrative graph (the method-level sibling of
-  lifecycle_entrypoint, which roots runtime-driven flows at subsystem level). Unused-detection seeds
-  the declaring method as an entrypoint alongside Portals, Observers, published components, and
-  lifecycle entrypoints, so reachability PROPAGATES through the method's narrative — unlike a
-  lint.allow, which only silences one spec and lets everything reachable solely through the
-  suppressed method cascade into further allows. Honesty guards: the caller prose is mandatory
-  (INVOKED_BY_UNDESCRIBED when missing), and a declaration on a method the internal walk reaches
-  anyway is stale (INVOKED_BY_REDUNDANT) so the declaration set shrinks as edges become properly
-  modeled. When the wiring is internal — the system itself hands the method to a runtime as a
-  callback — prefer a register narrative step on the registering method instead: it keeps
-  reachability derived, so the callback correctly returns to unused if its registrar does. A
-  sibling-subsystem declaration is a typed second-best to modeling the edge (e.g. a published-Portal
-  passthrough); it must never be used to dodge an edge that could legally exist.
+  A declared invocation from outside the modelled narrative graph. It sits on an L3 contract method,
+  or on a Portal component, where it is the entry every verb inherits and a verb may override only
+  its scope. It is the typed, reviewable acknowledgment that a real caller exists where no narrative
+  shows one. Kind `entry` says callers outside the design reach a Portal verb over the Portal's
+  transport, with a `scope` on network transports. Kind `runtime` says the process's own runtime
+  invokes it (a composition root, scheduler, signal or framework callback). Unused-detection seeds
+  the method (or every verb of the Portal) as an entrypoint, alongside lifecycle entrypoints,
+  Observers and the implementations of imported extension points; Portals are no longer seeds of
+  their own, so a Portal verb nothing reaches and nobody declared is reported. Honesty guards: the
+  caller prose is mandatory (INVOKED_BY_UNDESCRIBED), a runtime declaration the internal walk
+  already reaches is stale (INVOKED_BY_REDUNDANT), and an entry on a non-Portal is
+  ENTRY_ON_NON_PORTAL. An entry is never redundant, because it also states the verb's scope for the
+  network rules and the flow matrix. When the wiring is internal (the system itself hands the method
+  to a runtime as a callback), prefer a register narrative step on the registering method.
 fields:
   - name: kind
     type: InvocationKind
-    description: Who invokes the method from outside the modeled narrative graph.
+    description: >-
+      entry (callers outside the design reach a Portal verb) or runtime (the process's own runtime
+      invokes it)
     optional: false
   - name: caller
     type: string
     description: >-
-      Who invokes this method and via what path — name the command, doc, or subsystem so a human
-      reviewer can verify the claim (the trustedLinks doctrine: a reviewable exception, not tribal
-      knowledge).
+      Who invokes it and via what path: name the clients, command, runtime hook or subsystem, so a
+      human reviewer can verify the claim (the trustedLinks doctrine: a reviewable exception, not
+      tribal knowledge).
     optional: false
+  - name: scope
+    type: EntryScope
+    description: >-
+      Entry on a network transport only: where its callers come from, outside (the default) or
+      network. A scope on a local or in-process verb, or on a runtime declaration, is
+      ENTRY_SCOPE_NOT_NETWORK
+    optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-08-11T15:25:27.922Z'
-updatedAt: '2026-10-04T23:39:03.167Z'
+updatedAt: '2026-10-06T12:53:49.623Z'

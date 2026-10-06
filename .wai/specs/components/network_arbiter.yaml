@@ -1,0 +1,32 @@
+id: network_arbiter
+name: Network Arbiter
+description: >-
+  Judges a reach model against the network rules and answers the findings, deciding nothing else.
+
+  - Inside a declared network, only a gateway-variant Portal may take an outside entry. A modelled
+  call from outside the network must also land on one. Either violation is GATEWAY_BYPASSED.
+
+  - More than one gateway taking outside entries in one network is MULTIPLE_GATEWAYS.
+
+  - A network-scoped entry needs an enclosing network (ENTRY_SCOPE_UNBOUNDED, a notice: absent any
+  declared network the family is the implicit boundary for the proof, and flows cannot be narrowed
+  by isolation).
+
+  - In a family-scoped model, a network-scoped entry needs a modelled caller inside that boundary
+  (ENTRY_UNPROVEN).
+
+  - An export at an audience wider than project on a network-transport verb needs the outermost
+  network's gateway entered from outside (EXPORT_BEYOND_NETWORK).
+
+  Scope-blind rules (ENTRY_SCOPE_NOT_NETWORK and the rest of the entry shape) are
+  entry-declarations', not this arbiter's. Pure: the same model always gives the same findings, in a
+  stable order, each sited at the verb or the call it names, so an allow covers exactly one.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: arbiter
+status: complete
+createdAt: '2026-10-06T12:57:34.808Z'
+updatedAt: '2026-10-06T12:57:36.818Z'

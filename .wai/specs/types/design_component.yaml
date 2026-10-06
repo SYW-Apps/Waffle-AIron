@@ -36,10 +36,6 @@ fields:
     type: string
     description: On a Store
     optional: true
-  - name: portalType
-    type: string
-    description: On a Portal
-    optional: true
   - name: owns
     type: list<string>
     description: Keys of its private member blocks
@@ -74,12 +70,6 @@ fields:
   - name: ext
     type: map<string, any>
     optional: true
-  - name: mounts
-    type: list<PortalMount>
-    description: >-
-      A listener's mounts as declared, each portal as a key: the entrypoint facts a consumer reads
-      to decide what serves what (empty when the component mounts nothing)
-    optional: false
   - name: patterns
     type: list<PatternRef>
     description: The pack-declared patterns the component realizes, as declared (empty when none)
@@ -88,7 +78,21 @@ fields:
     type: list<ExternalLink>
     description: The opaque external references the component documents, as declared (empty when none)
     optional: false
+  - name: transport
+    type: string
+    description: 'On a Portal: its transport (format 2.0 replaces portalType and its HTTP_API spelling)'
+    optional: true
+  - name: abi
+    type: string
+    description: 'On an InProcess Portal that declares one: how a foreign language links it'
+    optional: true
+  - name: invokedBy
+    type: DeclaredInvocation
+    description: >-
+      On a Portal that declares one: the entry its verbs inherit, the fact a consumer reads to
+      decide what is entered from outside (format 2.0 replaces the listener mounts)
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:13.764Z'
-updatedAt: '2026-10-04T17:32:14.873Z'
+updatedAt: '2026-10-06T12:54:16.021Z'

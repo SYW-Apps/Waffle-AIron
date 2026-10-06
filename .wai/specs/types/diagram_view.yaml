@@ -12,5 +12,9 @@ values:
     description: The types and their relations (the ERD)
   - name: databases
     description: The declared databases and their tables
+  - name: network
+    description: >-
+      The derived network view: the declared networks as nested boundaries, the gateways on them, an
+      outside node, and the allowed flows aggregated per workload pair
 createdAt: '2026-10-04T23:32:53.412Z'
-updatedAt: '2026-10-04T23:32:53.861Z'
+updatedAt: '2026-10-06T12:53:40.931Z'

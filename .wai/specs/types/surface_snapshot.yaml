@@ -63,6 +63,13 @@ fields:
       pinned from the family, instance for one pinned through source.path; absent on surfaces
       written before externals and on imports.
     optional: true
+  - name: targetLanguage
+    type: string
+    description: >-
+      The producer's targetLanguage (L0), lowercased: what a consumer in another language judges a
+      native-ABI library call against (LANGUAGE_BRIDGE_MISSING); absent when the producer declares
+      none, or on snapshots written before it was carried
+    optional: true
 methods:
   - name: isProvidedBy
     signature: 'isProvidedBy(provider: string): boolean'
@@ -120,4 +127,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-04T23:38:39.341Z'
+updatedAt: '2026-10-06T13:01:35.516Z'

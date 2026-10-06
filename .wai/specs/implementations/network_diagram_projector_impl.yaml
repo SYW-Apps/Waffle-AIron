@@ -1,0 +1,47 @@
+id: network_diagram_projector_impl
+name: Network Diagram Projector Implementation
+description: The network picture, pure.
+contract: inetwork_diagram_projector
+sourcePath: src/network/diagram.ts
+methods:
+  - name: view
+    narrative:
+      - stepNumber: 1
+        description: Take the networks of the model, outermost first, gateways marked
+        type: local
+      - stepNumber: 2
+        description: >-
+          Collect the workloads: each project or component that sends or receives a flow, placed in
+          its network, plus an outside node when any flow comes from outside
+        type: local
+      - stepNumber: 3
+        description: >-
+          Aggregate the flows per caller workload, callee workload and transport, merging evidence
+          and counting verbs
+        type: local
+      - stepNumber: 4
+        description: Answer the view model
+        type: return
+        outcome: NetworkViewModel
+    detail: full
+  - name: mermaid
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Open a flowchart; write each network as a subgraph nested in its parent's, its workloads
+          inside it and its gateways first
+        type: local
+      - stepNumber: 2
+        description: Write the outside node when the view has one
+        type: local
+      - stepNumber: 3
+        description: Write each aggregated edge, labelled with its transport and verb count, in a stable order
+        type: local
+      - stepNumber: 4
+        description: Answer the Mermaid document
+        type: return
+        outcome: mermaid document
+    detail: full
+status: complete
+createdAt: '2026-10-06T13:12:08.707Z'
+updatedAt: '2026-10-06T13:12:09.354Z'

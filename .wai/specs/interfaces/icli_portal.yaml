@@ -409,6 +409,36 @@ methods:
     endpoint:
       transport: CLI
       command: wairon skills install
+  - name: networkFlows
+    description: '`wairon network flows`: the allowed-flows matrix (JSON, CSV or Markdown).'
+    signatureFrom: cli_runner.runNetworkFlows
+    endpoint:
+      transport: CLI
+      command: wairon network flows
+  - name: networkPolicy
+    description: '`wairon network policy --bindings <file>`: generated network policy.'
+    signatureFrom: cli_runner.runNetworkPolicy
+    endpoint:
+      transport: CLI
+      command: wairon network policy
+  - name: networkDiagram
+    description: '`wairon network diagram`: the network picture as Mermaid.'
+    signatureFrom: cli_runner.runNetworkDiagram
+    endpoint:
+      transport: CLI
+      command: wairon network diagram
+  - name: networkCheck
+    description: '`wairon network check --observed <file>`: observed live flows against the matrix.'
+    signatureFrom: cli_runner.runNetworkCheck
+    endpoint:
+      transport: CLI
+      command: wairon network check
+  - name: networkWhy
+    description: '`wairon network why <from> <to>`: why one party may reach another.'
+    signatureFrom: cli_runner.runNetworkWhy
+    endpoint:
+      transport: CLI
+      command: wairon network why
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-04T18:16:36.040Z'
+updatedAt: '2026-10-06T13:13:46.313Z'

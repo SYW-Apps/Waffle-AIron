@@ -343,6 +343,20 @@ methods:
         type: call
         targetComponent: mcp_externals_orchestrator
         targetMethod: declare
+  - name: sdd_get_network_flows
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the network flows workflow
+        type: call
+        targetComponent: mcp_network_orchestrator
+        targetMethod: flows
+  - name: sdd_explain_flow
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the flow explanation workflow
+        type: call
+        targetComponent: mcp_network_orchestrator
+        targetMethod: explain
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:17:36.689Z'
+updatedAt: '2026-10-06T13:15:33.663Z'

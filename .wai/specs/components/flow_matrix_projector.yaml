@@ -1,0 +1,25 @@
+id: flow_matrix_projector
+name: Flow Matrix Projector
+description: >-
+  Derives the allowed-flows matrix from a reach model, and explains a flow from it. Only network
+  transports produce flows; in-process and local verbs never do.
+
+  - Each modelled call into a network verb is a flow from its calling component, with the networks
+  it enters and the gateway it crosses.
+
+  - Each outside entry is a flow from outside.
+
+  - Each network entry is a flow from the whole network. In a family-scoped model it is narrowed to
+  its modelled callers when any exist, so the matrix is least-privilege by construction.
+
+  The explanation of a flow is its chain from the entry or modelled call through every gateway.
+  Pure.
+subsystem: sdd_network
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: projector
+status: complete
+createdAt: '2026-10-06T13:10:11.840Z'
+updatedAt: '2026-10-06T13:10:30.129Z'

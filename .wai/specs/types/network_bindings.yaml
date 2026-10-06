@@ -1,0 +1,25 @@
+kind: value-object
+id: network_bindings
+name: NetworkBindings
+description: >-
+  The deployment side of the derived networking, kept by the team outside .wai/ and passed by path:
+  which workload each design name runs as, and what outside means for a policy. Keys are project
+  ids, `project::subsystem` or `project::portal`, the most specific winning. A name with no binding
+  gets the placeholder label wairon.dev/workload: <name>, listed in the output, so nothing is
+  silently opened.
+subsystem: sdd_network
+fields:
+  - name: workloads
+    type: map<string, WorkloadBinding>
+    description: Each design name's workload
+    optional: false
+  - name: outside
+    type: list<string>
+    description: >-
+      The address blocks a policy admits for callers from outside the outermost network (for example
+      0.0.0.0/0, or an intranet's ranges): deployment facts, never in a spec
+    optional: true
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:37.680Z'
+updatedAt: '2026-10-06T13:09:38.286Z'

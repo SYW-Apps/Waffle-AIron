@@ -788,6 +788,60 @@ methods:
         The commander program's preAction hook in src/cli/index.ts (cli_portal), once before every
         command's action runs — a hook the framework calls, not an action endpoint, so no portal
         narrative steps into it.
+  - name: runNetworkFlows
+    description: >-
+      `wairon network flows`: print (or with --out write) the allowed-flows matrix of the project,
+      its family at a project that declares members, as JSON, CSV or Markdown. A team reviews it in
+      a pull request as the authoritative who-talks-to-whom: a design change that adds a dependency
+      shows up as a new row before any code or firewall change exists.
+    signature: 'runNetworkFlows(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkPolicy
+    description: >-
+      `wairon network policy --bindings <file>`: generate network policy (Kubernetes NetworkPolicy)
+      from the matrix and the team's bindings file, kept outside .wai/; print or write it, and list
+      every design name the bindings did not map (each given a placeholder label, never silently
+      opened). Committed to the deployment repository and diffed in CI, it turns a design change
+      into a policy diff the security reviewer reads in the same pull request.
+    signature: 'runNetworkPolicy(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkDiagram
+    description: >-
+      `wairon network diagram`: print (or write) the network picture as Mermaid: networks as nested
+      boundaries, gateways on them, an outside node, flows per workload pair. The input to a
+      threat-modelling session and the architecture page.
+    signature: 'runNetworkDiagram(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkCheck
+    description: >-
+      `wairon network check --observed <file> [--bindings <file>]`: compare observed live flows (a
+      service-mesh or eBPF export, or flow logs the team's tooling named) with the matrix; print the
+      unexpected flows, the unexercised ones and the unknown verbs, and exit non-zero when anything
+      unexpected was seen.
+    signature: 'runNetworkCheck(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkWhy
+    description: >-
+      `wairon network why <from> <to>`: print why one party may reach another, from the design: each
+      allowing flow's chain from its entry or modelled call through every gateway, or that nothing
+      allows it. Answers a firewall change request or an incident question in one command.
+    signature: 'runNetworkWhy(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T10:17:05.389Z'
+updatedAt: '2026-10-06T13:13:18.837Z'

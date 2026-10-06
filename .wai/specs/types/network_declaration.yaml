@@ -1,0 +1,19 @@
+kind: value-object
+id: network_declaration
+name: NetworkDeclaration
+description: >-
+  A project's declaration that it and every member below it form one isolated network boundary. It
+  is logical design, not deployment: it holds no address, range or region. `network: true` is the
+  short form of an empty declaration. Networks nest one level per declaring project. Inside one,
+  only a gateway-variant Portal may take entries from outside it, and a modelled call from outside
+  must land on one (GATEWAY_BYPASSED). A part cannot declare one, because it is a folder of the same
+  system.
+fields:
+  - name: description
+    type: string
+    description: What the boundary encloses, in the declaring project's words; shown on the network diagram
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-10-06T12:54:43.966Z'
+updatedAt: '2026-10-06T12:54:44.558Z'

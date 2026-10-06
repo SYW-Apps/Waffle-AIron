@@ -1,0 +1,22 @@
+id: network_codec
+name: Network Codec
+description: >-
+  Encodes the flow matrix in its neutral formats (JSON, CSV, Markdown) and as generated policy.
+
+  Kubernetes NetworkPolicy gets one ingress policy per bound workload: a podSelector from the
+  binding, and ingress admitting exactly its matrix sources (podSelector peers, and the bindings'
+  outside blocks for an outside-entered gateway), with the port when the binding names one. Default
+  deny is implied by the policy existing.
+
+  A name the bindings do not map gets the placeholder label wairon.dev/workload: <name> and is
+  listed as unbound, so nothing is silently opened. Deterministic: the same flows and bindings give
+  byte-identical output. Pure.
+subsystem: sdd_network
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: codec
+status: complete
+createdAt: '2026-10-06T13:10:15.408Z'
+updatedAt: '2026-10-06T13:10:30.896Z'

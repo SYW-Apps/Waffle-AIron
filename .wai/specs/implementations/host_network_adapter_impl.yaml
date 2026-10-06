@@ -1,0 +1,16 @@
+id: host_network_adapter_impl
+name: Host Network Adapter Implementation
+description: In-process forward onto the network portal.
+contract: ihost_network_adapter
+sourcePath: src/server/adapters/network.ts
+methods:
+  - name: view
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: view
+status: complete
+createdAt: '2026-10-06T13:14:47.690Z'
+updatedAt: '2026-10-06T13:14:48.321Z'

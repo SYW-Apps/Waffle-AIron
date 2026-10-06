@@ -88,7 +88,8 @@ methods:
         label: reach
         description: >-
           Where does the edge land? An edge that resolved inside its own subsystem is the stereotype
-          matrix's business, not this rule's: continue with the next edge
+          matrix's business, and a library edge (an exported InProcess Portal of another project) is
+          library-calls': continue with the next edge
         type: switch
         'on': edge.reach
         cases:
@@ -102,6 +103,8 @@ methods:
             step: 13
           - value: cross-project
             step: 6
+          - value: library
+            step: 1
         defaultStep: 1
       - stepNumber: 4
         label: invalidReference
@@ -140,9 +143,9 @@ methods:
       - stepNumber: 10
         label: surfaceCrosser
         description: >-
-          A contract entry declares the remote surface — a contained member's live table, a declared
-          external's pin, or a foreign snapshot: is the depending component something other than an
-          Adapter?
+          A contract entry that is not a library declares the remote surface (a contained member's
+          live table, a declared external's pin, or a foreign snapshot): is the depending component
+          something other than an Adapter?
         type: branch
         condition: edge.from.componentType is not Adapter
         onFalseStep: 1
@@ -1006,15 +1009,15 @@ methods:
         endStep: 9
       - stepNumber: 2
         description: >-
-          Is this a Portal with a transport its methods must bind? expected =
-          PORTAL_TRANSPORT[comp.portalType], a private constant of this file (HTTP_API to HTTP,
-          gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI; Custom to none). A Portal without a
-          portalType (the portal-fields rule reports that) or a Custom one carries no endpoint
-          obligation, and a component that is not a Portal is non-portal-endpoints' subject
+          Is this a Portal whose transport requires an endpoint on each verb? expected =
+          comp.transport, when comp.transport.requiresEndpoint() holds. A Portal without a transport
+          (the portal-fields rule reports that), an InProcess one (its verbs are its contract
+          methods) or a Custom one carries no endpoint obligation, and a component that is not a
+          Portal is non-portal-endpoints' subject
         type: branch
         condition: >-
-          comp.componentType is Portal, comp.portalType is set, and PORTAL_TRANSPORT maps it to a
-          transport
+          comp.componentType is Portal, comp.transport is set, and comp.transport.requiresEndpoint()
+          holds
         onFalseStep: 1
       - stepNumber: 3
         description: isDraftCtx = ctx.isComponentDraft(comp.id)
@@ -1470,6 +1473,66 @@ methods:
         type: local
     symbol: check
     exportedVia: lifecycleEffectClosureRule
+  - name: libraryCalls
+    narrative:
+      - stepNumber: 1
+        label: edges
+        description: For each edge of ctx.dependencyEdges().all whose reach is library
+        type: loop
+        loopKind: forEach
+        over: the library edges of ctx.dependencyEdges().all
+        endStep: 8
+      - stepNumber: 2
+        description: >-
+          The entry the edge resolved to: its transport, abi and the producer snapshot's
+          targetLanguage
+        type: local
+      - stepNumber: 3
+        description: A native-ABI library called across languages needs a binding
+        type: branch
+        condition: >-
+          the entry declares no abi, the producer's targetLanguage is known and differs from the
+          caller's effective targetLanguage
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report LANGUAGE_BRIDGE_MISSING (error, on edge.from.id; draft context edge.draftContext;
+          carrying the edge's resolution) naming both languages: declare abi on the producer's
+          Portal (c, wasm) or put a network Portal in front
+        type: local
+      - stepNumber: 5
+        description: Only pure or read logic has a purity bound
+        type: branch
+        condition: edge.from is an Orchestrator whose dependencyClass is pure or read
+        onFalseStep: 1
+      - stepNumber: 6
+        label: calls
+        description: >-
+          For each call step, register step and declared `calls` entry of edge.from's
+          implementations that reaches a verb of the entry
+        type: loop
+        loopKind: forEach
+        over: the calls of edge.from's implementations into the entry's verbs
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Is the verb's declared effect out of the caller's reach? pure reaches none only; read
+          reaches none and read; an undeclared effect counts as neither
+        type: branch
+        condition: >-
+          the verb's effect is not none, and (edge.from's dependencyClass is pure or the effect is
+          not read)
+        onFalseStep: 6
+      - stepNumber: 8
+        label: callsEnd
+        description: >-
+          Report LIBRARY_CALL_IMPURE (error, on the implementation, sited at the method and step;
+          draft context edge.draftContext) naming the verb, its effect (or that none is declared)
+          and the caller's dependencyClass: declare the verb's effect on the library when it is
+          effect-free, or narrow the caller's class
+        type: local
+    symbol: check
+    exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-04T11:53:08.623Z'
+updatedAt: '2026-10-06T13:02:31.618Z'

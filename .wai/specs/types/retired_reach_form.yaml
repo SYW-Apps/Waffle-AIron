@@ -1,0 +1,27 @@
+kind: enum
+id: retired_reach_form
+name: RetiredReachForm
+description: >-
+  A form the reachability model retired, as the scan met it in a stored spec. The loader reads each
+  one compatibly for one release, and the reachability migration rewrites it.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/core/reachability-migration.ts
+values:
+  - name: portal-type
+    description: A Portal's `portalType` (HTTP_API read as HTTP)
+  - name: listener-mounts
+    description: 'A Portal''s `mounts`: the portals it served, their prefixes and router entries'
+  - name: invoked-by-kind
+    description: 'An invokedBy of a retired kind: external or sibling-subsystem'
+  - name: export-type
+    description: >-
+      An authored `type` on an L1 or L0 export entry, now derived from the backing Portal's
+      transport
+  - name: in-process-endpoint
+    description: >-
+      A Custom endpoint whose address names an in-process call (`in-process …`,
+      `<package>#<function>`), or a Custom Portal that binds no endpoint at all
+createdAt: '2026-10-06T13:06:37.170Z'
+updatedAt: '2026-10-06T13:06:37.770Z'

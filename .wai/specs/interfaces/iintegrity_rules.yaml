@@ -140,24 +140,6 @@ methods:
       - code: PUBLIC_INTERFACE_FOREIGN_COMPONENT
         severity: error
         summary: Subsystem publishing a component it does not own
-  - name: publicSurfaceDeclaredType
-    description: >-
-      Rule public-surface-declared-type. A publicInterface entry's declared type must be realizable
-      by the stereotype of its backing component; Custom entries whose prose implies eventing must
-      be backed by an event-capable component.
-    signature: 'publicSurfaceDeclaredType(ctx: RuleContext): void'
-    returns: void
-    params:
-      - name: ctx
-        type: RuleContext
-        description: The validation run's shared read model and issue sink
-    findings:
-      - code: PUBLIC_INTERFACE_TYPE_MISMATCH
-        severity: error
-        summary: Backing component cannot realize the declared interface type
-      - code: PUBLIC_INTERFACE_EVENT_MISTYPED
-        severity: warning
-        summary: Custom interface describing eventing backed by a non-event component
   - name: publicSurfaceBoundContract
     description: >-
       Rule public-surface-bound-contract. A publicInterface entry that binds an L3 interface must
@@ -253,20 +235,24 @@ methods:
   - name: exportTables
     description: >-
       Rule export-tables. Every level's export table must resolve the way a module resolver resolves
-      `export … from`: one public name binds one target (EXPORT_ID_DUPLICATE when two wildcards — or
-      two explicit entries — bind a name to different targets, or two public names share one
-      nameKey, since a bare import could not tell them apart; the name is left out), no chain leads
-      back to itself (EXPORT_CYCLE — an error for a named chain that never reaches a component or
-      type, a warning for a wildcard cycle, which resolves to its union), every entry names a source
-      and an item that exist, that the source exports and, for an own type, that the level owns — a
-      subsystem-owned type at L1, a project-level type (no subsystem) for an L0 `{ typeDef }`
-      without `from` — under a public name of [a-z0-9-_]+ (EXPORT_INVALID), every re-exported
-      component can serve a boundary caller — a Portal, a gateway being a Portal variant, or an
-      Observer for events (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports), and an L0 entry that
-      re-exports a member's or an external's export never declares a wider audience than that export
-      has (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. The rule judges
-      the facts the export resolver recorded in the scan — for the bound root's table and every
-      contained member's — and resolves nothing itself.
+      `export … from`. One public name binds one target: EXPORT_ID_DUPLICATE when two wildcards (or
+      two explicit entries) bind a name to different targets, or two public names share one nameKey,
+      since a bare import could not tell them apart; the name is left out. No chain leads back to
+      itself: EXPORT_CYCLE, an error for a named chain that never reaches a component or type, a
+      warning for a wildcard cycle, which resolves to its union. Every entry names a source and an
+      item that exist, that the source exports and, for an own type, that the level owns (a
+      subsystem-owned type at L1, a project-level type with no subsystem for an L0 `{ typeDef }`
+      without `from`), under a public name of [a-z0-9-_]+ (EXPORT_INVALID). Every exported component
+      can serve what its role promises (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports): an entry
+      consumers call must be a Portal (a gateway being a Portal variant) or an Observer for events,
+      and an entry consumers implement (role implement, an extension point) may also be an Adapter
+      whose realization consumers supply. An L0 entry that re-exports a member's or an external's
+      export never declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a
+      re-export can narrow reach, never widen it. An entry's export kind is derived from its backing
+      Portal's transport and no longer authored, so no rule compares an authored kind with the
+      stereotype; the retired public-surface-declared-type rule and its codes are gone. The rule
+      judges the facts the export resolver recorded in the scan, for the bound root's table and
+      every contained member's, and resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -291,7 +277,9 @@ methods:
           level does not own, or a malformed public name
       - code: EXPORT_UNCONSUMABLE
         severity: error
-        summary: 'An exported component no boundary caller may reach: neither a Portal nor an Observer'
+        summary: >-
+          An exported component that cannot serve its role: called but neither a Portal nor an
+          Observer, or implemented but neither a Portal nor an Adapter
       - code: EXPORT_WIDENS_AUDIENCE
         severity: error
         summary: An L0 entry declares a wider audience than the member or external export it re-exports
@@ -629,6 +617,27 @@ methods:
         summary: >-
           A rename-trace entry equals a live key of the same kind, or two elements claim one former
           key
+  - name: implementsContracts
+    description: >-
+      Rule implements-contracts. An interface that declares `implements: alias::name` realizes
+      another project's extension point, so it must declare every method of that contract with the
+      same params and returns, read from the export the reference resolves to (a contained member's
+      live table, or a declared external's pin). Whether the reference resolves and names an entry
+      exported with role implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule
+      judges the shape once it resolves. Extra methods are the implementer's own and are not
+      reported.
+    signature: 'implementsContracts(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: IMPLEMENTS_MISMATCH
+        severity: error
+        summary: >-
+          An interface implementing an extension point lacks one of its methods, or declares one
+          with different params or returns
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-05T06:52:51.263Z'
+updatedAt: '2026-10-06T13:03:04.324Z'

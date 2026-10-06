@@ -323,6 +323,44 @@ methods:
         outcome: ExternalStatus[]
     detail: full
     symbol: getWebProjectExternals
+  - name: getProjectNetwork
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal through the single auth authority's session
+          bridge (rejects an expired or absent session as unauthenticated)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Confirm the project is in the caller's resolved read set through the web project
+          orchestrator's scoped list, refusing anything else as Forbidden
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: list
+      - stepNumber: 3
+        description: >-
+          Resolve the project's root within the principal's authorized set through the project
+          repository; an unresolvable one is Forbidden too, with no existence leak
+        type: call
+        targetComponent: project_repository
+        targetMethod: resolveRoot
+      - stepNumber: 4
+        description: >-
+          Bind that root with the caller's reach: the listed projects from step 2, so the family
+          above the project is composed only when its root is listed
+        type: local
+      - stepNumber: 5
+        description: Read the network view over the bound root through the host network adapter
+        type: call
+        targetComponent: host_network_adapter
+        targetMethod: view
+      - stepNumber: 6
+        description: Return the view model
+        type: return
+        outcome: NetworkViewModel
+    detail: full
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-03T13:38:52.555Z'
+updatedAt: '2026-10-06T13:14:52.897Z'

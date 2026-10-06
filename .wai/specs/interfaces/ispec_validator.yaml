@@ -168,6 +168,20 @@ methods:
     signature: 'builtinProjectKinds(): list<string>'
     returns: list<string>
     params: []
+  - name: reachModel
+    description: >-
+      The bound project's own reach model: the rule context validateProject builds, from the same
+      loaded specs, without running a rule, projected with the project's own network declaration
+      (reach_model_projector.project). The family run composes the family's model from each selected
+      project's; the derived networking outputs read it. Reads; writes nothing.
+    signature: 'reachModel(options?: ValidationOptions): ReachModel'
+    returns: ReachModel
+    params:
+      - name: options
+        type: ValidationOptions
+        description: The run's scope, exactly as validateProject takes it
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T10:09:29.538Z'
+updatedAt: '2026-10-06T13:00:07.880Z'

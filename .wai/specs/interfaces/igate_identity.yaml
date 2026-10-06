@@ -9,18 +9,20 @@ methods:
   - name: compute
     description: >-
       The gate identity of one project: its OWN spec identity digested together with the DESIGN
-      doctrine that governs it (the built-in rules that judge design, by name, codes and default
-      severities; the packs, profiles, languages, patterns, guarantees, assertions and pack rules;
-      the project's type and its rule tuning without the code-conformance tuning — rules.conformance
-      and the sddRuleSeverity overrides of code-judging codes), its own consumed contract inputs,
-      its `composition` block, and each direct member's composition subject keyed by alias. Rules
-      that judge code, and their tuning, are left out, so neither an analyzer upgrade nor a
-      code-severity change ever stales a lock; agent-facing prose (skills, instructions) is left
-      out, so a documentation edit never does either; and from format 3 the content is the DESIGN
-      identity (state_hash.ownDesign), so code linkage never does. The algorithm marker follows the
-      content identity it is given: `sha256+design+doctrine+inputs+members` for a design identity
+      doctrine that governs it, its own consumed contract inputs, its `composition` block, its
+      `network` declaration when it makes one, and each direct member's composition subject keyed by
+      alias. The design doctrine is the built-in rules that judge design (by name, codes and default
+      severities); the packs, profiles, languages, patterns, guarantees, assertions and pack rules;
+      and the project's type and its rule tuning without the code-conformance tuning
+      (rules.conformance and the sddRuleSeverity overrides of code-judging codes). Rules that judge
+      code, and their tuning, are left out, so neither an analyzer upgrade nor a code-severity
+      change ever stales a lock. Agent-facing prose (skills, instructions) is left out, so a
+      documentation edit never does either. From format 3 the content is the DESIGN identity
+      (state_hash.ownDesign), so code linkage never does. A project that declares no network digests
+      exactly as before, so no existing lock stales. The algorithm marker follows the content
+      identity it is given: `sha256+design+doctrine+inputs+members` for a design identity
       (`sha256-design`), and the previous `sha256+content+doctrine+inputs+members` for a
-      full-content identity (`sha256`) — which is how the same pure function recomputes a format-2
+      full-content identity (`sha256`), which is how the same pure function recomputes a format-2
       lock's identity exactly as it was taken. A member's specs are never hashed here: the member's
       RECORDED subject stands for them. Pure: the same inputs always give the same identity.
     signature: >-
@@ -45,7 +47,7 @@ methods:
         description: The project's own consumed contract inputs, as canonical content keys
       - name: gate
         type: GateConfig
-        description: The project's type, rule tuning and composition block
+        description: The project's type, rule tuning, composition block and network declaration
       - name: members
         type: map<string, string>
         description: >-
@@ -75,4 +77,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-10-06T10:09:11.221Z'
+updatedAt: '2026-10-06T13:05:42.599Z'

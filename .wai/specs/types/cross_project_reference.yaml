@@ -4,16 +4,18 @@ name: CrossProjectReference
 description: >-
   One reference that leaves the project that makes it. The scan binds every reference before this is
   built, so a reference is cross-project when the project that owns the referring spec differs from
-  the project its bound target lies in — whatever form it was written in (an `alias::name`, or a
+  the project its bound target lies in, whatever form it was written in (an `alias::name`, or a
   deprecated leading `::`, `super::` or member path the scan still binds for one release). The
   positions counted: a component's dependsOn; a narrative call, register or dispatch step's
   targetComponent (with its targetMethod, or its capability); an intent method's declared `calls`; a
-  Portal dispatch-table binding; a listener's mounts; a subsystem lifecycle entry; an `auth.from:
-  component:` source; an L1 publicInterfaces re-export (`from`, `component`, `typeDef`); and a type
-  named by a field, param or return. Not counted: `owns` (a pattern never owns across a subsystem,
-  let alone a project), trustedLinks (judged by TRUSTED_LINK_CROSSES_PROJECT), L0 re-exports (judged
-  by the export tables), and a reference bound as outside (its producer is not in the scan; the
-  verdict comes through the parent until stage 4).
+  Portal dispatch-table binding; a subsystem lifecycle entry; an `auth.from: component:` source; an
+  L1 publicInterfaces re-export (`from`, `component`, `typeDef`); an interface's `implements`; and a
+  type named by a field, param or return. A call, calls or dispatch reference that names a method is
+  what the family run seeds the producer's reachability walk with, and what the derived flow matrix
+  reads as a modelled flow. Not counted: `owns` (a pattern never owns across a subsystem, let alone
+  a project), trustedLinks (judged by TRUSTED_LINK_CROSSES_PROJECT), L0 re-exports (judged by the
+  export tables), and a reference bound as outside (its producer is not in the scan; the verdict
+  comes through the parent until stage 4).
 subsystem: sdd_core
 fields:
   - name: specId
@@ -61,4 +63,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:40:27.050Z'
-updatedAt: '2026-09-27T10:33:45.327Z'
+updatedAt: '2026-10-06T12:55:14.867Z'

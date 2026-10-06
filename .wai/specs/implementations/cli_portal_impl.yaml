@@ -610,6 +610,46 @@ methods:
         targetComponent: cli_runner
         targetMethod: runSkillsInstall
     symbol: install
+  - name: networkFlows
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network flows` with its parsed flags to cli_runner.runNetworkFlows.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkFlows
+    symbol: flows
+  - name: networkPolicy
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network policy` with its parsed flags to cli_runner.runNetworkPolicy.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkPolicy
+    symbol: policy
+  - name: networkDiagram
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network diagram` with its parsed flags to cli_runner.runNetworkDiagram.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkDiagram
+    symbol: diagram
+  - name: networkCheck
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network check` with its parsed flags to cli_runner.runNetworkCheck.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkCheck
+    symbol: check
+  - name: networkWhy
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network why` with its arguments and flags to cli_runner.runNetworkWhy.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkWhy
+    symbol: why <from> <to>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-05T23:37:36.628Z'
+updatedAt: '2026-10-06T13:14:00.669Z'

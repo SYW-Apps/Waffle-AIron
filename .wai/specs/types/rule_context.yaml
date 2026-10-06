@@ -340,7 +340,9 @@ methods:
     description: >-
       Every dependsOn edge in the tree, resolved on first ask and kept: the prologue the five
       dependency rules each used to re-pay before they could judge anything, including the pack
-      allowedEdges escape that must relax the whole matrix or none of it
+      allowedEdges escape that must relax the whole matrix or none of it. An edge into another
+      project whose contract entry is backed by an InProcess Portal is classified library once,
+      here, so no boundary or matrix rule needs its own exemption
   - name: specIds
     signature: 'specIds(): SpecId[]'
     returns: list<SpecId>
@@ -415,4 +417,4 @@ methods:
       another project and how to name its type.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-05T23:35:59.207Z'
+updatedAt: '2026-10-06T13:02:47.494Z'

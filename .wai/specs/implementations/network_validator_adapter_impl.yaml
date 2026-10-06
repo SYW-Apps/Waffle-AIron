@@ -1,0 +1,16 @@
+id: network_validator_adapter_impl
+name: Network Validator Adapter Implementation
+description: The in-process forward onto the validator's published portal.
+contract: inetwork_validator_adapter
+sourcePath: src/network/adapters/validator.ts
+methods:
+  - name: reachModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's reach model
+        type: call
+        targetComponent: validator_portal
+        targetMethod: reachModel
+status: complete
+createdAt: '2026-10-06T13:11:37.405Z'
+updatedAt: '2026-10-06T13:11:38.037Z'

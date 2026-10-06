@@ -12,7 +12,10 @@ fields:
     optional: true
   - name: methods
     type: string
-    description: Casing for interface method names (e.g. camelCase)
+    description: >-
+      Casing for interface method names (e.g. camelCase). When unset, it follows the target
+      language's convention (see methodCasingFor), so a Rust tree is snake_case without configuring
+      anything
     optional: true
   - name: types
     type: string
@@ -50,7 +53,22 @@ fields:
     type: any
     description: Per-component-type prefix, suffix, or regex naming constraints
     optional: true
-methods: []
+methods:
+  - name: methodCasingFor
+    signature: 'methodCasingFor(targetLanguage: string?): string'
+    params:
+      - name: targetLanguage
+        type: string?
+        description: >-
+          The effective targetLanguage of the subsystem holding the method, lowercased; none when
+          the tree declares none
+    returns: string
+    description: >-
+      The casing a method name must have in a tree of this target language: the configured `methods`
+      casing when set, else the language's convention: snake_case for rust, python, ruby, c and
+      elixir; PascalCase for csharp and go exports; camelCase for typescript, javascript, java,
+      kotlin, swift, dart and any language not listed. The naming-conventions rule and the authoring
+      and rename tools ask it, so define and rename accept the same names. Pure
 sourcePath: src/models/project.ts
 createdAt: '2026-07-06T20:47:01.138Z'
-updatedAt: '2026-10-04T10:20:33.951Z'
+updatedAt: '2026-10-06T12:54:54.369Z'

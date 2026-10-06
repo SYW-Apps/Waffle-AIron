@@ -2,21 +2,23 @@ kind: enum
 id: invocation_kind
 name: InvocationKind
 description: >-
-  Who invokes a method from outside the modeled narrative graph. Declaring it seeds the method as an
-  entrypoint, so reachability propagates through its narrative.
+  Who invokes a method from outside the modelled narrative graph. Declaring it seeds the method as
+  an entrypoint, so reachability propagates through its narrative. The retired kinds are read
+  compatibly for one release and reported (INVOKED_BY_RETIRED_KIND): `external` is read as `entry`
+  on a Portal and as `runtime` elsewhere, and `sibling-subsystem` as `runtime` (the caller is in the
+  same tree, so model the call).
 fields: []
 methods: []
 sourcePath: src/models/specs.ts
 values:
+  - name: entry
+    description: >-
+      Callers outside the design reach this Portal verb over the Portal's transport. Only a Portal
+      declares one (ENTRY_ON_NON_PORTAL), on the component (every verb inherits it) or on a verb
+      (overriding the scope). On a network transport it carries a scope
   - name: runtime
     description: >-
-      A composition root, scheduler or process host outside the modeled call chains (bootstrap start
-      and stop, signal handlers)
-  - name: external
-    description: A caller outside the system entirely (library embedders, third-party integrations)
-  - name: sibling-subsystem
-    description: >-
-      A caller in this tree across a boundary that licenses no modeled component edge (a published
-      code barrel onto an internal component)
+      The process's own runtime invokes it outside the modelled call chains: a composition root, a
+      scheduler, a signal or shutdown hook, a framework callback. Never an entry and never a flow
 createdAt: '2026-10-04T23:33:04.251Z'
-updatedAt: '2026-10-04T23:33:04.687Z'
+updatedAt: '2026-10-06T12:53:28.190Z'

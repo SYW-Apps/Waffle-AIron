@@ -44,8 +44,9 @@ fields:
   - name: type
     type: string
     description: >-
-      Surface kind, aligned with subsystem publicInterfaces: REST, GraphQL, MessageBus, RPC, or
-      Custom; inherited from the source's entry when omitted.
+      LEGACY, no longer authored: the export kind is derived from the backing Portal's transport
+      (transport.exportKind). Read compatibly for one release; doctor --fix drops a value that
+      agrees with the derived one and reports one that does not
     optional: true
   - name: details
     type: string
@@ -56,12 +57,11 @@ fields:
   - name: audience
     type: string
     description: >-
-      Exposure ceiling, ascending reach: "project" (family-internal — exported only into own chained
-      children, never beyond), "department" (owning org-unit subtree), "instance" (whole hosted
-      instance; the default), "partner" (grant-gated cross-tenant), "external" (publicly consumable
-      / 3rd-party-facing). A wildcard entry's audience applies to every name it brings in. The
-      surface projector filters snapshot entries by this ceiling; org-unit grants then decide
-      direction WITHIN the ceiling — effective visibility is the intersection.
+      Exposure ceiling: who may DESIGN against this export (import it, pin it, generate a client):
+      project, department, instance, partner or external. Defaults to instance at projection time. A
+      different axis from an entry's network scope, which says who can REACH a verb at runtime; the
+      two meet in one check: an audience wider than project on a network-transport verb needs the
+      outermost network's gateway entered from outside (EXPORT_BEYOND_NETWORK)
     optional: true
   - name: authPolicy
     type: string
@@ -96,7 +96,11 @@ fields:
       `typeDef`, so an entry without it keeps today's name. Must fit [a-z0-9-_]+ (else
       EXPORT_INVALID).
     optional: true
+  - name: role
+    type: ExportRole
+    description: 'What consumers do with the entry: call it (the default) or implement it (an extension point)'
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-08T21:10:42.862Z'
-updatedAt: '2026-09-27T10:33:56.892Z'
+updatedAt: '2026-10-06T12:54:28.782Z'

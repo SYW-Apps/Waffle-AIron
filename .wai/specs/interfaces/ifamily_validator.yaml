@@ -299,6 +299,42 @@ methods:
       - code: EXTERNAL_DRIFTED
         severity: notice
         summary: An external's producer changed since it was pinned, but nothing the project uses changed
+  - name: checkReach
+    description: >-
+      The reachability and network checks only the family run can make. It composes the family's
+      reach model (reach_model_projector.compose) from each selected project's own model and the
+      family's cross-project references, and judges it (network_arbiter.judge): the networks around
+      a member (GATEWAY_BYPASSED, MULTIPLE_GATEWAYS, EXPORT_BEYOND_NETWORK on a member's verbs and
+      on calls crossing into a network), the proof of every network-scoped entry by a modelled
+      caller inside its boundary (ENTRY_UNPROVEN), and a network-scoped entry with no declared
+      network around it (ENTRY_SCOPE_UNBOUNDED). A finding a project's own gate already carried (its
+      own network over its own tree) is not repeated. Each finding names the project whose spec it
+      sits on and is tuned by that project's rules.sddRuleSeverity; a lint.allow on that spec covers
+      it, sited at the verb or call it names. A member's own verdict is unchanged by it: the
+      member's gate judged the member alone.
+    signature: 'checkReach(family: ProjectFamily, models: map<string, ReachModel>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The family root's project graph
+      - name: models
+        type: map<string, ReachModel>
+        description: Each selected project's own reach model, by project key, as the run collected them
+    findings: []
+  - name: reachModel
+    description: >-
+      The family's reach model at the bound root, for the derived networking outputs: the same
+      selection and reach the family run makes, each selected project's own model
+      (spec_validator.reachModel under its own binding), composed with the family's references. At a
+      project without members it is that project's own model. Reads; writes nothing.
+    signature: 'reachModel(options: ValidationOptions): ReachModel'
+    returns: ReachModel
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The selection: member depth and reach, exactly as run takes them'
+    effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-06T10:15:20.548Z'
+updatedAt: '2026-10-06T13:00:23.281Z'

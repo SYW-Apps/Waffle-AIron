@@ -1,0 +1,14 @@
+id: mcp_network_adapter
+name: MCP Network Adapter
+description: >-
+  The MCP server's client of sdd_network's published portal, for the read-only network tools: the
+  allowed-flows matrix and the explanation of one flow, so an assistant can answer "who can reach
+  this" while it designs.
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn:
+  - network_portal
+status: complete
+createdAt: '2026-10-06T13:14:10.626Z'
+updatedAt: '2026-10-06T13:14:11.228Z'

@@ -14,8 +14,9 @@ fields:
   - name: type
     type: PublicInterfaceType
     description: >-
-      Transport kind of an own item. Required on an own component item; a re-export inherits its
-      target's.
+      LEGACY, no longer authored: an entry's export kind is derived from its backing Portal's
+      transport (transport.exportKind). Read compatibly for one release; doctor --fix drops a value
+      that agrees with the derived one and reports one that does not
     optional: true
   - name: details
     type: string
@@ -59,6 +60,12 @@ fields:
       The public name. Defaults to the narrowed interface, then the component or type id; must fit
       [a-z0-9-_]+ (else EXPORT_INVALID).
     optional: true
+  - name: role
+    type: ExportRole
+    description: >-
+      What consumers do with the entry: call it (the default) or implement it (an extension point;
+      an Adapter may back it, EXPORT_UNCONSUMABLE otherwise)
+    optional: true
 methods:
   - name: isOwnComponentItem
     signature: 'isOwnComponentItem(): boolean'
@@ -70,4 +77,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-04T23:40:25.629Z'
+updatedAt: '2026-10-06T12:54:25.654Z'
