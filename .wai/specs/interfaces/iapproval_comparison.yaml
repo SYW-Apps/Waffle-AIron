@@ -10,11 +10,15 @@ component: approval_comparison
 methods:
   - name: captureApprovedSpecs
     description: >-
-      Build the per-spec digest map to write into an approval record, for the tree as it stands: the
-      project's own spec files by their path from its root, and — since stage 8 — each part's spec
-      files under `members/<alias>/<path inside the part>`, so a part's specs are approved by its
-      parent's lock spec by spec and moving a part's storage changes no key. A part fetched from git
-      is digested from the cache at its pinned commit.
+      Build the per-spec digest map to write into an approval record, for the tree as it stands, in
+      the DESIGN reading (the record then carries specsReading `design`): each spec parsed and
+      projected to its design view — an implementation, type or component through its type's
+      designView, every other kind with its timestamps dropped — canonicalized and digested, so code
+      linkage (sourcePath, symbol, exportedVia, simPath, injectedParams, conformance tiers, mount
+      `via`, external links), whitespace and a no-op re-save never move a digest. Keyed as before:
+      the project's own spec files by their path from its root, and each part's under
+      `members/<alias>/<path inside the part>`. A part fetched from git is digested from the cache
+      at its pinned commit.
     signature: 'captureApprovedSpecs(root?: string, scope?: any): map<string, string>'
     returns: map<string, string>
     params:
@@ -31,9 +35,11 @@ methods:
         optional: true
   - name: diffAgainstApproval
     description: >-
-      What differs between the tree as it stands and the approval on record: which specs were added,
-      which changed, which were removed, and which are untouched. Null when the project has no
-      record at all — never approved is not the same as approved and drifted.
+      What differs between the tree as it stands and the approval on record, compared in the reading
+      the record names: design digests for a record with specsReading `design`, raw-content digests
+      (line endings normalized) for an earlier record — never one against the other. Which specs
+      were added, which changed, which were removed, and which are untouched. Null when the project
+      has no record at all — never approved is not the same as approved and drifted.
     signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
     returns: ApprovalDiff?
     params:
@@ -91,6 +97,29 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: reexpress
+    description: >-
+      The record on file carried into the current reading WITHOUT a new approval, when that is
+      provably sound: the record is a format-2 one (full-content gate algorithm, content-reading
+      digests) and its stateId equals gate.asRecorded — the identity it certified, recomputed over
+      the tree as it stands, so nothing it covered moved. The answer keeps lockedAt, lockedBy, the
+      validation and code results and the members' pins exactly, and replaces stateId with gate
+      (asRecorded dropped), specs with the design-reading capture, specsReading with `design`,
+      format with 3, and adds `reexpressed` (when, from which algorithm and reading, by which
+      command). Null when there is nothing to carry (no record, or already format 3) or it cannot be
+      proven (the old identity no longer matches: something it covered moved — perhaps only linkage,
+      but that is no longer provable, so it takes one re-lock). Writes nothing; the caller writes
+      the answer through the approval portal.
+    signature: 'reexpress(gate: StateId): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: gate
+        type: StateId
+        description: >-
+          The gate identity as it stands now (validator_portal.computeGateStateId), carrying
+          asRecorded when the record on disk is a format-2 one
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-10-04T10:18:30.259Z'
+updatedAt: '2026-10-06T10:09:58.468Z'

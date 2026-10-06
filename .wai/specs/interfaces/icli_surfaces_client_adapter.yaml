@@ -68,6 +68,18 @@ methods:
         type: DesignApproval
         description: The lock-check state decided by checkApproval
         optional: true
+  - name: declareExternal
+    description: >-
+      Forward to surface_portal.declareExternal: declare one external of the bound project (`wairon
+      externals add`).
+    signature: 'declareExternal(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location, and the optional producer id, ref, dir, use, description, pin and
+          dryRun
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-10-04T14:04:59.954Z'
+updatedAt: '2026-10-06T10:18:11.010Z'

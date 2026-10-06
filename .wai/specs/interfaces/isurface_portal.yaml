@@ -78,11 +78,17 @@ methods:
         optional: true
   - name: getExternalsStatus
     description: >-
-      Report each declared external's pin against its live producer at signature level; what cannot
-      be compared is EXTERNAL_CHECK_UNAVAILABLE. Writes nothing.
-    signature: 'getExternalsStatus(): list<ExternalStatus>'
+      Report each declared external's pin against its live producer at signature level — unchanged,
+      changed, renamed (named by the producer's rename trace, with the new name) or removed; what
+      cannot be compared is EXTERNAL_CHECK_UNAVAILABLE. Offline, no producer is read over the
+      network. Writes nothing.
+    signature: 'getExternalsStatus(offline?: bool): list<ExternalStatus>'
     returns: list<ExternalStatus>
-    params: []
+    params:
+      - name: offline
+        type: bool
+        description: Read no producer over the network (default false)
+        optional: true
   - name: listExternals
     description: List the bound project's declared externals, how each resolves and what is pinned for it.
     signature: 'listExternals(): list<ExternalListing>'
@@ -123,6 +129,12 @@ methods:
         type: DesignApproval
         description: The lock-check state (locked, stale, unlocked) the caller decided; omitted, unjudged
         optional: true
+  - name: declareExternal
+    description: >-
+      Published: declare one external of the bound project (`wairon externals add`,
+      sdd_add_external) — refused in one sentence naming the accepted form, checked against the
+      producer it reaches, pinned when asked. Dispatched to the external-declarations workflow.
+    signatureFrom: external_declarations.declare
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-04T23:38:35.672Z'
+updatedAt: '2026-10-06T10:14:45.303Z'

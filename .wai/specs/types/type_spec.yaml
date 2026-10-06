@@ -218,6 +218,15 @@ methods:
       prose signature; only its returns is read. Pure.
     sourcePath: src/models/type-grammar.ts
     symbol: typeCanonicalTypes
+  - name: designView
+    signature: 'designView(): TypeSpec'
+    params: []
+    returns: TypeSpec
+    description: >-
+      This type as the approval sees it: its design with its code linkage and volatile metadata left
+      out — its own sourcePath and symbol, each method's sourcePath and symbol, and
+      createdAt/updatedAt. Its fields, methods' signatures and descriptions, invariants, values,
+      holds, rename trace, lint and ext stay. Pure: over the spec's own fields.
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-04T23:39:21.881Z'
+updatedAt: '2026-10-06T10:06:56.896Z'

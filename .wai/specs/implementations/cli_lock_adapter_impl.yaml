@@ -113,12 +113,13 @@ methods:
         error: the lock's inputs changed while it ran
       - stepNumber: 14
         description: >-
-          Assemble a format-2 LockRecord: stateId = the captured identity, lockedAt, lockedBy,
-          validatorVersion, validationResult = the design half's counts (gate.designOnly()), status
-          ready, projectId when there is one, specs, `members` = each direct member's alias → a
-          project member's {as: project, project, subject, state, commit when referenced} or a
-          part's {as: part, contentDigest, commit when known, state approved}, and `code` =
-          gate.analysis without its codes list. No `children`
+          Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
+          lockedAt, lockedBy, validatorVersion, validationResult = the design half's counts
+          (gate.designOnly()), status ready, projectId when there is one, specs = the design-reading
+          digests with specsReading `design`, `members` = each direct member's alias → a project
+          member's {as: project, project, subject, state, commit when referenced} or a part's {as:
+          part, contentDigest, commit when known, state approved}, and `code` = gate.analysis
+          without its codes list. No `children`, no `reexpressed` (a human approved this one)
         type: local
       - stepNumber: 15
         description: Persist the commit-scoped lock record — the only file this lock writes
@@ -318,6 +319,46 @@ methods:
           which is why CI runs `wairon lock-check --strict`. With strict, refuse.
         type: return
         outcome: unlocked
+  - name: reexpressApproval
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Compute the gate identity as it stands, carrying asRecorded when the record on disk is a
+          format-2 one
+        type: call
+        targetComponent: validator_portal
+        targetMethod: computeGateStateId
+      - stepNumber: 2
+        description: >-
+          Ask for the record carried into the design reading — null unless the record's own
+          identity, recomputed, still holds
+        type: call
+        targetComponent: approval_portal
+        targetMethod: reexpress
+      - stepNumber: 3
+        description: Is there a carried record to write?
+        type: branch
+        condition: a carried record came back
+        onFalseStep: 6
+      - stepNumber: 4
+        description: >-
+          Persist the carried record — this project's .wai/lock.json only; the approval stays the
+          human's and the record says it was re-expressed
+        type: call
+        targetComponent: approval_portal
+        targetMethod: writeLockRecord
+      - stepNumber: 5
+        description: Return the written record
+        type: return
+        outcome: re-expressed
+      - stepNumber: 6
+        label: nothing
+        description: >-
+          Return null: nothing to carry, or nothing proves the design unchanged — the caller points
+          at one `wairon lock`
+        type: return
+        outcome: not re-expressed
+    symbol: reexpressLock
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-05T23:43:31.692Z'
+updatedAt: '2026-10-06T10:10:51.621Z'

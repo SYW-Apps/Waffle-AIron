@@ -1,0 +1,31 @@
+id: iexternal_declarations
+name: External Declarations Interface
+description: >-
+  Declare one external of the bound project from a request a person or an assistant can write
+  without knowing the configuration schema.
+component: external_declarations
+methods:
+  - name: declare
+    description: >-
+      Declare one external: refuse, writing nothing, an alias that is malformed or already a member
+      or external, a location the grammar refuses (an absolute path, an inner `..`, an empty
+      source), a `ref` beside a non-git source, or a `#<commit>` that is not a full commit — each
+      with one sentence naming the accepted form. Otherwise write the normalized declaration (object
+      form: path | hosted | git with ref and dir), resolve it, and when its producer is readable
+      confirm that it answers to the declared id and exports every `use` name to this project; a
+      contradiction takes the declaration back out and refuses, naming the id it answers to or the
+      closest exported names. A producer that cannot be read (a sibling not checked out, a remote
+      offline) leaves the declaration written and says so: it reads unavailable — never a pass —
+      until pinned. Pins it when asked and the producer was read. A dry run answers the same verdict
+      and writes nothing. Never touches the spec tree.
+    signature: 'declare(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location in the one location grammar, and optionally the producer id, ref,
+          dir, `use`, description, whether to pin (default yes) and whether this is a dry run
+status: complete
+createdAt: '2026-10-06T10:13:59.636Z'
+updatedAt: '2026-10-06T10:14:00.259Z'

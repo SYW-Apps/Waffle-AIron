@@ -518,8 +518,10 @@ methods:
   - name: sdd_get_externals_status
     description: >-
       Tool (scope: tree, a read): each declared external's pin compared with its live producer at
-      signature level — unchanged, changed, removed, unlocked — and EXTERNAL_CHECK_UNAVAILABLE for
-      anything that cannot be compared, never a pass. Writes nothing.
+      signature level — unchanged, changed, renamed (with the name it was renamed to, from the
+      producer's rename trace), removed, unlocked — each external's health (incompatible |
+      unavailable | drifted | ok), and EXTERNAL_CHECK_UNAVAILABLE for anything that cannot be
+      compared, never a pass. Writes nothing.
     signature: 'sdd_get_externals_status(): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params: []
@@ -835,6 +837,61 @@ methods:
     endpoint:
       transport: Custom
       address: mcp tools/call sdd_rename_type
+  - name: sdd_add_external
+    description: >-
+      Tool (scope: tree, a write): declare one external of the bound project in .wai/project.yaml —
+      the alias its specs will reference as `alias::name` and where the producer is, in the one
+      location grammar members use (a `#<commit>` on a git source fixes the ref the pin follows) —
+      then check it against the producer it reaches (the id it answers to, the `use` names it
+      exports) and pin it unless pin is false. Refusals are one sentence naming the accepted form.
+      Use it instead of editing .wai/project.yaml by hand.
+    signature: >-
+      sdd_add_external(alias: string, source?: string, project?: string, ref?: string, dir?: string,
+      use?: list<string>, description?: string, pin?: bool, dryRun?: bool): ExternalAddition
+    returns: ExternalAddition
+    params:
+      - name: alias
+        type: string
+        description: >-
+          The alias specs will reference the producer by (`alias::name`): [a-z0-9-_]+, not already a
+          member or external
+      - name: source
+        type: string
+        description: >-
+          Where the producer is: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`;
+          omit when the family provides it
+        optional: true
+      - name: project
+        type: string
+        description: The producer's project id when it differs from the alias
+        optional: true
+      - name: ref
+        type: string
+        description: 'git only: the branch, tag or full commit the pin follows'
+        optional: true
+      - name: dir
+        type: string
+        description: 'git only: the producer''s root inside the repository'
+        optional: true
+      - name: use
+        type: list<string>
+        description: Public names to import bare (`*` for all)
+        optional: true
+      - name: description
+        type: string
+        description: What the producer is to this project
+        optional: true
+      - name: pin
+        type: bool
+        description: Pin right after declaring (default true)
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what would be declared, writing nothing
+        optional: true
+    endpoint:
+      transport: Custom
+      address: mcp tools/call sdd_add_external
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T23:37:40.543Z'
+updatedAt: '2026-10-06T10:17:33.305Z'

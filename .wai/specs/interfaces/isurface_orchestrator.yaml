@@ -97,9 +97,15 @@ methods:
       source.hosted external read outside a hosted server says why in its reason: "hosted-only
       producer `<id>`: available only through the hosted server". A producer whose root lies outside
       the request's reach is marked outOfReach. Writes nothing.
-    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    signature: 'getExternalsStatus(offline?: bool): list<ExternalStatus>'
     returns: list<ExternalStatus>
-    params: []
+    params:
+      - name: offline
+        type: bool
+        description: >-
+          Read no producer over the network (default false): a git external is then reported not
+          compared, with the command that compares it. Plain validate and status ask offline
+        optional: true
   - name: listExternals
     description: >-
       The `wairon externals list` read: each declared external with how it resolves (family and its
@@ -230,4 +236,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-04T14:04:57.755Z'
+updatedAt: '2026-10-06T10:13:13.543Z'

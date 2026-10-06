@@ -92,14 +92,26 @@ methods:
         targetComponent: cli_validator_adapter
         targetMethod: validateProject
       - stepNumber: 10
+        label: advise
+        description: >-
+          Compare, offline and advisory, every external the run did not compose with its live
+          producer (passing the aliases a family run composed in reach): what moved, who uses it,
+          the fix
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: adviseExternals
+      - stepNumber: 11
         label: render
         description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
           of the notices; in a family run each project's findings under its project key, the
-          composition and family findings after them; for the owner's gate the one-line --family
-          hint when it has externals — say out loud how much conformance debt the project's register
-          carries, and exit non-zero when errors were reported — or, under --ci, when warnings were.
-          Notices never fail the run, under --ci or without it.
+          composition and family findings after them — then the advisory findings in their own
+          section, "Externals, compared live (advisory: the pin gates)", each naming the moved
+          member, the specs that use it and the fix (adapt, then `wairon externals pin <alias>`),
+          and the not-compared ones with the command that compares them; say out loud how much
+          conformance debt the project's register carries, and exit non-zero when errors were
+          reported — or, under --ci, when warnings were. Notices and advisory findings never fail
+          the run, under --ci or without it.
         type: local
     symbol: runValidate
   - name: computeGateStateId
@@ -130,6 +142,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: familyRelations
+  - name: adviseExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's advisory live comparison
+        type: call
+        targetComponent: validator_portal
+        targetMethod: adviseExternals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T12:15:31.400Z'
+updatedAt: '2026-10-06T10:16:08.701Z'

@@ -45,7 +45,14 @@ fields:
     type: string
     description: A named scalar's one primitive, in place of fields; only on a value-object that declares it
     optional: true
+  - name: formerly
+    type: list<string>
+    description: >-
+      The type's rename trace as the producer recorded it (previousIds), carried into the snapshot
+      and the surface export so a consumer pinned to a former name reads a rename rather than a
+      removal; absent when it was never renamed.
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-10-04T23:39:20.591Z'
+updatedAt: '2026-10-06T10:07:36.844Z'

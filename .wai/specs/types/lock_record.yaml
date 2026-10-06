@@ -87,8 +87,10 @@ fields:
   - name: format
     type: int
     description: >-
-      The record format. 2 from stage 5 on (members, code, no children). Absent means format 1: read
-      as written, its `children` taken as the member pins for one release, never written again.
+      The record format: 3 from the release in which code linkage left the approval (stateId under
+      the design gate algorithm, `specs` in the design reading), 2 from stage 5 on, absent means
+      format 1. A format-2 record stays valid as written: it is judged under its own algorithm
+      (StateId.asRecorded) and its own reading until it is re-locked or re-expressed.
     optional: true
   - name: members
     type: map<string, MemberPin>
@@ -110,6 +112,21 @@ fields:
       on code errors), not the lock. An analyzer upgrade adds evidence and never stales a lock. Its
       `codes` list is left out. Absent on a format-1 record.
     optional: true
+  - name: specsReading
+    type: SpecDigestReading?
+    description: >-
+      The reading `specs` was digested in: `design` on every record written from format 3 on (each
+      spec's design view — code linkage and timestamps out — in canonical form), absent on an
+      earlier record, whose digests are the files' raw content. A reader compares the tree in the
+      reading the record names, never in another.
+    optional: true
+  - name: reexpressed
+    type: LockReexpression?
+    description: >-
+      Present when a tool carried this record into the current reading and gate algorithm after
+      proving the design unchanged (doctor --fix), instead of a human re-approving it: who approved
+      and when stay the human's.
+    optional: true
 methods: []
 componentClass: lock_store
 invariants:
@@ -120,4 +137,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-04T10:28:59.486Z'
+updatedAt: '2026-10-06T10:07:18.244Z'

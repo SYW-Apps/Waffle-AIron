@@ -83,6 +83,14 @@ fields:
       The L3 interface the export narrows to, when it narrows; two narrowings of one component are
       distinct contracts.
     optional: true
+  - name: formerly
+    type: list<string>
+    description: >-
+      The interface's rename trace (previousIds) as the producer recorded it; each method entry
+      likewise carries its own `formerly` (previousNames) when it was renamed. Carried into the pin
+      snapshot and the surface export, so the consumer check, a generator and a reader can follow a
+      rename instead of reading a delete plus an add; absent when never renamed.
+    optional: true
 methods:
   - name: sameContract
     signature: 'sameContract(other: SurfaceContractEntry): boolean'
@@ -93,4 +101,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-10-04T10:21:14.022Z'
+updatedAt: '2026-10-06T10:07:38.890Z'

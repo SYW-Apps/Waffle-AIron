@@ -334,6 +334,15 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: renameType
+  - name: sdd_add_external
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Gather the tool's arguments into an ExternalRequest and dispatch to the declare-external
+          workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: declare
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:57:12.568Z'
+updatedAt: '2026-10-06T10:17:36.689Z'

@@ -32,7 +32,13 @@ fields:
       exported, or the producer is outside the family — no stage-2 reference form reaches outside
       the family, so nothing there is used until stage 3's `alias::name`.
     optional: true
+  - name: renamedTo
+    type: string
+    description: >-
+      On a renamed use: the public name (and member) the live producer's rename trace carries the
+      used name forward to — what the consumer's references should now name.
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:11.330Z'
-updatedAt: '2026-10-04T23:39:42.350Z'
+updatedAt: '2026-10-06T10:07:29.269Z'

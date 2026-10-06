@@ -120,15 +120,16 @@ methods:
         optional: true
   - name: computeGateStateId
     description: >-
-      Gather the project's OWN content identity, the governing extensions, the project's gate config
-      (type, rule tuning, composition), its own consumed contract inputs, the built-in rule
-      sequence, and each direct member's composition subject — read from the member's own lock
-      record, never recomputed and never its specs — and compute the gate identity from them. Every
-      input is the bound project's own or a direct member's recorded decision, never an ancestor's
-      state and never a member's tree, so a lock taken at a member's own root and one taken inside
-      its family record the same identity, and a parent's identity costs its own tree plus one lock
-      file per direct member. This closes the stage-4 inconsistency where a parent's identity hashed
-      its members' specs and pins although its lock gate never judged them.
+      Gather the project's OWN design identity (code linkage and timestamps left out), the governing
+      extensions, the project's gate config (type, rule tuning, composition), its own consumed
+      contract inputs, the built-in rule sequence, and each direct member's composition subject —
+      read from the member's own lock record, never recomputed and never its specs — and compute the
+      gate identity from them. Every input is the bound project's own or a direct member's recorded
+      decision, never an ancestor's state and never a member's tree. When the bound project's own
+      lock record was taken under the previous, full-content gate algorithm (format 2), the answer
+      also carries that record's identity recomputed under its own algorithm (StateId.asRecorded),
+      so a lock taken before code linkage left the approval stays valid as long as nothing it
+      covered moved — no forced re-lock.
     signature: 'computeGateStateId(): StateId'
     returns: StateId
     params: []
@@ -169,4 +170,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T10:19:39.228Z'
+updatedAt: '2026-10-06T10:09:29.538Z'

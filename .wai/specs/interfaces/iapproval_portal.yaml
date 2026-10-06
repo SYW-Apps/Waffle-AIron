@@ -36,12 +36,10 @@ methods:
         description: The gate identity as it stands now
   - name: captureApprovedSpecs
     description: >-
-      Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
-      relative to the project root. A chained child's own specs are excluded — the trees are
-      approved separately, and the parent pins the child's StateId instead. An optional scope
-      narrows the capture to one subsystem, leaving everything outside with whatever approval it
-      already had. Records a decision; the caller gates it, and the caller persists it on the lock
-      record.
+      Capture the CURRENT spec tree as approved: one DESIGN digest per spec file (its design view in
+      canonical form — code linkage and timestamps out), keyed by path relative to the project root,
+      recorded with specsReading `design`. A member project's own specs are excluded — the trees are
+      approved separately. An optional scope restricts the capture (lock --subsystem).
     signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): map<string, string>'
     returns: map<string, string>
     params:
@@ -110,13 +108,29 @@ methods:
       - idempotent
   - name: computeOwnStateId
     description: >-
-      The content identity of the bound project's OWN specs, never a member's: the content half of
-      the gate identity (state_hash.ownTree).
+      The content identity of the bound project's OWN specs in the full content reading, code
+      linkage included (state_hash.ownTree) — the content half of a format-2 lock's gate identity,
+      recomputed only to judge such a lock as it was taken (StateId.asRecorded).
     signature: 'computeOwnStateId(): StateId'
     returns: StateId
     params: []
     guarantees:
       - idempotent
+  - name: computeOwnDesignId
+    description: >-
+      The DESIGN identity of the bound project's own specs, code linkage and timestamps left out
+      (state_hash.ownDesign): the content half of the gate identity from format 3 on.
+    signature: 'computeOwnDesignId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: reexpress
+    description: >-
+      Forward to approval_comparison.reexpress: the format-2 record carried into the design reading
+      when the gate identity's asRecorded proves the design unchanged, else null. A read; the caller
+      writes the answer through writeLockRecord.
+    signatureFrom: approval_comparison.reexpress
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-10-04T10:18:30.989Z'
+updatedAt: '2026-10-06T10:10:40.563Z'

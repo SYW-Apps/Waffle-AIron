@@ -286,9 +286,13 @@ methods:
       source.path, a git source materialized in the fetch cache, or the hosted lookup, with the
       project's references into each producer by public name. Read-only; the caller's binding is
       restored before it answers.
-    signature: 'resolveExternals(): list<ExternalBinding>'
+    signature: 'resolveExternals(offline?: bool): list<ExternalBinding>'
     returns: list<ExternalBinding>
-    params: []
+    params:
+      - name: offline
+        type: bool
+        description: Read no producer over the network (see external_producers.resolveDeclared)
+        optional: true
   - name: excerptParent
     description: >-
       With a part's root bound (stage 8): the excerpt of its parent it can be judged against alone,
@@ -342,4 +346,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T23:37:51.093Z'
+updatedAt: '2026-10-06T10:13:08.747Z'

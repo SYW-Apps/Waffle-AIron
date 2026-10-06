@@ -43,7 +43,10 @@ methods:
           For each component entry, copy the full contract of its canonical target under the entry's
           public name — methods with params, returns, guarantees, effect, endpoints, narrowed to the
           entry's interface when it narrows — plus the component's dispatch table, recording the
-          target's componentType and the narrowed interface
+          target's componentType and the narrowed interface, and the rename trace: the interface's
+          previousIds as the entry's `formerly` and each renamed method's previousNames as that
+          method's `formerly`. The trace is provenance, not signature: it enters neither
+          memberDigest nor contentDigest, so carrying it moves no existing pin
         type: local
       - stepNumber: 8
         description: >-
@@ -59,8 +62,9 @@ methods:
           so two subsystems' types of one name both arrive — following the named types each parsed
           type expression references (type_expression.namedRefs) through a data type's fields and a
           signature type's params and returns, carrying a signature type into the closure with its
-          params and returns, an enum with its values in declared order and a named scalar with the
-          primitive it holds
+          params and returns, an enum with its values in declared order, a named scalar with the
+          primitive it holds, and a renamed type with its previousIds as `formerly` (outside every
+          digest, like the contracts' trace)
         type: local
       - stepNumber: 10
         description: >-
@@ -85,4 +89,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-10-04T10:53:34.646Z'
+updatedAt: '2026-10-06T10:13:35.431Z'

@@ -58,7 +58,7 @@ methods:
   - name: resolveExternals
     narrative:
       - stepNumber: 1
-        description: Forward the externals resolution to the core subsystem's published portal
+        description: Forward the externals resolution, with `offline`, to the core subsystem's published portal
         type: call
         targetComponent: spec_tree_portal
         targetMethod: resolveExternals
@@ -97,6 +97,24 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: projectFamily
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the declaration write to the core subsystem's published configuration portal,
+          which routes it through the core orchestrator
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: declareExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the removal to the core subsystem's published configuration portal, which routes
+          it through the core orchestrator
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removeExternal
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-04T17:32:10.522Z'
+updatedAt: '2026-10-06T10:14:22.819Z'

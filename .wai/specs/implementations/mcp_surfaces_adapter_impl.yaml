@@ -20,6 +20,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: getExternalsStatus
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: declareExternal
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-09-27T10:43:08.329Z'
+updatedAt: '2026-10-06T10:17:14.907Z'

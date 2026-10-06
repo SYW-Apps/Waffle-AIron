@@ -479,8 +479,11 @@ methods:
       The local spec tree's completeness dashboard, printed to the terminal: a heading, the core
       report marked up in the terminal's own colours with each member's approval state and pin (the
       pin tree, computed by the validator at each project's own root so it agrees with the member's
-      own status), and the lock's verdict underneath. It renders nothing itself — the tree is drawn
-      once, in core, and this supplies only what colour each role should take.
+      own status), the lock's verdict underneath, and — when any external moved live, drifted or
+      could not be compared — an Externals section from the advisory live comparison
+      (validator_portal.adviseExternals) naming what moved, who uses it and the fix, while the pin
+      still gates. It renders nothing itself — the tree is drawn once, in core, and this supplies
+      only what colour each role should take.
     signature: 'localStatus(options?: StatusOptions, listAll?: bool): async void'
     returns: async void
     params:
@@ -583,21 +586,32 @@ methods:
     returns: async void
   - name: runExternals
     description: >-
-      `wairon externals <action> [alias…]`: pin (pin the named declared externals, else all, into
-      .wai/externals/ and .wai/externals.lock.yaml, printing each alias's outcome and its unexported
-      references), status (each external's pin compared with its live producer at signature level —
-      unchanged, changed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE; it
-      reports and never fails the command on staleness), and list (the declared externals, how each
-      resolves, and what is pinned). `--json` prints the structured answer instead of the table.
+      `wairon externals <action> [alias…]`: add (`externals add <alias> [<source>]` — declare one
+      external in .wai/project.yaml from the one location grammar members use, `../sibling` |
+      `hosted:<id>` | `<git url>[#<commit>]`, with --project, --ref, --dir, --use, --description,
+      --no-pin and --dry-run; refused in one sentence naming the accepted form, checked against the
+      producer it reaches, pinned by default; exit 1 on a refusal), pin (pin the named declared
+      externals, else all, into .wai/externals/ and .wai/externals.lock.yaml, printing each alias's
+      outcome and its unexported references; exit 1 when an alias could not be pinned — unresolved
+      or unreachable — because its previous pin stays and nothing new was recorded), status (each
+      external's pin compared with its live producer at signature level — unchanged, changed,
+      renamed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE — a CI gate on the
+      LIVE producer for teams that want one: exit 1 when any external is incompatible, 2 when
+      nothing is incompatible but something could not be compared (never a pass), 0 otherwise, from
+      external_status.health), and list (the declared externals, how each resolves, and what is
+      pinned — a malformed declaration listed with its problem, never hidden). `--json` prints the
+      structured answer instead of the table, with the same exit code.
     signature: 'runExternals(action: string, aliases: list<string>, options?: ExternalsOptions): async void'
     returns: async void
     params:
       - name: action
         type: string
-        description: pin | status
+        description: add | pin | status | list
       - name: aliases
         type: list<string>
-        description: The declared externals to act on; empty for all
+        description: >-
+          pin/status: the declared externals to act on, empty for all; add: the alias, then the
+          source when given
       - name: options
         type: ExternalsOptions
         description: '--json: print the structured answer instead of the table'
@@ -776,4 +790,4 @@ methods:
         narrative steps into it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-05T23:54:33.275Z'
+updatedAt: '2026-10-06T10:17:05.389Z'

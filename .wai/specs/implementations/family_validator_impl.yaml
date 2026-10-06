@@ -131,12 +131,13 @@ methods:
       - stepNumber: 7
         label: judge
         description: >-
-          Turn the status into findings on the consumer's external: each used member changed or
-          removed is EXTERNAL_INCOMPATIBLE (naming the member, what the lock recorded and what the
-          live table now holds); a drifted producer with every used member unchanged is one
-          EXTERNAL_DRIFTED; each unavailable or unlocked use is EXTERNAL_CHECK_UNAVAILABLE with its
-          reason — never a pass. Each severity is the project's own sddRuleSeverity override, else
-          the code default
+          Turn the status into findings on the consumer's external: each used member changed,
+          renamed or removed is EXTERNAL_INCOMPATIBLE (naming the member, what the lock recorded and
+          what the live table now holds — for a rename, the new name the producer's trace carries it
+          to, so the fix reads as "follow the rename" rather than "it is gone"); a drifted producer
+          with every used member unchanged is one EXTERNAL_DRIFTED; each unavailable or unlocked use
+          is EXTERNAL_CHECK_UNAVAILABLE with its reason — never a pass. Each severity is the
+          project's own sddRuleSeverity override, else the code default
         type: local
       - stepNumber: 8
         label: next
@@ -626,6 +627,95 @@ methods:
         type: return
         outcome: ProjectRelations[]
     symbol: familyRelations
+  - name: advise
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read, through the surfaces adapter and OFFLINE, each of the bound project's externals
+          compared at signature level with its live producer within the request's reach: per used
+          member unchanged, changed, renamed (with renamedTo), removed, unlocked or unavailable,
+          whether the producer drifted, and whether it lay out of reach
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 2
+        description: >-
+          Read the bound project's configuration through the core adapter for its own severity
+          overrides
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: >-
+          Read the project graph through the core adapter for the bound project's references into
+          other projects, to name every spec that uses each moved member
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 4
+        description: >-
+          For each external's status not already composed by the run (an alias in `composed` is the
+          gate's, so it gets no second word)
+        type: loop
+        loopKind: forEach
+        over: the statuses whose alias is not in composed, in declaration order
+        endStep: 12
+      - stepNumber: 5
+        description: Which word does the relation's health give?
+        type: switch
+        'on': status.health()
+        cases:
+          - value: incompatible
+            step: 6
+          - value: drifted
+            step: 8
+          - value: unavailable
+            step: 10
+        defaultStep: 12
+      - stepNumber: 6
+        label: moved
+        description: >-
+          Report one EXTERNAL_LIVE_INCOMPATIBLE (warning, advisory) for the external naming each
+          moved member and how — changed at signature level, renamed to its renamedTo, or gone from
+          the producer's export table — every spec of this project whose references use it, and the
+          fix: adapt the uses (follow the rename), then re-pin with `wairon externals pin <alias>`
+        type: local
+      - stepNumber: 7
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 8
+        label: drift
+        description: >-
+          Report one EXTERNAL_DRIFTED (notice, advisory): the producer moved while nothing used did
+          — re-pin when convenient
+        type: local
+      - stepNumber: 9
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 10
+        label: uncompared
+        description: >-
+          Report one EXTERNAL_LIVE_UNCOMPARED (notice, advisory) naming why the live producer could
+          not be read — unreachable, unresolved, out of reach, or a git source not fetched offline —
+          and that `wairon externals status` compares it. Never a pass, never a failure of the owner
+          gate
+        type: local
+      - stepNumber: 11
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 12
+        label: next
+        description: The external is advised on
+        type: local
+      - stepNumber: 13
+        description: >-
+          Return the advisory findings, each marked advisory and stamped with its severity (the
+          project's sddRuleSeverity override, else the default)
+        type: return
+        outcome: ValidationIssue[] (advisory)
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-04T10:54:16.062Z'
+updatedAt: '2026-10-06T10:15:45.455Z'

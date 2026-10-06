@@ -214,12 +214,13 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Compute the content identity of the bound project's OWN specs through the core adapter —
-          its parts' specs included (stage 8: a part is the project's own subsystems, wherever
-          stored), never a project member's, whose subject stands for it below
+          Compute the DESIGN identity of the bound project's OWN specs through the core adapter —
+          code linkage and timestamps left out, its parts' specs included (stage 8: a part is the
+          project's own subsystems, wherever stored), never a project member's, whose subject stands
+          for it below
         type: call
         targetComponent: validator_core_adapter
-        targetMethod: computeOwnStateId
+        targetMethod: computeOwnDesignId
       - stepNumber: 2
         description: >-
           Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
@@ -304,7 +305,38 @@ methods:
         targetComponent: gate_identity
         targetMethod: compute
       - stepNumber: 13
-        description: Return the gate identity
+        label: readOwnRecord
+        description: Read the bound project's own lock record, to know which gate algorithm it was taken under
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 14
+        description: >-
+          Was it taken under the previous, full-content gate algorithm
+          (`sha256+content+doctrine+inputs+members`, a format-2 record)? Then it must be judged as
+          it was taken, never forced into a re-lock of an unchanged design
+        type: branch
+        condition: the record exists and its stateId.algorithm is the full-content gate algorithm
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          Compute the full-content identity of the own specs (code linkage included), the content
+          reading that record was taken in
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: computeOwnStateId
+      - stepNumber: 16
+        description: >-
+          Recompute the gate identity from that full-content identity and the SAME doctrine, inputs,
+          gate config and members' subjects — gate_identity.compute marks it with the previous
+          algorithm because its content is a full-content identity — and carry it as the answer's
+          asRecorded
+        type: call
+        targetComponent: gate_identity
+        targetMethod: compute
+      - stepNumber: 17
+        label: answer
+        description: Return the gate identity, with asRecorded when the record on disk is a format-2 one
         type: return
         outcome: StateId (the gate identity)
   - name: findTestsReferencing
@@ -727,4 +759,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T11:54:00.302Z'
+updatedAt: '2026-10-06T10:09:26.547Z'

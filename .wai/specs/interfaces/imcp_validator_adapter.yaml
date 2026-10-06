@@ -60,6 +60,17 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: adviseExternals
+    description: >-
+      Forward to validator_portal.adviseExternals: the advisory live comparison of the bound
+      project's externals the run did not compose.
+    signature: 'adviseExternals(composed?: list<string>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: composed
+        type: list<string>
+        description: Aliases the run already composed as part of its gate
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:28:31.521Z'
+updatedAt: '2026-10-06T10:18:17.507Z'

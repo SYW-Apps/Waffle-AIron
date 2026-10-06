@@ -243,7 +243,9 @@ methods:
           draft = ctx.isImplementationDraft(impl). unlinked = the names of contract.methods whose
           source file is none: the entry of impl.methods with the same name gives
           methodImpl.sourceFile(impl.sourcePath), and a contract method with no entry falls back to
-          impl.sourcePath. noFileAtAll = impl.sourceFiles() is empty
+          impl.sourcePath. noFileAtAll = impl.sourceFiles() is empty. begun =
+          code.holdsAny(impl.sourceFiles()): realization has begun once any file the implementation
+          names exists. strict = ctx.rules.conformance.requireCode
         type: local
       - stepNumber: 9
         description: >-
@@ -256,10 +258,14 @@ methods:
         onFalseStep: 11
       - stepNumber: 10
         description: >-
-          Report MISSING_SOURCE_PATH (warning; spec impl.id; draft context from draft): when
-          unlinked is non-empty, naming those contract methods of impl.contract as naming no source
-          file of their own while the implementation declares no sourcePath; otherwise stating that
-          the implementation names no source file at all
+          Before realization has begun, unlinked design is not a defect: report MISSING_SOURCE_PATH
+          (notice, or error naming rules.conformance.requireCode when strict; spec impl.id; draft
+          context from draft) — naming the unlinked contract methods when there are some, else
+          stating that the implementation names no source file at all, and saying a planned
+          sourcePath may be declared now (it is not part of the approval). Once it has begun, report
+          METHOD_SOURCE_PATH_MISSING (warning; spec impl.id; draft context from draft) naming the
+          contract methods of impl.contract that name no source file of their own while the
+          implementation declares no sourcePath
         type: local
       - stepNumber: 11
         label: fileLoop
@@ -311,8 +317,11 @@ methods:
       - stepNumber: 18
         label: missingReport
         description: >-
-          Report MISSING_SOURCE_FILE (error; spec impl.id; draft context from draft) naming owner
-          and file: the sourcePath does not resolve to a file
+          A named file that is not on disk: once realization has begun it is a broken link — report
+          MISSING_SOURCE_FILE (error; spec impl.id; draft context from draft) naming owner and file.
+          Before that it is planned — report SOURCE_FILE_PLANNED (notice, or error naming
+          rules.conformance.requireCode when strict; spec impl.id; draft context from draft) naming
+          owner and file: planned, not written yet; conformance judges it once a file exists
         type: local
       - stepNumber: 19
         description: Continue with the next file
@@ -442,15 +451,15 @@ methods:
         description: >-
           Expected only once the subsystem has adopted sims, only for complete implementations, only
           for non-leaf components (a leaf's unit suite is its sim), and only for an implementation
-          with CODE: one that names no source file, or whose every named file the code model holds
-          as missing, has nothing to wire yet — a harness for it is premature, and that it is
-          unlinked is MISSING_SOURCE_PATH's and MISSING_SOURCE_FILE's subject. Otherwise continue
+          whose realization has BEGUN (code_index.holdsAny over the files it names): one with no
+          code yet has nothing to wire — a harness for it is premature, and that it is unlinked or
+          planned is MISSING_SOURCE_PATH's and SOURCE_FILE_PLANNED's subject. Otherwise continue
           with the next implementation
         type: branch
         condition: >-
           adopted has comp.subsystem, !ctx.isImplementationDraft(impl), deps — the distinct ids of
           comp.dependsOn then comp.owns that ctx.componentMap resolves — is non-empty, and
-          impl.sourceFiles() names a file that ctx.codeIndex() does not hold with status missing
+          ctx.codeIndex().holdsAny(impl.sourceFiles())
         onFalseStep: 2
       - stepNumber: 7
         label: report
@@ -475,7 +484,7 @@ methods:
         description: Judge each declared integration harness
         type: loop
         over: ctx.implementations
-        endStep: 7
+        endStep: 10
       - stepNumber: 3
         description: >-
           An implementation that declares no harness is integration-sim-declaration's question:
@@ -503,11 +512,29 @@ methods:
         condition: facts = code.factsAt(impl.simPath) is absent or has status missing, escaped or unreadable
         onFalseStep: 2
       - stepNumber: 7
+        description: >-
+          Has the implementation the harness wires begun (code.holdsAny(impl.sourceFiles()))? A
+          harness for code not written yet is planned with it
+        type: branch
+        condition: code.holdsAny(impl.sourceFiles()) or the harness escapes the root or is unreadable
+        onFalseStep: 10
+      - stepNumber: 8
         label: report
         description: >-
           Report SIM_FILE_MISSING (warning; spec impl.id; draft context
           ctx.isImplementationDraft(impl)) naming impl.simPath and why: it resolves to no file (no
           facts, or status missing), escapes the project root, or is not readable as source text
+        type: local
+      - stepNumber: 9
+        description: Continue with the next implementation
+        type: jump
+        toStep: 2
+      - stepNumber: 10
+        label: planned
+        description: >-
+          Report SOURCE_FILE_PLANNED (notice, or error naming rules.conformance.requireCode; spec
+          impl.id; draft context ctx.isImplementationDraft(impl)) naming impl.simPath: the harness
+          is planned with the code it wires, not written yet
         type: local
     symbol: check
     exportedVia: integrationSimFileRule
@@ -728,9 +755,11 @@ methods:
       - stepNumber: 6
         description: >-
           Add the file to blocked and report the problem its status names, spec'd to type.id:
-          SOURCE_PATH_ESCAPES_ROOT (error) when escaped, MISSING_SOURCE_FILE (error) when missing,
-          CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the file and, when it is a
-          method's own file rather than the type's, the methods that name it
+          SOURCE_PATH_ESCAPES_ROOT (error) when escaped; when missing, MISSING_SOURCE_FILE (error)
+          if the type's realization has begun (code.holdsAny(type.sourceFiles())) and otherwise
+          SOURCE_FILE_PLANNED (notice, or error naming rules.conformance.requireCode) — planned, not
+          written yet; CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the file and,
+          when it is a method's own file rather than the type's, the methods that name it
         type: local
       - stepNumber: 7
         description: >-
@@ -1788,4 +1817,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-05T23:33:48.801Z'
+updatedAt: '2026-10-06T10:12:33.817Z'

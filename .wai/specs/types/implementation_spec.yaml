@@ -122,6 +122,20 @@ methods:
       deduplicated, in declaration order. The simPath harness is not a source file of the
       implementation and is not included.
     symbol: implementationSourceFiles
+  - name: designView
+    signature: 'designView(): ImplementationSpec'
+    params: []
+    returns: ImplementationSpec
+    description: >-
+      This implementation as the approval sees it: the design it states with its CODE LINKAGE and
+      its volatile metadata left out. Linkage is every field that says where or how the design is
+      realized in code rather than what the design is — its own sourcePath and simPath, its
+      injectedParams, its spec-level conformance tier, and on each method the method's sourcePath,
+      symbol, exportedVia and conformance tier — and the volatile metadata is createdAt and
+      updatedAt. Everything else stays: the contract, technologies (the vendor binding is design:
+      TECH_LEAKAGE judges it), the detail dial, each method's narrative, intent and declared calls,
+      the rename trace, lint, ext and status. Pure: over the spec's own fields; the same spec always
+      gives the same view, so a sourcePath added, moved or removed never changes it.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T23:38:04.344Z'
+updatedAt: '2026-10-06T10:06:53.080Z'

@@ -45,14 +45,16 @@ methods:
     description: >-
       The whole `wairon validate` workflow over the LOCAL tree: run the registry, project-config and
       spec-tree checks, render their findings (notices listed and counted apart from warnings), and
-      exit non-zero when the tree is invalid (or, under --ci, carries warnings — never for notices).
-      The spec-tree check is the family run at a project that declares members or when --family is
-      given, and the owner's gate otherwise (--no-recursive at a parent asks for the owner's gate
-      alone) — validation_options.selectsFamily decides, as it does for the MCP tool. A family run
-      prints each project's findings verbatim under its project; an owner's gate with externals
-      prints the one-line --family hint. Nothing is ever printed as 'verified through the parent':
-      that path is gone. The runner delegates here rather than orchestrating the three checks
-      itself, so the composition lives with the checks it composes.
+      exit non-zero when the tree is invalid (or, under --ci, carries warnings — never for notices,
+      never for advisory findings). The spec-tree check is the family run at a project that declares
+      members or when --family is given, and the owner's gate otherwise (--no-recursive at a parent
+      asks for the owner's gate alone) — validation_options.selectsFamily decides, as it does for
+      the MCP tool. Then, either way, the advisory live comparison of every external the run did not
+      compose (validator_portal.adviseExternals), rendered in its own section — "Externals, compared
+      live (advisory: the pin gates)" — with each moved member, who uses it and the fix; it never
+      changes the exit code. A family run prints each project's findings verbatim under its project.
+      The runner delegates here rather than orchestrating the checks itself, so the composition
+      lives with the checks it composes.
     signature: >-
       runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?:
       boolean }): Promise<void>
@@ -99,6 +101,17 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: adviseExternals
+    description: >-
+      Forward to validator_portal.adviseExternals: the advisory live comparison of the bound
+      project's externals the run did not compose.
+    signature: 'adviseExternals(composed?: list<string>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: composed
+        type: list<string>
+        description: Aliases the run already composed as part of its gate
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:28:17.158Z'
+updatedAt: '2026-10-06T10:18:16.159Z'

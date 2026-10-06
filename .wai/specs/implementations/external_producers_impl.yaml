@@ -51,7 +51,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the consumer node's externals and referenced project members
-        endStep: 18
+        endStep: 21
       - stepNumber: 8
         description: Is the producer in the family?
         type: branch
@@ -65,7 +65,7 @@ methods:
       - stepNumber: 10
         description: A family producer is bound
         type: jump
-        toStep: 18
+        toStep: 21
       - stepNumber: 11
         label: outside
         description: >-
@@ -80,8 +80,25 @@ methods:
         description: Is the producer in a git repository?
         type: branch
         condition: the producer's source is git
-        onFalseStep: 16
+        onFalseStep: 19
       - stepNumber: 13
+        description: >-
+          Offline, an external's live head is unknowable without the network (a referenced member
+          keeps its pinned commit, which the cache may already hold)
+        type: branch
+        condition: offline and the binding is an external
+        onFalseStep: 16
+      - stepNumber: 14
+        description: >-
+          Bind it without a directory and with the problem "not compared offline — `wairon externals
+          status` fetches it": unavailable, never a pass
+        type: local
+      - stepNumber: 15
+        description: An offline git external is bound
+        type: jump
+        toStep: 21
+      - stepNumber: 16
+        label: resolveHead
         description: >-
           For an external, resolve its ref's head now: that is the live producer a status compares
           the pin against. A referenced member keeps its declared commit instead — the family is
@@ -91,7 +108,7 @@ methods:
         type: call
         targetComponent: git_source_adapter
         targetMethod: resolve
-      - stepNumber: 14
+      - stepNumber: 17
         description: >-
           Materialize that commit (served from the cache offline when it is there) and take its
           directory, under the source's dir, as the producer's root; record the commit on the
@@ -99,11 +116,11 @@ methods:
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
-      - stepNumber: 15
+      - stepNumber: 18
         description: A git producer is bound
         type: jump
-        toStep: 18
-      - stepNumber: 16
+        toStep: 21
+      - stepNumber: 19
         label: hosted
         description: >-
           For a source.hosted external, ask the request binding's hosted record lookup for the
@@ -117,7 +134,7 @@ methods:
           git_source_adapter.head); a family, contained or same-repository producer records no
           commit and runs no git process
         type: local
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
           For a `../` sibling or path producer, find the git repository holding it and the
           consumer's (no git process): only a producer in another repository has its work tree's
@@ -125,20 +142,20 @@ methods:
         type: call
         targetComponent: git_source_adapter
         targetMethod: repositoryRoot
-      - stepNumber: 18
+      - stepNumber: 21
         label: bound
         description: >-
           Record the binding: the external, its usage when one was mapped, and whether the family
           was read whole
         type: local
-      - stepNumber: 19
+      - stepNumber: 22
         description: Restore the caller's binding
         type: local
-      - stepNumber: 20
+      - stepNumber: 23
         description: Answer the bindings in declaration order
         type: return
         outcome: ExternalBinding[]
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-02T23:59:07.124Z'
+updatedAt: '2026-10-06T10:14:42.720Z'

@@ -110,6 +110,66 @@ methods:
         type: return
         outcome: StateId (own content)
     symbol: computeOwnStateId
+  - name: ownDesign
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Read the scan's project graph for the owner of every spec key
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: >-
+          Keep only the specs the bound root owns (owner key empty), exactly as ownTree selects
+          them: a member's specs are its own lock's
+        type: local
+      - stepNumber: 9
+        description: >-
+          Project each kept spec to its design view: an implementation through
+          implementation_spec.designView, a type through type_spec.designView, a component through
+          component_spec.designView, and every other kind with createdAt and updatedAt dropped. A
+          part's implementation needs no re-expression of its paths from the part's root, because
+          the paths are linkage and the view leaves them out
+        type: local
+      - stepNumber: 10
+        description: >-
+          Put each kind into identity order exactly as ownTree does (by id, then canonical content,
+          compared by codepoint), canonicalize, and digest with sha256 in hex
+        type: local
+      - stepNumber: 11
+        description: 'Return the StateId {algorithm: ''sha256-design'', digest}'
+        type: return
+        outcome: StateId (own design)
+    symbol: computeOwnDesignStateId
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-09-30T05:49:02.458Z'
+updatedAt: '2026-10-06T10:08:32.228Z'

@@ -17,6 +17,18 @@ methods:
     signature: 'getExternalsStatus(): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params: []
+  - name: declareExternal
+    description: >-
+      Forward to surface_portal.declareExternal: declare one external of the bound project
+      (sdd_add_external).
+    signature: 'declareExternal(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location, and the optional producer id, ref, dir, use, description, pin and
+          dryRun
 status: complete
 createdAt: '2026-07-24T18:14:20.548Z'
-updatedAt: '2026-10-04T10:19:03.504Z'
+updatedAt: '2026-10-06T10:18:14.822Z'

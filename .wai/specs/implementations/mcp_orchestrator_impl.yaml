@@ -554,8 +554,18 @@ methods:
         targetMethod: approvalVerdict
       - stepNumber: 5
         description: >-
+          Compare this project's externals with their live producers, offline and advisory, via the
+          validator client adapter — so an agent deciding whether to write code against these specs
+          also sees a dependency that broke since it was pinned
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: adviseExternals
+      - stepNumber: 6
+        description: >-
           Answer it behind the tool-family context line, so a client reading one tool's output knows
-          which family of tools it belongs to
+          which family of tools it belongs to — with an Externals section when any external moved
+          live, drifted or could not be compared (what moved, who uses it, the fix; the pin still
+          gates)
         type: return
         outcome: status
     symbol: sdd_get_status
@@ -594,10 +604,10 @@ methods:
         targetMethod: validateFamily
       - stepNumber: 4
         description: >-
-          Answer the family verdict, split into errors, warnings and notices, each finding under its
-          project
-        type: return
-        outcome: ValidationResult (family run)
+          The family verdict holds every selected project's gate: go add the advisory live
+          comparison
+        type: jump
+        toStep: 6
       - stepNumber: 5
         label: ownerGate
         description: Run the owner's gate via the validator client adapter
@@ -605,11 +615,22 @@ methods:
         targetComponent: mcp_validator_adapter
         targetMethod: validateProject
       - stepNumber: 6
+        label: advise
         description: >-
-          Answer the project's verdict, split into errors, warnings and notices, with the --family
-          hint when it has externals
+          Compare, offline and advisory, every external the run did not compose with its live
+          producer (the aliases a family run composed in reach are passed so they get no second
+          word) via the validator client adapter
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: adviseExternals
+      - stepNumber: 7
+        description: >-
+          Answer the verdict — the family run's (each finding under its project) or the owner's
+          gate's — split into errors, warnings and notices, the advisory findings among them marked
+          advisory (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED: what
+          moved live, who uses it, the fix), which never make the tree invalid
         type: return
-        outcome: ValidationResult (owner's gate)
+        outcome: ValidationResult
     symbol: sdd_validate_tree
   - name: packImpact
     narrative:
@@ -663,4 +684,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-05T17:31:41.341Z'
+updatedAt: '2026-10-06T10:17:57.733Z'

@@ -180,8 +180,9 @@ methods:
         description: A by-name selection or a legacy path reference
   - name: computeOwnStateId
     description: >-
-      Forward to approval_portal.computeOwnStateId: the content identity of the bound project's own
-      specs, never a member's — the content half of the gate identity.
+      Forward to approval_portal.computeOwnStateId: the full-content identity of the bound project's
+      own specs (code linkage included), never a member's — recomputed only to judge a format-2 lock
+      under its own algorithm.
     signature: 'computeOwnStateId(): StateId'
     returns: StateId
     params: []
@@ -237,6 +238,15 @@ methods:
     signature: 'typeSpellingFacts(): TypeSpellingFacts'
     returns: TypeSpellingFacts
     params: []
+  - name: computeOwnDesignId
+    description: >-
+      Forward to approval_portal.computeOwnDesignId: the design identity of the bound project's own
+      specs — the content half of the gate identity from format 3 on.
+    signature: 'computeOwnDesignId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T10:27:32.808Z'
+updatedAt: '2026-10-06T10:09:01.844Z'

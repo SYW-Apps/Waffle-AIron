@@ -191,6 +191,17 @@ methods:
       The last word of the component's id that does not name a building block: what the component is
       about, rather than what it is. "pack_store" is about packs, "architecture_diagrams" about
       diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
+  - name: designView
+    signature: 'designView(): ComponentSpec'
+    params: []
+    returns: ComponentSpec
+    description: >-
+      This component as the approval sees it: its design with its code linkage and volatile metadata
+      left out — each mount's `via` (the router entry exported by the portal's file, held to code by
+      UNREALIZED_EXPORT_HANDLE), its externalLinks (an implementation link stands in for a
+      sourcePath and an informative link is documentation; neither can change a design verdict) and
+      createdAt/updatedAt. A mount's portal and prefixes, and every other field, stay. Pure: over
+      the spec's own fields.
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T23:38:02.642Z'
+updatedAt: '2026-10-06T10:06:57.832Z'

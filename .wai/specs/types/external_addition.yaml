@@ -1,0 +1,46 @@
+kind: value-object
+id: external_addition
+name: ExternalAddition
+description: >-
+  The answer to declaring one external: what was written (or would be, on a dry run), the producer
+  it reached, and the pin — or why nothing was written, as one sentence naming the accepted form,
+  never a schema dump.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias asked for
+    optional: false
+  - name: written
+    type: bool
+    description: Whether `.wai/project.yaml` now carries the declaration (false on a refusal and on a dry run)
+    optional: false
+  - name: declaration
+    type: ExternalDeclaration?
+    description: The declaration as written (object form, normalized); absent on a refusal
+    optional: false
+  - name: project
+    type: string
+    description: The producer's project id as the producer answered to it
+    optional: true
+  - name: pin
+    type: ExternalPin?
+    description: The pin taken right after, when asked
+    optional: true
+  - name: refusal
+    type: string
+    description: >-
+      Why nothing was written: a malformed or taken alias, a source the grammar refuses (naming the
+      accepted forms), a producer that could not be reached or answers to another id, or a `use`
+      name the producer does not export to this project (naming the closest exported names)
+    optional: true
+  - name: unreachable
+    type: string
+    description: >-
+      Set when the declaration was written but its producer could not be read (a sibling not checked
+      out, a remote offline): why, and that nothing was pinned. Declaring stays possible offline;
+      the external then reads as unavailable — never a pass — until it is pinned.
+    optional: true
+methods: []
+createdAt: '2026-10-06T10:07:54.921Z'
+updatedAt: '2026-10-06T10:08:01.608Z'
