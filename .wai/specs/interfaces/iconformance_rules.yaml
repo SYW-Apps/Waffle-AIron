@@ -9,16 +9,17 @@ methods:
   - name: sourceFileLinkage
     description: >-
       Rule source-file-linkage. Code↔spec Level 1: every source file an implementation names — its
-      own sourcePath and each method's — is checked against the code on disk, judged by whether the
-      implementation's realization has BEGUN (code_index.holdsAny over the files it names: at least
-      one exists). Before that, the design is ahead of the code and nothing is wrong: a named file
-      that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet) and
-      an implementation that names no file is unlinked design (MISSING_SOURCE_PATH, a notice), so a
-      design-only tree passes `validate --ci` and a planned sourcePath can be declared at design
-      time — which code linkage, outside the approval since format 3, costs nothing to do. Once it
-      has begun, conformance judges it: a named file that is missing is a broken link
-      (MISSING_SOURCE_FILE, an error) and a contract method that names no file while others do is
-      unlinked (METHOD_SOURCE_PATH_MISSING, a warning). A team that wants CI to demand code for
+      own sourcePath and each method's — is checked against the code on disk. A named file that is
+      not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet), at method
+      level as at implementation level and whether or not the implementation's realization has
+      begun: a design names the file a method will live in before the method is written, and code
+      linkage, outside the approval since format 3, costs nothing to declare. Whether the
+      realization has BEGUN (code_index.holdsAny over the files it names: at least one exists)
+      decides only how an unlinked method is reported: before that, an implementation that names no
+      file is unlinked design (MISSING_SOURCE_PATH, a notice), so a design-only tree passes
+      `validate --ci`; once it has begun, a contract method that names no file while others do is
+      unlinked (METHOD_SOURCE_PATH_MISSING, a warning), and a method its named, existing file does
+      not hold is method-realization's UNREALIZED_METHOD. A team that wants CI to demand code for
       every designed implementation sets rules.conformance.requireCode, which reports the two
       notices at error, naming the setting. A file that escapes the root or cannot be analyzed is
       reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript
@@ -38,12 +39,6 @@ methods:
           An implementation whose realization has not begun names no source file (for itself or for
           some contract methods) — designed, not linked to code yet; an error under
           rules.conformance.requireCode
-      - code: MISSING_SOURCE_FILE
-        severity: error
-        summary: >-
-          A source file an implementation or one of its methods names does not resolve to a file on
-          disk although the implementation's realization has begun (another file it names exists) —
-          a broken link
       - code: SOURCE_PATH_ESCAPES_ROOT
         severity: error
         summary: >-
@@ -62,9 +57,9 @@ methods:
       - code: SOURCE_FILE_PLANNED
         severity: notice
         summary: >-
-          A source file an implementation names is not on disk and none of its named files is —
-          planned, not written yet; conformance judges it once a file exists. An error under
-          rules.conformance.requireCode
+          A source file an implementation or one of its methods names is not on disk — planned, not
+          written yet, whether or not another file it names exists; method-realization judges the
+          methods in it once it does. An error under rules.conformance.requireCode
       - code: METHOD_SOURCE_PATH_MISSING
         severity: warning
         summary: >-
@@ -687,4 +682,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-06T13:04:53.100Z'
+updatedAt: '2026-10-06T13:20:52.740Z'

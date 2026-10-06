@@ -1,4 +1,4 @@
-import { importBindingOf, pathKey, resolveImport } from '../../../models/index.js';
+import { importBindingOf, pathKey, resolveImport, retiredMountsOf } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ export const exportConformanceRule: SddRule = {
     // mount naming no Portal is portal-mounts' finding, not a missing export.
     for (const listener of ctx.components) {
       if (listener.componentType !== 'Portal') continue;
-      for (const mount of listener.mounts ?? []) {
+      for (const mount of retiredMountsOf(listener).mounts) {
         const handle = mount.via;
         if (!handle) continue;
         const portal = ctx.componentMap.get(mount.portal);

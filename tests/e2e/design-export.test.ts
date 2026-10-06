@@ -16,7 +16,7 @@ import {
 // ---------------------------------------------------------------------------
 // `wairon export` against the BUILT CLI: a tree authored through the live MCP
 // server is exported to stdout, and the JSON is validated against the JSON
-// Schema the package SHIPS (schemas/design-export-1.json) — the contract a
+// Schema the package SHIPS (schemas/design-export-2.json) — the contract a
 // consumer validates against, not the zod schema it was generated from.
 // ---------------------------------------------------------------------------
 
@@ -33,7 +33,7 @@ function runCli(args: string[], cwd: string): Promise<CliResult> {
   });
 }
 
-const SHIPPED_SCHEMA = path.join(REPO_ROOT, 'schemas', 'design-export-1.json');
+const SHIPPED_SCHEMA = path.join(REPO_ROOT, 'schemas', 'design-export-2.json');
 
 describe('e2e design export (built CLI)', () => {
   let proj: ScratchProject;

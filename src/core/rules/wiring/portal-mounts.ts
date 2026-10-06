@@ -1,4 +1,5 @@
 import { SddRule } from '../types.js';
+import { retiredMountsOf } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Portal mounts — which listener serves which portal.
@@ -76,10 +77,13 @@ export const portalMountsRule: SddRule = {
 
     // ---- 1. each mount each listener declares ----
     for (const listener of ctx.components) {
-      if (listener.componentType !== 'Portal' || !listener.mounts) continue;
+      // Mounts are a retired form, still read (untyped) until the reachability
+      // rules replace this one and doctor --fix rewrites them.
+      const { declared, mounts } = retiredMountsOf(listener);
+      if (listener.componentType !== 'Portal' || !declared) continue;
       const listenerDraft = ctx.isComponentDraft(listener.id);
 
-      for (const mount of listener.mounts) {
+      for (const mount of mounts) {
         const target = ctx.componentMap.get(mount.portal);
 
         // ---- 2/3. a mount must name something that can serve routes ----
@@ -114,7 +118,7 @@ export const portalMountsRule: SddRule = {
     // ---- 5. every HTTP portal is a listener or mounted by one ----
     for (const portal of ctx.components) {
       if (portal.componentType !== 'Portal') continue;
-      if (portal.mounts !== undefined || mounted.has(portal.id)) continue;
+      if (retiredMountsOf(portal).declared || mounted.has(portal.id)) continue;
       const routes = httpRoutesOf(portal.id);
       if (routes.length === 0) continue;
       ctx.addIssue(

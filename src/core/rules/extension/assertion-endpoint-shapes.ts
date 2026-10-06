@@ -28,6 +28,7 @@ function endpointAddress(ep: Endpoint): string {
     case 'NamedPipe': return ep.pipe;
     case 'IPC': return ep.channel;
     case 'CLI': return ep.command;
+    case 'JSONRPC': return ep.method;
     case 'Custom': return ep.address;
   }
 }

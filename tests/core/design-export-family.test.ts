@@ -3,7 +3,7 @@
  * project is written as the `alias::publicName` a consumer resolves (never the
  * loader's in-memory key), in-tree subdirectory members and legacy mounts are
  * listed as dependencies, a dependency carries the digest its lock entry pins,
- * and a component carries its mounts, patterns and external links.
+ * and a component carries its transport, Portal-level entry, patterns and external links.
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
@@ -91,7 +91,7 @@ describe('the design export across project boundaries', () => {
 });
 
 describe('design_component is lossless for design content', () => {
-  it('carries mounts (portals as keys), patterns and external links as declared', () => {
+  it('carries a Portal\'s transport, abi and entry, patterns and external links as declared, and no retired mounts', () => {
     const now = '2026-10-04T12:00:00.000Z';
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-design-comp-')));
     roots.push(root);
@@ -107,22 +107,27 @@ describe('design_component is lossless for design content', () => {
       status: 'complete', createdAt: now, updatedAt: now,
     } as SubsystemSpec);
     const comp = (id: string, over: Record<string, unknown>): ComponentSpec => ({
-      id, name: id, description: 'd', subsystem: 'web', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [],
+      id, name: id, description: 'd', subsystem: 'web', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [],
       status: 'complete', createdAt: now, updatedAt: now, ...over,
     } as ComponentSpec);
     saveComponentSpec(comp('api', {}));
+    saveComponentSpec(comp('sdk', { transport: 'InProcess', abi: 'c' }));
     saveComponentSpec(comp('listener', {
+      invokedBy: { kind: 'entry', caller: 'Browsers of the shop', scope: 'outside' },
       mounts: [{ portal: 'api', prefixes: ['/api'] }],
       patterns: [{ id: 'acme/retry', version: '1' }],
       externalLinks: [{ url: 'https://example.com/spec', type: 'informative', label: 'Spec' }],
     }));
     const d = exportAt(root);
     const listener = d.components.find((c) => c.key === 'listener')!;
-    expect(listener.mounts).toEqual([{ portal: 'api', prefixes: ['/api'] }]);
+    expect('mounts' in listener).toBe(false);
+    expect(listener.transport).toBe('HTTP');
+    expect(listener.invokedBy).toEqual({ kind: 'entry', caller: 'Browsers of the shop', scope: 'outside' });
+    expect(d.components.find((c) => c.key === 'sdk')).toMatchObject({ transport: 'InProcess', abi: 'c' });
     expect(listener.patterns).toEqual([{ id: 'acme/retry', version: '1' }]);
     expect(listener.externalLinks).toEqual([{ url: 'https://example.com/spec', type: 'informative', label: 'Spec' }]);
     const api = d.components.find((c) => c.key === 'api')!;
-    expect([api.mounts, api.patterns, api.externalLinks]).toEqual([[], [], []]);
+    expect([api.patterns, api.externalLinks, api.invokedBy]).toEqual([[], [], undefined]);
     expect(DesignExportSchema.parse(d)).toBeTruthy();
   });
 });

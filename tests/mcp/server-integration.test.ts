@@ -100,7 +100,7 @@ describe('MCP stdio server integration (sdd_* pipeline)', () => {
       name: 'sdd_add_component',
       arguments: {
         id: 'billing-portal', name: 'Billing Portal', description: 'Inbound HTTP front door',
-        subsystem: 'billing', componentType: 'Portal', portalType: 'HTTP_API',
+        subsystem: 'billing', componentType: 'Portal', transport: 'HTTP',
         dependsOn: ['billing-orchestrator'],
       },
     }));
@@ -230,7 +230,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     } }));
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'core-portal', name: 'Core Portal', description: 'front door',
-      subsystem: 'core', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['core-orch'],
+      subsystem: 'core', componentType: 'Portal', transport: 'HTTP', dependsOn: ['core-orch'],
     } }));
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'core-orch', name: 'Core Orchestrator', description: 'workflow', subsystem: 'core', componentType: 'Orchestrator',

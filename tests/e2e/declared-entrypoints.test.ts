@@ -74,7 +74,7 @@ describe('e2e declared entrypoints (invokedBy + register, disk-verbatim)', () =>
           description: 'Run one work cycle',
           signature: 'tick(): Promise<void>',
           returns: 'Promise<void>',
-          invokedBy: { kind: 'external', caller: RICH_CALLER },
+          invokedBy: { kind: 'runtime', caller: RICH_CALLER },
         },
       ],
     });
@@ -106,7 +106,7 @@ describe('e2e declared entrypoints (invokedBy + register, disk-verbatim)', () =>
     expect(tick, 'tick method missing from the on-disk interface').toBeDefined();
     // THE assertion: the newly-vocabulary field is present and untouched. An
     // older-dist server strips it silently while still answering success.
-    expect(tick!['invokedBy']).toEqual({ kind: 'external', caller: RICH_CALLER });
+    expect(tick!['invokedBy']).toEqual({ kind: 'runtime', caller: RICH_CALLER });
   });
 
   it('the register step lands on disk with type and targets intact', () => {

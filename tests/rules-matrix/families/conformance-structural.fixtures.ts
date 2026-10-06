@@ -18,9 +18,9 @@
  *    contract methods name no source file — they cannot be linked to code.
  *  - SOURCE_FILE_PLANNED (notice; error under requireCode): a named file is not
  *    on disk and none of the implementation's named files is — planned.
- *  - MISSING_SOURCE_FILE (error): a source file an implementation or one of
- *    its methods names does not resolve to a file on disk although the
- *    implementation's realization has begun — a broken link.
+ *  - MISSING_SOURCE_FILE: never from an implementation any more — a named
+ *    file not on disk is SOURCE_FILE_PLANNED at method level as at
+ *    implementation level, begun or not (only a claimed type reports it).
  *  - SOURCE_PATH_ESCAPES_ROOT (error): a source file an implementation or one
  *    of its methods names is absolute or escapes the project root
  *    (containment refusal).
@@ -362,11 +362,11 @@ export default [
   }),
   defineRuleFixture({
     code: 'SOURCE_FILE_PLANNED',
-    expectFire: false,
-    reason:
-      'Another file the implementation names exists, so its realization has begun: a named file that is missing is then a broken link (MISSING_SOURCE_FILE), never planned.',
+    severity: 'notice',
+    anchoredTo: 'refund_orchestrator_impl',
+    expectFire: true,
     scenario:
-      'The refund orchestrator\'s own module is committed, but approveRefund names a module that was never committed.',
+      'The refund orchestrator\'s own module is committed, and approveRefund names the module it will live in, src/payments/refunds/approve-refund.ts, which is not written yet — a named file is planned at method level as at implementation level, whether or not the realization has begun.',
     tree: refundOrchestratorTree({
       sourcePath: 'src/payments/refund-orchestrator.ts',
       approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
@@ -426,11 +426,11 @@ export default [
   }),
   defineRuleFixture({
     code: 'MISSING_SOURCE_FILE',
-    severity: 'error',
-    anchoredTo: 'invoicing_engine_impl',
-    expectFire: true,
+    expectFire: false,
+    reason:
+      'A named implementation file that is not on disk is SOURCE_FILE_PLANNED, whether or not another file it names exists: realization having begun no longer turns it into an error. A method nothing realizes is reported by method-realization and METHOD_SOURCE_PATH_MISSING instead; MISSING_SOURCE_FILE is a claimed type\'s finding.',
     scenario:
-      'The invoicing engine\'s numbering module is still committed, but its main module src/billing/invoicing.ts was deleted in a cleanup — realization had begun, and the spec now names code that does not exist.',
+      'The invoicing engine\'s generateInvoice module is committed, and its main module src/billing/invoicing.ts is named but not on disk.',
     tree: {
       subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for placed orders.' }],
       components: [
@@ -1301,14 +1301,14 @@ export default [
     }),
   }),
 
-  // MISSING_SOURCE_FILE — a method's own file does not exist
+  // MISSING_SOURCE_FILE — a method's own file does not exist: planned, never an error
   defineRuleFixture({
     code: 'MISSING_SOURCE_FILE',
-    severity: 'error',
-    anchoredTo: 'refund_orchestrator_impl',
-    expectFire: true,
+    expectFire: false,
+    reason:
+      'A method\'s named file that is not on disk is planned (SOURCE_FILE_PLANNED) at method level as at implementation level, even once another file the implementation names exists.',
     scenario:
-      'The refund orchestrator\'s approveRefund names its own module src/payments/refunds/approve-refund.ts, but that module was never committed, so the method points at code that does not exist.',
+      'The refund orchestrator\'s approveRefund names its own module src/payments/refunds/approve-refund.ts, which is not written yet, while the implementation\'s own module is committed.',
     tree: refundOrchestratorTree({
       sourcePath: 'src/payments/refund-orchestrator.ts',
       approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',

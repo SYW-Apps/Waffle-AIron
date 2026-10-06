@@ -663,7 +663,7 @@ Portals are where requests enter a subsystem; Adapters are where calls leave it.
 
 *   [ ] **Define Ingress Portals (REST / gRPC / MessageBus):**
     *   *AI Action:* Create L2 Portal components with \`status: draft\` and map their L3 interfaces.
-    *   *Design check:* Bind each method's wire endpoint with \`sdd_set_endpoints\`, and give every HTTP Portal its \`mounts\` (or a listener) — otherwise \`UNMOUNTED_PORTAL\`.
+    *   *Design check:* Bind each method's wire endpoint with \`sdd_set_endpoints\`, and give every Portal its \`transport\`; a Portal that callers outside the design reach declares a Portal-level \`invokedBy\` entry.
     *   *Design check:* A subsystem another subsystem calls lists those callers in its \`publicInterfaces[].consumers\`.
 *   [ ] **Define Outbound Adapters (third-party clients / publishers):**
     *   *AI Action:* Declare an \`Adapter\` for each external API, database driver or event publisher the subsystem calls.

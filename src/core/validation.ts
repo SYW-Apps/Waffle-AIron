@@ -117,6 +117,8 @@ import { getProjectRoot } from '../utils/fs.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
   ComponentSpecSchema,
+  attachRetiredMounts,
+  readRetiredReachForms,
   ImplementationSpecSchema,
   InterfaceSpecSchema,
   SubsystemSpecSchema,
@@ -772,8 +774,15 @@ function readExcerptSpecs(excerpt: ParentExcerpt): ExcerptSpecs {
       const parsed = SystemSpecSchema.safeParse(doc);
       if (parsed.success) out.system = parsed.data;
     } else if ('parentSystem' in doc) take(out.subsystems, SubsystemSpecSchema.safeParse(doc));
-    else if ('componentType' in doc) take(out.components, ComponentSpecSchema.safeParse(doc));
-    else if ('component' in doc) take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
+    else if ('componentType' in doc) {
+      // Retired reachability forms read compatibly, as the loader reads them.
+      readRetiredReachForms('component', doc);
+      const parsed = ComponentSpecSchema.safeParse(doc);
+      take(out.components, parsed.success ? { success: true, data: attachRetiredMounts(parsed.data, doc) } : parsed);
+    } else if ('component' in doc) {
+      readRetiredReachForms('interface', doc);
+      take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
+    }
     else if ('contract' in doc) take(out.implementations, ImplementationSpecSchema.safeParse(doc));
     else if ('kind' in doc) take(out.types, TypeSpecSchema.safeParse(doc));
   }

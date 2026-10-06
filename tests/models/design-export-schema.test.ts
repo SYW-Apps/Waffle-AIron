@@ -1,5 +1,5 @@
 /**
- * The shipped JSON Schema (schemas/design-export-1.json) is GENERATED from the
+ * The shipped JSON Schema (schemas/design-export-<major>.json) is GENERATED from the
  * zod schema in src/models/design-export.ts at build time
  * (scripts/design-schema.mjs). This is the drift test: regenerated from the
  * SOURCE zod schema, it must say exactly what the committed file says — a

@@ -7,7 +7,7 @@ description: >-
 subsystem: sdd_core
 fields: []
 methods: []
-sourcePath: src/core/reachability-migration.ts
+sourcePath: src/models/specs.ts
 values:
   - name: portal-type
     description: A Portal's `portalType` (HTTP_API read as HTTP)
@@ -24,4 +24,4 @@ values:
       A Custom endpoint whose address names an in-process call (`in-process …`,
       `<package>#<function>`), or a Custom Portal that binds no endpoint at all
 createdAt: '2026-10-06T13:06:37.170Z'
-updatedAt: '2026-10-06T13:06:37.770Z'
+updatedAt: '2026-10-06T13:23:57.843Z'

@@ -317,11 +317,11 @@ methods:
       - stepNumber: 18
         label: missingReport
         description: >-
-          A named file that is not on disk: once realization has begun it is a broken link — report
-          MISSING_SOURCE_FILE (error; spec impl.id; draft context from draft) naming owner and file.
-          Before that it is planned — report SOURCE_FILE_PLANNED (notice, or error naming
-          rules.conformance.requireCode when strict; spec impl.id; draft context from draft) naming
-          owner and file: planned, not written yet; conformance judges it once a file exists
+          A named file that is not on disk is planned, at method level as at implementation level
+          and whether or not the realization has begun: report SOURCE_FILE_PLANNED (notice, or error
+          naming rules.conformance.requireCode when strict; spec impl.id; draft context from draft)
+          naming owner and file: planned, not written yet; method-realization judges the methods in
+          it once it exists
         type: local
       - stepNumber: 19
         description: Continue with the next file
@@ -1816,4 +1816,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-06T13:04:58.563Z'
+updatedAt: '2026-10-06T13:20:56.847Z'

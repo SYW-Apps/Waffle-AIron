@@ -71,7 +71,6 @@ const REFERENCE_POSITIONS: Position[] = [
   { kind: 'component', path: 'owns', position: 'owns', marker: 'ext::zz-own', scanned: true },
   { kind: 'component', path: 'dependsOn', position: 'dependsOn', marker: 'ext::zz-dep', scanned: true },
   { kind: 'component', path: 'dispatch.component', position: 'dispatch', marker: 'ext::zz-disp', scanned: true },
-  { kind: 'component', path: 'mounts.portal', position: 'mounts', marker: 'ext::zz-mount', scanned: true },
   // Every type-expression position (TYPE_EXPRESSION_PATHS), each its own marker.
   { kind: 'interface', path: 'methods.signature', position: 'type', marker: 'ext::zz-isig', scanned: true },
   { kind: 'interface', path: 'methods.returns', position: 'type', marker: 'ext::zz-iret', scanned: true },
@@ -124,7 +123,10 @@ const NOT_A_REFERENCE: Record<string, string> = {
   'component.auth.scopes.name': 'an OAuth scope', 'component.auth.scopes.description': 'prose', 'component.auth.openIdConnectUrl': 'a URL',
   'component.auth.description': 'prose', 'component.auth.example': 'an example value',
   'component.dispatch.capability': 'a capability key of this portal', 'component.dispatch.method': 'a method name (sdd_rename_method)',
-  'component.dispatch.description': 'prose', 'component.mounts.prefixes': 'URL prefixes', 'component.mounts.via': 'a transport note',
+  'component.dispatch.description': 'prose',
+  'component.abi': 'an ABI name (c, wasm)', 'component.invokedBy.caller': 'prose',
+  'interface.implements': 'an alias::name extension point the reachability implements rules bind (not yet a scanned position)',
+  'implementation.router': 'a code symbol (linkage)',
   'component.emits.topic': 'a bus topic', 'component.emits.event': 'an event name', 'component.emits.description': 'prose',
   'component.subscribesTo.topic': 'a bus topic', 'component.subscribesTo.event': 'an event name', 'component.subscribesTo.description': 'prose',
   'component.patterns.id': 'a pack pattern id, not a spec', 'component.patterns.version': 'a version', 'component.variant': 'a variant name',
@@ -259,10 +261,9 @@ describe('every reference position is recorded by the scan and respelled by the 
       trustedLinks: [{ subsystem: m('trustedLinks.subsystem', 'subsystem'), reason: 'a fast lane' }],
     }));
     put(specs(root, 'zz-sub', 'zz-c', '.index.yaml'), ComponentSpecSchema.parse({
-      id: 'zz-c', name: 'zz-c', description: 'd', subsystem: m('subsystem'), componentType: 'Portal', portalType: 'Custom', status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+      id: 'zz-c', name: 'zz-c', description: 'd', subsystem: m('subsystem'), componentType: 'Portal', transport: 'Custom', status: 'complete', createdAt: STAMP, updatedAt: STAMP,
       owns: [m('owns')], dependsOn: [m('dependsOn')],
       dispatch: [{ capability: 'cap', component: m('dispatch.component'), method: 'run' }],
-      mounts: [{ portal: m('mounts.portal'), prefixes: ['/zz'] }],
     }));
     put(specs(root, 'zz-sub', 'zz-c', '.interface.yaml'), InterfaceSpecSchema.parse({
       id: 'izz-c', name: 'izz-c', description: 'd', component: m('component', 'interface'), status: 'complete', createdAt: STAMP, updatedAt: STAMP,

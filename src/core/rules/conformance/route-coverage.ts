@@ -1,4 +1,4 @@
-import { pathKey, type RouteFact } from '../../../models/index.js';
+import { pathKey, retiredMountsOf, type RouteFact } from '../../../models/index.js';
 import { SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -138,7 +138,7 @@ export const routeCoverageRule: SddRule = {
 
     for (const listener of ctx.components) {
       if (listener.componentType !== 'Portal') continue;
-      for (const mount of listener.mounts ?? []) {
+      for (const mount of retiredMountsOf(listener).mounts) {
         // ---- 1. a mount that names a router entry, and the routes read from it ----
         // A mount with no `via` calls the portal's methods one by one and has
         // no router of its own to read. A mount naming no Portal is

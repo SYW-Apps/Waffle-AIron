@@ -3,7 +3,7 @@ import { isDraftSubsystem, isOwnComponentEntry } from '../../../models/index.js'
 
 const pubTypeMatches = (piType: string, ct: string, portalType?: string): boolean => {
   switch (piType) {
-    case 'REST':       return ct === 'Portal' && portalType === 'HTTP_API';
+    case 'REST':       return ct === 'Portal' && portalType === 'HTTP';
     case 'GraphQL':    return ct === 'Portal' && portalType === 'GraphQL';
     case 'RPC':        return ct === 'Portal' && portalType === 'gRPC';
     case 'MessageBus': return (ct === 'Portal' && portalType === 'MessageBus') || ct === 'Observer';
@@ -21,10 +21,10 @@ const EVENT_VOCAB = /\b(async|asynchronous|queue|queued|queues|event|events|even
 
 const expectedFor = (t: string): string => {
   switch (t) {
-    case 'REST':       return 'a Portal with portalType HTTP_API';
-    case 'GraphQL':    return 'a Portal with portalType GraphQL';
-    case 'RPC':        return 'a Portal with portalType gRPC';
-    case 'MessageBus': return 'a Portal with portalType MessageBus, or an Observer';
+    case 'REST':       return 'a Portal with transport HTTP';
+    case 'GraphQL':    return 'a Portal with transport GraphQL';
+    case 'RPC':        return 'a Portal with transport gRPC';
+    case 'MessageBus': return 'a Portal with transport MessageBus, or an Observer';
     default:           return 'a compatible component';
   }
 };
@@ -66,8 +66,8 @@ export const publicSurfaceDeclaredTypeRule: SddRule = {
         // An own component entry states both (the schema refuses it otherwise).
         const piType = pi.type ?? 'Custom';
         const piDetails = pi.details ?? '';
-        if (!pubTypeMatches(piType, backing.componentType, backing.portalType)) {
-          ctx.addIssue('error', 'PUBLIC_INTERFACE_TYPE_MISMATCH', `Subsystem "${sub.id}" declares a ${pi.type} public interface backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize ${pi.type}. Expected ${expectedFor(piType)}.`, sub.id, isDraftCtx);
+        if (!pubTypeMatches(piType, backing.componentType, backing.transport)) {
+          ctx.addIssue('error', 'PUBLIC_INTERFACE_TYPE_MISMATCH', `Subsystem "${sub.id}" declares a ${pi.type} public interface backed by "${pi.component}" (${backing.componentType}${backing.transport ? `/${backing.transport}` : ''}), which cannot realize ${pi.type}. Expected ${expectedFor(piType)}.`, sub.id, isDraftCtx);
         }
         // Heuristic — closes the "escape to Custom" hole. `Custom` is the only public
         // interface type that carries no backing obligation, so an unrealized event
@@ -78,9 +78,9 @@ export const publicSurfaceDeclaredTypeRule: SddRule = {
         // eventing. Warn so the mislabel surfaces; override via rules.sddRuleSeverity.
         if (piType === 'Custom' && EVENT_VOCAB.test(piDetails)) {
           const eventCapable = backing.componentType === 'Observer'
-            || (backing.componentType === 'Portal' && backing.portalType === 'MessageBus');
+            || (backing.componentType === 'Portal' && backing.transport === 'MessageBus');
           if (!eventCapable) {
-            ctx.addIssue('warning', 'PUBLIC_INTERFACE_EVENT_MISTYPED', `Subsystem "${sub.id}" declares a Custom public interface whose description implies an event/async boundary ("${pi.details}"), but it is backed by "${pi.component}" (${backing.componentType}${backing.portalType ? `/${backing.portalType}` : ''}), which cannot realize eventing. If this is genuinely event-driven, type it MessageBus and back it with an Observer or a Portal(MessageBus); otherwise reword the description to match the synchronous contract.`, sub.id, isDraftCtx);
+            ctx.addIssue('warning', 'PUBLIC_INTERFACE_EVENT_MISTYPED', `Subsystem "${sub.id}" declares a Custom public interface whose description implies an event/async boundary ("${pi.details}"), but it is backed by "${pi.component}" (${backing.componentType}${backing.transport ? `/${backing.transport}` : ''}), which cannot realize eventing. If this is genuinely event-driven, type it MessageBus and back it with an Observer or a Portal(MessageBus); otherwise reword the description to match the synchronous contract.`, sub.id, isDraftCtx);
           }
         }
       }

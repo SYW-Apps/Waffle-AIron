@@ -18,6 +18,7 @@ methods:
       Which kind of transport this is: network for HTTP, gRPC, GraphQL, MessageBus and Custom; local
       for CLI, NamedPipe, IPC and JSONRPC; in-process for InProcess. Flows, entry scopes and the
       gateway rule apply only to network transports
+    symbol: transportKind
   - name: requiresEndpoint
     signature: 'requiresEndpoint(): bool'
     params: []
@@ -25,6 +26,7 @@ methods:
     description: >-
       Whether each verb of a Portal on this transport needs an endpoint binding: every transport
       except InProcess and Custom
+    symbol: transportRequiresEndpoint
   - name: exportKind
     signature: 'exportKind(): PublicInterfaceType'
     params: []
@@ -33,6 +35,7 @@ methods:
       The export kind a published entry backed by a Portal on this transport is shown as in
       snapshots and the design export (REST, GraphQL, MessageBus, RPC or Custom), derived instead of
       authored. HTTP is REST; gRPC and JSONRPC are RPC; InProcess, CLI, IPC and NamedPipe are Custom
+    symbol: transportExportKind
 sourcePath: src/models/specs.ts
 previousIds:
   - portal_type
@@ -64,4 +67,4 @@ values:
   - name: Custom
     description: Any other wire, bound by a free-form address. Treated as a network transport
 createdAt: '2026-10-04T23:11:57.694Z'
-updatedAt: '2026-10-06T12:53:18.700Z'
+updatedAt: '2026-10-06T13:24:03.043Z'

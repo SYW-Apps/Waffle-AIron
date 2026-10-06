@@ -225,6 +225,7 @@ methods:
     description: >-
       The entry a verb of this Portal has: the verb's own invokedBy when it declares one, else the
       component's, with the verb's scope taking precedence. None for a non-Portal. Pure
+    symbol: componentEntryFor
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T12:53:59.221Z'
+updatedAt: '2026-10-06T13:24:10.891Z'

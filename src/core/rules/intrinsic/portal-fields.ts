@@ -17,10 +17,10 @@ export const portalFieldsRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    'A Portal declares its portalType. Non-Portal components carry no portalType, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that exposes the surface). Intrinsic to one component: no tree required.',
+    'A Portal declares its transport. Non-Portal components carry no transport, abi, basePath, or auth (auth is inbound transport auth — it belongs on the Portal that exposes the surface). Intrinsic to one component: no tree required.',
   codes: [
-    { code: 'MISSING_PORTAL_TYPE', defaultSeverity: 'error', summary: 'Portal without a portalType' },
-    { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with portalType/basePath' },
+    { code: 'MISSING_PORTAL_TYPE', defaultSeverity: 'error', summary: 'Portal without a transport' },
+    { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with transport/abi/basePath' },
     { code: 'AUTH_ON_NON_PORTAL', defaultSeverity: 'warning', summary: 'Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a Portal)' },
   ],
   check(ctx) {
@@ -29,12 +29,12 @@ export const portalFieldsRule: SddRule = {
 
       if (comp.componentType === 'Portal') {
         // A completeness code (draft-downgraded to a warning), so authoring a
-        // Portal and setting its portalType on the next call stays legal.
-        if (!comp.portalType) {
+        // Portal and setting its transport on the next call stays legal.
+        if (!comp.transport) {
           ctx.addIssue(
             'error',
             'MISSING_PORTAL_TYPE',
-            `Component "${comp.id}" has type "Portal" but is missing "portalType" field.`,
+            `Component "${comp.id}" has type "Portal" but is missing "transport" field.`,
             comp.id,
             isDraftCtx,
           );
@@ -42,11 +42,11 @@ export const portalFieldsRule: SddRule = {
         continue;
       }
 
-      if (comp.portalType !== undefined || comp.basePath !== undefined) {
+      if (comp.transport !== undefined || comp.abi !== undefined || comp.basePath !== undefined) {
         ctx.addIssue(
           'error',
           'UNEXPECTED_PORTAL_FIELD',
-          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but has "portalType" or "basePath" configured. Both are Portal-only — drop them, or make this component a Portal.`,
+          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but has "transport", "abi" or "basePath" configured. They are Portal-only — drop them, or make this component a Portal.`,
           comp.id,
           isDraftCtx,
         );

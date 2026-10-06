@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "wairon design export, format 1.x",
+  "title": "wairon design export, format 2.x",
   "description": "One project's whole design, resolved (format `wairon-design`). A MINOR formatVersion only adds a field or a member of a closed set, and consumers ignore what they do not know; a MAJOR removes, renames or changes a meaning and is named in the CHANGELOG. Generated from the zod schema in src/models/design-export.ts — never edit by hand.",
   "$ref": "#/definitions/DesignExport",
   "definitions": {
@@ -268,8 +268,37 @@
               "durability": {
                 "type": "string"
               },
-              "portalType": {
+              "transport": {
                 "type": "string"
+              },
+              "abi": {
+                "type": "string"
+              },
+              "invokedBy": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "entry",
+                      "runtime"
+                    ]
+                  },
+                  "caller": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "outside",
+                      "network"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "additionalProperties": true
               },
               "owns": {
                 "type": "array",
@@ -437,31 +466,6 @@
                   "additionalProperties": true
                 }
               },
-              "mounts": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "portal": {
-                      "type": "string"
-                    },
-                    "prefixes": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "via": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "portal",
-                    "prefixes"
-                  ],
-                  "additionalProperties": true
-                }
-              },
               "patterns": {
                 "type": "array",
                 "items": {
@@ -528,7 +532,6 @@
               "emits",
               "subscribesTo",
               "dispatch",
-              "mounts",
               "patterns",
               "externalLinks",
               "formerly"
@@ -658,24 +661,7 @@
                       }
                     },
                     "invokedBy": {
-                      "type": "object",
-                      "properties": {
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "runtime",
-                            "external",
-                            "sibling-subsystem"
-                          ]
-                        },
-                        "caller": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "kind"
-                      ],
-                      "additionalProperties": true
+                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/invokedBy"
                     },
                     "endpoint": {
                       "type": "object",

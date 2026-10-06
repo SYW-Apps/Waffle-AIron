@@ -1622,7 +1622,7 @@ export function mountCanvas(host, model, opts = {}) {
       } else {
         var c = compById[e.id];
         classes = stereoClass(c.componentType);
-        label = c.name + '\n\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
+        label = c.name + '\n\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
         + (dim ? ' dimmed' : '')
@@ -3730,7 +3730,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (focusKind === 'component' && compById[focusId]) {
       var c = compById[focusId];
       head = '<h2>' + esc(c.name) + '</h2>'
-        + staticChip('\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\u00BB')
+        + staticChip('\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
@@ -3810,7 +3810,7 @@ export function mountCanvas(host, model, opts = {}) {
         var xt = compById[pd.extId];
         head = '<h2>' + esc(xt ? xt.name : pd.extId) + '</h2>'
           + staticChip(pd.dir === 'in' ? '\u21E0 external caller' : 'external dependency \u21E2')
-          + (xt ? staticChip('\u00AB' + xt.componentType + (xt.portalType ? '/' + xt.portalType : '') + '\u00BB') : '')
+          + (xt ? staticChip('\u00AB' + xt.componentType + (xt.transport ? '/' + xt.transport : '') + '\u00BB') : '')
           + (xt ? chip(xt.subsystem, 'subsystem', xt.subsystem) : '');
         body += '<p class="desc">' + (pd.dir === 'in'
           ? 'Lives outside this box and depends on something inside it. The dashed line shows the actual cross-boundary link while this port is selected.'

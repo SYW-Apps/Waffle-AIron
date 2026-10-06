@@ -112,10 +112,10 @@ function lockMembers(): void {
 
 /**
  * Give `sib` one component whose implementation names a source file that does
- * not exist: a CODE finding (MISSING_SOURCE_FILE, an error) with a design that
- * is otherwise sound.
+ * not exist yet: planned (SOURCE_FILE_PLANNED, a notice) with a design that is
+ * otherwise sound.
  */
-/** `broken`: the method's own module is written but the implementation's main module is not — a broken link, a code error. */
+/** `broken`: the method names a module outside the project root — SOURCE_PATH_ESCAPES_ROOT, a code error. */
 function addUnimplementedComponent(broken = false): void {
   const dir = path.join(fam.sib, '.wai', 'specs', 'aside', 'engine');
   writeSpecFile(path.join(dir, '.index.yaml'), ComponentSpecSchema.parse({
@@ -130,13 +130,9 @@ function addUnimplementedComponent(broken = false): void {
   writeSpecFile(path.join(dir, '.implementation.yaml'), ImplementationSpecSchema.parse({
     id: 'engine_impl', name: 'engine_impl', description: 'The engine, not written yet', contract: 'iengine',
     sourcePath: 'src/engine.ts',
-    methods: [{ name: 'run', ...(broken ? { sourcePath: 'src/engine-run.ts' } : {}), narrative: [{ stepNumber: 1, description: 'Do the one thing', type: 'local' }] }],
+    methods: [{ name: 'run', ...(broken ? { sourcePath: '../outside/engine-run.ts' } : {}), narrative: [{ stepNumber: 1, description: 'Do the one thing', type: 'local' }] }],
     status: 'complete', createdAt: STAMP, updatedAt: STAMP,
   }));
-  if (broken) {
-    fs.mkdirSync(path.join(fam.sib, 'src'), { recursive: true });
-    fs.writeFileSync(path.join(fam.sib, 'src', 'engine-run.ts'), 'export function run(): void {}\n');
-  }
   invalidateSpecCache();
 }
 
@@ -189,7 +185,7 @@ describe('hosted lock — code findings are recorded beside the claim and never 
     addUnimplementedComponent(true);
     // The as-complete run does report the code finding, as an error …
     const run = runWithProjectRoot(fam.sib, () => validateAsComplete());
-    expect(run.issues.filter((i) => i.code === 'MISSING_SOURCE_FILE' && i.severity === 'error')).not.toHaveLength(0);
+    expect(run.issues.filter((i) => i.code === 'SOURCE_PATH_ESCAPES_ROOT' && i.severity === 'error')).not.toHaveLength(0);
 
     const record = executeApprovedLock(cfg, 'sib', APPROVER);
 

@@ -62,7 +62,7 @@ node ../../../dist/cli/index.js pack list     # see the loaded packs
 
 Break something to see the doctrine bite: add an `Actor` component to the
 demo project (→ `PROFILE_FORBIDDEN_STEREOTYPE`), give a Portal
-`portalType: HTTP_API` (→ `FLOWOPS_PORTAL_TRANSPORT`), or mention
+`transport: HTTP` (→ `FLOWOPS_PORTAL_TRANSPORT`), or mention
 "Google Sheets" in a component outside `record-repository`
 (→ `TECH_LEAKAGE` — the demo's `sheets-adapter` L4 declares
 `technologies: [google-sheets]`). The golden test

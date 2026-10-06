@@ -506,7 +506,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(res.issues.map(i => i.code)).not.toContain('INVALID_DEPENDENCY_REFERENCE');
   });
 
-  it("a chained child's source paths are its own: a file missing from its root is an error, never downgraded", () => {
+  it("a chained child's source paths are its own: a file missing from its root is reported against that root", () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     // A complete implementation whose sourcePath resolves nowhere in the child
@@ -519,8 +519,8 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     saveImplementationSpec({
       id: 'trans-orch-impl', name: 'impl', description: 'd', contract: 'itrans-orch',
       sourcePath: 'src/lives-in-the-parent.ts',
-      // The method's own file exists in the child, so realization has begun:
-      // the missing file is a broken link, not planned code.
+      // The method's own file exists in the child; the implementation's
+      // own file does not exist at the child's root, so it is planned there.
       methods: [{ name: 'run', sourcePath: 'src/run.ts', narrative: [] }],
       status: 'complete', createdAt: now, updatedAt: now,
     } as ImplementationSpec);
@@ -529,11 +529,12 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     invalidateSpecCache();
     setProjectRoot(childDir);
     const res = validateProject();
-    const missing = res.issues.filter(i => i.code === 'MISSING_SOURCE_FILE');
-    expect(missing).toHaveLength(1);
-    // It used to be downgraded to a warning --ci waived.
-    expect(missing[0].severity).toBe('error');
-    expect(res.valid).toBe(false);
+    // A named file not on disk is planned, judged against the child's own
+    // root (never resolved against the parent's).
+    const planned = res.issues.filter(i => i.code === 'SOURCE_FILE_PLANNED');
+    expect(planned).toHaveLength(1);
+    expect(planned[0].message).toContain('src/lives-in-the-parent.ts');
+    expect(res.issues.filter(i => i.code === 'MISSING_SOURCE_FILE')).toEqual([]);
   });
 
 });

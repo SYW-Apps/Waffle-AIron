@@ -896,6 +896,7 @@ methods:
     symbol: check
     exportedVia: invariantReferencesRule
   - name: entryDeclarations
+    sourcePath: src/core/rules/wiring/entry-declarations.ts
     narrative:
       - stepNumber: 1
         label: declarations
@@ -949,6 +950,7 @@ methods:
     symbol: check
     exportedVia: entryDeclarationsRule
   - name: networkBoundaries
+    sourcePath: src/core/rules/wiring/network-boundaries.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -982,4 +984,4 @@ methods:
     exportedVia: networkBoundariesRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-06T13:00:56.564Z'
+updatedAt: '2026-10-06T13:21:12.799Z'

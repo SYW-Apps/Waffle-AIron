@@ -152,7 +152,7 @@ describe('integration-sim-wiring — a missing own file reports once', () => {
     expect(byCode(issues, 'UNWIRED_INTEGRATION_SIM')).toEqual([]);
   });
 
-  it("still names the component's existing files the harness does not reach, leaving the missing one to MISSING_SOURCE_FILE", () => {
+  it("still names the component's existing files the harness does not reach, leaving the planned one to SOURCE_FILE_PLANNED", () => {
     const issues = validate(tree([
       unit('order-orchestrator', {
         subsystem: 'ordering',
@@ -181,7 +181,8 @@ describe('integration-sim-wiring — a missing own file reports once', () => {
     const unwired = byCode(issues, 'UNWIRED_INTEGRATION_SIM');
     expect(unwired).toHaveLength(1);
     expect(unwired[0].message).toContain("the component's own module (src/ordering/order-orchestrator.ts)");
-    expect(byCode(issues, 'MISSING_SOURCE_FILE').map(i => i.specId)).toEqual(['order-orchestrator-impl']);
+    expect(byCode(issues, 'SOURCE_FILE_PLANNED').map(i => i.specId)).toEqual(['order-orchestrator-impl']);
+    expect(byCode(issues, 'MISSING_SOURCE_FILE')).toEqual([]);
   });
 });
 

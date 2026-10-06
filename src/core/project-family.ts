@@ -16,6 +16,7 @@ import {
   type ResolvedExternal,
   type SubsystemSpec,
   type TypeSpec,
+  retiredMountsOf,
 } from '../models/index.js';
 // project_family_index projects the scan the Spec Index holds — the sanctioned
 // case of an Index over another Index of the same Repository.
@@ -264,7 +265,7 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
   for (const comp of specs.components) {
     comp.dependsOn.forEach((d) => add(comp.id, 'dependsOn', d));
     comp.dispatch?.forEach((b) => add(comp.id, 'dispatch-table', b.component, b.method));
-    comp.mounts?.forEach((m) => add(comp.id, 'mounts', m.portal));
+    retiredMountsOf(comp).mounts.forEach((m) => add(comp.id, 'mounts', m.portal));
   }
   const calledMethod = new Map<string, string>();
   for (const impl of specs.implementations) {

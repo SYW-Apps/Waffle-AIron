@@ -53,11 +53,11 @@ const COMPONENT_TYPE = [
 // below includes one of these only when it is the component's CURRENT value, so a
 // tree not yet migrated still shows its type without letting anyone pick it anew.
 const RETIRED_COMPONENT_TYPE = ['Specialist', 'Gateway'];
-const PORTAL_TYPE = ['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom'];
+const PORTAL_TRANSPORT = ['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom'];
 const DURABILITY = ['ram-projection', 'durable', 'read-through', 'cache'];
 const DESIGN_DEPTH = ['components', 'interfaces', 'implementations', 'narratives'];
-const METHOD_EFFECT = ['read', 'write', 'lifecycle'];
-const TRANSPORT = ['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom'];
+const METHOD_EFFECT = ['none', 'read', 'write', 'lifecycle', 'io'];
+const TRANSPORT = ['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom'];
 const HTTP_METHOD = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'];
 const GRAPHQL_OP = ['query', 'mutation', 'subscription'];
 const MB_DIRECTION = ['subscribe', 'publish'];
@@ -89,7 +89,7 @@ const PRIMITIVES = [
 const SCALAR_FIELDS: Record<SpecKind, string[]> = {
   system: ['vision'],
   subsystem: ['name', 'description', 'status', 'profile', 'designDepth', 'targetLanguage'],
-  component: ['name', 'description', 'status', 'componentType', 'portalType', 'basePath', 'durability'],
+  component: ['name', 'description', 'status', 'componentType', 'transport', 'basePath', 'durability'],
   interface: ['name', 'description'],
   implementation: ['name', 'description', 'status', 'detail', 'conformance'],
   type: ['name', 'description', 'kind'],
@@ -98,7 +98,7 @@ const SCALAR_FIELDS: Record<SpecKind, string[]> = {
 /** Optional enum fields the delta merge cannot UNSET (JSON drops undefined; the
  *  merge spreads, so '' would fail schema). Changing to a real value works;
  *  clearing a previously-set value is a no-op (documented). */
-const OPTIONAL_ENUM_FIELDS = new Set(['profile', 'designDepth', 'portalType', 'durability', 'detail', 'conformance']);
+const OPTIONAL_ENUM_FIELDS = new Set(['profile', 'designDepth', 'transport', 'durability', 'detail', 'conformance']);
 
 /**
  * Validation-rail field map — `sdd_validate_tree` issue code → the editable
@@ -914,6 +914,7 @@ function EndpointEditor(props: { endpoint: any; onChange: (ep: any) => void; dis
       {t === 'NamedPipe' && <Field label="Pipe"><TextInput value={ep.pipe ?? ''} onChange={(v) => set({ pipe: v })} disabled={props.disabled} /></Field>}
       {t === 'IPC' && <Field label="Channel"><TextInput value={ep.channel ?? ''} onChange={(v) => set({ channel: v })} disabled={props.disabled} /></Field>}
       {t === 'CLI' && <Field label="Command"><TextInput value={ep.command ?? ''} onChange={(v) => set({ command: v })} disabled={props.disabled} /></Field>}
+      {t === 'JSONRPC' && <Field label="JSON-RPC method"><TextInput value={ep.method ?? ''} onChange={(v) => set({ method: v })} disabled={props.disabled} /></Field>}
       {t === 'Custom' && <Field label="Address"><TextInput value={ep.address ?? ''} onChange={(v) => set({ address: v })} disabled={props.disabled} /></Field>}
     </div>
   );
@@ -1143,7 +1144,7 @@ function SpecForm(props: {
           <div className="row-form">
             <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><Select value={draft.componentType ?? ''} onChange={(v) => set('componentType', v)} options={componentTypeOptions(draft.componentType)} /></Field>
             {draft.componentType === 'Portal' && (
-              <Field label="Portal type"><EnumSelect value={draft.portalType} onChange={(v) => set('portalType', v)} options={PORTAL_TYPE} allowNone /></Field>
+              <Field label="Transport"><EnumSelect value={draft.transport} onChange={(v) => set('transport', v)} options={PORTAL_TRANSPORT} allowNone /></Field>
             )}
             {draft.componentType === 'Store' && (
               <Field label="Durability" fieldKey="durability" highlight={flagFor('durability')}><EnumSelect value={draft.durability} onChange={(v) => set('durability', v)} options={DURABILITY} allowNone /></Field>
