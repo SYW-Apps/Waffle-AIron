@@ -19,7 +19,7 @@ import {
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
-import { readLockRecord, type LockRecord } from './lockfile.js';
+import { readLockRecord, writeLockRecord as persistLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { listSpecFiles, readSpecFile, removeSpecFile, writeSpecFile } from './spec-files.js';
 // git_source_adapter: a git part is read from the content-addressed fetch cache at its pinned commit (stage 8).
@@ -86,10 +86,11 @@ import {
   type TypeSpellingFacts,
   type StoredInterfaceSpec,
   type StoredTypeSpec,
+  type ProjectRelations,
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
-import { buildGraphModel } from './diagram.js';
+import { buildGraphModel, renderDiagram as renderArchitectureDiagram, type DiagramFormat } from './diagram.js';
 // The export index is an owned face of this Repository: the facade forwards
 // its two reads 1:1 (spec_loader resolveSubsystemExports / resolveProjectExports).
 import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, pinnedUsageOf } from './exports.js';
@@ -7491,6 +7492,24 @@ export function readLockState(current: StateId): LockStatus {
   const record = readLockRecord();
   if (!record) return { state: 'unlocked', record: null, current };
   return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
+}
+
+/**
+ * core_orchestrator.writeLockRecord — the lock record written through the lock
+ * store. The approval portal publishes THIS function, so a Portal never reaches
+ * the store's write itself: writes route through the Orchestrator.
+ */
+export function writeLockRecord(record: LockRecord): void {
+  persistLockRecord(record);
+}
+
+/**
+ * core_orchestrator.renderDiagram — the spec tree rendered in the requested
+ * format by the architecture diagrams, with the relation health passed through
+ * (only the canvas draws it). The spec tree portal publishes this function.
+ */
+export function renderDiagram(format: DiagramFormat, relations?: ProjectRelations[]): string {
+  return renderArchitectureDiagram(format, relations);
 }
 
 /**

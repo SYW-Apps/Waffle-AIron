@@ -4,9 +4,11 @@ description: >-
   Concrete implementation of the Core Orchestrator: spec tree read/write workflows in
   src/core/specs.ts. Methods whose bodies live in sibling core modules name them in their own
   sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
-  Specialist retirement in stereotype-migration.ts. The lock, state-hash and diagram forwards
-  realized in lockfile.ts, statehash.ts and diagram.ts, republished by the core portal barrel, keep
-  their method-realization checks dialed off.
+  Specialist retirement in stereotype-migration.ts. The lock-record write and the diagram render are
+  real forwards in specs.ts, which the core portal barrel publishes, so a Portal reaches the lock
+  store's write only through this Orchestrator. The state-hash and lock-record read forwards,
+  realized in statehash.ts and lockfile.ts and republished by the barrel, keep their
+  method-realization checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -118,7 +120,6 @@ methods:
         type: call
         targetComponent: lock_store
         targetMethod: write
-    conformance: 'off'
   - name: renderDiagram
     narrative:
       - stepNumber: 1
@@ -126,7 +127,6 @@ methods:
         type: call
         targetComponent: architecture_diagrams
         targetMethod: render
-    conformance: 'off'
   - name: createMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -391,11 +391,16 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
-          implementations, and types) into the part's specs dir, re-expressing each moved
-          implementation's file paths — sourcePath, each method's sourcePath, simPath — relative to
-          the part's root, the same files. Keys and references are untouched: the moved specs are
-          still the bound project's own, so nothing is respelled
+          Move every spec file the subsystem owns into the part's specs dir, whatever the layout
+          keeps it in: its nested folder whole (its .index.yaml, components, interfaces,
+          implementations and types), and each file outside it at the same relative place under the
+          part — a type or group in the shared types/ folder naming it, and in the flat layout its
+          subsystems/ file, each component naming it, their contracts and those contracts'
+          implementations; a destination already taken refuses before anything moves, and a folder
+          the move empties goes. Each moved implementation's file paths — sourcePath, each method's
+          sourcePath, simPath — are re-expressed relative to the part's root, the same files. Keys
+          and references are untouched: the moved specs are still the bound project's own, so
+          nothing is respelled
         type: local
       - stepNumber: 6
         description: >-
@@ -2260,8 +2265,11 @@ methods:
         description: >-
           Re-save every spec that referenced across the old boundary, targets unchanged: the
           parent's `alias::name` references and the member's `<parent id>::name` references become
-          local ids, and the exports and the parent external that existed only for the boundary are
-          dropped; then drop the spec cache
+          local ids — an `alias::<type>` token of a type expression or an asserted invariant written
+          `<subsystem>.<type>` (the bare id for a project-level type); a consumers list that still
+          restricts a surface widened by the subsystems across the old boundary that depend on it,
+          each recorded in consumersRestored; the exports and the parent external that existed only
+          for the boundary are dropped; then drop the spec cache
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
@@ -2594,4 +2602,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-05T23:39:16.192Z'
+updatedAt: '2026-10-06T00:41:49.260Z'

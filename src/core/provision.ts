@@ -780,7 +780,11 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   const parentRoot = getProjectRoot();
   const parentSpecsDir = aiPathsAt(parentRoot).specsDir();
   const fooDir = path.join(parentSpecsDir, subsystemId);
-  if (!fs.existsSync(fooDir)) throw new WaironError(`subsystem specs directory not found: ${fooDir}`);
+  // Every file the subsystem owns, wherever the layout keeps it: its nested folder, and every
+  // spec outside it that names it — a shared types/ file, or the flat layout's subsystems/,
+  // components/, interfaces/ and implementations/ files.
+  const owned = subsystemFiles(subsystemId, parentSpecsDir);
+  if (owned.files.length === 0) throw new WaironError(`subsystem specs not found for "${subsystemId}" under ${parentSpecsDir}`);
   // Step 4: the part's directory, under the containment guard; a project there refuses.
   const relPath = toPosixPath(partPath);
   const partDir = assertContainedProjectPath(parentRoot, relPath);
@@ -794,24 +798,96 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   if (!joined && (declaredMembers(projectConfigRepository.load() ?? {}).some((m) => m.alias === alias) || projectConfigRepository.load()?.externals?.[alias] !== undefined)) {
     throw new WaironError(`cannot externalize "${subsystemId}": this project already declares the alias "${alias}".`);
   }
-  const targetDir = path.join(aiPathsAt(partDir).specsDir(), subsystemId);
-  if (fs.existsSync(targetDir)) throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${targetDir}`);
+  const partSpecsDir = aiPathsAt(partDir).specsDir();
+  const targetDir = path.join(partSpecsDir, subsystemId);
+  if (owned.home !== undefined && fs.existsSync(targetDir)) throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${targetDir}`);
+  const destinationOf = (file: string): string => path.join(partSpecsDir, path.relative(parentSpecsDir, file));
+  const strays = owned.files.filter((f) => !(owned.home !== undefined && isWithinDir(owned.home, f)));
+  const taken = strays.filter((f) => fs.existsSync(destinationOf(f)));
+  if (taken.length > 0) throw new WaironError(`cannot externalize "${subsystemId}": the part already holds ${taken.map((f) => toPosixPath(path.relative(partDir, destinationOf(f)))).join(', ')}.`);
   // Step 8 checked first: an externalize as project is one write or none.
   if (as === 'project') {
     if (joined) throw new WaironError(`cannot externalize "${subsystemId}" as a project into the existing part "${joined.alias}": externalize it into the part, then promote the part (\`wairon member promote ${joined.alias}\`).`);
-    const refusals = promoteRefusals(family, specFilesUnder(fooDir), ownSpecFiles(family, fooDir), alias);
+    const inside = new Set(owned.files.map((f) => path.resolve(f)));
+    const refusals = promoteRefusals(family, owned.files, ownSpecFiles(family, fooDir).filter((f) => !inside.has(path.resolve(f))), alias);
     if (refusals.length > 0) throw new WaironError(`cannot externalize "${subsystemId}" as a project: ${refusals.join('; ')}.`);
   }
-  // Step 5: the subtree moves into the part; its implementations' file paths re-expressed.
-  ensureDir(path.dirname(targetDir));
-  fs.renameSync(fooDir, targetDir);
-  rebaseImplementationPaths(targetDir, parentRoot, partDir);
+  // Step 5: the subtree moves into the part — its folder whole, every file it owns elsewhere to
+  // the same place under the part's specs — and its implementations' file paths re-expressed.
+  const moved: string[] = [];
+  if (owned.home !== undefined) {
+    ensureDir(path.dirname(targetDir));
+    fs.renameSync(owned.home, targetDir);
+    moved.push(...specFilesUnder(targetDir));
+  }
+  for (const file of strays) {
+    const to = destinationOf(file);
+    ensureDir(path.dirname(to));
+    fs.renameSync(file, to);
+    moved.push(to);
+    removeEmptyDirsUpTo(path.dirname(file), parentSpecsDir);
+  }
+  rebaseImplementationPaths(partSpecsDir, parentRoot, partDir, moved);
   // Step 6: declared under the subsystem id by the shorthand, unless it joined a part.
   if (!joined) projectConfigRepository.declareMember(alias, { source: relPath });
   invalidateSpecCache();
   // Steps 7-8: as a project, the new part is promoted in place.
   // Step 9: answered with what the promote wrote across the new boundary.
   return as === 'project' ? promoteMember(alias) : undefined;
+}
+
+/**
+ * Every spec file a subsystem of the bound project owns, wherever its layout
+ * keeps it. In the nested layout that is its folder (`home`); a spec that names
+ * the subsystem from outside it is owned too — a type or group in the shared
+ * types/ folder, and in the flat layout its subsystems/ file and each
+ * component naming it (a component's folder whole: its contract,
+ * implementation and owned members), each contract of those components and
+ * each implementation of those contracts. Moving the folder alone would leave
+ * those behind in the parent, naming a subsystem it no longer holds.
+ */
+function subsystemFiles(subsystemId: string, specsDir: string): { home?: string; files: string[] } {
+  const subPath = getSubsystemPath(subsystemId);
+  const nested = subPath.endsWith('.index.yaml') && path.resolve(path.dirname(subPath)) === path.resolve(path.join(specsDir, subsystemId)) && fs.existsSync(subPath);
+  const home = nested ? path.dirname(subPath) : undefined;
+  const files = new Set<string>(home !== undefined ? specFilesUnder(home).map((f) => path.resolve(f)) : []);
+  if (!nested && fs.existsSync(subPath)) files.add(path.resolve(subPath));
+  const l0 = path.resolve(aiPathsAt(getProjectRoot()).specsSystem());
+  const others = (): string[] => specFilesUnder(specsDir).filter((f) => path.resolve(f) !== l0 && !files.has(path.resolve(f)));
+  const add = (file: string): void => {
+    // A component (or group) stored as a folder's .index.yaml carries the folder with it.
+    if (path.basename(file) === '.index.yaml') for (const f of specFilesUnder(path.dirname(file))) files.add(path.resolve(f));
+    else files.add(path.resolve(file));
+  };
+  // Each document naming the subsystem — a component, a type, or a group of types (no spec kind of its own).
+  for (const file of others()) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
+    if (kind === 'subsystem' || kind === 'system' || raw?.subsystem !== subsystemId) continue;
+    add(file);
+  }
+  // Then the contracts of its components, and the implementations of its contracts.
+  const owned = (): RawSpec[] => rawSpecs([...files]);
+  const components = new Set(owned().filter((x) => x.kind === 'component').map((x) => x.id));
+  for (const spec of rawSpecs(others())) if (spec.kind === 'interface' && components.has(spec.raw?.component)) add(spec.file);
+  const contracts = new Set(owned().filter((x) => x.kind === 'interface').map((x) => x.id));
+  for (const spec of rawSpecs(others())) if (spec.kind === 'implementation' && contracts.has(spec.raw?.contract)) add(spec.file);
+  return { home, files: [...files] };
+}
+
+/** Remove `dir` and each parent above it, up to (not including) `stop`, while empty. */
+function removeEmptyDirsUpTo(dir: string, stop: string): void {
+  let at = path.resolve(dir);
+  const end = path.resolve(stop);
+  while (at !== end && isWithinDir(end, at) && fs.existsSync(at) && fs.readdirSync(at).length === 0) {
+    fs.rmdirSync(at);
+    at = path.dirname(at);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1484,6 +1560,12 @@ export interface InternalizeResult {
   deleted: string[];
   /** Each piece of metadata deliberately not carried, with the reason. */
   notCarried: string[];
+  /**
+   * Demote only: one line per consumers list widened by the subsystems across
+   * the old boundary that depend on the surface it restricts — the use the
+   * project boundary's export table granted, kept as the list a part needs.
+   */
+  consumersRestored: string[];
 }
 
 /** The member's .wai entries this write knows, by the group its deleted list names them under. */
@@ -1554,7 +1636,7 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   if (refusals.length > 0) {
     throw new WaironError(`cannot internalize "${alias}": the member cannot be taken in whole — ${refusals.join('; ')}.`);
   }
-  const result: InternalizeResult = { subsystems: scan.subsystems, types: scan.types, placed: [], externals: [], deleted: [], notCarried: [] };
+  const result: InternalizeResult = { subsystems: scan.subsystems, types: scan.types, placed: [], externals: [], deleted: [], notCarried: [], consumersRestored: [] };
   // What crosses the old boundary, read BEFORE anything moves.
   const intoMember = crossingReferences(family, '', member.namespace);
   const backOut = crossingReferences(family, member.namespace, '');
@@ -1609,7 +1691,7 @@ function internalizePart(alias: string, part: ProjectFamily['nodes'][number]['pa
   const deleted = deleteMemberWai(partDir);
   invalidateSpecCache();
   // Step 24.
-  return { subsystems: part.subsystems, types, placed: [], externals: [], deleted, notCarried: [] };
+  return { subsystems: part.subsystems, types, placed: [], externals: [], deleted, notCarried: [], consumersRestored: [] };
 }
 
 /** Steps 4-7: the member's subsystems and types, its home, its L0 and its configuration. */
@@ -2049,7 +2131,7 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
     refusals.push(`its metadata needs a home subsystem (--home) — ${home === '' ? 'none was named' : `"${home}" is no subsystem of the member or of this project`}; its subsystems are ${subsystems.join(', ') || 'none'}`);
   }
   if (refusals.length > 0) throw new WaironError(`demote refused: "${alias}" cannot become a part — ${refusals.join('; ')}.`);
-  const result: InternalizeResult = { subsystems, types, placed: [], externals: [], deleted: [], notCarried: [] };
+  const result: InternalizeResult = { subsystems, types, placed: [], externals: [], deleted: [], notCarried: [], consumersRestored: [] };
   // What crosses the old boundary, by public name on each side, read BEFORE anything is written.
   const intoMember = localsOf(dir);
   const backOut = localsOf(root);
@@ -2069,6 +2151,12 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
   const memberSide = rewriteRefsIn(memberSpecs, across(parentAliases, backOut, true));
   // A bare name the member imported from this project by `use` crossed too.
   for (const pa of parentAliases) for (const name of config?.externals?.[pa]?.use ?? []) if (name !== '*') crossed.add(backOut.get(name) ?? name);
+  const memberNow = rawSpecs(specFilesUnder(aiPathsAt(dir).specsDir()).filter((f) => path.resolve(f) !== path.resolve(aiPathsAt(dir).specsSystem())));
+  const parentNow = rawSpecs(ownSpecFiles(family, aiPathsAt(dir).specsDir()));
+  // ... and every `alias::<type>` token of a type expression or an asserted invariant, which no whole-value position holds.
+  respellQualifiedBack(parentNow, memberNow, { intoMember: (a) => a === alias, backOut: (a) => parentAliases.has(a) }, { intoMember, backOut }, crossed);
+  // A consumers list still restricting a surface names the subsystems across the old boundary that use it again.
+  restoreCrossingConsumers(memberNow, parentNow, result);
   // Its subsystems belong to this project's L0 again.
   const parentName = loadSystemSpec()?.name;
   if (parentName) {
@@ -2098,6 +2186,111 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
   invalidateSpecCache();
   // Step 15.
   return result;
+}
+
+/**
+ * demoteMember's inverse of promote's qualified-token respelling: every
+ * `<alias>::<name>` token of a type-expression slot (a returns, a param or
+ * field type, a type method's signature) and every asserted invariant's type
+ * reference, naming a type across the old boundary, written back in the form a
+ * reference to a type of one's own tree takes — `<subsystem>.<type>` for a
+ * subsystem's type, the bare id for a project-level one. A name is read
+ * through the side's export table first (a public name may differ from the
+ * type's id). Each type that crossed into the parent is recorded, so an export
+ * that existed only for the boundary retires with it.
+ */
+function respellQualifiedBack(
+  parentSide: RawSpec[],
+  memberSide: RawSpec[],
+  aliases: { intoMember: (alias: string) => boolean; backOut: (alias: string) => boolean },
+  tables: { intoMember: Map<string, string>; backOut: Map<string, string> },
+  crossed: Set<string>,
+): void {
+  const types = [...parentSide, ...memberSide].filter((s) => s.kind === 'type');
+  const localForm = (id: string): string | undefined => {
+    const found = types.filter((t) => t.id === id);
+    if (found.length !== 1) return undefined;
+    const sub = found[0].raw?.subsystem;
+    return typeof sub === 'string' && sub !== '' ? `${sub}.${id}` : id;
+  };
+  for (const [specs, across, table, record] of [
+    [parentSide, aliases.intoMember, tables.intoMember, false],
+    [memberSide, aliases.backOut, tables.backOut, true],
+  ] as const) {
+    const local = (token: string): string => {
+      const segments = token.split('::');
+      if (segments.length !== 2 || !across(segments[0])) return token;
+      const id = table.get(segments[1]) ?? segments[1];
+      const to = localForm(id);
+      if (to === undefined) return token;
+      if (record) crossed.add(id);
+      return to;
+    };
+    for (const spec of specs) {
+      if (!fs.existsSync(spec.file)) continue;
+      const raw = readYamlFile(spec.file) as any;
+      if (!raw || typeof raw !== 'object') continue;
+      let changed = false;
+      for (const slot of typeExpressionSlots(spec.kind, raw)) {
+        const value = slot.holder[slot.key] as string;
+        const next = respellTypeNames(value, local);
+        if (next !== value) {
+          slot.holder[slot.key] = next;
+          changed = true;
+        }
+      }
+      if (spec.kind === 'implementation') {
+        for (const m of raw.methods ?? []) {
+          for (const step of m?.narrative ?? []) {
+            if (!Array.isArray(step?.assertsInvariants)) continue;
+            step.assertsInvariants = step.assertsInvariants.map((ref: unknown) => {
+              const typeRef = typeof ref === 'string' ? assertedTypeRef(ref) : undefined;
+              if (typeRef === undefined || !typeRef.includes('::')) return ref;
+              const to = local(typeRef);
+              if (to === typeRef) return ref;
+              changed = true;
+              return `${to}${(ref as string).slice(typeRef.length)}`;
+            });
+          }
+        }
+      }
+      if (changed) writeYamlFile(spec.file, raw);
+    }
+  }
+}
+
+/**
+ * demoteMember's inverse of promote's step 10. Promote drops each consumers
+ * entry naming a subsystem across the new boundary, because between projects
+ * the L0 export table governs who may use a name; a part has no export table,
+ * so a list that still restricts a surface must name every subsystem across
+ * the old boundary that depends on it, or the demote leaves
+ * CROSS_SUBSYSTEM_UNLISTED_CONSUMER behind. The subsystems added are exactly
+ * the dependents the boundary's exports admitted. A list promote removed
+ * whole is not recreated: absent is what it reads as (any subsystem of the
+ * project may depend), and no durable record survives the promote to tell it
+ * from a list that was never written — the promote's plan named its removal.
+ */
+function restoreCrossingConsumers(memberSide: RawSpec[], parentSide: RawSpec[], result: InternalizeResult): void {
+  const sides: [RawSpec[], RawSpec[]][] = [[memberSide, parentSide], [parentSide, memberSide]];
+  for (const [providers, consumers] of sides) {
+    const dependents = consumers.filter((c) => c.kind === 'component' && typeof c.raw?.subsystem === 'string' && Array.isArray(c.raw?.dependsOn));
+    for (const spec of providers.filter((x) => x.kind === 'subsystem')) {
+      patchKeepingStamp(spec.file, (raw) => {
+        let changed = false;
+        for (const entry of raw.publicInterfaces ?? []) {
+          if (!Array.isArray(entry?.consumers) || entry.consumers.length === 0 || typeof entry.component !== 'string') continue;
+          const users = [...new Set(dependents.filter((c) => (c.raw.dependsOn as unknown[]).includes(entry.component)).map((c) => c.raw.subsystem as string))]
+            .filter((sub) => sub !== spec.id && !entry.consumers.includes(sub));
+          if (users.length === 0) continue;
+          entry.consumers = [...entry.consumers, ...users];
+          changed = true;
+          result.consumersRestored.push(`${spec.id} ${entry.component}: ${users.join(', ')}`);
+        }
+        return changed;
+      });
+    }
+  }
 }
 
 /**

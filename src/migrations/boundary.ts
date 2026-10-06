@@ -8,7 +8,7 @@ import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { memberLocationOf, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
-import type { PromoteResult } from '../core/index.js';
+import type { InternalizeResult, PromoteResult } from '../core/index.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -606,8 +606,11 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
     // Step 18.
     return;
   }
-  // Step 19: the core's demote — a core refusal propagates.
-  for (const e of planned.filter((x) => x.write.call === 'demoteMember')) writeOne(rehearsal, e.write);
+  // Step 19: the core's demote — a core refusal propagates; a consumers list it widened is named in the plan.
+  for (const e of planned.filter((x) => x.write.call === 'demoteMember')) {
+    const demoted = writeOne(rehearsal, e.write) as InternalizeResult | undefined;
+    for (const line of demoted?.consumersRestored ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `consumers across the old boundary restored: ${line}` });
+  }
   // Step 20: the bound project's pin of the member removed.
   for (const e of planned.filter((x) => x.write.call === 'unpin')) writeOne(rehearsal, e.write);
   // Step 21: the caller's binding is back.

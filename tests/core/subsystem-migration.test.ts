@@ -496,3 +496,89 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     expect(referenceFindings(verdict(top))).toEqual([]);
   });
 });
+
+describe('externalize moves every file the subsystem owns, whatever the layout keeps it in', () => {
+  let top: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (top) fs.rmSync(top, { recursive: true, force: true });
+  });
+
+  /** A project with billing (an orchestrator, its contract and implementation, a type) beside ledger; flat when `flat`. */
+  function seedLayout(flat: boolean): void {
+    top = fs.mkdtempSync(path.join(os.tmpdir(), 'migrate-layout-'));
+    const specsDir = path.join(top, '.wai', 'specs');
+    fs.mkdirSync(specsDir, { recursive: true });
+    writeYamlFile(path.join(top, '.wai', 'project.yaml'), {
+      schemaVersion: '1.0.0', id: 'shop', name: 'shop', targets: [],
+      rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
+    });
+    // The flat layout: subsystems live as subsystems/<id>.yaml once that folder holds one.
+    if (flat) {
+      fs.mkdirSync(path.join(specsDir, 'subsystems'), { recursive: true });
+      writeYamlFile(path.join(specsDir, 'subsystems', 'ledger.yaml'), { id: 'ledger', name: 'ledger', description: 'the ledger', parentSystem: 'shop', publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now });
+    }
+    setProjectRoot(top);
+    invalidateSpecCache();
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'shop', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    if (!flat) saveSpec('subsystem', { id: 'ledger', name: 'ledger', description: 'the ledger', parentSystem: 'shop', publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now } as SubsystemSpec);
+    saveSpec('subsystem', { id: 'billing', name: 'billing', description: 'billing', parentSystem: 'shop', publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now } as SubsystemSpec);
+    saveComponentSpec({ id: 'bill_orch', name: 'Bill', description: 'workflow', subsystem: 'billing', componentType: 'Orchestrator', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+    saveInterfaceSpec({ id: 'ibill_orch', name: 'IBill', description: 'c', component: 'bill_orch', methods: [{ name: 'charge', description: 'charge', params: [{ name: 'r', type: 'receipt' }], returns: 'void' }], createdAt: now, updatedAt: now } as any);
+    saveImplementationSpec({ id: 'bill_orch_impl', name: 'Bill impl', description: 'i', contract: 'ibill_orch', sourcePath: 'src/billing/orch.ts', methods: [{ name: 'charge', narrative: [{ stepNumber: 1, description: 'Charge', type: 'local' }] }], createdAt: now, updatedAt: now } as any);
+    saveTypeSpec({ id: 'receipt', name: 'Receipt', description: 'r', subsystem: 'billing', kind: 'value-object', fields: [{ name: 'amount', type: 'int' }], methods: [], createdAt: now, updatedAt: now } as any);
+    invalidateSpecCache();
+  }
+
+  /** Every spec document under a specs folder naming the subsystem, as a path relative to it. */
+  function naming(dir: string, subsystem: string): string[] {
+    return listFilesRecursive(path.join(dir, '.wai', 'specs'), '.yaml')
+      .filter((f) => {
+        const raw = readYamlFile(f) as any;
+        return raw?.subsystem === subsystem || raw?.id === subsystem || raw?.component === 'bill_orch' || raw?.contract === 'ibill_orch';
+      })
+      .map((f) => path.relative(path.join(dir, '.wai', 'specs'), f).replace(/\\/g, '/'))
+      .sort();
+  }
+
+  it('flat layout: the subsystems/ file, its components, contracts, implementations and shared types/ files all move', () => {
+    seedLayout(true);
+    const before = naming(top, 'billing');
+    expect(before).toContain('types/receipt.yaml');
+    expect(before).toContain('subsystems/billing.yaml');
+
+    externalizeSubsystem('billing', 'packages/billing');
+
+    const part = path.join(top, 'packages', 'billing');
+    // Nothing of billing is left in the parent; each file sits at the same place under the part.
+    expect(naming(top, 'billing')).toEqual([]);
+    expect(naming(part, 'billing')).toEqual(before);
+    // The implementation's source path is re-expressed from the part's root.
+    const impl = listFilesRecursive(path.join(part, '.wai', 'specs'), '.yaml').map((f) => readYamlFile(f) as any).find((r) => r?.id === 'bill_orch_impl');
+    expect(impl.sourcePath).toBe('../../src/billing/orch.ts');
+    // ledger stays, and the tree still reads the moved type as billing's.
+    expect(fs.existsSync(path.join(top, '.wai', 'specs', 'subsystems', 'ledger.yaml'))).toBe(true);
+    expect(referenceFindings(verdict(top))).toEqual([]);
+  });
+
+  it('nested layout: a type of the subsystem kept in the shared types/ folder moves with its folder', () => {
+    seedLayout(false);
+    // A shared types/ file naming billing, as a hand-written or flat-era type is kept.
+    const stray = path.join(top, '.wai', 'specs', 'types', 'refund.yaml');
+    fs.mkdirSync(path.dirname(stray), { recursive: true });
+    writeYamlFile(stray, { id: 'refund', name: 'Refund', description: 'r', subsystem: 'billing', kind: 'value-object', fields: [{ name: 'amount', type: 'int' }], methods: [], createdAt: now, updatedAt: now });
+    invalidateSpecCache();
+
+    externalizeSubsystem('billing', 'packages/billing');
+
+    const part = path.join(top, 'packages', 'billing');
+    expect(naming(top, 'billing')).toEqual([]);
+    expect(fs.existsSync(path.join(part, '.wai', 'specs', 'types', 'refund.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(part, '.wai', 'specs', 'billing', '.index.yaml'))).toBe(true);
+    // The emptied shared folder goes with it.
+    expect(fs.existsSync(path.join(top, '.wai', 'specs', 'types'))).toBe(false);
+    expect(referenceFindings(verdict(top))).toEqual([]);
+  });
+});

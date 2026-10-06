@@ -23,6 +23,8 @@ import * as barrel from '../../src/core/index.js';
 import * as library from '../../src/index.js';
 import * as ruleBarrel from '../../src/core/rules/index.js';
 import * as lockStore from '../../src/core/lockfile.js';
+import * as orchestrator from '../../src/core/specs.js';
+import * as diagrams from '../../src/core/diagram.js';
 import { describeApprover, type ApproverIdentity } from '../../src/models/lock.js';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -332,5 +334,26 @@ describe('approver_identity.label lives with its type', () => {
       source: 'legacy',
     });
     expect(describeApprover(lockStore.normalizeApprover(NAMED))).toBe('Robbe (u-17) [authenticated]');
+  });
+});
+
+describe('a Portal publishes the orchestrator, never a store write or a member render', () => {
+  it('approval_portal.writeLockRecord is core_orchestrator.writeLockRecord, not the lock store write', () => {
+    expect(barrel.writeLockRecord).toBe(orchestrator.writeLockRecord);
+    expect(
+      barrel.writeLockRecord,
+      'A Portal must not reach a write directly: the barrel republishing lockfile.writeLockRecord '
+      + 'is the PORTAL_WRITE_SHORTCUT the narrative denies.',
+    ).not.toBe(lockStore.writeLockRecord);
+  });
+
+  it('spec_tree_portal.renderDiagram is core_orchestrator.renderDiagram, as its narrative says', () => {
+    expect(barrel.renderDiagram).toBe(orchestrator.renderDiagram);
+    expect(barrel.renderDiagram).not.toBe(diagrams.renderDiagram);
+  });
+
+  it('the orchestrator forwards really reach the store and the diagrams', () => {
+    expect(orchestrator.renderDiagram('mermaid')).toBe(diagrams.renderDiagram('mermaid'));
+    expect(() => orchestrator.renderDiagram('pdf' as never)).toThrow(/Unsupported diagram format "pdf"/);
   });
 });

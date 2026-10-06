@@ -638,7 +638,9 @@ spec — each mount names the `portal`, the path `prefixes` it routes there, and
 optionally `via`, the router entry the Portal's file exports for it. An HTTP
 Portal that no listener mounts, and that declares no `mounts` itself (which
 marks it as a listener, even with `mounts: []`), is `UNMOUNTED_PORTAL`: nothing
-would ever reach it. A prefix matches whole path segments (`/web` covers
+would ever reach it. `mounts: []` is honest only on a Portal that IS the whole
+HTTP server and serves just its own routes; a service with several HTTP
+Portals has one listener that mounts each of them. A prefix matches whole path segments (`/web` covers
 `/web/admin`, not `/webhooks`). Only HTTP endpoints are judged.
 
 ### Forwarding a contract: `signatureFrom`

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { readYamlFile } from '../../src/utils/yaml.js';
+import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import { validateFamily, type ValidationIssue } from '../../src/core/validation.js';
 import type { MigrationPlan } from '../../src/migrations/types.js';
 import { at, migrate, newFindings, plan } from '../helpers/family-verbs.js';
@@ -260,6 +260,39 @@ describe('promote, externalize --as project and rename-alias respell every refer
     expect(why).toMatch(/takes its signature from "contracts\.charge_listener".*not read across a project boundary/);
     expect(why).toMatch(/asserts the invariant "orders\.order\.positive_total"/);
     expect(planned.changes).toEqual([]);
+  });
+
+  it('demote restores, onto a consumers list that still restricts a surface, the subsystems across the old boundary that use it; plan = apply; no new error', () => {
+    const { root, part } = writeShop(path.join(tempDir(cleanups, 'wairon-respell-'), 'shop'));
+    // orders publishes its portal to billing (across the would-be boundary) AND to contracts (inside it).
+    const ordersFile = specs(root, 'orders', '.index.yaml');
+    const orders = readYamlFile(ordersFile) as { publicInterfaces: { consumers?: string[] }[] };
+    orders.publicInterfaces[0].consumers = ['billing', 'contracts'];
+    writeYamlFile(ordersFile, orders);
+    invalidateSpecCache();
+    const consumersOf = (dir: string, sub: string): string[] | undefined =>
+      (readYamlFile(specs(dir, sub, '.index.yaml')) as { publicInterfaces: { consumers?: string[] }[] }).publicInterfaces[0].consumers;
+    const before = errorsOf(root);
+
+    migrate(root, { verb: 'promote', alias: 'billing' });
+    invalidateSpecCache();
+    // Promote: only the entry across the new boundary is dropped; billing's own list went whole.
+    expect(consumersOf(root, 'orders')).toEqual(['contracts']);
+    expect(consumersOf(part, 'billing')).toBeUndefined();
+
+    const planned = plan(root, { verb: 'demote', alias: 'billing' });
+    expect(planned.refusals).toEqual([]);
+    expect(planned.edits.map((e) => e.detail).join('\n')).toMatch(/consumers across the old boundary restored: orders orders_portal: billing/);
+    migrations_apply(root, planned);
+
+    // The restriction still holds, and billing — which uses the portal — is admitted again.
+    expect(consumersOf(root, 'orders')).toEqual(['contracts', 'billing']);
+    // A list promote removed whole is not recreated: absent (any subsystem may depend) is what it reads as.
+    expect(consumersOf(part, 'billing')).toBeUndefined();
+    // Every `alias::` token of a type expression or an asserted invariant is a local reference again.
+    expect([...typeTexts(root), ...typeTexts(part)].filter((t) => /\b(billing|shop)::/.test(t))).toEqual([]);
+    expect(typeTexts(root)).toEqual(expect.arrayContaining(['billing.receipt', 'billing.receipt.positive']));
+    expect(newFindings(before, errorsOf(root))).toEqual([]);
   });
 
   it('a dotted reference through an alias is never accepted silently: UNDEFINED_TYPE_REFERENCE naming the `alias::name` to write', () => {

@@ -198,13 +198,17 @@ export type { StateId } from './statehash.js';
 // The lock record itself (approval_portal readLockRecord / writeLockRecord).
 // `wairon lock` writes one and `wairon status` reads one; neither is allowed to
 // know where the file lives.
-export { readLockRecord, writeLockRecord } from './lockfile.js';
+// The write is the core orchestrator's (a Portal never reaches the lock store's
+// write itself); the read is the store's own function, which the orchestrator
+// binds and hands through.
+export { readLockRecord } from './lockfile.js';
+export { writeLockRecord } from './specs.js';
 export type { LockRecord, MemberPin } from './lockfile.js';
 
 // The rendered architecture diagram (spec_tree_portal renderDiagram) — one string
 // for `wairon diagram`, which is the only thing that command needs from the
 // four core modules it used to build its artifacts out of.
-export { renderDiagram } from './diagram.js';
+export { renderDiagram } from './specs.js';
 
 // The same canvas as data (spec_tree_portal buildCanvasDataModel), for a client
 // that mounts the shared renderer itself — the hosted web app and share
