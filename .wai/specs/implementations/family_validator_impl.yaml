@@ -89,7 +89,8 @@ methods:
       - stepNumber: 12
         description: >-
           Return the family verdict: valid when no project's gate and no family finding holds an
-          error, with every project's totals
+          error, with every project's totals and the aliases of the bound project's externals it
+          composed in reach (`composed`), which the advisory live comparison then skips
         type: return
         outcome: ValidationResult
   - name: compose
@@ -718,4 +719,4 @@ methods:
         outcome: ValidationIssue[] (advisory)
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-06T10:15:45.455Z'
+updatedAt: '2026-10-06T11:12:23.088Z'

@@ -193,6 +193,14 @@ export interface ValidationIssue {
    * root. Absent on the owner's own run.
    */
   project?: string;
+  /**
+   * True on a finding reported beside a gate rather than by it — the live
+   * comparison of an external with its producer (family_validator.advise).
+   * Printed and counted with its severity, but never part of a failure
+   * decision: `valid` and `validate --ci` both ignore it, because the pin is
+   * the reproducible gate and a live producer is not.
+   */
+  advisory?: boolean;
 }
 
 export interface ValidationResult {
@@ -217,6 +225,12 @@ export interface ValidationResult {
    * and on a family run.
    */
   analysis?: CodeAnalysis;
+  /**
+   * A family run only: the aliases of the bound project's externals the run
+   * composed as part of its gate (their producers in reach) — the advisory
+   * live comparison skips them, so they get no second word.
+   */
+  composed?: string[];
 }
 
 /**
@@ -1162,4 +1176,15 @@ export function familyApprovals(depth?: number): ProjectApproval[] {
  */
 export function familyRelations(): ProjectRelations[] {
   return familyValidator.familyRelations();
+}
+
+/**
+ * ivalidator_portal.adviseExternals — the advisory live comparison of the
+ * bound project's externals the run did not compose (family_validator.advise):
+ * EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED and EXTERNAL_LIVE_UNCOMPARED,
+ * every one marked advisory. Plain `validate`, `status` and their MCP twins
+ * append it beside the gate's own findings; it never decides `valid` or `--ci`.
+ */
+export function adviseExternals(composed?: string[]): ValidationIssue[] {
+  return familyValidator.advise(composed);
 }

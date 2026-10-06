@@ -43,6 +43,7 @@ import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
 import type { PackImpact } from '../models/pack-impact.js';
 import type { ExternalStatus } from '../models/index.js';
+import { readExternalSource } from '../models/project.js';
 import type {
   ApiKeyRecord,
   ApprovalDecision,
@@ -696,10 +697,12 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
 }
 
 /** Each declared external's alias → the hosted record its `source.hosted` names. */
-function externalRecords(config: { externals?: Record<string, { source?: { hosted?: string } } | null> } | null): Map<string, string> {
+function externalRecords(config: { externals?: Record<string, { source?: unknown } | null> } | null): Map<string, string> {
   const out = new Map<string, string>();
   for (const [alias, decl] of Object.entries(config?.externals ?? {})) {
-    if (decl?.source?.hosted !== undefined) out.set(alias, decl.source.hosted);
+    // Either form of the source: `hosted:<id>` or { hosted }.
+    const hosted = readExternalSource(decl?.source).source?.hosted;
+    if (hosted !== undefined) out.set(alias, hosted);
   }
   return out;
 }

@@ -12,4 +12,6 @@ export {
   pinExternals,
   getExternalsStatus,
   listExternals,
+  // `wairon externals add`: declare one external.
+  declareExternal,
 } from '../../core/surface-portal.js';

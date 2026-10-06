@@ -13,10 +13,14 @@
 // the package's library entry — never offers a pin carried without re-pinning.
 // ---------------------------------------------------------------------------
 import * as surfaceOrchestrator from './surfaces.js';
+// external_declarations: declaring one external is a workflow of its own.
+import * as externalDeclarations from './external-declarations.js';
 import type { SurfaceExportResult } from './surfaces.js';
 import type {
   DesignApproval,
   DesignExport,
+  ExternalAddition,
+  ExternalRequest,
   ExternalListing,
   ExternalPin,
   ExternalStatus,
@@ -60,8 +64,9 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
   return surfaceOrchestrator.pinExternals(aliases);
 }
 
-export function getExternalsStatus(): ExternalStatus[] {
-  return surfaceOrchestrator.getExternalsStatus();
+/** isurface_portal.getExternalsStatus — each declared external's pin against its live producer; offline, no producer is read over the network. */
+export function getExternalsStatus(offline?: boolean): ExternalStatus[] {
+  return surfaceOrchestrator.getExternalsStatus(offline);
 }
 
 export function listExternals(): ExternalListing[] {
@@ -70,6 +75,16 @@ export function listExternals(): ExternalListing[] {
 
 export function listPinnedExternals(): PinnedExternal[] {
   return surfaceOrchestrator.listPinnedExternals();
+}
+
+/**
+ * isurface_portal.declareExternal — declare one external of the bound project
+ * (`wairon externals add`, sdd_add_external): refused in one sentence naming
+ * the accepted form, checked against the producer it reaches, pinned when
+ * asked. Dispatched to the external-declarations workflow.
+ */
+export function declareExternal(request: ExternalRequest): ExternalAddition {
+  return externalDeclarations.declare(request);
 }
 
 /** isurface_portal.pinnedParent — a part's pinned parent, from its own .wai/externals files only (stage 8); null at a project. */

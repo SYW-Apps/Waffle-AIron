@@ -173,8 +173,27 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
         : {}),
       // A named scalar travels with the primitive it holds.
       ...(t.holds !== undefined ? { holds: t.holds } : {}),
+      // A renamed type travels with its rename trace — provenance, outside every digest.
+      ...formerlyOf(t.previousIds, t.id),
     };
   });
+}
+
+/** The last segment of a possibly-qualified id: the name a public table spells it by. */
+function lastSegment(id: string): string {
+  return id.split('::').pop() ?? id;
+}
+
+/**
+ * A rename trace as a snapshot carries it (`formerly`): the former names, each
+ * by its last segment, deduplicated in order, without the current name; no
+ * field at all when nothing was renamed. Provenance, never signature — it
+ * enters neither memberDigest nor contentDigest, so carrying it moves no pin.
+ */
+function formerlyOf(trace: readonly string[] | undefined, current: string): { formerly?: string[] } {
+  const now = lastSegment(current);
+  const names = [...new Set((trace ?? []).map(lastSegment))].filter((n) => n !== now);
+  return names.length ? { formerly: names } : {};
 }
 
 /** The effective id of the bound project, when it has a configuration to take one from. */
@@ -197,9 +216,17 @@ function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: I
     // The loaded tree carries every method resolved: a sourced method already
     // holds its source's params and returns inline, so the snapshot drops the
     // signatureFrom — it names no producer-internal method. A rename trace
-    // never enters a snapshot either: a renamed method moves no digest beyond
-    // the name it changed.
-    .map(({ signatureFrom: _source, previousNames: _trace, ...method }) => method);
+    // travels as `formerly` (each former key's method name), which no digest
+    // reads: a renamed method moves no digest beyond the name it changed.
+    .map(({ signatureFrom: _source, previousNames: trace, ...method }) => ({
+      ...method,
+      ...formerlyOf(trace?.map((key) => key.slice(key.lastIndexOf('.') + 1)), method.name),
+    }));
+  // The entry's own rename trace: the former public names, when the public
+  // name is the one the narrowed interface's (else the component's) id gives —
+  // an export renamed with `as` keeps its public name through a rename.
+  const named = entry.interface ? interfaces.find((i) => i.id === entry.interface) : comp;
+  const derived = lastSegment(entry.interface ?? comp.id) === entry.publicName;
   return {
     id: entry.publicName,
     name: entry.name ?? comp.name,
@@ -217,6 +244,7 @@ function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: I
     ...(entry.stability ? { stability: entry.stability } : {}),
     componentType: comp.componentType,
     ...(entry.interface ? { interface: entry.interface } : {}),
+    ...(derived ? formerlyOf(named?.previousIds, entry.publicName) : {}),
   };
 }
 
@@ -984,6 +1012,83 @@ export function pinParent(aliases?: string[]): ExternalPin[] {
   }];
 }
 
+/** Where the live producer's rename trace carries a used name, or null when it does not. */
+interface RenamedUse {
+  publicName: string;
+  member?: string;
+}
+
+/**
+ * A used name gone from the live table, followed through the producer's
+ * rename trace (`formerly` on an entry, a method or an exported type's
+ * definition): the live public name (and member) it was renamed to, or null —
+ * then it was removed.
+ */
+function renamedIn(live: SurfaceSnapshot, publicName: string, member?: string): RenamedUse | null {
+  if (member === undefined || member === 'type') {
+    const entry = live.interfaces.find((e) => e.formerly?.includes(publicName));
+    if (entry && member === undefined) return { publicName: entry.id };
+    const exported = (live.exportedTypes ?? []).find((t) => t.id !== publicName
+      && (live.types.find((d) => d.id === t.type)?.formerly ?? []).includes(publicName));
+    return exported ? { publicName: exported.id, ...(member ? { member } : {}) } : null;
+  }
+  const entry = live.interfaces.find((e) => e.id === publicName) ?? live.interfaces.find((e) => e.formerly?.includes(publicName));
+  if (!entry) return null;
+  if (member.startsWith('capability:')) {
+    const has = entry.dispatch?.some((b) => b.capability === member.slice('capability:'.length));
+    return has && entry.id !== publicName ? { publicName: entry.id, member } : null;
+  }
+  const method = entry.methods.find((m) => m.name === member) ?? entry.methods.find((m) => m.formerly?.includes(member));
+  if (!method || (entry.id === publicName && method.name === member)) return null;
+  return { publicName: entry.id, member: method.name };
+}
+
+/** How a rename reads: `name` or `name.member` (a type keeps its bare name). */
+function renamedName(to: RenamedUse): string {
+  return to.member === undefined || to.member === 'type' ? to.publicName : `${to.publicName}.${to.member}`;
+}
+
+/**
+ * Whether a renamed member still has the signature the lock recorded: the live
+ * table read back under the former names (the entry, method or exported type
+ * renamed back), so only the name — which a digest reads — is set aside.
+ */
+function sameSignatureAfterRename(live: SurfaceSnapshot, from: { publicName: string; member: string }, to: RenamedUse, digest: string): boolean {
+  if (from.member === 'type') {
+    const exported = (live.exportedTypes ?? []).find((t) => t.id === to.publicName);
+    if (!exported) return false;
+    const def = live.types.find((d) => d.id === exported.type);
+    const defId = def && def.id === to.publicName ? from.publicName : exported.type;
+    const back: SurfaceSnapshot = {
+      ...live,
+      exportedTypes: (live.exportedTypes ?? []).map((t) => (t === exported ? { ...t, id: from.publicName, type: defId } : t)),
+      types: live.types.map((d) => (d === def ? { ...d, id: defId } : d)),
+    };
+    return memberDigest(back, from.publicName, 'type') === digest;
+  }
+  const back: SurfaceSnapshot = {
+    ...live,
+    interfaces: live.interfaces.map((e) => (e.id !== to.publicName ? e : {
+      ...e,
+      id: from.publicName,
+      methods: e.methods.map((m) => (m.name === to.member ? { ...m, name: from.member } : m)),
+    })),
+  };
+  return memberDigest(back, from.publicName, from.member) === digest;
+}
+
+/** A used member gone under its pinned name: renamed when the live rename trace names it, removed otherwise. */
+function goneUse(live: SurfaceSnapshot, publicName: string, member: string | undefined, digest: string | undefined): ExternalUseStatus {
+  const to = renamedIn(live, publicName, member);
+  const at = { publicName, ...(member !== undefined ? { member } : {}) };
+  if (!to) return { ...at, state: 'removed' };
+  const renamedTo = renamedName(to);
+  const signature = member === undefined || digest === undefined
+    ? ''
+    : sameSignatureAfterRename(live, { publicName, member }, to, digest) ? ' (its signature is unchanged)' : ' (and its signature changed)';
+  return { ...at, state: 'renamed', renamedTo, detail: `renamed to "${renamedTo}"${signature} — follow the rename` };
+}
+
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
 function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
@@ -991,12 +1096,12 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
   for (const [publicName, members] of Object.entries(locked)) {
     if (Object.keys(members).length === 0) {
-      uses.push({ publicName, state: liveHas(publicName) ? 'unchanged' : 'removed' });
+      uses.push(liveHas(publicName) ? { publicName, state: 'unchanged' } : goneUse(live, publicName, undefined, undefined));
       continue;
     }
     for (const [member, digest] of Object.entries(members)) {
       const now = memberDigest(live, publicName, member);
-      uses.push({ publicName, member, state: now === null ? 'removed' : now === digest ? 'unchanged' : 'changed' });
+      uses.push(now === null ? goneUse(live, publicName, member, digest) : { publicName, member, state: now === digest ? 'unchanged' : 'changed' });
     }
   }
   for (const use of usage?.used ?? []) {
@@ -1068,7 +1173,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   return {
     ...base,
     reachable: true,
-    stale: uses.some((u) => u.state === 'changed' || u.state === 'removed'),
+    stale: uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed'),
     ...(drifted !== undefined ? { drifted } : {}),
     uses,
   };
@@ -1090,9 +1195,10 @@ function hostedOutOfReach(external: ResolvedExternal): boolean {
  * cannot be compared is EXTERNAL_CHECK_UNAVAILABLE, never a pass. It only
  * reports: it writes nothing and fails nothing.
  */
-export function getExternalsStatus(): ExternalStatus[] {
-  // Step 1: the declared externals, with the references as they are now.
-  const bindings = resolveExternals();
+export function getExternalsStatus(offline?: boolean): ExternalStatus[] {
+  // Step 1: the declared externals, with the references as they are now —
+  // offline, no producer is read over the network.
+  const bindings = resolveExternals(offline);
   // Step 2: the lock.
   const lock = externalsRepository.readLock();
   // Steps 3-12: one status per declared external, in declaration order.

@@ -59,50 +59,68 @@ methods:
         targetMethod: declareExternal
       - stepNumber: 8
         description: >-
-          Resolve the declared externals, offline, to read the new alias's binding: its producer,
-          the id it answers to and what it exports to this project
+          Resolve the declared externals to read the new alias's binding: its producer and where it
+          is (a git producer fetched; one that cannot be reached is bound with its problem, so
+          declaring still works offline)
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
       - stepNumber: 9
+        label: producer-id
         description: >-
-          Was the producer read, and does it contradict the declaration — answering to another id
-          than declared, or not exporting a `use` name to this project?
+          When the binding has a root, read the producer's configuration with that root bound
+          read-only, for the id it answers to (the caller's binding restored afterwards)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 10
+        label: producer-exports
+        description: >-
+          With the producer's root bound the same way, read its resolved export table, for the
+          public names it exports at this project's audience
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 11
+        description: >-
+          Does the producer contradict the declaration — answering to another id than declared (read
+          from its configuration, or named by the family's own resolution of the alias), or, once
+          read, not exporting a `use` name to this project?
         type: branch
         condition: >-
-          the binding is resolved and (its producer's effective id differs from the declared one, or
-          a `use` name is not in its export table at this project's audience)
-        onFalseStep: 12
-      - stepNumber: 10
+          the producer answers to another id than the declared one, or it was read and a `use` name
+          is not in its export table at this project's audience
+        onFalseStep: 14
+      - stepNumber: 12
         description: >-
           Take the declaration back out, so a contradicted declaration never lingers in the
           configuration
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: removeExternal
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Answer the refusal naming what the producer contradicted: the id it answers to (declare
           `project:` or use that alias), or each unexported `use` name with the closest names it
           does export
         type: return
         outcome: refused by the producer
-      - stepNumber: 12
+      - stepNumber: 14
         label: kept
         description: >-
           Pin it now when asked (the default) and the producer was read; an unreadable producer
           leaves it declared and unpinned, with the reason carried as `unreachable`
         type: branch
-        condition: request.pin is not false and the binding is resolved
-        onFalseStep: 14
-      - stepNumber: 13
+        condition: request.pin is not false and the producer was read
+        onFalseStep: 16
+      - stepNumber: 15
         description: >-
           Pin the new alias — its snapshot and lock entry — so its uses are judged against a
           reproducible pin from the first validate
         type: call
         targetComponent: surface_orchestrator
         targetMethod: pinExternals
-      - stepNumber: 14
+      - stepNumber: 16
         label: answer
         description: >-
           Answer the addition: written, the declaration, the producer id it answers to, the pin when
@@ -111,4 +129,4 @@ methods:
         outcome: declared
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-10-06T10:59:14.735Z'
+updatedAt: '2026-10-06T11:12:46.745Z'

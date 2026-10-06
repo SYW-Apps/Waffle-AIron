@@ -53,5 +53,6 @@ fields:
     description: Answer what would be declared and pinned, writing nothing
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-10-06T10:07:50.451Z'
-updatedAt: '2026-10-06T10:07:51.106Z'
+updatedAt: '2026-10-06T11:12:50.448Z'

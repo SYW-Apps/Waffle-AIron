@@ -42,5 +42,6 @@ fields:
       the external then reads as unavailable — never a pass — until it is pinned.
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-10-06T10:07:54.921Z'
-updatedAt: '2026-10-06T10:08:01.608Z'
+updatedAt: '2026-10-06T11:12:51.176Z'

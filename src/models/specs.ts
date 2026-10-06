@@ -1896,6 +1896,12 @@ export const SurfaceTypeDefSchema = z.object({
   values: z.array(EnumValueSchema).optional(),
   /** A named scalar's one primitive, in place of fields; only on a value-object that declares it. */
   holds: z.string().optional(),
+  /**
+   * The type's rename trace as the producer recorded it (previousIds), so a
+   * consumer pinned to a former name reads a rename rather than a removal.
+   * Provenance, never signature: it enters no digest. Absent when never renamed.
+   */
+  formerly: z.array(z.string()).optional(),
 });
 export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
 
@@ -1920,8 +1926,12 @@ export const SurfaceContractEntrySchema = z.object({
   type: z.string().default('Custom'),
   /** Local name of the backing Portal in the producing project. */
   component: z.string(),
-  /** Full contract methods (params, returns, guarantees, effect, endpoint), resolved: a snapshot names no producer-internal source. */
-  methods: z.array(ResolvedMethodSignatureSchema).default([]),
+  /**
+   * Full contract methods (params, returns, guarantees, effect, endpoint),
+   * resolved: a snapshot names no producer-internal source. A renamed method
+   * carries its former names as `formerly` (provenance, outside every digest).
+   */
+  methods: z.array(ResolvedMethodSignatureSchema.extend({ formerly: z.array(z.string()).optional() })).default([]),
   /** The backing portal's capability dispatch table, when generic-dispatch. */
   dispatch: z.array(DispatchBindingSchema).optional(),
   details: z.string().default(''),
@@ -1936,6 +1946,15 @@ export const SurfaceContractEntrySchema = z.object({
   componentType: z.string().optional(),
   /** The L3 interface the export narrows to, when it narrows. */
   interface: z.string().optional(),
+  /**
+   * The rename trace behind the entry's public name: the former public names
+   * the producer's rename trace (the narrowed interface's, else the backing
+   * component's previousIds) records. Carried into the pin snapshot and the
+   * surface export so a consumer can follow a rename instead of reading a
+   * delete plus an add. Provenance, never signature: it enters neither
+   * memberDigest nor contentDigest. Absent when never renamed.
+   */
+  formerly: z.array(z.string()).optional(),
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
@@ -2074,8 +2093,55 @@ export interface ExternalPin {
   detail?: string;
 }
 
+/**
+ * external_request — what `wairon externals add` and sdd_add_external ask for:
+ * one external to declare in the bound project's `.wai/project.yaml`, written
+ * exactly as a person would say it.
+ */
+export interface ExternalRequest {
+  /** The alias the project's specs will reference it by (`alias::name`). */
+  alias: string;
+  /** Where the producer is, in the one location grammar; omitted when the family provides it. */
+  source?: string;
+  /** The producer's project id when it differs from the alias. */
+  project?: string;
+  /** git only: the branch, tag or full commit the pin follows. */
+  ref?: string;
+  /** git only: the producer's root inside the repository. */
+  dir?: string;
+  /** Public names to import bare (`*` for all). */
+  use?: string[];
+  /** What the producer is to this project. */
+  description?: string;
+  /** Pin it right after declaring it (default true). */
+  pin?: boolean;
+  /** Answer what would be declared, writing nothing. */
+  dryRun?: boolean;
+}
+
+/**
+ * external_addition — the answer to declaring one external: what was written
+ * (or would be, on a dry run), the producer it reached and the pin — or why
+ * nothing was written, as one sentence naming the accepted form.
+ */
+export interface ExternalAddition {
+  alias: string;
+  /** Whether `.wai/project.yaml` now carries the declaration (false on a refusal and on a dry run). */
+  written: boolean;
+  /** The declaration as written (object form, normalized); null on a refusal. */
+  declaration: import('./project.js').ExternalDeclaration | null;
+  /** The producer's project id as the producer answered to it. */
+  project?: string;
+  /** The pin taken right after, when asked. */
+  pin?: ExternalPin | null;
+  /** Why nothing was written, in one sentence naming the accepted form. */
+  refusal?: string;
+  /** Set when the declaration was written but its producer could not be read: why, and that nothing was pinned. */
+  unreachable?: string;
+}
+
 /** The verdict on one used member of a pinned external. */
-export type ExternalUseState = 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable';
+export type ExternalUseState = 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable' | 'renamed';
 
 /** external_use_status — the verdict on one used member of one pinned external. */
 export interface ExternalUseStatus {
@@ -2085,6 +2151,12 @@ export interface ExternalUseStatus {
   /** EXTERNAL_CHECK_UNAVAILABLE on an unavailable entry — never a pass. */
   code?: string;
   detail?: string;
+  /**
+   * On a renamed use: the public name (and member, as `name.member`) the live
+   * producer's rename trace carries the used name forward to — what the
+   * consumer's references should now name.
+   */
+  renamedTo?: string;
 }
 
 /** external_status — the status of one declared external. */
@@ -2120,7 +2192,7 @@ export type RelationHealth = 'ok' | 'drifted' | 'incompatible' | 'unavailable';
  * be checked ever reads as ok. Pure: over the status's own fields.
  */
 export function relationHealth(status: ExternalStatus): RelationHealth {
-  if (status.uses.some((u) => u.state === 'changed' || u.state === 'removed')) return 'incompatible';
+  if (status.uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed')) return 'incompatible';
   if (!status.reachable || status.outOfReach || status.uses.some((u) => u.state === 'unavailable' || u.state === 'unlocked')) return 'unavailable';
   if (status.drifted) return 'drifted';
   return 'ok';

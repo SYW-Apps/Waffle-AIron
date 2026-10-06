@@ -28,4 +28,9 @@ export {
   // The project graph, whose direct project members the design export lists
   // as dependencies (their L0 tables read through resolveProjectExports).
   projectFamily,
+  // `wairon externals add` / sdd_add_external: one external declaration
+  // written into the bound project's configuration, and taken back out when
+  // the producer contradicts it.
+  declareExternal,
+  removeExternal,
 } from '../index.js';

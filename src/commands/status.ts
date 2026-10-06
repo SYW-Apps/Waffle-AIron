@@ -13,6 +13,10 @@ import { getStatusReport, approvalVerdict } from './adapters/core.js';
 // The pin tree: every project's approval state, computed by the validator at
 // that project's own root, so a member's state here is the one its own status prints.
 import { familyApprovals } from './validate.js';
+// The advisory live comparison of the externals, printed in its own section
+// beside the verdict: what moved, who uses it, the fix — the pin still gates.
+import { adviseExternals } from './validate.js';
+import type { ValidationIssue } from '../core/validation.js';
 import type { StatusDecor, StatusOptions } from '../core/status.js';
 // The pending-transaction banner: unfinished family migrations, asked of the
 // migration portal (recover with fix false — a report, nothing written).
@@ -152,6 +156,11 @@ export async function runStatus(options: StatusOptions = {}, listAll = false): P
     else logger.info(text);
     if (!listAll && lock.moved && lock.moved.length > 5) logger.info(chalk.gray('`wairon status --all` lists every spec that moved.'));
   }
+  // Steps 10-11: the externals compared with their live producers, offline and
+  // advisory — the same pass plain `validate` appends. An Externals section
+  // only when one moved, drifted or could not be compared; the exit code is
+  // unchanged.
+  printExternals(adviseExternals());
   // The percentages above and the approval answer different questions, and an
   // approved tree at "80% Complete" read like a contradiction — so say what the
   // percentage counts, always.
@@ -163,6 +172,22 @@ export async function runStatus(options: StatusOptions = {}, listAll = false): P
 
   logger.blank();
   // Step 8: done.
+}
+
+/**
+ * The Externals section: one line per external that moved live, drifted or
+ * could not be compared — what moved, who uses it and the fix — noting that
+ * the pin still gates. Nothing when every external is current.
+ */
+function printExternals(advised: ValidationIssue[]): void {
+  if (advised.length === 0) return;
+  logger.header('Externals');
+  for (const issue of advised) {
+    const line = `[${issue.code}] ${issue.message}`;
+    if (issue.severity === 'notice') logger.notice(line);
+    else logger.warn(line);
+  }
+  logger.info(chalk.gray('Compared live and advisory: the pin still gates, so none of this changes an exit code. `wairon externals status` is the live gate.'));
 }
 
 /**

@@ -71,8 +71,10 @@ import {
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
-import { pinExternals, getExternalsStatus } from './adapters/surfaces.js';
-import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals } from './adapters/validator.js';
+// declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
+import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
+import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
+import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
@@ -399,6 +401,37 @@ const externalPinsOutput = {
   ...staleServerOutput,
 };
 
+/** sdd_add_external's structured answer: what declaring the external wrote, reached and pinned — or the refusal. */
+const externalAdditionOutput = {
+  alias: z.string(),
+  written: z.boolean().describe('Whether .wai/project.yaml now carries the declaration (false on a refusal and on a dry run).'),
+  declaration: z.record(z.unknown()).nullable().describe('The declaration as written, in object form; null on a refusal.'),
+  project: z.string().optional().describe('The producer\'s project id as the producer answered to it.'),
+  pin: z.record(z.unknown()).nullable().optional().describe('The pin taken right after, when asked.'),
+  refusal: z.string().optional().describe('Why nothing was written, in one sentence naming the accepted form.'),
+  unreachable: z.string().optional().describe('Set when the declaration was written but its producer could not be read: why, and that nothing was pinned.'),
+  ...staleServerOutput,
+};
+
+/**
+ * sdd_add_external's answer, shaped from the addition the surfaces adapter
+ * answered (mcp_externals_orchestrator.declare): the addition as structured
+ * content beside a one-line summary; a refusal as its one sentence (never a
+ * schema dump).
+ */
+function additionAnswer(request: ExternalRequest, addition: ExternalAddition): CallToolResult {
+  if (addition.refusal) {
+    return { ...structured(addition.refusal, { ...addition }), isError: true };
+  }
+  const summary = request.dryRun
+    ? `Dry run: would declare "${addition.alias}" → ${addition.project ?? addition.alias} as ${JSON.stringify(addition.declaration)}; the producer is checked and the external pinned on the real run. Nothing was written.`
+    : `Declared "${addition.alias}" → ${addition.project ?? addition.alias} as ${JSON.stringify(addition.declaration)}`
+      + (addition.pin ? `; pin ${addition.pin.outcome}${addition.pin.detail ? ` — ${addition.pin.detail}` : ''}` : '')
+      + (addition.unreachable ? `. Declared but not pinned: ${addition.unreachable}` : '')
+      + '.';
+  return structured(summary, { ...addition });
+}
+
 /** sdd_get_externals_status' structured answer: one status per declared external. */
 const externalStatusesOutput = {
   statuses: z.array(z.object({
@@ -412,6 +445,10 @@ const externalStatusesOutput = {
     uses: z.array(z.record(z.unknown())),
     detail: z.string().optional(),
     outOfReach: z.boolean().optional(),
+    health: z.enum(['incompatible', 'unavailable', 'drifted', 'ok']).optional().describe(
+      'The relation\'s health in one word: incompatible (a used member changed, was renamed or went away), unavailable '
+      + '(something could not be compared — never a pass), drifted (the producer moved while nothing used did), ok.',
+    ),
     pinnedDigest: z.string().optional().describe('The content digest the lock recorded; provenance, never compared here.'),
     pinnedCommit: z.string().optional().describe('The producer commit the lock recorded, for one in another repository; provenance only.'),
   })).describe('One status per declared external, in declaration order; EXTERNAL_CHECK_UNAVAILABLE marks what could not be compared.'),
@@ -630,6 +667,17 @@ const specChangeReportOutput = {
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
+/**
+ * sdd_get_status' Externals section: one line per advisory finding — what
+ * moved live, who uses it and the fix — or nothing when every external is
+ * current.
+ */
+function externalsSection(advised: ValidationIssue[]): string {
+  if (advised.length === 0) return '';
+  const lines = advised.map((i) => `- [${i.code}] ${i.message}`);
+  return `\nExternals (compared live, advisory — the pin still gates):\n${lines.join('\n')}\n`;
+}
+
 /** One finding, field for field as the validator raises it. */
 const validationIssueOutput = {
   severity: z.enum(['error', 'warning', 'notice']).describe('The finding\'s severity after project overrides.'),
@@ -653,6 +701,11 @@ const validationIssueOutput = {
   ),
   project: z.string().optional().describe(
     'In a family run: the key of the project whose gate the finding belongs to (\'\' for the family root).',
+  ),
+  advisory: z.boolean().optional().describe(
+    'True on a finding reported beside the gate rather than by it — the live comparison of an external with its '
+    + 'producer (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED). Counted with its severity, '
+    + 'but never part of `valid` or `--ci`: the pin is the reproducible gate.',
   ),
 } satisfies Record<keyof ValidationIssue, z.ZodTypeAny>;
 
@@ -2543,7 +2596,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem?: string; recursive?: boolean; family?: boolean }>(server,
     'sdd_validate_tree',
     {
-      description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls. Findings come back as structured content too, under the schema this tool declares — errors, warnings and notices already split into three lists (a notice never makes the tree invalid and never fails --ci), each with its code, severity, message and the spec it concerns — so a caller filters them as objects instead of parsing the JSON text block and hoping its shape holds.',
+      description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls. Findings come back as structured content too, under the schema this tool declares — errors, warnings and notices already split into three lists (a notice never makes the tree invalid and never fails --ci), each with its code, severity, message and the spec it concerns — so a caller filters them as objects instead of parsing the JSON text block and hoping its shape holds. Externals the run did not compose are also compared with their LIVE producers, offline: those findings (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED) carry advisory: true and never make the tree invalid — the pin is the gate — and say what moved, who uses it and the fix.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only validate the specified subsystem (granular)'),
         recursive: z.boolean().optional().describe("At a project that declares members: the family run (true, the default) or the owner's gate alone (false)"),
@@ -2571,18 +2624,22 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Step 2: which run — the same reading `wairon validate` makes. Steps
         // 3/5: the family run (within the request's reach, which it never
         // widens) or the owner's gate.
-        const result = selectsFamily(options, declaredMembers(config).length > 0)
-          ? validateFamily(options)
-          : validateProject(options);
+        const familyRun = selectsFamily(options, declaredMembers(config).length > 0);
+        const result = familyRun ? validateFamily(options) : validateProject(options);
+        // Step 6: the advisory live comparison of every external the run did
+        // not compose (a family run hands over the aliases it composed in
+        // reach) — marked advisory, never part of `valid`.
+        const advised = adviseExternals(familyRun ? result.composed : undefined);
+        const all = [...result.issues, ...advised];
         // The text block is the same JSON it has always been; the structured
         // twin is that very object, so the two can never disagree.
         return jsonStructured({
           valid: result.valid,
-          errors: result.issues.filter((i) => i.severity === 'error'),
-          warnings: result.issues.filter((i) => i.severity === 'warning'),
+          errors: all.filter((i) => i.severity === 'error'),
+          warnings: all.filter((i) => i.severity === 'warning'),
           notices: [
             ...banner.map((message) => ({ severity: 'notice' as const, code: 'TRANSACTION_PENDING', message })),
-            ...result.issues.filter((i) => i.severity === 'notice'),
+            ...all.filter((i) => i.severity === 'notice'),
           ],
           ...(result.hint ? { hint: result.hint } : {}),
           ...(result.projects ? { projects: result.projects } : {}),
@@ -2807,7 +2864,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // important thing this answer can carry — and silence reads exactly like
         // being current, which is what this tool used to answer.
         const verdict = approvalVerdict(approvals);
-        return text(`${banner}${family}${report.text}${verdict.text}`);
+        // Steps 5-6: the externals compared with their live producers, offline
+        // and advisory — an Externals section only when one moved, drifted or
+        // could not be compared; the pin still gates.
+        return text(`${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}`);
       } catch (e) {
         return errText(`${banner}${String(e)}`);
       }
@@ -2839,16 +2899,44 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<Record<string, never>>(server,
     'sdd_get_externals_status',
     {
-      description: 'Each declared external\'s pin compared with its live producer at signature level — per used member unchanged, changed, removed or unlocked (used now but not in the lock) — and EXTERNAL_CHECK_UNAVAILABLE for anything that cannot be compared (an unreachable producer, an unexported reference, a producer outside the family), never a pass. Stale only when a used member changed or went away. A tree-scoped read: writes nothing.',
+      description: 'Each declared external\'s pin compared with its live producer at signature level — per used member unchanged, changed, renamed (with renamedTo: the name the producer\'s rename trace carries it to), removed or unlocked (used now but not in the lock) — each external\'s health (incompatible | unavailable | drifted | ok), and EXTERNAL_CHECK_UNAVAILABLE for anything that cannot be compared (an unreachable producer, an unexported reference, a producer outside the family), never a pass. Stale only when a used member changed, was renamed or went away. Git producers are fetched: this is the live comparison `wairon externals status` gates on. A tree-scoped read: writes nothing.',
       outputSchema: externalStatusesOutput,
     },
     () => {
       try {
         const statuses = getExternalsStatus();
+        const renames = (s: ExternalStatus): string => s.uses.filter((u) => u.state === 'renamed')
+          .map((u) => `; ${[u.publicName, u.member].filter(Boolean).join('.')} renamed to ${u.renamedTo}`).join('');
         const lines = statuses.length
-          ? statuses.map((s) => `${s.alias} → ${s.project}: ${s.sourceKind}, ${s.pinned ? 'pinned' : 'not pinned'}, ${s.reachable ? (s.stale ? 'stale' : 'current') : 'unreachable'}${s.drifted ? ', drifted' : ''}${s.detail ? ` — ${s.detail}` : ''}`)
+          ? statuses.map((s) => `${s.alias} → ${s.project}: ${s.sourceKind}, ${s.pinned ? 'pinned' : 'not pinned'}, ${s.reachable ? (s.stale ? 'stale' : 'current') : 'unreachable'}${s.drifted ? ', drifted' : ''}, ${relationHealth(s)}${s.detail ? ` — ${s.detail}` : ''}${renames(s)}`)
           : ['This project declares no externals.'];
-        return structured(lines.join('\n'), { statuses });
+        return structured(lines.join('\n'), { statuses: statuses.map((s) => ({ ...s, health: relationHealth(s) })) });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ alias: string; source?: string; project?: string; ref?: string; dir?: string; use?: string[]; description?: string; pin?: boolean; dryRun?: boolean }>(server,
+    'sdd_add_external',
+    {
+      description: 'Declare one external of the bound project in .wai/project.yaml — the alias its specs will reference as `alias::name` and where the producer is, in the one location grammar members use (`../sibling`, `hosted:<id>`, `<git url>`, `<git url>#<commit>`; a `#<commit>` fixes the ref the pin follows) — then check it against the producer it reaches (the id it answers to, the `use` names it exports to this project; a contradiction takes the declaration back out) and pin it unless pin is false. Refusals are one sentence naming the accepted form. A producer that cannot be read leaves it declared and unpinned, saying why. Use it instead of editing .wai/project.yaml by hand. A tree-scoped write.',
+      inputSchema: {
+        alias: z.string().describe('The alias specs will reference the producer by (`alias::name`): [a-z0-9-_]+, not already a member or external'),
+        source: z.string().optional().describe('Where the producer is: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`; omit when the family provides it'),
+        project: z.string().optional().describe('The producer\'s project id when it differs from the alias'),
+        ref: z.string().optional().describe('git only: the branch, tag or full commit the pin follows'),
+        dir: z.string().optional().describe('git only: the producer\'s root inside the repository'),
+        use: z.array(z.string()).optional().describe('Public names to import bare (`*` for all)'),
+        description: z.string().optional().describe('What the producer is to this project'),
+        pin: z.boolean().optional().describe('Pin right after declaring (default true)'),
+        dryRun: z.boolean().optional().describe('Answer what would be declared, writing nothing'),
+      },
+      outputSchema: externalAdditionOutput,
+    },
+    (request) => {
+      try {
+        return additionAnswer(request, addExternal(request));
       } catch (e) {
         return errMessage(e);
       }
