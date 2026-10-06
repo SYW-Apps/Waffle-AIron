@@ -19,6 +19,12 @@ import {
 } from '../models/project.js';
 import { familyNode, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { SURFACE_AUDIENCES } from '../models/specs.js';
+import { readExternalSource, type ExternalSource } from '../models/project.js';
+/** An external declaration's source in its object form, whichever form was written (readExternalSource). */
+function externalSourceOf(declaration: { source?: unknown } | undefined): ExternalSource | undefined {
+  return readExternalSource(declaration?.source).source;
+}
+
 import type { ResolvedExportTable } from '../models/exports.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 
@@ -128,7 +134,7 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-taken', bound, `"${alias}" is no alias: an alias must fit [a-z0-9-_]+`);
   else if (config.members?.[alias] !== undefined || config.externals?.[alias] !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${alias}"`);
   if (dir !== null) {
-    const external = Object.entries(config.externals ?? {}).find(([, e]) => e.source?.path && path.resolve(node.directory, e.source.path) === dir);
+    const external = Object.entries(config.externals ?? {}).find(([, e]) => externalSourceOf(e)?.path && path.resolve(node.directory, externalSourceOf(e)!.path!) === dir);
     if (external) refuse(plan, 'already-member', bound, `${label(bound)}'s external "${external[0]}" already names ${dir} — make it a member with \`wairon member adopt ${external[0]}\``);
     else if (nodeAt(family, dir)) refuse(plan, 'already-member', nodeAt(family, dir)!.namespace, `${dir} is already the family project ${label(nodeAt(family, dir)!.namespace)}`);
   }
@@ -200,7 +206,7 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   const alias = request.alias ?? '';
   // A completed detach plans nothing: the alias is an external found by path.
   const done = configAt(familyNode(family, bound)!.directory)?.externals?.[alias];
-  if ((done?.source?.path || done?.source?.hosted) && !family.nodes.some((n) => n.parent === bound && n.mountAlias === alias)) return plan;
+  if ((externalSourceOf(done)?.path || externalSourceOf(done)?.hosted) && !family.nodes.some((n) => n.parent === bound && n.mountAlias === alias)) return plan;
   // Step 1.
   const member = memberUnder(family, bound, alias, plan);
   if (member && request.relocation && occupied(request.relocation.to)) {
@@ -353,8 +359,8 @@ export function planAdopt(family: ProjectFamily, bound: string, request: Migrati
   else if (request.relocation) return planRelocatedAdopt(plan, family, bound, alias, external, request.relocation);
   else {
     // Step 2: where its source path lands, under the containment guard.
-    dir = files.resolve(boundDir, external.source?.path ?? '');
-    if (dir === null) refuse(plan, 'not-contained', bound, `the external "${alias}" ${external.source?.path ? `is found at "${external.source.path}", which is not strictly within ${label(bound)}` : 'names no source.path'}`);
+    dir = files.resolve(boundDir, externalSourceOf(external)?.path ?? '');
+    if (dir === null) refuse(plan, 'not-contained', bound, `the external "${alias}" ${externalSourceOf(external)?.path ? `is found at "${externalSourceOf(external)?.path}", which is not strictly within ${label(bound)}` : 'names no source.path'}`);
     else if (nodeAt(family, dir)) refuse(plan, 'already-member', nodeAt(family, dir)!.namespace, `${dir} is already the family project ${label(nodeAt(family, dir)!.namespace)}`);
   }
   // Steps 3-4.
@@ -378,12 +384,12 @@ function planRelocatedAdopt(
 ): MigrationPlan {
   const boundDir = familyNode(family, bound)!.directory;
   const target = files.resolve(boundDir, plan.request.path ?? '');
-  if (!external.source?.hosted) refuse(plan, 'not-contained', bound, `the external "${alias}" names no source.hosted — a hosted adopt moves a project named by its hosted record id`);
+  if (!externalSourceOf(external)?.hosted) refuse(plan, 'not-contained', bound, `the external "${alias}" names no source.hosted — a hosted adopt moves a project named by its hosted record id`);
   else if (target === null || path.resolve(target) !== path.resolve(relocation.to)) refuse(plan, 'not-contained', bound, `the member path "${plan.request.path ?? ''}" does not resolve strictly within ${label(bound)} to ${relocation.to}`);
   else if (occupied(relocation.to)) refuse(plan, 'relocation-target-exists', bound, `the external "${alias}" cannot be adopted at ${relocation.to}: it already exists and is not an empty directory`);
   // Where it lives now: the caller's relocation.from, else the hosting binding's record lookup (reach-gated).
-  const from = relocation.from ?? (external.source?.hosted !== undefined ? getHostedLookup()?.(external.source.hosted) ?? undefined : undefined);
-  if (plan.refusals.length === 0 && !from) refuse(plan, 'not-a-project', bound, `the hosted record "${external.source?.hosted}" is unknown or outside this request's reach — there is no root to adopt from`);
+  const from = relocation.from ?? (externalSourceOf(external)?.hosted !== undefined ? getHostedLookup()?.(externalSourceOf(external)!.hosted!) ?? undefined : undefined);
+  if (plan.refusals.length === 0 && !from) refuse(plan, 'not-a-project', bound, `the hosted record "${externalSourceOf(external)?.hosted}" is unknown or outside this request's reach — there is no root to adopt from`);
   if (plan.refusals.length > 0) return plan;
   return adoptEdits(plan, family, bound, alias, external, from!, relocation.to);
 }
@@ -416,21 +422,21 @@ function adoptEdits(plan: MigrationPlan, family: ProjectFamily, bound: string, a
   edit(plan, bound, 'member', `members: ${alias} → ${declaration.path}`, { root: boundDir, call: 'declareMember', args: [alias, declaration] });
   // A source naming the adoptee: by a path landing on it, or — hosted — by its record id (its project id).
   const namesAdoptee = (from: string, e: ExternalDeclaration): boolean =>
-    (e.source?.path !== undefined && path.resolve(from, e.source.path) === path.resolve(dir))
-    || (plan.request.relocation !== undefined && id !== undefined && e.source?.hosted === id);
-  const sourceText = (e: ExternalDeclaration): string => (e.source?.hosted !== undefined ? `source.hosted ${e.source.hosted}` : `source.path ${e.source?.path}`);
+    (externalSourceOf(e)?.path !== undefined && path.resolve(from, externalSourceOf(e)!.path!) === path.resolve(dir))
+    || (plan.request.relocation !== undefined && id !== undefined && externalSourceOf(e)?.hosted === id);
+  const sourceText = (e: ExternalDeclaration): string => (externalSourceOf(e)?.hosted !== undefined ? `source.hosted ${externalSourceOf(e)?.hosted}` : `source.path ${externalSourceOf(e)?.path}`);
   for (const n of family.nodes) {
     for (const [a, e] of Object.entries(configAt(n.directory)?.externals ?? {})) {
       if (n.namespace === bound && a === alias) continue;
       if (!namesAdoptee(n.directory, e)) continue;
       edit(plan, n.namespace, 'external', `externals: ${a} found through the family (its ${sourceText(e)} removed)`, { root: n.directory, call: 'repointExternal', args: [a, e.project ?? null, null] });
-      plan.notes.push(`${label(n.namespace)}'s external "${a}" named the adoptee by ${e.source?.hosted !== undefined ? 'hosted record id' : 'path'}; adopt removes it — detach-then-adopt is exact only when detach wrote that source`);
+      plan.notes.push(`${label(n.namespace)}'s external "${a}" named the adoptee by ${externalSourceOf(e)?.hosted !== undefined ? 'hosted record id' : 'path'}; adopt removes it — detach-then-adopt is exact only when detach wrote that source`);
     }
   }
   // A source of the adoptee naming a family project: by a path landing on one, or — hosted — by its record id.
   const namesFamily = (e: ExternalDeclaration): boolean =>
-    (e.source?.path !== undefined && nodeAt(family, path.resolve(dir, e.source.path)) !== undefined)
-    || (plan.request.relocation !== undefined && e.source?.hosted !== undefined && family.nodes.some((n) => n.id === e.source!.hosted));
+    (externalSourceOf(e)?.path !== undefined && nodeAt(family, path.resolve(dir, externalSourceOf(e)!.path!)) !== undefined)
+    || (plan.request.relocation !== undefined && externalSourceOf(e)?.hosted !== undefined && family.nodes.some((n) => n.id === externalSourceOf(e)!.hosted));
   for (const [a, e] of Object.entries(adoptee?.externals ?? {})) {
     if (!namesFamily(e)) continue;
     edit(plan, key, 'external', `externals: ${a} found through the family (its ${sourceText(e)} removed)`, { root: dir, call: 'repointExternal', args: [a, e.project ?? null, null] });

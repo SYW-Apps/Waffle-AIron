@@ -337,7 +337,7 @@ describe('source.hosted resolves only through the hosting server, within reach',
     const answer = await call(tok, 'sdd_get_externals_status', {}, 'docs');
     expect(answer.isError, answer.text).toBe(false);
     // Stage 8: a hosted producer is compared per use like any other — read, not "outside the family".
-    expect(answer.text).toMatch(/billing → billing: hosted, not pinned, current$/m);
+    expect(answer.text).toMatch(/billing → billing: hosted, not pinned, current, ok$/m);
   });
 
   it('out of reach: unavailable, never a pass, and never read', async () => {

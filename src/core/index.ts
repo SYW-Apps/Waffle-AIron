@@ -193,6 +193,11 @@ export type { MemberCreation, MemberAdvance } from './provision.js';
 // (approval_portal computeOwnStateId — the content half of the gate identity a
 // lock records; a member's specs are never part of it).
 export { computeStateId, computeOwnStateId } from './statehash.js';
+// approval_portal computeOwnDesignId — the bound project's OWN design identity
+// (code linkage and timestamps out): the content half of the gate identity
+// from lock format 3 on. computeOwnStateId above stays as the content reading
+// a format-2 lock was taken in.
+export { computeOwnDesignStateId as computeOwnDesignId } from './statehash.js';
 export type { StateId } from './statehash.js';
 
 // The lock record itself (approval_portal readLockRecord / writeLockRecord).
@@ -422,6 +427,10 @@ export {
   // private copy of it, which is how sdd_get_status came to say nothing at all
   // about a tree that had drifted from its approval.
   approvalVerdict,
+  // approval_portal reexpress — a format-2 record carried into the design
+  // reading when its own identity, recomputed, proves the design unchanged; a
+  // read, the caller writes the answer through writeLockRecord.
+  reexpress,
 } from './approval.js';
 export type { ApprovalDiff, ApprovalVerdict } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved

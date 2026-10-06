@@ -36,13 +36,21 @@ methods:
         targetMethod: loadImplementationSpecs
       - stepNumber: 6
         description: >-
+          Load type specs: the sourcePaths of the types a subsystem owns (a type's own and its
+          methods') are code locations its owner fences, and those of the types whose componentClass
+          a component is are its implementer's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: >-
           Load the component-variant registry (the dynamic layer on top of packs), so each
           owner/implementer can carry its variant-tagged components' guidance + same-variant
           siblings
         type: call
         targetComponent: variant_registry_adapter
         targetMethod: loadProjectVariants
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Render each owner/implementer's variant guidance through the variant registry, so the
           generated agent and the MCP spec-read path emit the SAME text from one implementation
@@ -50,14 +58,14 @@ methods:
         type: call
         targetComponent: variant_registry_adapter
         targetMethod: composeVariantGuidance
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Read the project configuration through the project config repository: its enabled targets,
           stamped on every record, and rules.generateComponentImplementers.
         type: call
         targetComponent: project_config_repository
         targetMethod: load
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Read the declared domains through the topology repository's facade, so a domain the
           repository declares but the spec tree does not model still gets an owner — domains are a
@@ -65,7 +73,7 @@ methods:
         type: call
         targetComponent: topology_repository
         targetMethod: loadConfig
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           For each member the bound root declares directly, bind the member's own root and collect
           the ids of the agents ITS layer resolves (its architect, its owners and implementers, and
@@ -73,27 +81,27 @@ methods:
           `<alias>::<agentId>`. Ids only: nothing of the member's agents is rendered here, and the
           walk stops at one level, so this layer's topology stays proportional to itself
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Ask the spec loader where each local subsystem's spec lives, for its owner's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: subsystemPath
-      - stepNumber: 12
+      - stepNumber: 13
         description: Ask where each component's spec lives, for its owner's and implementer's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: componentPath
-      - stepNumber: 13
+      - stepNumber: 14
         description: Ask where each of the component's interfaces lives, for its implementer's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: interfacePath
-      - stepNumber: 14
+      - stepNumber: 15
         description: Ask where each of the component's implementations lives, for its implementer's ownedPaths
         type: call
         targetComponent: spec_loader
         targetMethod: implementationPath
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
           and ONE delegating owner per member project this project declares (in `members`, or for
@@ -104,8 +112,15 @@ methods:
           whose fence holds the part's spec files where the part stores them, and whose description
           names the part — a part fetched from git is read, never owned (its files are the fetch
           cache's; it is changed in its own repository and taken in with `member update`). Each
-          owner's and implementer's ownedPaths fence holds the source files its implementations and
-          their methods name, and each carries the rendered variantGuidance for its variant-tagged
+          owner's and implementer's ownedPaths fence holds every code location its specs name,
+          whether the file exists yet or is PLANNED: the source files its implementations and their
+          methods name, their simPath harnesses, and the sourcePaths of its types (an owner's: the
+          types its subsystem owns; an implementer's: the types whose componentClass its component
+          is — a type's own file and its methods'). A type file the specs of another subsystem also
+          name (a shared models module) is no single owner's to fence and is left out, so no path
+          has two owners. A planned path is declared at design time since code linkage left the
+          approval, so the fence of a component with no code yet is already the file the implementer
+          must create. Each record carries the rendered variantGuidance for its variant-tagged
           components.
         type: local
   - name: composeAgentBrief
@@ -191,18 +206,22 @@ methods:
         type: local
       - stepNumber: 13
         description: >-
-          Fold in the code write fence and the type mapping. The fence: every source file the
-          record's implementations name, plus the folder they share below the project root as
+          Fold in the code write fence and the type mapping. The fence: every code location the
+          record owns — implementation and method source files, simPath harnesses and owned types'
+          source files, existing or planned — plus the folder they share below the project root as
           `<folder>/**` (the subsystem's code folder), carried as codeFence and as a '## Code write
-          fence' section placed ahead of the project guidance (which stays the last word) — a
-          section that, when no implementation names a file yet, says so and asks the spawning
-          session to name the planned files. The mapping: find the language the record's
-          implementations are written in (their technologies' language, else the language their
-          source files are analyzed as), take the dialect shipped for it (type_dialect.forLanguage)
-          and, when there is one, carry its write table (type_dialect.mappingLines) as the brief's
-          typeMapping and as a '## Types in <language>' section of the instructions — so an
-          implementer maps `list<T>`, `T?`, `async T` and an enum by rule rather than by guess. An
-          agent that implements nothing gets neither
+          fence' section placed ahead of the project guidance (which stays the last word). Each
+          planned file (not on disk yet) is marked `(planned — create it)` so the implementer knows
+          to write it rather than look for it. When no spec names a location yet, the section says
+          so and that the spawning session should declare the planned sourcePath on the
+          implementation now — it is code linkage, not part of the approval, so declaring it costs
+          no re-lock. The mapping: find the language the record's implementations are written in
+          (their technologies' language, else the language their source files are analyzed as, else
+          the language a planned file's extension names), take the dialect shipped for it
+          (type_dialect.forLanguage) and, when there is one, carry its write table
+          (type_dialect.mappingLines) as the brief's typeMapping and as a '## Types in <language>'
+          section of the instructions — so an implementer maps `list<T>`, `T?`, `async T` and an
+          enum by rule rather than by guess. An agent that implements nothing gets neither
         type: local
       - stepNumber: 14
         description: >-
@@ -227,4 +246,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T00:08:17.482Z'
+updatedAt: '2026-10-06T10:57:58.978Z'

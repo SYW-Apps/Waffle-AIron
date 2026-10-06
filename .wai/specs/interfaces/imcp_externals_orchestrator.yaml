@@ -2,7 +2,7 @@ id: imcp_externals_orchestrator
 name: MCP Externals Orchestrator Interface
 description: >-
   Contract for the MCP tool workflows over the bound project's outward world: external-surface
-  discovery, the externals pin and the externals status report.
+  discovery, declaring an external, the externals pin and the externals status report.
 component: mcp_externals_orchestrator
 methods:
   - name: pin
@@ -22,11 +22,28 @@ methods:
   - name: status
     description: >-
       The sdd_get_externals_status tool workflow: read each declared external's pin against its live
-      producer through the surfaces adapter and shape the tool response; what cannot be compared is
-      EXTERNAL_CHECK_UNAVAILABLE. A tree-scoped read.
+      producer through the surfaces adapter (fetching git producers) and shape the tool response —
+      per used member unchanged, changed, renamed (with the new name), removed or unlocked, and each
+      external's health; what cannot be compared is EXTERNAL_CHECK_UNAVAILABLE. A tree-scoped read.
     signature: 'status(): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params: []
+  - name: declare
+    description: >-
+      The sdd_add_external tool workflow: declare one external of the bound project through the
+      surfaces adapter and shape the tool response — the addition as structured content, a refusal
+      as one sentence naming the accepted form (never a schema dump), so an assistant never
+      hand-edits .wai/project.yaml. A tree-scoped write: under a narrowed credential it declares on
+      the bound child, and a producer outside the request's reach is reported unreachable, never
+      read.
+    signature: 'declare(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location in the one location grammar, and optionally the producer id, ref,
+          dir, `use`, description, pin and dryRun
 status: complete
 createdAt: '2026-09-26T17:50:42.455Z'
-updatedAt: '2026-10-04T10:19:00.586Z'
+updatedAt: '2026-10-06T10:17:18.706Z'

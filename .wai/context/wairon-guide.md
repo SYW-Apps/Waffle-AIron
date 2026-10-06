@@ -1,4 +1,4 @@
-<!-- wairon-version: 5.1.1-dev.102 -->
+<!-- wairon-version: 5.1.1-dev.103 -->
 <!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
 # Domain Map (12 domains)
@@ -45,6 +45,6 @@ If `.wai/specs/` exists, the wairon SDD workflow is active; otherwise ignore it.
   2. **MCP Tools Only**: Author/validate specs *only* via `sdd_*` tools (e.g. `sdd_initialize_system`, `sdd_validate_tree`).
   3. **No CLI Exec**: Do not run the `wairon` CLI (human tool). Use MCP tools `sdd_validate_tree` and `sdd_get_status` instead.
   4. **Delegation**: Delegate implementation via the `sdd-delegate` skill — live agent briefs (`sdd_get_agent_brief` MCP tool / `wairon-agent://` resource) are composed per call and always current; no session restart. Generated agent files are an optional materialized view of the same topology. User-owned per-agent guidance may live in `.wai/agents/<agent-id>.md` (folded into every brief; scaffold via `wairon agent customize <id>`).
-  5. **Design First, then approval**: Complete the spec and pass `sdd_validate_tree`, then ask the human to approve it with `wairon lock` before writing code. Approval is the lock record (`.wai/lock.json`), not a spec's `status` — the lock does not rewrite statuses; `sdd_get_status` reports the approval state.
+  5. **Design First, then approval**: Complete the spec and pass `sdd_validate_tree`, then ask the human to approve it with `wairon lock` before writing code. Approval is the lock record (`.wai/lock.json`), not a spec's `status` — the lock does not rewrite statuses; `sdd_get_status` reports the approval state. Code linkage (`sourcePath`, `symbol`, `simPath`, …) is not part of the approval: declare planned source paths at design time, they cost no re-lock.
   6. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
   7. **Members & References**: A project may declare **members** in its `.wai/project.yaml` `members` (create one with `sdd_add_member`). A **part** (the default) stores some of this project's subsystems in another folder or repository: local ids, this project's lock. A **project** member is an independent boundary with its own spec tree and lock, designed from its own root. Reference what another project exports as `alias::name` (the alias is a member or a declared external, the name a public name of its L0 export table); an id without `::` is local. A leading `::`, `super::`, member paths and an L1 subsystem carrying `projectPath` are deprecated: they still resolve for one release, are reported, and `wairon doctor --fix` rewrites them.

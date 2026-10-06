@@ -139,6 +139,11 @@ last.
      the approval and does not block on them, so a passing lock alongside a failing
      `validate --ci` is expected until the code findings are paid.
    - `lock` no longer writes `status: complete` into spec files.
+   - A lock written by an earlier v6 build (format 2) still passes while nothing it
+     covers moved. Run `wairon doctor --fix` to re-express it as format 3: who
+     approved it and when are kept, and the record notes `reexpressed`. One that
+     already drifted needs one `wairon lock`; after that, linking code never
+     drifts it.
 10. **Update scripts and integrations** for the renamed CLI commands, MCP tools,
     library exports and hosted API answers in the tables below.
 11. **Optional: gate merges on approval.** `wairon lock-check` is new and fails only
@@ -181,6 +186,8 @@ last.
 | Which project a command binds (every command, `wairon mcp serve`, `wairon dev`) | the walk up to the nearest project stops at the repository root (the nearest folder holding `.git`) unless a project above declares the folder as a member; a stray `.wai` above a repository binds nothing. Each command prints `project <id> at <root>` on stderr |
 | `wairon init -y` | configures the `claude` target only (name from the folder, profile backend); another tool is one interactive answer or one `targets` entry away |
 | `wairon init` in a folder a parent project binds | asks on a terminal before making the folder a member, which edits the parent's `project.yaml`; with `--yes` it refuses, writes nothing and prints the `wairon member add <alias> <path> --project` to run from the parent |
+| `wairon externals status` | exits 1 when an external is incompatible and 2 when something could not be compared (it always exited 0); a CI step that ran it for information now gates |
+| `wairon externals pin` | exits 1 when an alias could not be pinned (unresolved or unreachable) |
 | `wairon lock-check` at a project with members | judges the members too: a member with spec changes nobody approved fails, and a member that re-locked fails until this project is locked again to pin its new approval. `--strict` also fails a member that was never approved |
 
 #### MCP tools
@@ -254,6 +261,7 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | `NARRATIVE_COMPLEXITY`, `EXCESSIVE_NARRATIVE_STEPS` | warning | a narrative above the `moderate` cognitive band, or above 25 steps (the limit now has a default) | split it, or set `complexity.cognitiveWarnAbove` / `maxNarrativeSteps` |
 | `MISLEADING_BLOCK_WORD`, `GENERIC_COMPONENT_NAME`, `METHOD_REPEATS_COMPONENT`, `COMPONENT_IS_ITS_ONLY_METHOD`, `INCOHESIVE_METHODS` | warning | a name says a block it is not, says nothing, repeats its component, or an Orchestrator holds two jobs (a pure forwarder is exempt) | rename or split, or a reasoned `lint.allow` |
 | `UNUSED_COMPONENT`, `UNUSED_METHOD` | warning | a method with no narrative steps no longer vouches for every collaborator | write its `calls` |
+| `METHOD_SOURCE_PATH_MISSING` | warning | an implementation's realization has begun (a file it names exists) but some contract methods name no file | name each method's file, or the implementation's `sourcePath` |
 | `UNUSED_LINT_ALLOW`, `UNKNOWN_LINT_ALLOW_CODE` | warning | a coarse allow on a code that names sites, an allow naming an error, or an allow naming a retired code | one allow per site (`at:`); delete the rest |
 | `UNMOUNTED_PORTAL`, `ENDPOINT_OUTSIDE_MOUNT` | warning | an HTTP Portal no listener mounts, or an endpoint outside its mount's prefixes | declare `mounts` on the listener (an empty list on a Portal that serves itself) |
 | `MOUNT_TARGET_NOT_PORTAL` | error | a listener mounts something that is not a Portal | fix the mount |
@@ -267,6 +275,14 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 
 Code-conformance findings can be recorded as classified debt in
 `rules.conformance.carried` instead of being allowed.
+
+**Planned code is a notice.** `MISSING_SOURCE_PATH` is now a notice (it was a
+warning), and a named file that does not exist yet is the new notice
+`SOURCE_FILE_PLANNED`, while the implementation's realization has not begun (no
+file it names exists). Once it has begun, `MISSING_SOURCE_FILE` (error) and
+`SIM_FILE_MISSING` (warning) apply as before. A design-only tree therefore
+passes `--ci`. `rules.conformance.requireCode: true` reports both notices as
+errors.
 
 **Retired codes** (an allow naming one is `UNKNOWN_LINT_ALLOW_CODE`; a severity entry naming
 one does nothing):
@@ -290,9 +306,16 @@ rules are split into smaller named rules (40 → 115); a split rule kept its cod
   `lint.allow` gains `at` and `covers`, and `sdd_update_spec` merges allows by code
   and `at`. A method effect can be `lifecycle`. An L1 subsystem carrying
   `projectPath` is a deprecated form.
-- **Lock record format 2.** It adds `members` (alias → project, approved state),
+- **Lock record format 3.** It adds `members` (alias → project, approved state),
   `code` (the conformance results beside the claim), `projectId` and one digest per
   spec. `children` is read for one release and never written.
+  - The per-spec digests and the gate identity read each spec's **design**
+    (`specsReading: design`). Code linkage is left out: `sourcePath`, `symbol`,
+    `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a mount's `via`,
+    `externalLinks`, and the `createdAt`/`updatedAt` timestamps. Linking code to an
+    approved design, or a change and its revert, never stales a lock.
+  - A format-2 record from an earlier v6 build still passes while unchanged, and
+    `doctor --fix` re-expresses it (upgrade step 9).
   - The **gate identity** is computed differently. It no longer depends on the
     machine, and it now also covers the governing doctrine, the pinned contracts,
     `composition` and the members' approvals. Code findings are recorded beside the
@@ -460,6 +483,28 @@ each with configurable thresholds.
   each agent a capability tier, a turn ceiling and a tool class.
 - The MCP server sends `instructions` on connect and offers the skills as prompts.
 
+**Code linkage and live drift.**
+
+- Code linkage is outside the approval (lock format 3), so planned `sourcePath`s
+  are declared at design time. Briefs fence planned files, marked
+  `(planned — create it)`, simulation harnesses and the subsystem's type files.
+  `rules.conformance.requireCode` makes unlinked and planned code an error.
+- Plain `validate` and `status`, `sdd_validate_tree` and `sdd_get_status` compare
+  each external with its **live** producer, offline, and report what moved as
+  advisory findings (`advisory: true`): `EXTERNAL_LIVE_INCOMPATIBLE` (warning) names
+  each moved member, the specs that use it and the fix; `EXTERNAL_DRIFTED` and
+  `EXTERNAL_LIVE_UNCOMPARED` (notices). They never decide `valid` or `--ci`: the pin
+  stays the gate. `wairon externals status` is the opt-in live gate.
+- A rename reads as a rename. The surface projection, the pin snapshot and
+  `wairon surface export` carry the producer's rename trace as `formerly`, outside
+  every digest, so no existing pin moves. A used name that was renamed is `renamed`
+  with `renamedTo`, and `EXTERNAL_INCOMPATIBLE` and `EXTERNAL_LIVE_INCOMPATIBLE`
+  say "renamed to X".
+- `wairon externals add` and `sdd_add_external` declare an external: one-sentence
+  refusals, a check against the producer it reaches (a contradicted declaration is
+  removed again), and a pin by default. `sdd_get_externals_status` returns each
+  external's `health`.
+
 **Severity `notice`:** reported everywhere, never a failure. Any code can be set to
 `notice` in `rules.sddRuleSeverity`.
 
@@ -493,6 +538,16 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 
 ### Fixes
 
+- **External sources.** A `project.yaml` external's `source` is read in either
+  form: the location string (`../x`, `hosted:<id>`, `<git url>`,
+  `<git url>#<commit>`) or the object. `source: { git, commit }` and a malformed
+  `url#commit` are that external's problem, named with the forms that work. They
+  no longer produce a raw schema dump or hide the other externals from
+  `externals list`. A `<git url>#<full commit>` external uses that commit directly
+  instead of failing `ls-remote`.
+- **Approval drift without a design change.** `updatedAt` is no longer part of a
+  spec's approved digest, so a no-op re-save or a change and its revert no longer
+  drifts the lock.
 - **Delta merges.**
   - Every array merges by identity at every depth (it used to replace whole lists
     such as `trustedLinks`, `invariants`, `lint.allow`, `params` and `catches`).

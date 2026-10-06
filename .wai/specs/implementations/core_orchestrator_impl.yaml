@@ -843,10 +843,12 @@ methods:
         outcome: unlocked
       - stepNumber: 4
         description: >-
-          Compare the recorded gate identity with the one the caller computed now; nothing is hashed
-          here
+          Compare the recorded gate identity with the one the caller computed now — or, for a
+          format-2 record, with current.asRecorded: the same identity recomputed under the algorithm
+          that record was taken with. Nothing is hashed here. Accepting asRecorded is what keeps a
+          lock taken before code linkage left the approval valid while nothing it covered moved
         type: branch
-        condition: the record's stateId equals current
+        condition: the record's stateId equals current, or equals current.asRecorded
         onFalseStep: 6
       - stepNumber: 5
         description: Return locked with the record and current
@@ -2602,4 +2604,4 @@ methods:
         outcome: renamed
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T00:41:49.260Z'
+updatedAt: '2026-10-06T10:09:37.684Z'

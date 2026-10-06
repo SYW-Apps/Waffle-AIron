@@ -275,6 +275,16 @@ export const ConformanceRuleConfigSchema = z.object({
    * carryable, an entry of kind `undecided`, which is exactly that sentence.
    */
   carried: z.array(CarriedDebtSchema).optional(),
+  /**
+   * Opt-in strictness for teams that want CI to say "every designed component
+   * has code": every implementation must have begun (some file it names
+   * exists). When true, SOURCE_FILE_PLANNED and MISSING_SOURCE_PATH are
+   * reported at error, naming this setting, instead of as notices. Off by
+   * default, so a design-only tree passes `validate --ci`. Code-conformance
+   * tuning like the rest of `rules.conformance`: it enters the analyzer's
+   * digest, never the gate identity, so switching it never stales a lock.
+   */
+  requireCode: z.boolean().optional(),
 });
 export type ConformanceRuleConfig = z.infer<typeof ConformanceRuleConfigSchema>;
 
@@ -471,7 +481,15 @@ export type ExternalSource = z.infer<typeof ExternalSourceSchema>;
 export const ExternalDeclarationSchema = z.object({
   /** The producer's project id; defaults to the alias. Plain string: a malformed id is REPORTED, never unreadable. */
   project: z.string().optional(),
-  source: ExternalSourceSchema.optional(),
+  /**
+   * Where the producer is found, in either form: the one location string
+   * members use (`../geo-sdk`, `hosted:<id>`, `<git url>`, `<git url>#<commit>`
+   * — a `#<commit>` read as the ref the pin follows) or the object form
+   * ({ path } | { hosted } | { git, ref?, dir? }). Read leniently: any shape
+   * loads, and one that is not a source is the declaration's problem
+   * (readExternalSource), never a configuration that fails to load.
+   */
+  source: z.custom<ExternalSource | MemberSource>(() => true).optional(),
   /**
    * The producer's public names this project imports, so its specs may name
    * them bare: `['*']` imports every public name the producer exports to this
@@ -1093,14 +1111,63 @@ export interface DeclaredExternal {
   use: string[];
 }
 
-/** A source that names more or fewer than one of `path`, `hosted` and `git`, or an external's commit. */
-function sourceProblem(source: ExternalSource | undefined): string | undefined {
-  if (source === undefined) return undefined;
+/** The forms an external's `source` is accepted in, as a refusal names them. */
+export const EXTERNAL_SOURCE_FORMS = 'a location string (`../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`) or an object ({ path } | { hosted } | { git, ref?, dir? })';
+
+/** An external's source as read: its object form, normalized, or why it cannot be read. */
+export interface ReadExternalSource {
+  /** The object form; absent when nothing usable was written. */
+  source?: ExternalSource;
+  /** Why the source cannot be used as written — the declaration's problem, never a load failure. */
+  problem?: string;
+}
+
+/** The string form of an external's source, read through the one location grammar. */
+function readSourceString(written: string): ReadExternalSource {
+  const text = written.trim();
+  if (text === '') return { problem: `its \`source\` is empty — write ${EXTERNAL_SOURCE_FORMS}` };
+  if (GIT_URL_RE.test(text)) {
+    const hash = text.lastIndexOf('#');
+    const url = hash >= 0 ? text.slice(0, hash) : text;
+    const commit = hash >= 0 ? text.slice(hash + 1).trim() : '';
+    if (hash < 0 || commit === '') return { source: { git: url } };
+    // For an external a `#<commit>` is the ref the pin follows, fixed at that commit.
+    if (!FULL_COMMIT_RE.test(commit)) {
+      return { source: { git: url }, problem: `its git source pins "${commit}", which is not a full commit — write the full commit after \`#\`, or follow a branch or tag with \`ref\`` };
+    }
+    return { source: { git: url, ref: commit } };
+  }
+  const parsed = parseMemberSource(text);
+  if (parsed.storage === 'hosted') return { source: parsed.source, ...(parsed.problem ? { problem: parsed.problem } : {}) };
+  if (isAbsolutePath(text)) return { source: { path: text }, problem: `its \`source\` is the absolute path "${text}" — a location string is relative to the declaring project (\`../sibling\`)` };
+  return { source: { path: text }, ...(parsed.problem ? { problem: parsed.problem } : {}) };
+}
+
+/**
+ * external_declaration.source read leniently: the location string or the
+ * object form, normalized into the object form. A source of the wrong shape,
+ * one naming none or several of path/hosted/git, one naming `commit`, or a
+ * string the grammar refuses is answered as the problem — never thrown — so a
+ * configuration holding it still loads and every other external still shows.
+ */
+export function readExternalSource(written: unknown): ReadExternalSource {
+  if (written === undefined || written === null) return {};
+  if (typeof written === 'string') return readSourceString(written);
+  if (typeof written !== 'object' || Array.isArray(written)) {
+    return { problem: `its \`source\` is neither of the accepted forms — write ${EXTERNAL_SOURCE_FORMS}` };
+  }
+  const raw = written as Record<string, unknown>;
+  const keys = ['path', 'hosted', 'git', 'ref', 'commit', 'dir'] as const;
+  const wrong = keys.find((k) => raw[k] !== undefined && typeof raw[k] !== 'string');
+  if (wrong) return { problem: `its \`source.${wrong}\` is not a string — write ${EXTERNAL_SOURCE_FORMS}` };
+  const source: ExternalSource = Object.fromEntries(keys.filter((k) => raw[k] !== undefined).map((k) => [k, raw[k] as string]));
   const named = [source.path, source.hosted, source.git].filter((v) => v !== undefined).length;
-  if (named === 0) return 'its `source` names none of `path`, `hosted` and `git` — give exactly one';
-  if (named > 1) return 'its `source` names more than one of `path`, `hosted` and `git` — give exactly one';
-  if (source.commit !== undefined) return "its `source` names a `commit` — an external's commit is its pin's, recorded in .wai/externals.lock.yaml";
-  return undefined;
+  if (named === 0) return { source, problem: 'its `source` names none of `path`, `hosted` and `git` — give exactly one' };
+  if (named > 1) return { source, problem: 'its `source` names more than one of `path`, `hosted` and `git` — give exactly one' };
+  if (source.commit !== undefined) {
+    return { source, problem: 'its `source` names `commit`, but an external follows a ref — write `ref: <commit>` or `<url>#<commit>`' };
+  }
+  return { source };
 }
 
 /** One `use` entry: `*`, or a public name of [a-z0-9-_]+. */
@@ -1126,6 +1193,9 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
   return Object.entries(config.externals ?? {}).map(([alias, declaration]) => {
     const project = declaration?.project ?? alias;
     const imports = readUse(alias, declaration?.use);
+    // Either form of the source, normalized; a malformed one is the declaration's problem.
+    const read = readExternalSource(declaration?.source);
+    const source = read.source;
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
       ? (PROJECT_ID_RE.test(alias)
         ? `the alias "${alias}" is not a reference name ([a-z0-9-_]+) — a dotted producer id needs an explicit alias, e.g. \`${alias.replace(/\./g, '-')}: { project: ${alias} }\``
@@ -1134,15 +1204,15 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
         ? `the alias "${alias}" is also declared under \`members\` — one alias names one project`
         : !PROJECT_ID_RE.test(project)
           ? `the producer id "${project}" breaks the project-id grammar`
-          : sourceProblem(declaration?.source) ?? imports.problem;
+          : read.problem ?? imports.problem;
     return {
       alias,
       project,
-      ...(declaration?.source?.path !== undefined ? { sourcePath: declaration.source.path } : {}),
-      ...(declaration?.source?.hosted !== undefined ? { sourceHosted: declaration.source.hosted } : {}),
-      ...(declaration?.source?.git !== undefined ? { sourceGit: declaration.source.git } : {}),
-      ...(declaration?.source?.ref !== undefined ? { sourceRef: declaration.source.ref } : {}),
-      ...(declaration?.source?.dir !== undefined ? { sourceDir: declaration.source.dir } : {}),
+      ...(source?.path !== undefined ? { sourcePath: source.path } : {}),
+      ...(source?.hosted !== undefined ? { sourceHosted: source.hosted } : {}),
+      ...(source?.git !== undefined ? { sourceGit: source.git } : {}),
+      ...(source?.ref !== undefined ? { sourceRef: source.ref } : {}),
+      ...(source?.dir !== undefined ? { sourceDir: source.dir } : {}),
       ...(problem ? { problem } : {}),
       use: imports.use,
     };

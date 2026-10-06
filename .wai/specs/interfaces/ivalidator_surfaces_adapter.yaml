@@ -20,11 +20,17 @@ methods:
     description: >-
       Each declared external of the bound project compared at signature level with its live
       producer, via the surface portal — what a family run turns into EXTERNAL_INCOMPATIBLE,
-      EXTERNAL_DRIFTED and EXTERNAL_CHECK_UNAVAILABLE. The caller must gate on reach itself: a
-      producer outside the request's reach comes back outOfReach, unread.
-    signature: 'getExternalsStatus(): list<ExternalStatus>'
+      EXTERNAL_DRIFTED and EXTERNAL_CHECK_UNAVAILABLE, and the advisory pass
+      (family_validator.advise) into EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED and
+      EXTERNAL_LIVE_UNCOMPARED. The caller must gate on reach itself: a producer outside the
+      request's reach comes back outOfReach, unread.
+    signature: 'getExternalsStatus(offline?: bool): list<ExternalStatus>'
     returns: list<ExternalStatus>
-    params: []
+    params:
+      - name: offline
+        type: bool
+        description: Read no producer over the network (the advisory pass asks offline)
+        optional: true
   - name: pinnedParent
     description: >-
       A part's pinned parent, via the surface portal — what the owner's gate opened at a part judges
@@ -34,4 +40,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-10-04T10:19:46.518Z'
+updatedAt: '2026-10-06T10:15:01.641Z'

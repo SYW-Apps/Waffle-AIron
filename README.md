@@ -180,6 +180,10 @@ git add .wai && git commit -m "Approve the design"
 #    --strict also fails when .wai/lock.json is missing or a member project was
 #    never approved; plain lock-check only fails an approval that no longer matches.
 wairon lock-check --strict
+wairon validate --ci        # the conformance gate; externals are judged against their pins
+# Optional: gate on the LIVE producers of your externals as well
+# (exit 1 when one is incompatible, 2 when one could not be compared).
+wairon externals status
 
 # 4. Implement: your AI tool delegates each component with the sdd-delegate
 #    skill, from its live brief (sdd_get_agent_brief).
@@ -215,7 +219,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon rules list` | The conformance rule registry (the architecture linter) |
 | `wairon pack init \| build \| install \| use \| unuse \| impact \| sync \| bundle \| which \| list \| add \| remove` | Extension packs: injected profiles, language tables, and rules |
 | `wairon member …` / `wairon subsystem externalize` / `wairon project rename` | Members (parts and projects) and the family migrations |
-| `wairon externals pin \| status \| list` | Pin and check the externals a project consumes |
+| `wairon externals add \| pin \| status \| list` | Declare, pin and check the externals a project consumes (`status` is the opt-in live gate) |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon lock [-y]` | Validate the design as complete and record its approval in `.wai/lock.json`, code findings beside it; no spec file is rewritten |

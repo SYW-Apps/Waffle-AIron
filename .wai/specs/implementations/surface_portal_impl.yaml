@@ -51,7 +51,7 @@ methods:
   - name: getExternalsStatus
     narrative:
       - stepNumber: 1
-        description: Forward getExternalsStatus to the surface orchestrator
+        description: Forward getExternalsStatus, with `offline`, to the surface orchestrator
         type: call
         targetComponent: surface_orchestrator
         targetMethod: getExternalsStatus
@@ -83,6 +83,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: exportDesign
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the declaration to the external-declarations workflow
+        type: call
+        targetComponent: external_declarations
+        targetMethod: declare
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-04T18:29:31.630Z'
+updatedAt: '2026-10-06T10:14:59.050Z'

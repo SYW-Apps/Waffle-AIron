@@ -9,13 +9,22 @@ methods:
   - name: sourceFileLinkage
     description: >-
       Rule source-file-linkage. Code↔spec Level 1: every source file an implementation names — its
-      own sourcePath and each method's — must resolve to a real, readable file inside the project
-      root, and an implementation that names no file at all, or leaves a contract method without
-      one, is linked to no code. A file that escapes the root, is missing or cannot be analyzed is
+      own sourcePath and each method's — is checked against the code on disk, judged by whether the
+      implementation's realization has BEGUN (code_index.holdsAny over the files it names: at least
+      one exists). Before that, the design is ahead of the code and nothing is wrong: a named file
+      that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet) and
+      an implementation that names no file is unlinked design (MISSING_SOURCE_PATH, a notice), so a
+      design-only tree passes `validate --ci` and a planned sourcePath can be declared at design
+      time — which code linkage, outside the approval since format 3, costs nothing to do. Once it
+      has begun, conformance judges it: a named file that is missing is a broken link
+      (MISSING_SOURCE_FILE, an error) and a contract method that names no file while others do is
+      unlinked (METHOD_SOURCE_PATH_MISSING, a warning). A team that wants CI to demand code for
+      every designed implementation sets rules.conformance.requireCode, which reports the two
+      notices at error, naming the setting. A file that escapes the root or cannot be analyzed is
       reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript
-      files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED), since
-      dependency conformance then skips them. Implementations under chained subsystems (projectPath)
-      validate standalone in their own project run and are skipped here.
+      files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED).
+      Implementations under chained subsystems (projectPath) validate standalone in their own
+      project run and are skipped here.
     signature: 'sourceFileLinkage(ctx: RuleContext): void'
     returns: void
     params:
@@ -24,15 +33,17 @@ methods:
         description: The validation run's shared read model and issue sink
     findings:
       - code: MISSING_SOURCE_PATH
-        severity: warning
+        severity: notice
         summary: >-
-          An implementation names no source file at all, or a contract method is left without one —
-          structural conformance cannot link it to code
+          An implementation whose realization has not begun names no source file (for itself or for
+          some contract methods) — designed, not linked to code yet; an error under
+          rules.conformance.requireCode
       - code: MISSING_SOURCE_FILE
         severity: error
         summary: >-
           A source file an implementation or one of its methods names does not resolve to a file on
-          disk
+          disk although the implementation's realization has begun (another file it names exists) —
+          a broken link
       - code: SOURCE_PATH_ESCAPES_ROOT
         severity: error
         summary: >-
@@ -48,6 +59,17 @@ methods:
         summary: >-
           TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) —
           dependency conformance skips them
+      - code: SOURCE_FILE_PLANNED
+        severity: notice
+        summary: >-
+          A source file an implementation names is not on disk and none of its named files is —
+          planned, not written yet; conformance judges it once a file exists. An error under
+          rules.conformance.requireCode
+      - code: METHOD_SOURCE_PATH_MISSING
+        severity: warning
+        summary: >-
+          An implementation whose realization has begun leaves contract methods without a source
+          file — structural conformance cannot link them to code
   - name: methodRealization
     description: >-
       Rule method-realization. Code↔spec Level 1: every L3 contract method must be realized in its
@@ -229,11 +251,12 @@ methods:
   - name: integrationSimDeclaration
     description: >-
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
-      declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem must
-      declare one too: its unit suite proves contract shape against mocks, not that the wired
-      components run together. A leaf component's unit suite IS its sim, a subsystem that has
-      adopted nothing is never flooded, and an implementation with no code yet — no source file
-      named, or only files that are missing — has nothing to wire and is not asked for a harness.
+      declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem whose
+      realization has begun must declare one too: its unit suite proves contract shape against
+      mocks, not that the wired components run together. A leaf component's unit suite IS its sim, a
+      subsystem that has adopted nothing is never flooded, and an implementation with no code yet
+      (code_index.holdsAny over its named files is false — none named, or only planned ones) has
+      nothing to wire and is not asked for a harness.
     signature: 'integrationSimDeclaration(ctx: RuleContext): void'
     returns: void
     params:
@@ -247,8 +270,10 @@ methods:
   - name: integrationSimFile
     description: >-
       Rule integration-sim-file. A declared L4 simPath must resolve to a readable, committed file
-      inside the project root — the integration harness is a re-runnable file, not a claim.
-      Execution stays CI's job.
+      inside the project root — the integration harness is a re-runnable file, not a claim;
+      execution stays CI's job. A harness declared for an implementation whose realization has not
+      begun is planned with the code it will wire (SOURCE_FILE_PLANNED, a notice; an error under
+      rules.conformance.requireCode), so a design may name its harness up front.
     signature: 'integrationSimFile(ctx: RuleContext): void'
     returns: void
     params:
@@ -258,7 +283,14 @@ methods:
     findings:
       - code: SIM_FILE_MISSING
         severity: warning
-        summary: Declared simPath resolves to no file inside the project root
+        summary: >-
+          Declared simPath resolves to no file inside the project root although the implementation
+          it wires has begun
+      - code: SOURCE_FILE_PLANNED
+        severity: notice
+        summary: >-
+          A declared simPath is not on disk and the implementation it wires has no code yet either —
+          planned, not written yet
   - name: integrationSimWiring
     description: >-
       Rule integration-sim-wiring. A committed integration harness's import graph — closed
@@ -299,17 +331,19 @@ methods:
   - name: typeRealization
     description: >-
       Rule type-realization. Code↔spec Level 1 for the data model: a type that names a sourcePath is
-      claiming code, so every file it names — its own and each method's — must resolve to a real,
-      readable file inside the project root, its file must PUBLISH its declaration (an exported name
-      at exact grade, the declaration tier below it, under its `symbol` when the code-level name
-      differs from the type's name — and a pure re-export barrel publishes nothing of its own, so a
-      claim on one is never realized), and each of its pure methods must appear in its own file (the
-      method's sourcePath, else the type's) at the declaration tier, under the method's `symbol`,
-      else the method's name. A type that names no sourcePath claims nothing and is never reported.
-      Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker
-      analysis is visible, a file that escapes the root, is missing or could not be analyzed is
-      reported once and blocks only what it would have realized, and types under chained subsystems
-      (projectPath) validate standalone in their own project run.
+      claiming code. Until that claim has BEGUN (code_index.holdsAny over the type's own file and
+      its methods' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a
+      notice; an error under rules.conformance.requireCode). Once it has begun, every file it names
+      must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error,
+      otherwise), its file must PUBLISH its declaration (an exported name at exact grade, the
+      declaration tier below it, under its `symbol` when the code-level name differs from the type's
+      name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never
+      realized), and each of its pure methods must appear in its own file (the method's sourcePath,
+      else the type's) at the declaration tier, under the method's `symbol`, else the method's name.
+      A type that names no sourcePath claims nothing and is never reported. Findings carry the
+      analysis grade, a file that escapes the root or could not be analyzed is reported once and
+      blocks only what it would have realized, and types under chained subsystems (projectPath)
+      validate standalone in their own project run.
     signature: 'typeRealization(ctx: RuleContext): void'
     returns: void
     params:
@@ -329,7 +363,9 @@ methods:
           sourcePath, else the type's)
       - code: MISSING_SOURCE_FILE
         severity: error
-        summary: A source file a type or one of its methods names does not resolve to a file on disk
+        summary: >-
+          A source file a type or one of its methods names does not resolve to a file on disk
+          although the type's realization has begun (another file it names exists)
       - code: SOURCE_PATH_ESCAPES_ROOT
         severity: error
         summary: >-
@@ -340,6 +376,11 @@ methods:
         summary: >-
           A source file a type or one of its methods names could not be analyzed (binary/unreadable)
           — what it would have realized was not checked
+      - code: SOURCE_FILE_PLANNED
+        severity: notice
+        summary: >-
+          A source file a type names is not on disk and none of its named files is — planned, not
+          written yet; an error under rules.conformance.requireCode
   - name: unclaimedSource
     description: >-
       Rule unclaimed-source. Code↔spec Level 1, asked the other way round: every source file under
@@ -644,4 +685,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-05T23:48:54.564Z'
+updatedAt: '2026-10-06T10:11:55.313Z'

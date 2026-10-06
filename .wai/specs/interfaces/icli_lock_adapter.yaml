@@ -18,11 +18,12 @@ methods:
       composition.requireApprovedMembers is set and a direct member is drifted or never approved
       (naming each, writing nothing), confirm with the human (skipped under --yes), then —
       immediately before writing — recompute the gate identity and refuse when it differs from the
-      one the caller captured before validation. Writes a format-2 record: stateId = the captured
-      identity, the approval (one digest per OWN spec), `members` (each direct member's subject and
-      state), `code` (the code-conformance results and analyzer identity, beside the claim),
-      validationResult = the design half's counts, and the project's effective id. Never writes
-      `children`, never writes anything into the spec tree or below this project. Returns the
+      one the caller captured before validation. Writes a format-3 record: stateId = the captured
+      identity (design gate algorithm — code linkage is not part of what is approved), the approval
+      (one DESIGN digest per OWN spec, specsReading `design`), `members` (each direct member's
+      subject and state), `code` (the code-conformance results and analyzer identity, beside the
+      claim), validationResult = the design half's counts, and the project's effective id. Never
+      writes `children`, never writes anything into the spec tree or below this project. Returns the
       written record, or null when the human declined.
     signature: 'lockTree(options: LockOptions, gate: ValidationResult, captured: StateId): async LockRecord?'
     returns: async LockRecord?
@@ -47,25 +48,25 @@ methods:
       decision.
 
 
-
-      The GATE identity, not the per-spec content digests the same record carries: the digests
-      answer "has this file changed since you approved it", so a whitespace-only edit would move
-      them and demand a re-lock. The gate identity hashes the parsed own tree, the governing design
-      doctrine, the declared inputs, `composition` and the direct members' subjects, and answers
-      "has the approved DESIGN or anything it was approved under changed" — the only question a
-      merge gate is entitled to refuse on. Code-conformance results are not part of it, so an
-      analyzer upgrade never fails this gate.
-
+      The GATE identity, not the per-spec digests the same record carries. The gate identity hashes
+      the parsed own DESIGN (code linkage out since format 3), the governing design doctrine, the
+      declared inputs, `composition` and the direct members' subjects, and answers "has the approved
+      DESIGN or anything it was approved under changed" — the only question a merge gate is entitled
+      to refuse on. Code-conformance results and code linkage are not part of it, so neither an
+      analyzer upgrade nor a sourcePath added after implementation ever fails this gate: conformance
+      judges linkage, in `validate --ci`.
 
 
-      `stale` refuses at every strictness. A stale verdict that is only the stage-5 identity upgrade
-      (LockStatus.upgraded) still refuses — the old identity cannot be recomputed, so nothing proves
-      the design unchanged — but says so plainly: "the gate identity gained inputs in stage 5",
-      whether any own spec file changed since the approval (from the per-spec digests), and that one
-      re-lock clears it. `unlocked` is the opt-in seam and passes with a notice unless `strict` is
-      asked for, so a project that never locks cannot start failing because it upgraded. A
-      repository with no spec tree is reported as such rather than crashing or being mistaken for an
-      unapproved one.
+      A format-2 record is judged under its own algorithm (StateId.asRecorded), so upgrading wairon
+      never fails this gate on an unchanged design. `stale` refuses at every strictness. A stale
+      verdict under an earlier identity (LockStatus.upgraded) still refuses — nothing proves the
+      design unchanged — but says so plainly: for a format-2 record, that it predates code linkage
+      leaving the approval and something it covered moved (the design or only linkage, which can no
+      longer be told apart), whether any own spec file changed since the approval, and that one
+      re-lock clears it for good; a format-2 record that still matches passes, with a hint that
+      `wairon doctor --fix` re-expresses it. `unlocked` is the opt-in seam and passes with a notice
+      unless `strict` is asked for. A repository with no spec tree is reported as such rather than
+      crashing or being mistaken for an unapproved one.
     signature: 'checkApproval(strict: bool): ApprovalCheck'
     returns: ApprovalCheck
     params:
@@ -75,6 +76,18 @@ methods:
           Whether the absence of an approval is itself a refusal. False (the default) passes an
           unlocked or spec-tree-less repository with a notice.
         optional: false
+  - name: reexpressApproval
+    description: >-
+      Carry a format-2 lock record into the design reading without a review, when that is provable:
+      compute the gate identity (which carries the record's own identity recomputed as asRecorded),
+      ask approval_comparison.reexpress for the carried record, and write it when there is one. The
+      approval stays the human's (lockedAt, lockedBy unchanged); the record gains `reexpressed`.
+      Returns the written record, or null when there was nothing to carry or nothing proves the
+      design unchanged — then the caller says so and points at one `wairon lock`. The write behind
+      `wairon doctor --fix`'s approval step; it writes this project's .wai/lock.json only.
+    signature: 'reexpressApproval(): LockRecord?'
+    returns: LockRecord?
+    params: []
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-04T10:31:56.705Z'
+updatedAt: '2026-10-06T10:10:39.141Z'

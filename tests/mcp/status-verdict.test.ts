@@ -78,6 +78,9 @@ function approve(): void {
     validationResult: { valid: true, errors: 0, warnings: 0 },
     status: 'ready',
     specs: captureApprovedSpecs(),
+    // captureApprovedSpecs answers the design reading (lock format 3).
+    specsReading: 'design',
+    format: 3,
     children: {},
   });
 }

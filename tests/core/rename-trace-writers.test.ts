@@ -278,15 +278,17 @@ describe('spec_restatement.applyTo carries the trace and refuses a retired name'
   });
 });
 
-describe('a snapshot never carries a trace', () => {
-  it('drops previousNames, so a method rename moves only the name it changed', () => {
+describe('a snapshot carries a trace only as formerly, outside every digest', () => {
+  it('drops previousNames for formerly, so a method rename moves only the name it changed', () => {
     shop();
     const before = projectOwnSurface('project');
     renameMethod('cart', 'add', 'put');
     const after = projectOwnSurface('project');
     const methodsOf = (s: typeof before): any[] => s.interfaces.flatMap((e) => e.methods);
     expect(methodsOf(after).some((m) => 'previousNames' in m)).toBe(false);
-    const strip = (s: typeof before): string => JSON.stringify(methodsOf(s).map(({ name: _n, signature: _s, ...rest }) => rest));
+    // The rename trace travels as `formerly` (linkage-and-drift D8), so a consumer reads a rename.
+    expect(methodsOf(after).find((m) => m.name === 'put')?.formerly).toEqual(['add']);
+    const strip = (s: typeof before): string => JSON.stringify(methodsOf(s).map(({ name: _n, signature: _s, formerly: _f, ...rest }) => rest));
     expect(strip(after)).toBe(strip(before));
   });
 });

@@ -4,17 +4,23 @@
  *
  * Documented intents pinned here (rule description + doc comments + the
  * ConformanceTierSchema doc in src/models/specs.ts):
- *  - MISSING_SOURCE_PATH (warning): an implementation names no source file at
- *    all, or a contract method is left without one — structural conformance
- *    cannot link it to code. The "no file at all" case fires regardless of
- *    the contract's method count (including a contract with none yet), since
- *    an implementation with no sourcePath and no per-method sourcePath links
- *    to nothing either way. When every contract method names its own file
- *    there is nothing to report. An `implementation`-type externalLink on the
- *    component is the external source-of-record and suppresses the finding.
+ *  Realization has BEGUN once any file an implementation names exists
+ *  (code_index.holdsAny); before that the design is simply ahead of the code.
+ *  - MISSING_SOURCE_PATH (notice; error under rules.conformance.requireCode):
+ *    an implementation whose realization has not begun names no source file at
+ *    all, or leaves a contract method without one — designed, not linked to
+ *    code yet. The "no file at all" case fires regardless of the contract's
+ *    method count (including a contract with none yet). When every contract
+ *    method names its own file there is nothing to report. An
+ *    `implementation`-type externalLink on the component is the external
+ *    source-of-record and suppresses the finding.
+ *  - METHOD_SOURCE_PATH_MISSING (warning): realization has begun, and some
+ *    contract methods name no source file — they cannot be linked to code.
+ *  - SOURCE_FILE_PLANNED (notice; error under requireCode): a named file is not
+ *    on disk and none of the implementation's named files is — planned.
  *  - MISSING_SOURCE_FILE (error): a source file an implementation or one of
- *    its methods names does not resolve to a file on disk — the spec names
- *    code that does not exist.
+ *    its methods names does not resolve to a file on disk although the
+ *    implementation's realization has begun — a broken link.
  *  - SOURCE_PATH_ESCAPES_ROOT (error): a source file an implementation or one
  *    of its methods names is absolute or escapes the project root
  *    (containment refusal).
@@ -64,7 +70,7 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'MISSING_SOURCE_PATH',
-    severity: 'warning',
+    severity: 'notice',
     anchoredTo: 'settlement_exporter_impl',
     expectFire: true,
     scenario:
@@ -143,7 +149,7 @@ export default [
   }),
   defineRuleFixture({
     code: 'MISSING_SOURCE_PATH',
-    severity: 'warning',
+    severity: 'notice',
     anchoredTo: 'webhook_signature_verifier_impl',
     expectFire: true,
     scenario:
@@ -175,16 +181,110 @@ export default [
     },
   }),
 
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_PATH',
+    severity: 'error',
+    anchoredTo: 'settlement_exporter_impl',
+    expectFire: true,
+    scenario:
+      'The payments team set rules.conformance.requireCode so CI demands code for every designed component, and the settlement exporter\'s implementation still names no sourcePath.',
+    tree: {
+      rules: { conformance: { requireCode: true } },
+      subsystems: [{ id: 'billing', description: 'Invoicing and settlement export for completed orders.' }],
+      components: [
+        {
+          id: 'settlement-exporter',
+          componentType: 'Orchestrator',
+          subsystem: 'billing',
+          description: 'Assembles daily settlement batches and hands them to the bank file drop.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'isettlement_exporter',
+          component: 'settlement-exporter',
+          methods: [{ name: 'exportSettlements', description: 'Assemble and export the daily settlement batch.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'settlement_exporter_impl',
+          contract: 'isettlement_exporter',
+          methods: [
+            {
+              name: 'exportSettlements',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Collect the day\'s captured payments into a settlement batch.' }],
+            },
+          ],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_PATH',
+    expectFire: false,
+    reason:
+      'Realization has begun — approveRefund\'s module is committed — so a method left unlinked is METHOD_SOURCE_PATH_MISSING\'s subject, not unlinked design.',
+    scenario:
+      'The refund orchestrator\'s approveRefund module is committed and named, while issueRefund names no file and the implementation declares no sourcePath of its own.',
+    tree: refundOrchestratorTree({
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        'src/payments/refunds/approve-refund.ts': [
+          'export function approveRefund(refundId: string): boolean {',
+          '  return refundId.length > 0;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+
   // -------------------------------------------------------------------------
-  // MISSING_SOURCE_FILE
+  // METHOD_SOURCE_PATH_MISSING
   // -------------------------------------------------------------------------
   defineRuleFixture({
-    code: 'MISSING_SOURCE_FILE',
-    severity: 'error',
+    code: 'METHOD_SOURCE_PATH_MISSING',
+    severity: 'warning',
+    anchoredTo: 'refund_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The refund orchestrator\'s approveRefund module is committed and named, but issueRefund names no file and the implementation declares no sourcePath — the payout method cannot be linked to the code that now exists.',
+    tree: refundOrchestratorTree({
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        'src/payments/refunds/approve-refund.ts': [
+          'export function approveRefund(refundId: string): boolean {',
+          '  return refundId.length > 0;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+  defineRuleFixture({
+    code: 'METHOD_SOURCE_PATH_MISSING',
+    expectFire: false,
+    reason:
+      'Nothing the implementation names exists yet, so its realization has not begun: the unlinked method is planned design (MISSING_SOURCE_PATH, a notice), not a gap in code.',
+    scenario:
+      'The refund orchestrator was designed ahead of the code: approveRefund names its planned module, which is not written yet, and issueRefund names no file.',
+    tree: refundOrchestratorTree({
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {},
+    }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // SOURCE_FILE_PLANNED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    severity: 'notice',
     anchoredTo: 'invoicing_engine_impl',
     expectFire: true,
     scenario:
-      'The invoicing engine implementation points at src/billing/invoicing.ts, but the module was deleted in a cleanup and the spec now names code that does not exist.',
+      'The invoicing engine was designed and approved first: its implementation already names the planned module src/billing/invoicing.ts, which nobody has written yet.',
     tree: {
       subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for placed orders.' }],
       components: [
@@ -215,8 +315,162 @@ export default [
           ],
         },
       ],
-      // deliberately NO src/billing/invoicing.ts on disk
+      // deliberately NO src/billing/invoicing.ts on disk: planned, not written
       files: {},
+    },
+  }),
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    severity: 'error',
+    anchoredTo: 'invoicing_engine_impl',
+    expectFire: true,
+    scenario:
+      'The billing team set rules.conformance.requireCode so CI demands code for every designed component, and the invoicing engine\'s planned module src/billing/invoicing.ts is still not written.',
+    tree: {
+      rules: { conformance: { requireCode: true } },
+      subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for placed orders.' }],
+      components: [
+        {
+          id: 'invoicing-engine',
+          componentType: 'Orchestrator',
+          subsystem: 'billing',
+          description: 'Turns completed orders into issued invoices.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iinvoicing_engine',
+          component: 'invoicing-engine',
+          methods: [{ name: 'generateInvoice', description: 'Assemble the line items and issue the invoice.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'invoicing_engine_impl',
+          contract: 'iinvoicing_engine',
+          sourcePath: 'src/billing/invoicing.ts',
+          methods: [
+            {
+              name: 'generateInvoice',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Assemble the order\'s line items into an invoice draft.' }],
+            },
+          ],
+        },
+      ],
+      files: {},
+    },
+  }),
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    expectFire: false,
+    reason:
+      'Another file the implementation names exists, so its realization has begun: a named file that is missing is then a broken link (MISSING_SOURCE_FILE), never planned.',
+    scenario:
+      'The refund orchestrator\'s own module is committed, but approveRefund names a module that was never committed.',
+    tree: refundOrchestratorTree({
+      sourcePath: 'src/payments/refund-orchestrator.ts',
+      approveRefundSourcePath: 'src/payments/refunds/approve-refund.ts',
+      files: {
+        'src/payments/refund-orchestrator.ts': [
+          'export function issueRefund(refundId: string): void {',
+          '  // hand the payout to the PSP',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // MISSING_SOURCE_FILE
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    expectFire: false,
+    reason:
+      'Nothing the implementation names exists, so its realization has not begun: the named module is planned (SOURCE_FILE_PLANNED), not a broken link.',
+    scenario:
+      'The invoicing engine was designed first and names its planned module src/billing/invoicing.ts, which is not written yet.',
+    tree: {
+      subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for placed orders.' }],
+      components: [
+        {
+          id: 'invoicing-engine',
+          componentType: 'Orchestrator',
+          subsystem: 'billing',
+          description: 'Turns completed orders into issued invoices.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iinvoicing_engine',
+          component: 'invoicing-engine',
+          methods: [{ name: 'generateInvoice', description: 'Assemble the line items and issue the invoice.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'invoicing_engine_impl',
+          contract: 'iinvoicing_engine',
+          sourcePath: 'src/billing/invoicing.ts',
+          methods: [
+            {
+              name: 'generateInvoice',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Assemble the order\'s line items into an invoice draft.' }],
+            },
+          ],
+        },
+      ],
+      files: {},
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    severity: 'error',
+    anchoredTo: 'invoicing_engine_impl',
+    expectFire: true,
+    scenario:
+      'The invoicing engine\'s numbering module is still committed, but its main module src/billing/invoicing.ts was deleted in a cleanup — realization had begun, and the spec now names code that does not exist.',
+    tree: {
+      subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for placed orders.' }],
+      components: [
+        {
+          id: 'invoicing-engine',
+          componentType: 'Orchestrator',
+          subsystem: 'billing',
+          description: 'Turns completed orders into issued invoices.',
+        },
+      ],
+      interfaces: [
+        {
+          id: 'iinvoicing_engine',
+          component: 'invoicing-engine',
+          methods: [{ name: 'generateInvoice', description: 'Assemble the line items and issue the invoice.' }],
+        },
+      ],
+      implementations: [
+        {
+          id: 'invoicing_engine_impl',
+          contract: 'iinvoicing_engine',
+          sourcePath: 'src/billing/invoicing.ts',
+          methods: [
+            {
+              name: 'generateInvoice',
+              sourcePath: 'src/billing/generate-invoice.ts',
+              narrative: [{ stepNumber: 1, type: 'local', description: 'Assemble the order\'s line items into an invoice draft.' }],
+            },
+          ],
+        },
+      ],
+      // deliberately NO src/billing/invoicing.ts on disk; the method's own module is
+      files: {
+        'src/billing/generate-invoice.ts': [
+          'export function generateInvoice(orderId: string): void {',
+          '  // assemble and issue the invoice',
+          '}',
+          '',
+        ].join('\n'),
+      },
     },
   }),
   defineRuleFixture({

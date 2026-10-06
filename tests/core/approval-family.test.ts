@@ -93,7 +93,7 @@ describe('stage 5 — the lock record, format 2', () => {
     await lockAt(fam.mid);
     const record = (await lockAt(fam.top))!;
 
-    expect(record.format).toBe(2);
+    expect(record.format).toBe(3);
     expect(record.children).toBeUndefined();
     const mid = readLockRecordAt(fam.mid)!;
     expect(record.members).toEqual({
@@ -107,7 +107,7 @@ describe('stage 5 — the lock record, format 2', () => {
     expect(record.code!.analyzer.grade).toBe('none');
     expect(record.code!.codes).toBeUndefined();
     expect(record.validationResult.valid).toBe(true);
-    expect(record.stateId.algorithm).toBe('sha256+content+doctrine+inputs+members');
+    expect(record.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
     expect(fs.readFileSync(path.join(fam.top, '.wai', 'lock.json'), 'utf8')).not.toContain('"children"');
   });
 
@@ -454,7 +454,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     await lockAt(fam.top);
     writeFormat1(fam.top, 'c'.repeat(64), { mid: 'sha256+content+doctrine+inputs:x' });
     const record = (await lockAt(fam.top))!;
-    expect(record.format).toBe(2);
+    expect(record.format).toBe(3);
     expect(readLockRecordAt(fam.top)!.children).toBeUndefined();
     writeLockRecord({ ...record, children: { mid: 'x' } });
     expect(readLockRecordAt(fam.top)!.children).toBeUndefined();

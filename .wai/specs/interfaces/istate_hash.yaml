@@ -1,9 +1,9 @@
 id: istate_hash
 name: State Hash Interface
 description: >-
-  Contract for computing the deterministic content identity of the spec tree: the whole scan
-  (compute) or the bound project's own specs alone (ownTree), which is the content half of the gate
-  identity.
+  Contract for computing the deterministic identity of the spec tree: the whole scan (compute), the
+  bound project's own specs alone in the full content reading (ownTree), and the bound project's own
+  DESIGN (ownDesign) — the content half of the gate identity since code linkage left the approval.
 component: state_hash
 methods:
   - name: compute
@@ -19,20 +19,36 @@ methods:
       - idempotent
   - name: ownTree
     description: >-
-      The content identity of the bound project's OWN specs only: the specs the scan keys under the
-      bound root — its parts' specs included (stage 8), wherever they are stored, each digested
-      under its storage-independent path (`members/<alias>/<path inside the part>`), so moving a
-      part between a contained path, a sibling checkout and a git repository leaves the identity
-      unchanged when its content does not (storage-is-orthogonal) — never a project member's (those
-      are covered by the member's composition subject in the gate identity, so hashing them here as
-      well would re-couple a parent's approval to every member edit). Same ordering, canonical form
-      and algorithm marker (sha256) as compute, so for a project with no members the two answer the
-      same identity. The content half of the gate identity.
+      The content identity of the bound project's OWN specs only, in the full content reading — code
+      linkage (sourcePath, symbol, exportedVia, simPath and the rest the spec types' designView
+      leaves out) INCLUDED: the specs the scan keys under the bound root — its parts' specs included
+      (stage 8), wherever they are stored, each digested under its storage-independent path
+      (`members/<alias>/<path inside the part>`), so moving a part leaves the identity unchanged
+      when its content does not — never a project member's. Same ordering, canonical form and
+      algorithm marker (sha256) as compute, so for a project with no members the two answer the same
+      identity. No longer the gate's content half: kept as the reading a format-2 lock was taken in,
+      so validator_portal.computeGateStateId can recompute that lock's identity (StateId.asRecorded)
+      and judge it exactly as it was taken.
     signature: 'ownTree(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: ownDesign
+    description: >-
+      The DESIGN identity of the bound project's own specs: exactly ownTree's selection,
+      storage-independence and ordering, but each spec digested in its design view — an
+      implementation, a type and a component through their type's designView (code linkage and
+      timestamps out), every other kind with createdAt/updatedAt out. Algorithm marker
+      `sha256-design`, so it can never compare equal to a content identity. The content half of the
+      gate identity from format 3 on: adding, moving or removing a sourcePath, symbol, exportedVia,
+      simPath, injectedParams, conformance tier, mount `via` or external link never moves it; any
+      change to what the design says does.
+    signature: 'ownDesign(): StateId'
     returns: StateId
     params: []
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-10-02T20:26:50.630Z'
+updatedAt: '2026-10-06T10:08:22.688Z'

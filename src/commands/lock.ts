@@ -14,6 +14,7 @@ import {
   loadSystemSpec,
   readLockState,
   readLockRecord,
+  reexpress,
   loadProjectConfig,
   projectFamily,
   type LockRecord,
@@ -90,13 +91,17 @@ export interface ApprovalCheck {
 // approved and illegal (approved before a doctrine change), or legal and
 // unapproved.
 //
-// It is decided from the GATE StateId, never from the per-spec content digests
-// the same lock record carries. The two are kept deliberately (see
-// approval.ts): the content digest answers "has this FILE changed since you
-// approved it", the gate identity hashes the PARSED tree plus the governing
-// doctrine and answers "has the DESIGN changed". A merge gate on the content
-// digest would demand a re-lock after a whitespace-only edit, and a gate people
-// learn to bypass is worse than no gate at all.
+// It is decided from the GATE StateId, never from the per-spec digests the
+// same lock record carries. The gate identity hashes the parsed own DESIGN
+// (code linkage out since lock format 3) plus the governing doctrine and
+// answers "has the DESIGN changed" — so neither a whitespace edit nor a
+// sourcePath added after implementation ever fails it: conformance judges
+// linkage, in `validate --ci`. A gate people learn to bypass is worse than no
+// gate at all.
+//
+// A format-2 record (taken before code linkage left the approval) is judged
+// under its own algorithm (StateId.asRecorded), so an upgrade never fails this
+// gate on an unchanged design.
 //
 // Optional by construction. Only `stale` refuses at the default strictness, and
 // `stale` is unreachable in a project that never locked — `readLockState`
@@ -149,10 +154,11 @@ export function checkApproval(strict: boolean): ApprovalCheck {
     };
   }
 
-  // A stale verdict that is only the v6 gate-identity upgrade still refuses —
-  // the old identity cannot be recomputed, so nothing proves the design
-  // unchanged — but it says so plainly, with whether any own spec file moved.
-  // (LockStatus.upgraded: stale, and the record's algorithm is not the current one.)
+  // A stale verdict under an earlier identity still refuses — nothing proves
+  // the design unchanged — but it says so plainly, with whether any own spec
+  // file moved. (LockStatus.upgraded: stale, and the record's algorithm is not
+  // the current one.) A format-2 record reaches here only when it no longer
+  // matches even under its own algorithm.
   if (lock.state === 'stale' && record!.stateId.algorithm !== lock.current.algorithm) return upgradedCheck(record!);
 
   switch (lock.state) {
@@ -176,11 +182,16 @@ export function checkApproval(strict: boolean): ApprovalCheck {
           + (never.length > 0
             ? ` NOT gated: ${never.map((m) => m.alias ?? m.key).join(', ')} — never approved by anyone (\`--strict\` fails here).`
             : '');
+      // A format-2 record that still holds passes, with the one-time carry.
+      const carry = record!.specsReading !== 'design'
+        ? ' This approval predates lock format 3 and still holds in its original reading; `wairon doctor --fix` '
+          + 're-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it.'
+        : '';
       return {
         state: 'locked',
         approved: true,
         message: (never.length > 0 ? 'This project\'s own design is the approved design — ' : 'The design in this tree is the approved design — ')
-          + `approved ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}.${family}`,
+          + `approved ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}.${family}${carry}`,
       };
     }
     case 'stale': {
@@ -312,6 +323,19 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     : diffSize(diff) === 0
       ? 'No own spec file has changed since the approval.'
       : `${diffSize(diff)} own spec file(s) changed since the approval.`;
+  if (record.format === 2) {
+    // A format-2 record judged under its own algorithm and still not matching:
+    // something it covered moved, and it cannot say whether only linkage did.
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) is a format-2 lock `
+        + 'taken before code linkage (sourcePath, symbol, simPath and the like) left the approval, and something it '
+        + 'covered moved since — the design, or only code linkage, which this record can no longer tell apart. '
+        + `${specs} Fix: one \`wairon lock\` clears it for good — from then on linkage never drifts the approval — `
+        + 'and commit the updated .wai/lock.json.',
+    };
+  }
   return {
     state: 'stale',
     approved: false,
@@ -483,13 +507,15 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     );
   }
 
-  // Step 14: a format-2 record. No `children`.
+  // Step 14: a format-3 record. No `children`, no `reexpressed` (a human approved this one).
   const design = designOnly(gate);
   const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
   const record: LockRecord = {
-    // The record format: 2 since wairon 6.0.0 (members, code, no children).
-    format: 2,
-    stateId: captured,
+    // The record format: 3 since code linkage left the approval (design gate
+    // algorithm, design-reading digests); 2 from wairon 6.0.0 (members, code, no children).
+    format: 3,
+    // The captured identity alone: asRecorded is a reading, never recorded.
+    stateId: { algorithm: captured.algorithm, digest: captured.digest },
     lockedAt: new Date().toISOString(),
     lockedBy,
     validatorVersion: WAIRON_VERSION,
@@ -497,12 +523,36 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     status: 'ready',
     ...(projectId !== null ? { projectId } : {}),
     specs,
+    specsReading: 'design',
     members: memberPins(members),
     ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };
   // Step 15: the only file this lock writes.
   writeLockRecord(record);
   return record;
+}
+
+/**
+ * cli_lock_adapter.reexpressApproval — carry a format-2 lock record into the
+ * design reading without a review, when that is provable: compute the gate
+ * identity (which carries the record's own identity recomputed as asRecorded),
+ * ask for the carried record, and write it when there is one. The approval
+ * stays the human's (lockedAt, lockedBy unchanged); the record gains
+ * `reexpressed`. Writes this project's .wai/lock.json only. Null when there was
+ * nothing to carry or nothing proves the design unchanged — the caller then
+ * points at one `wairon lock`.
+ */
+export function reexpressLock(): LockRecord | null {
+  // Step 1: the gate identity as it stands, with asRecorded for a format-2 record.
+  const gate = computeGateStateId();
+  // Step 2: the carried record, null unless the record's own identity still holds.
+  const carried = reexpress(gate);
+  // Step 3: nothing to write.
+  if (!carried) return null;
+  // Step 4: the only file this writes.
+  writeLockRecord(carried);
+  // Step 5: the written record.
+  return carried;
 }
 
 /** Each direct member's alias → a project member's {as: project, project, subject, state} or a part's {as: part, contentDigest, commit, state} as it stands now. */

@@ -27,11 +27,12 @@ import {
   loadTypeSpecs,
 } from './adapters/validator-core.js';
 import { getExternalsStatus } from './adapters/validator-surfaces.js';
-import { dependencyCycles, familyNode, keyIn, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
+import { dependencyCycles, declaredExternals, declaredMembers, familyNode, keyIn, relationHealth, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
 import { admits, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
+import type { StateId } from './statehash.js';
 import type { PinState, ProjectApproval } from '../models/lock.js';
 
 /** A project's lock record, as the core adapter reads one. */
@@ -72,6 +73,9 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   EXTERNAL_INCOMPATIBLE: 'error',
   EXTERNAL_DRIFTED: 'notice',
   EXTERNAL_CHECK_UNAVAILABLE: 'warning',
+  // The advisory live comparison (advise): printed and counted, never part of a failure decision.
+  EXTERNAL_LIVE_INCOMPATIBLE: 'warning',
+  EXTERNAL_LIVE_UNCOMPARED: 'notice',
   MEMBER_NOT_FOUND: 'error',
   PROJECT_ID_COLLISION: 'error',
   PROJECT_DEPENDENCY_CYCLE: 'warning',
@@ -324,12 +328,18 @@ export function run(options: ValidationOptions): ValidationResult {
   issues.push(...within(root, ceiling, () => checkPolicies(narrowed(family, selected))));
   // Step 11: the externals the reach left out.
   const hint = notSelectedHint(left);
-  // Step 12: the family verdict.
+  // Step 12: the family verdict, with the bound project's externals the run
+  // composed as its gate — the advisory pass gives them no second word.
+  const rootSelected = selected.find((s) => s.node.namespace === '');
+  const composed = rootSelected
+    ? rootSelected.node.externals.map((e) => e.alias).filter((alias) => !left.some((l) => l.project === '' && l.alias === alias))
+    : [];
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,
     projects,
     ...(hint ? { hint } : {}),
+    ...(composed.length ? { composed } : {}),
   };
 }
 
@@ -342,17 +352,30 @@ function useName(use: ExternalStatus['uses'][number]): string {
   return `"${use.publicName}.${use.member}"`;
 }
 
+/** A used member that broke since the pin: changed, renamed or gone. */
+function isBroken(use: ExternalStatus['uses'][number]): boolean {
+  return use.state === 'changed' || use.state === 'removed' || use.state === 'renamed';
+}
+
+/** How a broken use moved, as a finding says it: changed at signature level, renamed to its new name, or gone. */
+function howMoved(use: ExternalStatus['uses'][number]): string {
+  if (use.state === 'changed') return 'changed at signature level since it was pinned';
+  if (use.state === 'renamed') {
+    const changed = use.detail?.includes('signature changed') ? ' (and its signature changed)' : '';
+    return `was renamed to "${use.renamedTo}"${changed}, per the producer's rename trace`;
+  }
+  return 'is gone from the producer\'s live export table';
+}
+
 /** Step 7 of compose: one external's status as findings on the consumer. */
 function judgeExternal(status: ExternalStatus, project: string, config: ProjectConfig | null): ValidationIssue[] {
   const out: (ValidationIssue | null)[] = [];
   const who = `the external "${status.alias}" (project "${status.project}")`;
-  const broken = status.uses.filter((u) => u.state === 'changed' || u.state === 'removed');
+  const broken = status.uses.filter(isBroken);
   for (const use of broken) {
-    const what = use.state === 'changed'
-      ? 'changed at signature level since it was pinned'
-      : 'is gone from the producer\'s live export table';
+    const fix = use.state === 'renamed' ? 'Follow the rename in the uses' : 'Adapt the uses';
     out.push(finding(config, 'EXTERNAL_INCOMPATIBLE',
-      `${named(project)} uses ${useName(use)} of ${who}, which ${what}. Adapt the uses, then re-pin (\`wairon externals pin ${status.alias}\`).`,
+      `${named(project)} uses ${useName(use)} of ${who}, which ${howMoved(use)}. ${fix}, then re-pin (\`wairon externals pin ${status.alias}\`).`,
       project));
   }
   if (broken.length === 0 && status.drifted) {
@@ -397,6 +420,116 @@ export function compose(project: string): ExternalComposition {
   }
   // Step 9.
   return { findings, notSelected };
+}
+
+// ---- the advisory live comparison ------------------------------------------
+//
+// THE PIN GATES, LIVE DRIFT IS VISIBLE. The owner's gate judges each external
+// against its pin, reproducibly; this pass compares the externals the run did
+// not compose with their LIVE producers — offline, within the request's reach
+// — so a consumer whose producer broke hears it from plain `validate` and
+// `status`. Every finding is marked advisory: printed and counted, never part
+// of `valid` or `--ci`.
+
+/** The command a moved external is fixed with once its uses are adapted. */
+function repin(alias: string): string {
+  return `\`wairon externals pin ${alias}\``;
+}
+
+/** Every spec of the bound project whose references use one public name of an external, sorted. */
+function specsUsing(family: ProjectFamily, alias: string, publicName: string | undefined): string[] {
+  const specs = family.authoredReferences
+    .filter((r) => (family.owners.get(r.specId) ?? '') === ''
+      && (r.authored.startsWith(`${alias}::`) || (r.importedVia ?? '').split(', ').includes(alias))
+      && (publicName === undefined || (r.publicName ?? r.authored.split('::')[r.form === 'import' ? 0 : 1]) === publicName))
+    .map((r) => r.specId);
+  return [...new Set(specs)].sort();
+}
+
+/** One moved use, as the advisory finding names it. */
+function movedUse(use: ExternalStatus['uses'][number]): string {
+  return `${useName(use)} ${howMoved(use).replace(/^was renamed/, 'renamed').replace(/^is gone/, 'gone')}`;
+}
+
+/** Why an external could not be compared live: the status's own reason, else its uses'. */
+function uncomparedReason(status: ExternalStatus): string {
+  const reasons = [status.detail, ...status.uses.filter((u) => u.state === 'unavailable' || u.state === 'unlocked').map((u) => u.detail)]
+    .filter((r): r is string => !!r);
+  return [...new Set(reasons)].join('; ') || 'the live producer could not be read';
+}
+
+/** An advisory finding at the bound project's severity; null when it turned the code off. */
+function advisory(config: ProjectConfig | null, code: string, message: string): ValidationIssue | null {
+  const issue = finding(config, code, message, '');
+  if (!issue) return null;
+  const { project: _own, ...rest } = issue;
+  return { ...rest, advisory: true };
+}
+
+/** Steps 5-11 for one external: its health as at most one advisory finding. */
+function adviseOn(status: ExternalStatus, family: ProjectFamily, config: ProjectConfig | null): ValidationIssue | null {
+  const who = `the external "${status.alias}" (project "${status.project}")`;
+  switch (relationHealth(status)) {
+    case 'incompatible': {
+      // Step 6: what moved, who uses it, the fix.
+      const broken = status.uses.filter(isBroken);
+      const users = [...new Set(broken.flatMap((u) => specsUsing(family, status.alias, u.publicName)))].sort();
+      const renamed = broken.some((u) => u.state === 'renamed');
+      return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
+        `${who} moved in its live producer since it was pinned: ${broken.map(movedUse).join('; ')}. `
+        + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
+        + `Adapt the uses${renamed ? ' (follow the rename)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
+    }
+    case 'drifted':
+      // Step 8.
+      return advisory(config, 'EXTERNAL_DRIFTED',
+        `The live producer of ${who} moved since it was pinned, but nothing this project uses changed. Re-pin when convenient (${repin(status.alias)}).`);
+    case 'unavailable': {
+      // Step 10: never a pass, never a failure of the owner's gate.
+      const reason = uncomparedReason(status);
+      const how = reason.includes('wairon externals status') ? '' : ' `wairon externals status` compares it live.';
+      return advisory(config, 'EXTERNAL_LIVE_UNCOMPARED',
+        `${who} was not compared with its live producer: ${reason}. Only its pin judged it — not a pass of the live producer.${how}`);
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * ifamily_validator.advise — compare each of the bound project's externals the
+ * run did not compose with its LIVE producer, offline, within the request's
+ * reach, and report what moved: EXTERNAL_LIVE_INCOMPATIBLE (warning),
+ * EXTERNAL_DRIFTED (notice), EXTERNAL_LIVE_UNCOMPARED (notice) — every one
+ * marked advisory, so neither `valid` nor `validate --ci` decides on it.
+ * Writes nothing.
+ */
+export function advise(composed?: string[]): ValidationIssue[] {
+  // Nothing declared, nothing to compare — and no graph to read for it.
+  const declared = configOrNull();
+  if (!declared || (declaredExternals(declared).length === 0 && declaredMembers(declared).length === 0)) return [];
+  try {
+    // Step 1: each external compared with its live producer, offline.
+    const statuses = getExternalsStatus(true);
+    // Step 2: the bound project's own severity overrides.
+    const config = declared;
+    // Step 3: the bound project's references, to name who uses each moved member.
+    const family = projectFamily();
+    const skip = new Set(composed ?? []);
+    const out: ValidationIssue[] = [];
+    // Steps 4-12: each external the run did not compose, in declaration order.
+    for (const status of statuses) {
+      if (skip.has(status.alias)) continue;
+      const issue = adviseOn(status, family, config);
+      if (issue) out.push(issue);
+    }
+    // Step 13.
+    return out;
+  } catch {
+    // An unreadable tree or configuration is the owner's gate's to report;
+    // the advisory pass never fails a run.
+    return [];
+  }
 }
 
 // ---- the family checks -----------------------------------------------------
@@ -534,10 +667,12 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
       ...(node.id !== undefined ? { projectId: node.id } : {}),
       state: 'never',
     };
-    // Step 7: none is never; a matching identity is approved; else drifted,
-    // upgraded when only the algorithm marker moved.
+    // Step 7: none is never; a matching identity is approved — for a format-2
+    // record, matching the identity recomputed under its own algorithm
+    // (asRecorded) — else drifted, upgraded when only the algorithm marker moved.
     if (!record) return base;
-    const matches = record.stateId.algorithm === current.algorithm && record.stateId.digest === current.digest;
+    const same = (id: StateId | undefined): boolean => !!id && record.stateId.algorithm === id.algorithm && record.stateId.digest === id.digest;
+    const matches = same(current) || same(current.asRecorded);
     return {
       ...base,
       state: matches ? 'approved' : 'drifted',

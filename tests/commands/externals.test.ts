@@ -51,6 +51,7 @@ describe('wairon externals and the externals MCP tools', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    process.exitCode = undefined;
     setProjectRoot(null);
     invalidateSpecCache();
     try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }

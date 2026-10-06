@@ -115,7 +115,8 @@ function lockMembers(): void {
  * not exist: a CODE finding (MISSING_SOURCE_FILE, an error) with a design that
  * is otherwise sound.
  */
-function addUnimplementedComponent(): void {
+/** `broken`: the method's own module is written but the implementation's main module is not — a broken link, a code error. */
+function addUnimplementedComponent(broken = false): void {
   const dir = path.join(fam.sib, '.wai', 'specs', 'aside', 'engine');
   writeSpecFile(path.join(dir, '.index.yaml'), ComponentSpecSchema.parse({
     id: 'engine', name: 'engine', description: 'The engine component', subsystem: 'aside',
@@ -129,9 +130,13 @@ function addUnimplementedComponent(): void {
   writeSpecFile(path.join(dir, '.implementation.yaml'), ImplementationSpecSchema.parse({
     id: 'engine_impl', name: 'engine_impl', description: 'The engine, not written yet', contract: 'iengine',
     sourcePath: 'src/engine.ts',
-    methods: [{ name: 'run', narrative: [{ stepNumber: 1, description: 'Do the one thing', type: 'local' }] }],
+    methods: [{ name: 'run', ...(broken ? { sourcePath: 'src/engine-run.ts' } : {}), narrative: [{ stepNumber: 1, description: 'Do the one thing', type: 'local' }] }],
     status: 'complete', createdAt: STAMP, updatedAt: STAMP,
   }));
+  if (broken) {
+    fs.mkdirSync(path.join(fam.sib, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(fam.sib, 'src', 'engine-run.ts'), 'export function run(): void {}\n');
+  }
   invalidateSpecCache();
 }
 
@@ -143,7 +148,7 @@ describe('hosted lock — format 2', () => {
 
     const record = executeApprovedLock(cfg, 'top', APPROVER);
 
-    expect(record.format).toBe(2);
+    expect(record.format).toBe(3);
     expect(record.children).toBeUndefined();
     expect(record.lockedBy).toEqual(APPROVER);
     expect(record.members).toEqual({
@@ -154,9 +159,9 @@ describe('hosted lock — format 2', () => {
     expect(record.code!.analyzer.doctrineDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(record.code!.codes).toBeUndefined();
     expect(record.validationResult).toMatchObject({ valid: true, errors: 0 });
-    expect(record.stateId.algorithm).toBe('sha256+content+doctrine+inputs+members');
+    expect(record.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
     // What was written is what was returned, and it carries no `children`.
-    expect(readLockRecordAt(fam.top)).toMatchObject({ format: 2, stateId: record.stateId });
+    expect(readLockRecordAt(fam.top)).toMatchObject({ format: 3, stateId: record.stateId });
     expect(fs.readFileSync(lockFile(fam.top), 'utf8')).not.toContain('"children"');
     // The record certifies the tree as it stands: the hosted lock state reads locked.
     expect(runWithProjectRoot(fam.top, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
@@ -164,7 +169,7 @@ describe('hosted lock — format 2', () => {
 
   it('a member-scoped lock records the member at its own root and writes nothing at the parent', () => {
     const leaf = executeApprovedLock(cfg, 'leaf', APPROVER);
-    expect(leaf.format).toBe(2);
+    expect(leaf.format).toBe(3);
     expect(readLockRecordAt(fam.leaf)).toMatchObject({ stateId: leaf.stateId });
     expect(fs.existsSync(lockFile(fam.mid))).toBe(false);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
@@ -172,8 +177,16 @@ describe('hosted lock — format 2', () => {
 });
 
 describe('hosted lock — code findings are recorded beside the claim and never refuse', () => {
-  it('a design with no code yet locks; the code errors are counted under `code`, not in validationResult', () => {
+  it('a design with no code yet locks with no code errors: its planned file is a notice', () => {
     addUnimplementedComponent();
+    const run = runWithProjectRoot(fam.sib, () => validateAsComplete());
+    expect(run.issues.filter((i) => i.code === 'SOURCE_FILE_PLANNED').map((i) => i.severity)).toEqual(['notice']);
+    const record = executeApprovedLock(cfg, 'sib', APPROVER);
+    expect(record.code!.errors).toBe(0);
+  });
+
+  it('a design whose code is broken still locks; the code errors are counted under `code`, not in validationResult', () => {
+    addUnimplementedComponent(true);
     // The as-complete run does report the code finding, as an error …
     const run = runWithProjectRoot(fam.sib, () => validateAsComplete());
     expect(run.issues.filter((i) => i.code === 'MISSING_SOURCE_FILE' && i.severity === 'error')).not.toHaveLength(0);
@@ -186,7 +199,7 @@ describe('hosted lock — code findings are recorded beside the claim and never 
   });
 
   it('the lockProject outcome states the code findings beside the claim', () => {
-    addUnimplementedComponent();
+    addUnimplementedComponent(true);
     const outcome = lockProject(cfg, MASTER, 'sib');
     expect(outcome.status).toBe('completed');
     expect(outcome.summary).toMatch(/code: [1-9]\d* errors recorded beside the claim/);
@@ -279,7 +292,7 @@ describe('hosted property: parent-lock-writes-nothing-below', () => {
 describe('lockProject routes through executeApprovedLock', () => {
   it('the admin plane\'s lockProject writes the same format-2 record, with the authenticated approver', () => {
     const record = admin.lockProject(cfg, MASTER, 'top');
-    expect(record.format).toBe(2);
+    expect(record.format).toBe(3);
     expect(record.members).toBeDefined();
     expect(record.lockedBy).toMatchObject({ source: 'hosted' });
     expect(readLockRecordAt(fam.top)).toMatchObject({ stateId: record.stateId });
@@ -288,7 +301,7 @@ describe('lockProject routes through executeApprovedLock', () => {
   it('the lifecycle lockProject (yes) completes with a format-2 record and states the code line', () => {
     const outcome = lockProject(cfg, MASTER, 'top');
     expect(outcome.status).toBe('completed');
-    expect(outcome.lock!.format).toBe(2);
+    expect(outcome.lock!.format).toBe(3);
     expect(outcome.lock!.members).toBeDefined();
     expect(outcome.summary).toMatch(/Locked project "top" \(status: ready\)\. code: \d+ errors recorded beside the claim/);
   });

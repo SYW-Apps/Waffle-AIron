@@ -26,6 +26,16 @@ fields:
       doctrine projection, the consumed contract inputs, the composition block and the members'
       subjects)
     optional: false
+  - name: asRecorded
+    type: StateId?
+    description: >-
+      On a gate identity only: the same gate identity computed under the algorithm the bound
+      project's lock record was taken with, when that is the previous algorithm this release can
+      still recompute (the content reading that kept code linkage in). Present only while the record
+      on disk carries that earlier algorithm, so a lock taken before linkage left the approval is
+      judged exactly as it was taken — never a forced re-lock of an unchanged design. Never
+      recorded: a lock writes algorithm and digest alone.
+    optional: true
 methods:
   - name: equals
     signature: 'equals(other: StateId | null | undefined): boolean'
@@ -36,4 +46,4 @@ methods:
     symbol: stateIdEquals
 sourcePath: src/core/statehash.ts
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-10-04T10:21:10.994Z'
+updatedAt: '2026-10-06T10:07:03.203Z'

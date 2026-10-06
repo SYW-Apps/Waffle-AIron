@@ -430,6 +430,12 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     originOf,
     possibleOriginsOf,
     forwardsOf,
+    // Realization has begun once any named file is one the run analyzed or
+    // could read: missing and escaped are the only statuses that hold nothing.
+    holdsAny: (files) => files.some((file) => {
+      const status = facts.get(pathKey(file))?.status;
+      return status !== undefined && status !== 'missing' && status !== 'escaped';
+    }),
   };
 }
 

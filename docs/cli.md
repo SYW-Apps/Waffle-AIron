@@ -50,7 +50,10 @@ Each member project prints as `[Project] alias (id)` holding its own subsystems,
 with its **approval state** computed at the member's own root (`approved`,
 `drifted`, `never`) and how this project's lock pinned it (`matches`, `moved`,
 `unpinned`). The report closes with this project's own state. Asked at the parent
-or at the member, the answer is the same.
+or at the member, the answer is the same. When an external moved in its live
+producer, drifted or could not be compared, an **Externals** section follows
+the verdict (the same advisory comparison `validate` prints); it never changes
+the exit code.
 
 ### `wairon validate [--ci] [--all] [--subsystem <id>] [--family] [--no-recursive]`
 Run the architecture-conformance gate over the spec tree: reference integrity,
@@ -65,6 +68,26 @@ warnings as errors (notices are printed and counted, never fatal).
   member's own gate, and this project's externals composed against their live
   producers. `--no-recursive` runs this project's gate alone; `--family` runs
   the family run from a member.
+- **Externals, compared live (advisory: the pin gates).** The gate judges each
+  external against its pin. Then every external the run did not compose is
+  compared with its **live** producer, offline, and printed in its own section:
+  `EXTERNAL_LIVE_INCOMPATIBLE` (warning: a used member changed at signature
+  level, was renamed — the new name is given — or is gone; it names the specs
+  that use it and the fix: adapt the uses, then `wairon externals pin <alias>`),
+  `EXTERNAL_DRIFTED` (notice: the producer moved, nothing used did) and
+  `EXTERNAL_LIVE_UNCOMPARED` (notice: the producer could not be read — a git
+  external is never fetched here; `wairon externals status` compares it). These
+  findings are **advisory**: printed and counted, but neither the exit code nor
+  `--ci` ever decides on them. A family run composes the externals in its reach
+  as its gate (`EXTERNAL_INCOMPATIBLE`, error) and gives them no second word.
+- **Planned code is a notice.** An implementation whose `sourcePath` names a
+  file not written yet is `SOURCE_FILE_PLANNED`, and one naming no file is
+  `MISSING_SOURCE_PATH` — both notices — until realization begins (any file the
+  implementation names exists). From then on a missing file is
+  `MISSING_SOURCE_FILE` (error) and a contract method naming no file is
+  `METHOD_SOURCE_PATH_MISSING` (warning). `rules.conformance.requireCode: true`
+  in `project.yaml` reports the two notices as errors, for a CI that must say
+  every designed implementation has code.
 
 ### `wairon generate [--target <name>] [--domain <id>] [--domains <ids>] [--root] [--family] [--no-prune] [--global] [--dry-run]`
 Reconcile the generated guides, skills and context, and — only when the project
@@ -114,7 +137,7 @@ before its code exists.
 **It approves this project only.** The gate identity it records covers this
 project's own specs, the design doctrine, its declared inputs, its `composition`
 block, and each direct member's **composition subject** — the `stateId` in the
-member's own lock record. The record (format 2) lists each direct member under
+member's own lock record. The record (format 3) lists each direct member under
 `members` with its subject and state (`approved`, `drifted`, `never`). Nothing is
 written below the project: each member locks at its own root. With
 `composition.requireApprovedMembers: true` in `project.yaml`, the lock refuses
@@ -125,8 +148,21 @@ if a spec, the doctrine, an input or a member's approval moves while the lock
 runs, it refuses and writes nothing. (`--no-recursive` is accepted for one
 release and changes nothing: a lock never reaches below its project.)
 
+**Code linkage is not part of the approval.** The gate identity and the per-spec
+digests read each spec's **design**: where it is realized — `sourcePath`,
+`symbol`, `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a mount's
+`via`, `externalLinks` — and the `createdAt`/`updatedAt` timestamps are left
+out (`specsReading: design`). Linking code to an approved design, or a change and
+its revert, never stales the lock; declare planned `sourcePath`s at design time.
+
+A **format-2** record (written before this reading) still passes `lock-check`
+while nothing it covered moved. `wairon doctor --fix` re-expresses it as format 3
+in place — keeping `lockedAt`, `lockedBy`, the results and the member pins, and
+recording `reexpressed: { at, fromAlgorithm, fromReading, by }`. A format-2 record
+that no longer matches reads stale once; one `wairon lock` clears it for good.
+
 It writes **nothing into your spec tree**. The approval is one sha256 per spec
-file on `.wai/lock.json`, the record that was always committed — so your
+(over its design view) on `.wai/lock.json`, the record that was always committed — so your
 teammates, a fresh clone and CI all see the same approval you gave, and
 `wairon status` elsewhere can name what has drifted from it. Keys are sorted, so
 re-approving a one-spec change shows up as a two-line diff. A failed or
@@ -279,6 +315,10 @@ listed, and every position no rewrite can settle (an inline function type, a
 literal union, a union mixing in a primitive, a `number` with no proposal) is
 listed with its replacement for an author. Plain `wairon doctor` prints the same
 plan without writing it.
+
+`--fix` also re-expresses a format-2 lock record that still provably covers the
+tree as format 3 (see `wairon lock`), keeping who approved it and when; when it
+no longer covers the tree, doctor says that one `wairon lock` is needed.
 
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
@@ -637,7 +677,7 @@ project, so it holds nothing machine-specific: it runs `wairon mcp serve` from t
 and the server attaches to the project it is started in. A `--global` registration is
 machine-wide and names the running CLI by its absolute path.
 
-The local server offers 37 tools:
+The local server offers 38 tools:
 
 | Group | Tools |
 |-------|-------|
@@ -646,7 +686,7 @@ The local server offers 37 tools:
 | Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
 | Renames and moves (in this tree) | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_type`, `sdd_move_methods` |
 | Members and family migrations (each takes `dryRun`) | `sdd_add_member`, `sdd_move_member`, `sdd_externalize_subsystem`, `sdd_promote_member`, `sdd_demote_member`, `sdd_internalize_member`, `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias` |
-| Externals | `sdd_pin_externals`, `sdd_get_externals_status` |
+| Externals | `sdd_add_external`, `sdd_pin_externals`, `sdd_get_externals_status` |
 | Packs | `sdd_pack_impact` |
 | Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
 
@@ -725,7 +765,7 @@ principal.
 | `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
-| `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 2) against the hosted project |
+| `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 3) against the hosted project |
 | `wairon host git enable \| disable \| sync \| commit \| status \| sync-config` | Bind a hosted project to its real repository (wairon commits only `.wai/`) |
 | `wairon host producer configure \| produce \| remove \| list` | Project a hosted project to Notion or Miro |
 | `wairon host secret set \| list` | Set integration secrets at runtime (`git-token`, `notion-token`, `miro-token`, `signing-secret`) — no restart |
@@ -757,7 +797,10 @@ return the impact of every pack they applied in their results.
 
 | Command | Description |
 |---------|-------------|
-| `wairon externals pin [alias…] \| status \| list [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml`; `status` compares each pin with its live producer per used member; `list` shows what is declared |
+| `wairon externals add <alias> [<source>] [--project <id>] [--ref <ref>] [--dir <dir>] [--use a,b\|'*'] [--description <text>] [--no-pin] [--dry-run] [--json]` | Declare one external in `.wai/project.yaml`. The source is the location grammar members use: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>` (the commit is the ref the pin follows, fixed there); omit it when the family provides the producer. It is checked against the producer it reaches: one answering to another id, or not exporting a `use` name to this project, takes the declaration back out and names the id or the closest exported names. Pins by default; a producer that cannot be read leaves it declared and unpinned, saying why. A refusal is one sentence naming the accepted form, and exits 1 |
+| `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`; exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
+| `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`). Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
+| `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration is listed with its problem, never hidden |
 | `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI document per portal), import one, or list them |
 | `wairon produce <notion\|miro> [--page <id>] [--token <token>]` | Project the local spec tree to Notion or Miro (the token comes from `--token`, the environment, else a prompt; nothing is stored) |
 

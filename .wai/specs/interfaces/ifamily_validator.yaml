@@ -36,13 +36,15 @@ methods:
       producer's live export table (decision 19, signature-level superset, canonical digests). The
       uses compared are every public name the project's references land on or spell — `alias::name`
       references and bare names bound through its `use` imports alike, for family and outside
-      producers alike since stage 8 (a sibling checkout, a git repository, a hosted record) — so a
-      type used only bare is covered, and a producer outside the family that breaks a used method is
-      EXTERNAL_INCOMPATIBLE, not only drifted. A used method or type that changed or vanished is
-      EXTERNAL_INCOMPATIBLE (error); a producer whose canonical contract changed while nothing used
-      changed is EXTERNAL_DRIFTED (notice; prose never drifts); a use that cannot be compared —
-      unpinned, used but not in the lock, an unreachable or unfetchable producer — is
-      EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass.
+      producers alike since stage 8 — so a type used only bare is covered, and a producer outside
+      the family that breaks a used method is EXTERNAL_INCOMPATIBLE, not only drifted. A used method
+      or type that changed, was renamed (the producer's rename trace names the new name, and the
+      message names it) or vanished is EXTERNAL_INCOMPATIBLE (error); a producer whose canonical
+      contract changed while nothing used changed is EXTERNAL_DRIFTED (notice; prose never drifts);
+      a use that cannot be compared — unpinned, used but not in the lock, an unreachable or
+      unfetchable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the
+      family run's gate over producers inside its reach (one checkout, so live is reproducible
+      there); everything else is advise's to report.
     signature: 'compose(project: string): ExternalComposition'
     returns: ExternalComposition
     params:
@@ -256,6 +258,47 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: advise
+    description: >-
+      THE PIN GATES, LIVE DRIFT IS VISIBLE. With the bound project's root bound, compare each of its
+      externals the run did not compose with its LIVE producer within the request's reach, offline
+      (no network: a git external's head is not fetched), and report what moved — every finding
+      marked advisory, so it is printed and counted but never decides `valid` or `validate --ci`:
+      the pin stays the reproducible gate. A used member that changed, was renamed or vanished live
+      since the pin is EXTERNAL_LIVE_INCOMPATIBLE (warning), one finding per external naming each
+      moved member and how (changed at signature level; renamed to <new name> per the producer's
+      rename trace; gone from its export table), every spec of this project that uses it, and the
+      fix: adapt the uses (follow the rename), then re-pin (`wairon externals pin <alias>`). A
+      producer that moved while nothing used did is EXTERNAL_DRIFTED (notice: re-pin when
+      convenient). A producer that could not be read live — unreachable, unresolved, a git source
+      not fetched offline, a hosted record out of reach — is EXTERNAL_LIVE_UNCOMPARED (notice)
+      naming why and the command that compares it (`wairon externals status`): honest, never a pass,
+      and never a failure of the owner gate. Each severity is the project's own sddRuleSeverity
+      override, else the default. Writes nothing.
+    signature: 'advise(composed?: list<string>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: composed
+        type: list<string>
+        description: >-
+          Aliases of the bound project's externals the run already composed as part of its gate (a
+          family run's in-reach externals); they are not advised on twice. Omitted: none were
+        optional: true
+    findings:
+      - code: EXTERNAL_LIVE_INCOMPATIBLE
+        severity: warning
+        summary: >-
+          Advisory: a member the project uses from an external changed, was renamed or vanished in
+          the reachable live producer since the pin — adapt the uses, then re-pin; the pin still
+          gates
+      - code: EXTERNAL_LIVE_UNCOMPARED
+        severity: notice
+        summary: >-
+          Advisory: an external's live producer could not be read (unreachable, offline git, out of
+          reach), so only its pin judged it — not a pass of the live producer
+      - code: EXTERNAL_DRIFTED
+        severity: notice
+        summary: An external's producer changed since it was pinned, but nothing the project uses changed
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-04T10:54:12.937Z'
+updatedAt: '2026-10-06T10:15:20.548Z'

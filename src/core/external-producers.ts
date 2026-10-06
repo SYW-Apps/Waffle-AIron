@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { declaredExternals, declaredMembers, type ExternalBinding, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
+import { declaredExternals, declaredMembers, FULL_COMMIT_RE, type ExternalBinding, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
 // core_orchestrator.resolveChainingParent (the reach-gated detection) and the
 // spec repository's graph, export usage and pinned usage, all on the one core module.
 import { exportUsage, graph, listProjectRoots, pinnedUsage, resolveChainingParent } from './specs.js';
@@ -102,13 +102,23 @@ function gitDeclarationOf(config: ProjectConfig | null, external: ResolvedExtern
  * cannot be fetched, leaves the binding without a directory and with the
  * problem: unavailable, never a pass.
  */
-function resolveGit(external: ResolvedExternal, config: ProjectConfig | null): ResolvedExternal {
+function resolveGit(external: ResolvedExternal, config: ProjectConfig | null, offline: boolean): ResolvedExternal {
   if (external.sourceKind !== 'git') return external;
   const declared = gitDeclarationOf(config, external);
   if (!declared) return { ...external, problem: 'git producer unavailable: its declaration names no repository' };
+  // Steps 13-15: offline, an external's live producer is not read — bound
+  // without a directory, never a pass; `externals status` fetches it. A
+  // referenced member keeps its pinned commit, which the cache may already hold.
+  if (offline && external.role !== 'member') {
+    const { directory: _none, ...rest } = external;
+    return { ...rest, problem: NOT_COMPARED_OFFLINE };
+  }
   try {
-    // Step 13: an external follows its ref; a member keeps its declared commit.
-    const commit = external.role === 'member' && declared.commit ? declared.commit : gitSource.resolve(declared.url, declared.ref);
+    // Step 16: an external follows its ref — a ref that is a full commit
+    // (`<url>#<commit>`) fixes it, with no remote to ask; a member keeps its
+    // declared commit.
+    const fixed = declared.ref !== undefined && FULL_COMMIT_RE.test(declared.ref) ? declared.ref : undefined;
+    const commit = external.role === 'member' && declared.commit ? declared.commit : fixed ?? gitSource.resolve(declared.url, declared.ref);
     // Step 14: that commit materialized (served from the cache offline when it is there).
     const directory = gitSource.fetch(declared.url, commit, declared.dir);
     return { ...external, directory: path.resolve(directory), commit, problem: undefined };
@@ -118,6 +128,9 @@ function resolveGit(external: ResolvedExternal, config: ProjectConfig | null): R
   }
 }
 
+/** Why an offline read leaves a git external uncompared, naming the command that compares it. */
+export const NOT_COMPARED_OFFLINE = 'not compared offline — `wairon externals status` fetches it';
+
 /** The consumer's configuration, as the scan the graph came from read it. */
 function consumerConfig(bound: string): ProjectConfig | null {
   return listProjectRoots().find((r) => dirKey(r.directory) === dirKey(bound))?.config ?? null;
@@ -126,9 +139,11 @@ function consumerConfig(bound: string): ProjectConfig | null {
 /**
  * iexternal_producers.resolveDeclared — every declared external of the bound
  * project, and every referenced project member it declares (stage 8), bound to
- * its producer, each with the project's usage of it by public name.
+ * its producer, each with the project's usage of it by public name. Offline,
+ * nothing touches the network: a git external is bound unreachable with the
+ * reason that `wairon externals status` fetches it.
  */
-export function resolveDeclared(): ExternalBinding[] {
+export function resolveDeclared(offline?: boolean): ExternalBinding[] {
   // Step 1: the consumer is the bound root.
   const bound = path.resolve(getProjectRoot());
   // Steps 2-4: climb to the highest root in reach.
@@ -143,14 +158,14 @@ export function resolveDeclared(): ExternalBinding[] {
     if (!node) return null;
     const config = consumerConfig(bound);
     // Step 7: each external, then each referenced project member.
-    return node.externals.map((declared) => bindProducer(node, declared, config, whole));
+    return node.externals.map((declared) => bindProducer(node, declared, config, whole, offline === true));
   });
   // Steps 19-20: the caller's binding is restored; the bindings in declaration order.
   return answer(top) ?? answer(bound) ?? [];
 }
 
 /** Steps 8-18 for one producer: the usage, and — outside the family — where its live table is. */
-function bindProducer(node: ProjectNode, declared: ResolvedExternal, config: ProjectConfig | null, whole: boolean): ExternalBinding {
+function bindProducer(node: ProjectNode, declared: ResolvedExternal, config: ProjectConfig | null, whole: boolean, offline: boolean): ExternalBinding {
   // Steps 8-10: a family producer, its usage mapped onto its live table.
   if (declared.sourceKind === 'family' && declared.producer !== undefined) {
     return { external: declared, usage: exportUsage(node.namespace, declared.producer), reachable: whole };
@@ -159,8 +174,8 @@ function bindProducer(node: ProjectNode, declared: ResolvedExternal, config: Pro
   // Step 11: any other producer, its usage counted by the public name it spells.
   const usage = pinnedUsage(node.namespace, declared.alias);
   // Steps 12-16: git through the fetch cache; hosted through the record lookup.
-  const external = declared.sourceKind === 'git' ? resolveGit(declared, config) : headAcross(node.directory, resolveHosted(declared));
-  // Step 18.
+  const external = declared.sourceKind === 'git' ? resolveGit(declared, config, offline) : headAcross(node.directory, resolveHosted(declared));
+  // Step 21.
   return { external, usage, reachable: whole };
 }
 

@@ -1759,6 +1759,110 @@ export function typeSourceFiles(
 }
 
 // ---------------------------------------------------------------------------
+// The design view — a spec as the approval sees it
+//
+// Code linkage says WHERE or HOW a design is realized in code, never WHAT the
+// design is: pointing a spec at the file that realizes it must not reopen the
+// human approval. One table names every field of the three kinds that carry
+// linkage, in or out, and the projections below drop exactly the `linkage`
+// half (with the volatile timestamps). Both the gate identity
+// (state_hash.ownDesign) and the per-spec approval digests read it, so the
+// two can never disagree about what is design.
+//
+// A test classifies EVERY schema field against this table, so a new field
+// cannot slip into (or out of) the approval silently: it must be placed.
+// ---------------------------------------------------------------------------
+
+/** Each schema's fields, split into the design (approved) and the code linkage (not approved). */
+export const DESIGN_VIEW_FIELDS = {
+  implementation: {
+    linkage: ['sourcePath', 'simPath', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
+    design: ['id', 'name', 'description', 'contract', 'technologies', 'methods', 'detail', 'previousIds', 'lint', 'ext', 'status'],
+  },
+  implementationMethod: {
+    linkage: ['sourcePath', 'symbol', 'exportedVia', 'conformance'],
+    design: ['name', 'narrative', 'detail', 'intent', 'calls', 'ext'],
+  },
+  type: {
+    linkage: ['sourcePath', 'symbol', 'createdAt', 'updatedAt'],
+    design: [
+      'kind', 'id', 'name', 'description', 'subsystem', 'group', 'fields', 'methods', 'componentClass', 'invariants',
+      'database', 'table', 'linkedEntity', 'previousIds', 'lint', 'ext', 'params', 'returns', 'values', 'holds',
+    ],
+  },
+  typeMethod: {
+    linkage: ['sourcePath', 'symbol'],
+    design: ['name', 'signature', 'params', 'returns', 'description'],
+  },
+  component: {
+    linkage: ['externalLinks', 'createdAt', 'updatedAt'],
+    design: [
+      'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'portalType', 'basePath', 'auth',
+      'dispatch', 'mounts', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'patterns', 'variant',
+      'previousIds', 'lint', 'ext', 'status',
+    ],
+  },
+  portalMount: {
+    linkage: ['via'],
+    design: ['portal', 'prefixes'],
+  },
+} as const;
+
+/** A copy of an object without the named keys; anything that is not a plain object passes through. */
+function withoutFields<T>(value: T, fields: readonly string[]): T {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value as Record<string, unknown>)) {
+    if (!fields.includes(key)) out[key] = field;
+  }
+  return out as T;
+}
+
+/** Each element of an array field projected; an absent or malformed field stays as it is. */
+function eachOf<T>(items: T, project: (item: unknown) => unknown): T {
+  return (Array.isArray(items) ? items.map(project) : items) as T;
+}
+
+/**
+ * implementation_spec.designView — this implementation as the approval sees it:
+ * its own sourcePath, simPath, injectedParams and conformance tier, each
+ * method's sourcePath, symbol, exportedVia and conformance tier, and the
+ * timestamps left out. Everything else — the contract, technologies, the
+ * detail dial, each method's narrative, intent and calls, the rename trace,
+ * lint, ext, status — stays. Pure: a sourcePath added, moved or removed never
+ * changes it. Reads a stored (raw) spec as readily as a loaded one.
+ */
+export function implementationDesignView<T extends object>(impl: T): T {
+  const view = withoutFields(impl, DESIGN_VIEW_FIELDS.implementation.linkage) as Record<string, unknown>;
+  if ('methods' in view) view.methods = eachOf(view.methods, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.implementationMethod.linkage));
+  return view as T;
+}
+
+/**
+ * type_spec.designView — this type as the approval sees it: its own sourcePath
+ * and symbol, each method's sourcePath and symbol, and the timestamps left
+ * out; its fields, methods' signatures and descriptions, invariants, values,
+ * holds, rename trace, lint and ext stay. Pure.
+ */
+export function typeDesignView<T extends object>(type: T): T {
+  const view = withoutFields(type, DESIGN_VIEW_FIELDS.type.linkage) as Record<string, unknown>;
+  if ('methods' in view) view.methods = eachOf(view.methods, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.typeMethod.linkage));
+  return view as T;
+}
+
+/**
+ * component_spec.designView — this component as the approval sees it: each
+ * mount's `via` (the router entry the portal's file exports, held to code by
+ * UNREALIZED_EXPORT_HANDLE), its externalLinks and the timestamps left out. A
+ * mount's portal and prefixes, and every other field, stay. Pure.
+ */
+export function componentDesignView<T extends object>(component: T): T {
+  const view = withoutFields(component, DESIGN_VIEW_FIELDS.component.linkage) as Record<string, unknown>;
+  if ('mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.portalMount.linkage));
+  return view as T;
+}
+
+// ---------------------------------------------------------------------------
 // Surface snapshots — the portable, contract-grade public-surface artifact
 // (Public Surface Exchange). One format, three origins: generated (own
 // parent/child family), exchanged (another wairon project), authored (an
@@ -1792,6 +1896,12 @@ export const SurfaceTypeDefSchema = z.object({
   values: z.array(EnumValueSchema).optional(),
   /** A named scalar's one primitive, in place of fields; only on a value-object that declares it. */
   holds: z.string().optional(),
+  /**
+   * The type's rename trace as the producer recorded it (previousIds), so a
+   * consumer pinned to a former name reads a rename rather than a removal.
+   * Provenance, never signature: it enters no digest. Absent when never renamed.
+   */
+  formerly: z.array(z.string()).optional(),
 });
 export type SurfaceTypeDef = z.infer<typeof SurfaceTypeDefSchema>;
 
@@ -1816,8 +1926,12 @@ export const SurfaceContractEntrySchema = z.object({
   type: z.string().default('Custom'),
   /** Local name of the backing Portal in the producing project. */
   component: z.string(),
-  /** Full contract methods (params, returns, guarantees, effect, endpoint), resolved: a snapshot names no producer-internal source. */
-  methods: z.array(ResolvedMethodSignatureSchema).default([]),
+  /**
+   * Full contract methods (params, returns, guarantees, effect, endpoint),
+   * resolved: a snapshot names no producer-internal source. A renamed method
+   * carries its former names as `formerly` (provenance, outside every digest).
+   */
+  methods: z.array(ResolvedMethodSignatureSchema.extend({ formerly: z.array(z.string()).optional() })).default([]),
   /** The backing portal's capability dispatch table, when generic-dispatch. */
   dispatch: z.array(DispatchBindingSchema).optional(),
   details: z.string().default(''),
@@ -1832,6 +1946,15 @@ export const SurfaceContractEntrySchema = z.object({
   componentType: z.string().optional(),
   /** The L3 interface the export narrows to, when it narrows. */
   interface: z.string().optional(),
+  /**
+   * The rename trace behind the entry's public name: the former public names
+   * the producer's rename trace (the narrowed interface's, else the backing
+   * component's previousIds) records. Carried into the pin snapshot and the
+   * surface export so a consumer can follow a rename instead of reading a
+   * delete plus an add. Provenance, never signature: it enters neither
+   * memberDigest nor contentDigest. Absent when never renamed.
+   */
+  formerly: z.array(z.string()).optional(),
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
@@ -1970,8 +2093,55 @@ export interface ExternalPin {
   detail?: string;
 }
 
+/**
+ * external_request — what `wairon externals add` and sdd_add_external ask for:
+ * one external to declare in the bound project's `.wai/project.yaml`, written
+ * exactly as a person would say it.
+ */
+export interface ExternalRequest {
+  /** The alias the project's specs will reference it by (`alias::name`). */
+  alias: string;
+  /** Where the producer is, in the one location grammar; omitted when the family provides it. */
+  source?: string;
+  /** The producer's project id when it differs from the alias. */
+  project?: string;
+  /** git only: the branch, tag or full commit the pin follows. */
+  ref?: string;
+  /** git only: the producer's root inside the repository. */
+  dir?: string;
+  /** Public names to import bare (`*` for all). */
+  use?: string[];
+  /** What the producer is to this project. */
+  description?: string;
+  /** Pin it right after declaring it (default true). */
+  pin?: boolean;
+  /** Answer what would be declared, writing nothing. */
+  dryRun?: boolean;
+}
+
+/**
+ * external_addition — the answer to declaring one external: what was written
+ * (or would be, on a dry run), the producer it reached and the pin — or why
+ * nothing was written, as one sentence naming the accepted form.
+ */
+export interface ExternalAddition {
+  alias: string;
+  /** Whether `.wai/project.yaml` now carries the declaration (false on a refusal and on a dry run). */
+  written: boolean;
+  /** The declaration as written (object form, normalized); null on a refusal. */
+  declaration: import('./project.js').ExternalDeclaration | null;
+  /** The producer's project id as the producer answered to it. */
+  project?: string;
+  /** The pin taken right after, when asked. */
+  pin?: ExternalPin | null;
+  /** Why nothing was written, in one sentence naming the accepted form. */
+  refusal?: string;
+  /** Set when the declaration was written but its producer could not be read: why, and that nothing was pinned. */
+  unreachable?: string;
+}
+
 /** The verdict on one used member of a pinned external. */
-export type ExternalUseState = 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable';
+export type ExternalUseState = 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable' | 'renamed';
 
 /** external_use_status — the verdict on one used member of one pinned external. */
 export interface ExternalUseStatus {
@@ -1981,6 +2151,12 @@ export interface ExternalUseStatus {
   /** EXTERNAL_CHECK_UNAVAILABLE on an unavailable entry — never a pass. */
   code?: string;
   detail?: string;
+  /**
+   * On a renamed use: the public name (and member, as `name.member`) the live
+   * producer's rename trace carries the used name forward to — what the
+   * consumer's references should now name.
+   */
+  renamedTo?: string;
 }
 
 /** external_status — the status of one declared external. */
@@ -2016,7 +2192,7 @@ export type RelationHealth = 'ok' | 'drifted' | 'incompatible' | 'unavailable';
  * be checked ever reads as ok. Pure: over the status's own fields.
  */
 export function relationHealth(status: ExternalStatus): RelationHealth {
-  if (status.uses.some((u) => u.state === 'changed' || u.state === 'removed')) return 'incompatible';
+  if (status.uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed')) return 'incompatible';
   if (!status.reachable || status.outOfReach || status.uses.some((u) => u.state === 'unavailable' || u.state === 'unlocked')) return 'unavailable';
   if (status.drifted) return 'drifted';
   return 'ok';

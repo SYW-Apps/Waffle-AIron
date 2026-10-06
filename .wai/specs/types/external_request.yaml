@@ -1,0 +1,58 @@
+kind: value-object
+id: external_request
+name: ExternalRequest
+description: >-
+  What `wairon externals add` and sdd_add_external ask for: one external to declare in the bound
+  project's `.wai/project.yaml`, written exactly as a person would say it.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: >-
+      The alias the project's specs will reference it by (`alias::name`): [a-z0-9-_]+, not already a
+      member or external
+    optional: false
+  - name: source
+    type: MemberSource
+    description: >-
+      Where the producer is, in the one location grammar (`../geo-sdk`, `hosted:<id>`, `<git url>`,
+      `<git url>#<commit>`); omitted when the family provides it
+    optional: true
+  - name: project
+    type: string
+    description: The producer's project id when it differs from the alias
+    optional: true
+  - name: ref
+    type: string
+    description: >-
+      git only: the branch, tag or full commit the pin follows (the `#<commit>` of the source says
+      the same)
+    optional: true
+  - name: dir
+    type: string
+    description: 'git only: the producer''s root inside the repository'
+    optional: true
+  - name: use
+    type: list<string>
+    description: >-
+      Public names to import so specs may name them bare (`*` for all); each must be exported to
+      this project by the producer
+    optional: true
+  - name: description
+    type: string
+    description: What the producer is to this project, in this project's words
+    optional: true
+  - name: pin
+    type: bool
+    description: >-
+      Pin it right after declaring it (default true): the reproducible gate exists from the first
+      validate
+    optional: true
+  - name: dryRun
+    type: bool
+    description: Answer what would be declared and pinned, writing nothing
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-06T10:07:50.451Z'
+updatedAt: '2026-10-06T11:12:50.448Z'

@@ -137,7 +137,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     // The GATE flavour, not the content one: a lock certifies that these specs
     // passed THIS gate, so the governing doctrine is part of the frozen identity
     // and a later pack change invalidates the lock by state mismatch.
-    expect(record!.stateId.algorithm).toBe('sha256+content+doctrine+inputs+members');
+    expect(record!.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
     // …and it is exactly the validator's gate identity, the one readLockState
     // is later handed to compare against.
@@ -366,7 +366,7 @@ describe('readLockState (the shared lock verdict)', () => {
     const { state, record, current } = readLockState(computeGateStateId());
     expect(state).toBe('locked');
     // The verdict is decided against the gate flavour, and they agree.
-    expect(current.algorithm).toBe('sha256+content+doctrine+inputs+members');
+    expect(current.algorithm).toBe('sha256+design+doctrine+inputs+members');
     expect(record!.stateId.digest).toBe(current.digest);
   });
 
@@ -544,10 +544,10 @@ describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    // The per-spec CONTENT digest the same lock record carries has moved: this
-    // is precisely the case a content-digest gate would refuse, demanding a
-    // re-lock for an edit that changed no design. The gate StateId has not.
-    expect(diffAgainstApproval()!.changed).toContain(
+    // Since lock format 3 the per-spec digests are DESIGN digests too: a
+    // reformatted file is not a changed spec, and the gate StateId has not
+    // moved either.
+    expect(diffAgainstApproval()!.changed).not.toContain(
       path.relative(rootDir, specFile).split(path.sep).join('/'),
     );
     setProjectRoot(null);

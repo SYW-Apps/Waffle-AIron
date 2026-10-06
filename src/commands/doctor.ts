@@ -47,6 +47,8 @@ import { computeGateStateId, validateFamily } from './validate.js';
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
 import { describeApprover } from '../models/lock.js';
+// cli_lock_adapter.reexpressApproval: the write behind --fix's approval step.
+import { reexpressLock } from './lock.js';
 import {
   claudeMcpConfigPath, planMcpInstall, runMcpInstall, findLegacyPlugin, retireLegacyPlugin,
   type McpConfigWrite, type McpInstallOptions,
@@ -441,7 +443,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
         line(tally, 'ok', `approved at ${lock.record!.lockedAt} by ${describeApprover(lock.record!.lockedBy)}`);
         if (!lock.record!.specs) {
           line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
+        } else if (lock.record!.specsReading !== 'design') {
+          line(tally, 'warn', 'this lock predates lock format 3 and still holds — `wairon doctor --fix` re-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it');
         }
+        logger.blank();
+      } else if (lock.state === 'stale' && lock.record!.format === 2) {
+        console.log(chalk.bold('Lock'));
+        line(tally, 'warn',
+          `stale — the lock of ${lock.record!.lockedAt} predates lock format 3 (taken before code linkage left the approval) `
+          + 'and something it covered moved since — the design, or only code linkage, which that record can no longer tell apart. '
+          + 'One `wairon lock` clears it for good: from then on linkage never drifts the approval.');
         logger.blank();
       } else if (lock.state === 'stale' && lock.record!.stateId.algorithm !== lock.current.algorithm) {
         console.log(chalk.bold('Lock'));
@@ -630,6 +641,11 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // specs they re-save are saved under their current names.
   repairProjectSpecs('');
 
+  // The approval: a format-2 lock carried into the design reading when it
+  // still provably covers the tree — no review, the approval stays the
+  // approver's and the record says it was re-expressed.
+  reexpressApproval();
+
   // The chaining migration — the last spec-touching fix: after the
   // configuration backfill, so every chained child has a project.yaml to
   // declare its id in, and after the filename migration and the spec repairs,
@@ -646,6 +662,25 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   logger.blank();
 }
 
+
+/**
+ * Step 23 of --fix: carry a format-2 approval into the design reading when its
+ * own identity, recomputed, still matches (cli_lock_adapter.reexpressApproval).
+ * Silent when there is nothing to carry; a format-2 lock that no longer
+ * matches is named by the report's Lock section that follows (one `wairon
+ * lock`, after which code linkage never drifts it again).
+ */
+function reexpressApproval(): void {
+  try {
+    const carried = reexpressLock();
+    if (carried) {
+      console.log(`  ${icon('ok')} Re-expressed the approval of ${carried.lockedAt} by ${describeApprover(carried.lockedBy)} in the design reading `
+        + '(lock format 3) — the design is provably the one approved, so no review was needed; from now on adding or moving a sourcePath never drifts it. Commit .wai/lock.json.');
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} Approval re-expression failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
 
 // ── the per-project repairs, and their cascade into the members ─────────────
 

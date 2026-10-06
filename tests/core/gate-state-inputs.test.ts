@@ -177,10 +177,10 @@ describe('the gate identity digests consumed surface snapshots', () => {
     expect(stateIdEquals(before, after)).toBe(true);
   });
 
-  it('the algorithm is sha256+content+doctrine+inputs+members', () => {
+  it('the algorithm is sha256+design+doctrine+inputs+members', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
-    expect(computeGateStateId().algorithm).toBe('sha256+content+doctrine+inputs+members');
+    expect(computeGateStateId().algorithm).toBe('sha256+design+doctrine+inputs+members');
   });
 
   it('a lock record carrying the retired sha256+doctrine+inputs identity reads STALE, never locked', () => {

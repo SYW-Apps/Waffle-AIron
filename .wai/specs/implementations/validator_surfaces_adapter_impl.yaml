@@ -24,7 +24,7 @@ methods:
   - name: getExternalsStatus
     narrative:
       - stepNumber: 1
-        description: Call getExternalsStatus on the surface portal
+        description: Call getExternalsStatus on the surface portal, passing `offline` through
         type: call
         targetComponent: surface_portal
         targetMethod: getExternalsStatus
@@ -37,4 +37,4 @@ methods:
         targetMethod: pinnedParent
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-10-02T20:25:14.619Z'
+updatedAt: '2026-10-06T10:15:02.746Z'

@@ -272,7 +272,8 @@ methods:
         description: >-
           Resolve the bound project's declared externals and its referenced project members (a
           `../`, git or hosted source) through the core, with the consumer's references as they are
-          now — counted by public name for every producer, the outside ones included
+          now — counted by public name for every producer, the outside ones included — passing
+          `offline` through, so an offline read never touches the network
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
@@ -317,10 +318,13 @@ methods:
           Restore the consumer's binding. Compare every used member — the lock's and the one the
           references use now — at signature level, for every producer alike (family, path, git,
           hosted, a referenced project): a live SurfaceSnapshot.memberDigest equal to the locked one
-          is unchanged, a different one changed, none removed, and a member used now but not in the
-          lock unlocked; an unexported reference of a family producer is unavailable. Stale when a
-          used member changed or went away; drifted when the live content digest differs from the
-          pinned one
+          is unchanged, a different one changed; one absent under its name is RENAMED when a live
+          entry's `formerly` (the producer's rename trace) names it — renamedTo is that entry's
+          public name (and member), and its signature is still compared so the detail says whether
+          it also changed — and removed otherwise; a member used now but not in the lock is
+          unlocked; an unexported reference of a family producer is unavailable. Stale when a used
+          member changed, was renamed or went away; drifted when the live content digest differs
+          from the pinned one
         type: local
       - stepNumber: 9
         description: Next external
@@ -331,8 +335,10 @@ methods:
         description: >-
           Report every locked used member — or, when none is locked, the external itself — as
           unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason: unresolved (the external's
-          problem), unreachable (why its root could not be read), a git producer that could not be
-          fetched or resolved (offline, refused, unknown ref), or a source.hosted producer read
+          problem, a malformed source naming the accepted forms included), unreachable (why its root
+          could not be read), a git producer that could not be fetched or resolved (offline,
+          refused, unknown ref — or not compared because the read was asked offline, naming `wairon
+          externals status` as the command that fetches it), or a source.hosted producer read
           outside a hosted server or out of the request's reach (outOfReach). Never a pass
         type: local
       - stepNumber: 11
@@ -633,4 +639,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-05T23:51:08.488Z'
+updatedAt: '2026-10-06T10:13:40.817Z'

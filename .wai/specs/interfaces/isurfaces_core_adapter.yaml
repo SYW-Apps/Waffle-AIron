@@ -59,9 +59,13 @@ methods:
       members (a `../`, git or hosted source), each bound to its producer (family, source.path, git,
       hosted), with the project's references into each by public name. The surfaces plane never
       walks the family itself.
-    signature: 'resolveExternals(): list<ExternalBinding>'
+    signature: 'resolveExternals(offline?: bool): list<ExternalBinding>'
     returns: list<ExternalBinding>
-    params: []
+    params:
+      - name: offline
+        type: bool
+        description: Read no producer over the network (see external_producers.resolveDeclared)
+        optional: true
   - name: excerptParent
     description: >-
       Forward to the core portal: a part's excerpt of its parent, for `wairon externals pin` at a
@@ -109,6 +113,31 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: declareExternal
+    description: >-
+      Forward to project_config_portal.declareExternal: write one external declaration into the
+      bound project's configuration (refused for a malformed alias or producer id, or an alias
+      holding a different declaration; a no-op for the same one). Returns whether it wrote.
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias key
+      - name: declaration
+        type: ExternalDeclaration
+        description: The normalized declaration (object form) to write under it
+  - name: removeExternal
+    description: >-
+      Forward to project_config_portal.removeExternal: take one external declaration back out — the
+      compensation when a just-written declaration turns out to name a producer that answers to
+      another id or does not export a `use` name. Returns whether it removed.
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-04T17:32:06.662Z'
+updatedAt: '2026-10-06T10:13:12.356Z'

@@ -11,6 +11,7 @@ import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
 import {
   validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
+  adviseExternals as adviseLive,
   type ValidationIssue, type ValidationResult, type ValidationOptions,
 } from '../core/validation.js';
 
@@ -58,6 +59,35 @@ export function validateProject(options?: ValidationOptions, projectType?: strin
 /** cli_validator_adapter.validateFamily — the family run, forwarded to the validator portal. */
 export function validateFamily(options: ValidationOptions): ValidationResult {
   return familyRun(options);
+}
+
+/**
+ * cli_validator_adapter.adviseExternals — the advisory live comparison of the
+ * bound project's externals the run did not compose, forwarded to the
+ * validator portal. Every finding is advisory: it never decides the exit code.
+ */
+export function adviseExternals(composed?: string[]): ValidationIssue[] {
+  return adviseLive(composed);
+}
+
+/** The heading the advisory live comparison is printed under, by `validate` and `status` alike. */
+const ADVISORY_HEADING = 'Externals, compared live (advisory: the pin gates)';
+
+/**
+ * Print the advisory findings in their own section — each moved external with
+ * who uses it and the fix, each drifted or uncompared one — and say that none
+ * of them is part of the failure decision. Prints nothing when there are none.
+ */
+function renderAdvisory(advised: ValidationIssue[], heading = ADVISORY_HEADING): void {
+  if (advised.length === 0) return;
+  logger.header(heading);
+  for (const issue of advised) {
+    const line = `[${issue.code}] ${issue.message}`;
+    if (issue.severity === 'error') logger.error(line);
+    else if (issue.severity === 'notice') logger.notice(line);
+    else logger.warn(line);
+  }
+  logger.info(chalk.gray(`${advised.length} advisory finding(s): the pin is the reproducible gate, so these never fail validate (nor --ci); \`wairon externals status\` is the live gate.`));
 }
 
 /** cli_validator_adapter.validateRegistry — the registry's topology rules, forwarded to the validator portal. */
@@ -319,12 +349,17 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     // Steps 7-9: the family run already holds the owner's gate of every
     // selected project; otherwise the owner's gate over the bound project alone.
     const sddResult = family ? validateFamily(sddOptions) : validateProject(sddOptions);
-    // Step 10: render.
+    // Step 10: the advisory live comparison of every external the run did not
+    // compose (a family run hands over the aliases it composed in reach).
+    const advised = adviseExternals(family ? sddResult.composed : undefined);
+    // Step 11: render — the advisory findings in their own section, never in
+    // the failure decision.
     const tally = renderSpecFindings(sddResult, options.all === true);
     hasErrors ||= tally.errors;
     hasFatalWarnings ||= tally.fatalWarnings;
     waivedWarnings += tally.waived;
     noticeTotal += tally.notices;
+    renderAdvisory(advised);
   }
 
   // The conformance debt register, said out loud on every run. A suppression

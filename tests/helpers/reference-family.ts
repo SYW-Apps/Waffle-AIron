@@ -336,6 +336,76 @@ export function buildContractFamily(): ContractFamily {
 }
 
 // ---------------------------------------------------------------------------
+// The path-external pair (live drift): two independent projects side by side,
+// no family between them.
+//
+//   <tmp>/ledger   id ledger  — exports `ledger-portal`: post(amount), balance()
+//   <tmp>/billing  id billing — declares `ledger` as an external found at
+//                               `../ledger` and calls `ledger::ledger-portal` post
+//
+// billing's owner gate judges ledger against its pin; nothing climbs to a
+// family, so plain `validate` at billing only ever composes the pin, and the
+// advisory pass is what compares the live producer.
+// ---------------------------------------------------------------------------
+
+export interface PathExternalPair {
+  root: string;
+  ledger: string;
+  billing: string;
+  /**
+   * Rewrite ledger's portal contract: post's name and its amount type, and
+   * balance's return type. `formerly` gives the renamed post a rename trace,
+   * as the rename tool writes one.
+   */
+  setLedgerContract(options?: { postName?: string; amountType?: string; balanceReturns?: string; formerly?: string[] }): void;
+  /** Rewrite billing's project.yaml lines (between the schema version and the targets). */
+  setBillingConfig(lines: string[]): void;
+  cleanup(): void;
+}
+
+/** Build the path-external pair in a fresh temp directory. */
+export function buildPathExternalPair(source: 'object' | 'string' = 'object'): PathExternalPair {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-pathpair-'));
+  const ledger = path.join(root, 'ledger');
+  const billing = path.join(root, 'billing');
+
+  projectYaml(ledger, ['id: ledger', 'name: Ledger']);
+  system(ledger, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'instance' }]);
+  subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ type: 'Custom', details: 'The ledger surface', component: 'ledger-portal' }] });
+  component(ledger, 'books', 'ledger-portal', 'Portal');
+  const setLedgerContract: PathExternalPair['setLedgerContract'] = ({ postName = 'post', amountType = 'number', balanceReturns = 'number', formerly } = {}) => contract(ledger, 'books', 'ledger-portal', [
+    { name: postName, description: 'Post an amount', signature: `${postName}(amount: ${amountType}): void`, returns: 'void',
+      params: [{ name: 'amount', type: amountType, description: 'The amount' }],
+      ...(formerly ? { previousNames: formerly } : {}) },
+    { name: 'balance', description: 'The balance', signature: `balance(): ${balanceReturns}`, returns: balanceReturns, params: [] },
+  ]);
+  setLedgerContract();
+
+  const declaration = source === 'string' ? ['externals:', '  ledger:', '    source: ../ledger'] : ['externals:', '  ledger:', '    source:', '      path: ../ledger'];
+  projectYaml(billing, ['id: billing', 'name: Billing', ...declaration]);
+  system(billing, 'Billing');
+  subsystem(billing, 'Billing', 'invoicing');
+  component(billing, 'invoicing', 'invoice-poster', 'Adapter', ['ledger::ledger-portal']);
+  contract(billing, 'invoicing', 'invoice-poster', [
+    { name: 'settle', description: 'Settle an invoice', signature: 'settle(amount: number): void', returns: 'void',
+      params: [{ name: 'amount', type: 'number', description: 'The amount' }] },
+  ]);
+  writeSpecFile(specs(billing, 'invoicing', 'invoice-poster', '.implementation.yaml'), ImplementationSpecSchema.parse({
+    id: 'invoice-poster-impl', name: 'invoice-poster-impl', description: 'Posts through the ledger', contract: 'iinvoice-poster',
+    methods: [{ name: 'settle', narrative: [
+      { stepNumber: 1, description: 'Post the amount to the ledger', type: 'call', targetComponent: 'ledger::ledger-portal', targetMethod: 'post' },
+    ] }],
+    status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+  }));
+
+  return {
+    root, ledger, billing, setLedgerContract,
+    setBillingConfig: (lines) => projectYaml(billing, lines),
+    cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The approval family (stage 5): a clean chain every project of which locks.
 //
 //   top (the bound root)                   id top

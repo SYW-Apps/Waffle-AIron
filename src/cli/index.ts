@@ -616,15 +616,31 @@ program
 
 // ---------------------------------------------------------------------------
 // externals — the other projects this project consumes (declared in
-// .wai/project.yaml `externals`): pin, status, list
+// .wai/project.yaml `externals`): add, pin, status, list
 // ---------------------------------------------------------------------------
 
 program
   .command('externals <action> [aliases...]')
-  .description('declared externals: pin [alias…] | status | list')
+  .description('declared externals: add <alias> [<source>] | pin [alias…] | status (exit 1 incompatible, 2 not compared) | list')
   .option('--json', 'print the structured answer instead of the table')
+  .option('--project <id>', "add: the producer's project id when it differs from the alias")
+  .option('--ref <ref>', 'add: git only — the branch, tag or full commit the pin follows')
+  .option('--dir <dir>', "add: git only — the producer's root inside the repository")
+  .option('--use <names>', "add: public names to import bare, comma-separated ('*' for all)")
+  .option('--description <text>', 'add: what the producer is to this project')
+  .option('--no-pin', 'add: declare only, without pinning')
+  .option('--dry-run', 'add: say what would be declared, write nothing')
   .action(async (action: string, aliases: string[] | undefined, opts) => {
-    await runExternals(action, aliases ?? [], { json: opts.json });
+    await runExternals(action, aliases ?? [], {
+      json: opts.json,
+      project: opts.project,
+      ref: opts.ref,
+      dir: opts.dir,
+      ...(opts.use !== undefined ? { use: String(opts.use).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
+      description: opts.description,
+      pin: opts.pin,
+      dryRun: opts.dryRun,
+    });
   });
 
 // ---------------------------------------------------------------------------

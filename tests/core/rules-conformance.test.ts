@@ -93,7 +93,7 @@ function createTempProject() {
   };
 }
 
-const CODES = ['MISSING_SOURCE_PATH', 'MISSING_SOURCE_FILE', 'SOURCE_PATH_ESCAPES_ROOT', 'UNREALIZED_METHOD', 'CONFORMANCE_ANALYSIS_SKIPPED'];
+const CODES = ['MISSING_SOURCE_PATH', 'METHOD_SOURCE_PATH_MISSING', 'MISSING_SOURCE_FILE', 'SOURCE_FILE_PLANNED', 'SOURCE_PATH_ESCAPES_ROOT', 'UNREALIZED_METHOD', 'CONFORMANCE_ANALYSIS_SKIPPED'];
 const conformanceIssues = (res: { issues: { code: string; specId?: string; message: string; severity: string }[] }) =>
   res.issues.filter(i => CODES.includes(i.code));
 
@@ -101,11 +101,13 @@ const INTENT = (m: string) =>
   `  - name: ${m}\n    detail: intent\n    intent: Performs ${m} against held state and returns nothing; failures surface as thrown errors.`;
 
 describe('structural conformance — file level', () => {
-  it('flags a sourcePath that resolves to no file as an error', () => {
+  it('flags a sourcePath that resolves to no file as an error once realization has begun', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
-    proj.impl('orch-a', `sourcePath: src/gone.ts\nmethods:\n${INTENT('runFlow')}`);
+    // runFlow's own file exists, so the implementation's realization has begun.
+    proj.impl('orch-a', `sourcePath: src/gone.ts\nmethods:\n${INTENT_AT('runFlow', 'src/run-flow.ts')}`);
+    proj.source('src/run-flow.ts', 'export function runFlow(): void {}\n');
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
@@ -113,6 +115,20 @@ describe('structural conformance — file level', () => {
       expect(found[0].code).toBe('MISSING_SOURCE_FILE');
       expect(found[0].severity).toBe('error');
       expect(found[0].specId).toBe('impl-orch-a');
+    } finally { proj.cleanup(); }
+  });
+
+  it('reports a named file as PLANNED (a notice) while nothing the implementation names exists', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', `sourcePath: src/planned.ts\nmethods:\n${INTENT('runFlow')}`);
+    proj.activate();
+    try {
+      const found = conformanceIssues(validateProject());
+      expect(found.map(i => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
+      expect(found[0].severity).toBe('notice');
+      expect(found[0].message).toContain('src/planned.ts');
     } finally { proj.cleanup(); }
   });
 
@@ -129,7 +145,7 @@ describe('structural conformance — file level', () => {
     } finally { proj.cleanup(); }
   });
 
-  it('warns about a complete implementation with no sourcePath at all', () => {
+  it('notes a complete implementation with no sourcePath at all as unlinked design (a notice)', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
@@ -138,7 +154,8 @@ describe('structural conformance — file level', () => {
     try {
       const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
-      expect(found[0].severity).toBe('warning');
+      expect(found[0].severity).toBe('notice');
+      expect(found[0].message).toContain('costs no re-lock');
     } finally { proj.cleanup(); }
   });
 
@@ -157,7 +174,7 @@ describe('structural conformance — file level', () => {
     try {
       const found = conformanceIssues(validateProject());
       expect(found.map(i => i.code)).toEqual(['MISSING_SOURCE_PATH']);
-      expect(found[0].severity).toBe('warning');
+      expect(found[0].severity).toBe('notice');
       expect(found[0].message).toContain('names no source file at all');
     } finally { proj.cleanup(); }
   });
@@ -206,7 +223,8 @@ describe('structural conformance — file level', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
-    proj.impl('orch-a', `status: draft\nsourcePath: src/gone.ts\nmethods:\n${INTENT('runFlow')}`);
+    proj.impl('orch-a', `status: draft\nsourcePath: src/gone.ts\nmethods:\n${INTENT_AT('runFlow', 'src/run-flow.ts')}`);
+    proj.source('src/run-flow.ts', 'export function runFlow(): void {}\n');
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
@@ -325,7 +343,8 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     proj2.impl('orch-a', `conformance: off\nsourcePath: src/gone.ts\nmethods:\n${INTENT('generatedThing')}`);
     proj2.activate();
     try {
-      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      // Nothing the implementation names exists: the file check still runs, and calls it planned.
+      expect(conformanceIssues(validateProject()).map(i => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
     } finally { proj2.cleanup(); }
   });
 
@@ -489,7 +508,7 @@ describe('structural conformance — each method against its own source file', (
     } finally { proj.cleanup(); }
   });
 
-  it('MISSING_SOURCE_PATH names only the contract methods left without a file, and the rest are still checked', () => {
+  it('METHOD_SOURCE_PATH_MISSING (realization begun) names only the contract methods left without a file, and the rest are still checked', () => {
     const proj = createTempProject();
     proj.component('cli-orch', 'Orchestrator');
     proj.contract('cli-orch', ['listTargets', 'lockSpecs', 'unlockSpecs']);
@@ -499,8 +518,9 @@ describe('structural conformance — each method against its own source file', (
     proj.activate();
     try {
       const found = conformanceIssues(validateProject());
-      expect(found.map(i => i.code).sort()).toEqual(['MISSING_SOURCE_PATH', 'UNREALIZED_METHOD']);
-      const missingPath = found.find(i => i.code === 'MISSING_SOURCE_PATH')!;
+      expect(found.map(i => i.code).sort()).toEqual(['METHOD_SOURCE_PATH_MISSING', 'UNREALIZED_METHOD']);
+      const missingPath = found.find(i => i.code === 'METHOD_SOURCE_PATH_MISSING')!;
+      expect(missingPath.severity).toBe('warning');
       expect(missingPath.message).toContain('"listTargets", "unlockSpecs"');
       expect(missingPath.message).not.toContain('"lockSpecs"');
       expect(found.find(i => i.code === 'UNREALIZED_METHOD')!.message).toContain('"src/commands/lock.ts"');

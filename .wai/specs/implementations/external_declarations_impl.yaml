@@ -1,0 +1,132 @@
+id: external_declarations_impl
+name: External Declarations Implementation
+description: >-
+  The declare workflow: read the request, refuse in one sentence, write, check against the producer,
+  compensate, pin.
+contract: iexternal_declarations
+sourcePath: src/core/external-declarations.ts
+methods:
+  - name: declare
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core, for the aliases its `members` and
+          `externals` already hold
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Read the request: the alias against [a-z0-9-_]+ and against every alias already declared;
+          the source through the one location grammar (member_source parsed: `hosted:<id>`, a git
+          URL with an optional `#<full commit>`, a leading-`../` sibling or a contained path;
+          refused: empty, absolute, an inner `..`) — a git `#<commit>` becoming the declaration's
+          ref, which the pin then follows fixed at that commit; `ref` and `dir` only beside a git
+          source; the producer id against the project-id grammar; each `use` entry `*` or a public
+          name. Build the normalized declaration in object form, or the one-sentence refusal naming
+          the accepted form
+        type: local
+      - stepNumber: 3
+        description: Anything refused?
+        type: branch
+        condition: the request was refused
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer the refusal, writing nothing
+        type: return
+        outcome: refused
+      - stepNumber: 5
+        label: dry
+        description: >-
+          A dry run stops here: the producer is read through the declaration, so it is not consulted
+          before anything is written
+        type: branch
+        condition: request.dryRun
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Answer what would be written (written false, the normalized declaration) and that the
+          producer is checked on the real run
+        type: return
+        outcome: dry run
+      - stepNumber: 7
+        label: write
+        description: >-
+          Write the normalized declaration into `.wai/project.yaml` through the core's configuration
+          portal
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: declareExternal
+      - stepNumber: 8
+        description: >-
+          Resolve the declared externals to read the new alias's binding: its producer and where it
+          is (a git producer fetched; one that cannot be reached is bound with its problem, so
+          declaring still works offline)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 9
+        label: producer-id
+        description: >-
+          When the binding has a root, read the producer's configuration with that root bound
+          read-only, for the id it answers to (the caller's binding restored afterwards)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 10
+        label: producer-exports
+        description: >-
+          With the producer's root bound the same way, read its resolved export table, for the
+          public names it exports at this project's audience
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 11
+        description: >-
+          Does the producer contradict the declaration — answering to another id than declared (read
+          from its configuration, or named by the family's own resolution of the alias), or, once
+          read, not exporting a `use` name to this project?
+        type: branch
+        condition: >-
+          the producer answers to another id than the declared one, or it was read and a `use` name
+          is not in its export table at this project's audience
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          Take the declaration back out, so a contradicted declaration never lingers in the
+          configuration
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: removeExternal
+      - stepNumber: 13
+        description: >-
+          Answer the refusal naming what the producer contradicted: the id it answers to (declare
+          `project:` or use that alias), or each unexported `use` name with the closest names it
+          does export
+        type: return
+        outcome: refused by the producer
+      - stepNumber: 14
+        label: kept
+        description: >-
+          Pin it now when asked (the default) and the producer was read; an unreadable producer
+          leaves it declared and unpinned, with the reason carried as `unreachable`
+        type: branch
+        condition: request.pin is not false and the producer was read
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Pin the new alias — its snapshot and lock entry — so its uses are judged against a
+          reproducible pin from the first validate
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinExternals
+      - stepNumber: 16
+        label: answer
+        description: >-
+          Answer the addition: written, the declaration, the producer id it answers to, the pin when
+          taken, and `unreachable` with the reason when the producer could not be read
+        type: return
+        outcome: declared
+status: complete
+createdAt: '2026-10-06T10:14:16.933Z'
+updatedAt: '2026-10-06T11:12:46.745Z'

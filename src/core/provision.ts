@@ -55,7 +55,7 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, DesignDepthSchema, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, declaredMembers, DesignDepthSchema, readExternalSource, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
 import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
 // The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
@@ -1991,8 +1991,8 @@ function carryDeclarations(scan: InternalizeScan, result: InternalizeResult): vo
   for (const [alias, decl] of Object.entries(scan.config?.externals ?? {})) {
     if (carriedExternal(scan, alias, decl) === 'parent') continue;
     // A path is re-expressed from the new owner; a hosted record id names the same producer from anywhere.
-    const source = decl.source?.path !== undefined && !path.isAbsolute(decl.source.path)
-      ? { path: toPosixPath(path.relative(root, path.resolve(scan.memberDir, decl.source.path))) }
+    const source = externalSourceOf(decl)?.path !== undefined && !path.isAbsolute(externalSourceOf(decl)!.path!)
+      ? { path: toPosixPath(path.relative(root, path.resolve(scan.memberDir, externalSourceOf(decl)!.path!))) }
       : decl.source;
     if (bound.members?.[alias] === undefined) {
       projectConfigRepository.declareExternal(alias, {
@@ -3504,4 +3504,9 @@ export function moveMountToMembers(alias: string): boolean {
 export function normalizeReferences(kind: WritableSpecKind, id: string): boolean {
   // Step 1.
   return normalizeSpecReferences(kind, id);
+}
+
+/** An external declaration's source in its object form, whichever form was written (readExternalSource). */
+function externalSourceOf(declaration: { source?: unknown } | undefined): ExternalSource | undefined {
+  return readExternalSource(declaration?.source).source;
 }

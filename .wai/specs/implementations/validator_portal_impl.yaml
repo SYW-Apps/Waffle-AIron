@@ -111,6 +111,13 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: relations
+  - name: adviseExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward adviseExternals to the family validator's advisory pass
+        type: call
+        targetComponent: family_validator
+        targetMethod: advise
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-03T12:15:30.109Z'
+updatedAt: '2026-10-06T10:15:55.233Z'

@@ -48,7 +48,15 @@ fields:
       finding) the finding belongs to — '' for the family root. The finding's message is that
       gate's, verbatim; the run only prefixes it. Absent on the owner's own run.
     optional: true
+  - name: advisory
+    type: bool
+    description: >-
+      True on a finding reported beside a gate rather than by it — the live comparison of an
+      external with its producer (family_validator.advise). Printed and counted with its severity,
+      but never part of a failure decision: `valid` and `validate --ci` both ignore it, because the
+      pin is the reproducible gate and a live producer is not.
+    optional: true
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T23:39:48.102Z'
+updatedAt: '2026-10-06T10:07:25.991Z'

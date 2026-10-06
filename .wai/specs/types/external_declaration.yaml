@@ -13,10 +13,15 @@ fields:
     description: The producer's project id; defaults to the alias.
     optional: true
   - name: source
-    type: ExternalSource
+    type: ExternalSource | MemberSource
     description: >-
-      An explicit place to find the producer; without one it is found through the family (parent,
-      members, siblings).
+      Where the producer is found, in either form. The one location string members use
+      (`../geo-sdk`, `hosted:<id>`, `<git url>`, `<git url>#<commit>`) — for an external a
+      `#<commit>` is read as a ref the pin follows, fixed at that commit — or the object form ({
+      path } | { hosted } | { git, ref?, dir? }). Read leniently: a source of the wrong shape, an
+      object naming `commit`, or a string the grammar refuses is the declaration's problem
+      (EXTERNAL_UNRESOLVED, naming the accepted forms), never a configuration that fails to load —
+      so `externals list` and `status` still show every other external.
     optional: true
   - name: use
     type: list<string>
@@ -38,4 +43,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:15.516Z'
-updatedAt: '2026-10-04T10:20:10.282Z'
+updatedAt: '2026-10-06T10:07:42.240Z'

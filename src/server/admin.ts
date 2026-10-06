@@ -429,8 +429,10 @@ function lockRecordOf(
   // The bound tree's effective id, so a later id change is caught (PROJECT_ID_CHANGED).
   const projectId = config ? effectiveProjectId(config) : null;
   return {
-    format: 2,
-    stateId: captured,
+    // Format 3: the design gate algorithm, design-reading digests.
+    format: 3,
+    // The captured identity alone: asRecorded is a reading, never recorded.
+    stateId: { algorithm: captured.algorithm, digest: captured.digest },
     lockedAt: new Date().toISOString(),
     lockedBy: approver,
     validatorVersion: WAIRON_VERSION,
@@ -438,6 +440,7 @@ function lockRecordOf(
     status: 'ready',
     ...(projectId !== null ? { projectId } : {}),
     specs,
+    specsReading: 'design',
     members: memberPins(members),
     ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };

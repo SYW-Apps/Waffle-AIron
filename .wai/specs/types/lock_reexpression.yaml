@@ -1,0 +1,32 @@
+kind: value-object
+id: lock_reexpression
+name: LockReexpression
+description: >-
+  Provenance on a lock record that was re-expressed in a newer reading rather than re-approved: the
+  approval (who, when) is the human's unchanged, and this says that a tool rewrote its identity and
+  digests after PROVING the design is the one approved — the record's own earlier identity
+  recomputed over the tree as it stands matched. Read by nothing that decides; shown beside the
+  approval so a reviewer can see the record was mechanically carried forward.
+subsystem: sdd_core
+fields:
+  - name: at
+    type: string
+    description: ISO-8601 time of the re-expression
+    optional: false
+  - name: fromAlgorithm
+    type: string
+    description: The gate algorithm the record carried before, whose recomputation proved the design unchanged
+    optional: false
+  - name: fromReading
+    type: SpecDigestReading
+    description: The per-spec digest reading the record carried before
+    optional: false
+  - name: by
+    type: string
+    description: >-
+      The command that re-expressed it (e.g. `wairon doctor --fix`), never a person: the approval
+      stays the approver's
+    optional: false
+methods: []
+createdAt: '2026-10-06T10:07:11.529Z'
+updatedAt: '2026-10-06T10:07:12.189Z'

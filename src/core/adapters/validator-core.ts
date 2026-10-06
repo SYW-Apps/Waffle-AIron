@@ -22,6 +22,10 @@ export {
   // half) and another root's lock record (a direct member's, for its
   // composition subject; a member's parent's, for its pin).
   computeOwnStateId,
+  // The bound project's OWN design identity — the gate identity's content
+  // half from lock format 3 on (computeOwnStateId is kept to judge a format-2
+  // lock under its own algorithm).
+  computeOwnDesignId,
   approvalRecord,
   consumedContractInputs,
   settledSpecPaths,

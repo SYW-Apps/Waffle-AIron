@@ -102,6 +102,20 @@ methods:
         type: call
         targetComponent: state_hash
         targetMethod: ownTree
+  - name: computeOwnDesignId
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the state hash's own-design identity
+        type: call
+        targetComponent: state_hash
+        targetMethod: ownDesign
+  - name: reexpress
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the approval comparison's re-expression
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: reexpress
 status: complete
 createdAt: '2026-09-25T17:32:26.946Z'
-updatedAt: '2026-09-30T05:49:46.181Z'
+updatedAt: '2026-10-06T10:10:45.727Z'

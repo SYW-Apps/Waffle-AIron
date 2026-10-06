@@ -14,11 +14,22 @@ methods:
       cache (an external at its ref's head, a member at its pinned commit), or the hosted record
       lookup within the request's reach; each with the project's usage of it by public name — mapped
       onto the live table for a family producer, counted by spelled name for any other — and whether
-      the family was read whole. An unreachable producer is bound with its problem, never dropped:
-      unavailable, never a pass.
-    signature: 'resolveDeclared(): list<ExternalBinding>'
+      the family was read whole. An external's source is read in either declared form (the location
+      string or the object; see external_declaration.source), a `#<commit>` fixing its ref. Offline,
+      nothing touches the network: a git external whose ref's head is not already known is bound
+      unreachable with the reason "not compared offline — `wairon externals status` fetches it"; a
+      referenced git member at its pinned commit still binds from the cache when the cache holds it.
+      An unreachable producer is bound with its problem, never dropped: unavailable, never a pass.
+    signature: 'resolveDeclared(offline?: bool): list<ExternalBinding>'
     returns: list<ExternalBinding>
-    params: []
+    params:
+      - name: offline
+        type: bool
+        description: >-
+          Read no producer over the network (default false). Plain `validate` and `status` ask
+          offline, so they stay fast and deterministic; `externals status` and `externals pin` do
+          not
+        optional: true
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-04T10:18:45.614Z'
+updatedAt: '2026-10-06T10:13:07.609Z'

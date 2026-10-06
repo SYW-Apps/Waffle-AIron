@@ -243,7 +243,8 @@ methods:
     description: >-
       Resolve the project's lock against the gate identity the caller computed now
       (validator_portal.computeGateStateId): unlocked when no record exists, locked when the
-      record's gate identity equals it, stale otherwise.
+      record's gate identity equals it — or, for a format-2 record, equals its asRecorded reading
+      (the identity recomputed under the algorithm that record was taken with) — stale otherwise.
     signature: 'readLockState(current: StateId): LockStatus'
     returns: LockStatus
     params:
@@ -1220,4 +1221,4 @@ methods:
         description: Its new id, under the same owner
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-05T23:34:32.157Z'
+updatedAt: '2026-10-06T10:09:42.751Z'

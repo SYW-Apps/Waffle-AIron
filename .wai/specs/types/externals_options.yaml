@@ -8,7 +8,35 @@ fields:
     type: bool
     description: '--json: print the structured answer instead of the table.'
     optional: true
+  - name: project
+    type: string
+    description: 'add: the producer''s project id when it differs from the alias (--project)'
+    optional: true
+  - name: ref
+    type: string
+    description: 'add: git only — the branch, tag or full commit the pin follows (--ref)'
+    optional: true
+  - name: dir
+    type: string
+    description: 'add: git only — the producer''s root inside the repository (--dir)'
+    optional: true
+  - name: use
+    type: list<string>
+    description: 'add: public names to import bare, comma-separated (--use a,b or --use ''*'')'
+    optional: true
+  - name: description
+    type: string
+    description: 'add: what the producer is to this project (--description)'
+    optional: true
+  - name: pin
+    type: bool
+    description: 'add: pin right after declaring (default true; --no-pin declares only)'
+    optional: true
+  - name: dryRun
+    type: bool
+    description: 'add: say what would be declared, write nothing (--dry-run)'
+    optional: true
 methods: []
 sourcePath: src/commands/externals.ts
 createdAt: '2026-10-03T17:11:27.059Z'
-updatedAt: '2026-10-04T10:20:09.291Z'
+updatedAt: '2026-10-06T10:16:22.391Z'

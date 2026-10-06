@@ -3,9 +3,11 @@ name: Approval Comparison Implementation
 description: >-
   The approval arithmetic in src/core/approval.ts: free functions over a project root, holding
   nothing between calls. Each read defaults its root to the bound project, which is why callers that
-  have one tree pass nothing. Digests normalize CRLF to LF before hashing, so the same commit
-  checked out on Windows and Linux compares equal — the same reason the gate identity had to be made
-  reproducible.
+  have one tree pass nothing. From format 3 a spec's approved digest is its DESIGN digest — the
+  parsed spec's design view in canonical form — so code linkage, whitespace and timestamps never
+  move it; a format-2 record keeps its raw-content digests (CRLF normalized to LF, so a commit
+  checked out on Windows and Linux compares equal) and is compared in that reading until it is
+  re-locked or re-expressed.
 contract: iapproval_comparison
 sourcePath: src/core/approval.ts
 methods:
@@ -18,8 +20,12 @@ methods:
         targetMethod: snapshot
       - stepNumber: 2
         description: >-
-          Digest each file's raw text, normalizing CRLF to LF first and keying by the path relative
-          to the project root, so the same tree digests the same on every platform
+          Parse each file's spec and project it to its design view — implementation_spec.designView,
+          type_spec.designView or component_spec.designView for those kinds, every other kind with
+          createdAt and updatedAt dropped — then canonicalize it (stable key order) and digest it,
+          keying by the path relative to the project root (a part's file under `members/<alias>/…`).
+          A file that does not parse is digested in the content reading instead, so it is still
+          recorded and any edit to it still shows
         type: local
       - stepNumber: 3
         description: >-
@@ -53,9 +59,11 @@ methods:
         outcome: unapproved
       - stepNumber: 4
         description: >-
-          Digest the tree as it stands and compare it against the digests the record carries: a path
-          the record does not cover is added, one whose digest differs is changed, one the record
-          covers that is gone is removed, and the rest are unchanged
+          Digest the tree as it stands in the reading the record names — design digests when its
+          specsReading is `design`, raw-content digests (CRLF normalized) when it names none, a
+          record written before format 3 — and compare against the digests the record carries: a
+          path the record does not cover is added, one whose digest differs is changed, one the
+          record covers that is gone is removed, and the rest are unchanged
         type: local
       - stepNumber: 5
         description: Answer with the four lists
@@ -111,13 +119,15 @@ methods:
       - stepNumber: 5
         description: >-
           From the approvals the caller passed, when it passed any: take the root's own entry, and
-          note when it is upgraded — the lock was taken under an earlier gate identity, so say "the
-          gate identity gained inputs in stage 5 (members' composition subjects, `composition`; code
-          conformance moved beside the claim) — re-lock once" rather than implying the design moved;
-          then take the direct members (parent = the root) whose pin moved, and those drifted or
-          never approved. A moved pin is a change this project must re-approve even when none of its
-          OWN specs shifted; a drifted or never-approved member is the member's to lock, named so
-          the parent knows before it locks
+          note when it is upgraded — the lock was taken under an earlier gate identity. For a
+          format-2 lock that is stale under its own algorithm, say that it predates code linkage
+          leaving the approval and something it covered moved since — the design, or only code
+          linkage, which can no longer be told apart — so it takes one re-lock, after which linkage
+          never drifts it again; for an earlier identity, say the identity gained inputs — rather
+          than implying the design moved. Then take the direct members (parent = the root) whose pin
+          moved, and those drifted or never approved. A moved pin is a change this project must
+          re-approve even when none of its OWN specs shifted; a drifted or never-approved member is
+          the member's to lock, named so the parent knows before it locks
         type: local
       - stepNumber: 6
         description: Compare the tree against what was approved
@@ -145,10 +155,52 @@ methods:
           `-` removed) for a caller that wants the whole account — with the member and upgrade notes
           appended, and report drift when the specs moved, a member's pin moved, or the identity was
           upgraded. A member that is merely drifted or never approved is named but is not this
-          project's drift
+          project's drift. A format-2 lock that still holds gets one more line: it is read in its
+          original reading, and `wairon doctor --fix` carries it into the design reading without a
+          review (approval_comparison.reexpress), after which adding or moving a sourcePath never
+          drifts it
         type: return
         outcome: verdict
     symbol: approvalVerdict
+  - name: reexpress
+    narrative:
+      - stepNumber: 1
+        description: Read the approval record of the bound project
+        type: call
+        targetComponent: lock_store
+        targetMethod: read
+      - stepNumber: 2
+        description: >-
+          Only a format-2 record whose certified identity still holds can be carried forward: the
+          record exists, names no design reading, and its stateId equals gate.asRecorded — the
+          identity it certified recomputed over the tree as it stands
+        type: branch
+        condition: the record exists and specsReading is absent and record.stateId equals gate.asRecorded
+        onFalseStep: 6
+      - stepNumber: 3
+        description: Take the design-reading digests of the tree as it stands
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 4
+        description: >-
+          Build the carried record: lockedAt, lockedBy, validatorVersion, validationResult, code,
+          members, projectId and the git provenance exactly as recorded; stateId = gate without
+          asRecorded; specs = the design digests; specsReading = design; format = 3; reexpressed = {
+          at: now, fromAlgorithm: the record's algorithm, fromReading: content, by: the command }
+        type: local
+      - stepNumber: 5
+        description: Answer the carried record for the caller to write
+        type: return
+        outcome: carried
+      - stepNumber: 6
+        label: unprovable
+        description: >-
+          Answer null: nothing to carry (no record, or already in the design reading) or nothing
+          proves the design unchanged (something the record covered moved), so only a human re-lock
+          can record the approval anew
+        type: return
+        outcome: not carried
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-05T23:53:26.941Z'
+updatedAt: '2026-10-06T10:10:17.404Z'

@@ -431,9 +431,10 @@ methods:
         error: 'composition.requireApprovedMembers: direct members not approved'
       - stepNumber: 14
         description: >-
-          Capture the approved tree as one content digest per OWN spec file — its parts' included
-          (stage 8), keyed `members/<alias>/<path inside the part>`; a project member's files are
-          its own lock's. Nothing is written into the spec files
+          Capture the approved tree as one DESIGN digest per OWN spec file (its design view in
+          canonical form — code linkage and timestamps out) — its parts' included (stage 8), keyed
+          `members/<alias>/<path inside the part>`; a project member's files are its own lock's.
+          Nothing is written into the spec files
         type: call
         targetComponent: host_core_adapter
         targetMethod: captureApprovedSpecs
@@ -458,13 +459,13 @@ methods:
         error: the lock's inputs changed while it ran
       - stepNumber: 18
         description: >-
-          Assemble a format-2 LockRecord: stateId = the captured identity, lockedAt, the
-          AUTHENTICATED approver the caller resolved from the credential, validatorVersion,
-          validationResult = the design half's counts, status ready, the effective id as projectId,
-          the captured specs, `members` = each direct member's alias → a project member's {as:
-          project, project, subject, state} or a part's {as: part, contentDigest, commit when known,
-          state approved}, and `code` = the result's analysis without its codes list. No `children`
-          is written
+          Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
+          lockedAt, the AUTHENTICATED approver the caller resolved from the credential,
+          validatorVersion, validationResult = the design half's counts, status ready, the effective
+          id as projectId, the captured specs with specsReading `design`, `members` = each direct
+          member's alias → a project member's {as: project, project, subject, state} or a part's
+          {as: part, contentDigest, commit when known, state approved}, and `code` = the result's
+          analysis without its codes list. No `children` is written
         type: local
       - stepNumber: 19
         description: >-
@@ -1234,4 +1235,4 @@ methods:
     symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-05T17:30:14.316Z'
+updatedAt: '2026-10-06T10:11:18.748Z'
