@@ -48,6 +48,13 @@ fields:
       its canonical spelling, and each that is not canonical at all. The loaded interfaces and types
       hold canonical text, so this is the only place the stored spellings are still visible
     optional: false
+  - name: retiredReach
+    type: list<RetiredReachFact>
+    description: >-
+      The retired reachability forms the scan met (listener mounts, portalType, retired invokedBy
+      kinds, Custom portals binding no endpoint), kept on the index like typeSpellings so the
+      reachability migration reads exactly what was loaded.
+    optional: false
 methods:
   - name: retiredBy
     signature: 'retiredBy(kind: string, id: string): string?'
@@ -69,4 +76,4 @@ methods:
     symbol: specIndexRetiredBy
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-04T17:29:51.962Z'
+updatedAt: '2026-10-06T17:39:42.526Z'
