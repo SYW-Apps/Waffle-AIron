@@ -51,11 +51,6 @@ jobs:
       - name: Run e2e journeys (built artifact)
         run: npm run test:e2e
 
-      # Dogfood: enforce wairon's own architecture-conformance gate on its spec tree.
-      # --ci treats warnings as errors.
-      - name: Architecture conformance gate
-        run: node dist/cli/index.js validate --ci
-
       # Dogfood the approval gate too — the thing .github/workflows/lock-check.yml
       # offers to other repositories, run here against the CLI THIS commit builds
       # rather than the published one (a released binary would be testing a
@@ -72,6 +67,14 @@ jobs:
       # must fail too, not pass with a notice.
       - name: Approved-design gate
         run: node dist/cli/index.js lock-check --strict
+
+      # The conformance gate, the way docs/cli.md and the reusable workflow
+      # recommend it: `validate --ci` at the FAMILY ROOT, after the approval check.
+      # This repository is nobody's member, so it is the root its proofs are
+      # judged at: were members declared, this same plain run would be the family
+      # run (ENTRY_UNPROVEN, networks, gateways). --ci treats warnings as errors.
+      - name: Architecture conformance gate (family root)
+        run: node dist/cli/index.js validate --ci
 
   docker-build:
     name: Build Docker image (no push)

@@ -290,8 +290,19 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: migrateReachability
+    description: >-
+      Forward to spec_maintenance_portal.migrateReachability at the bound project root: plan, and
+      with apply write, that project's migration onto the reachability model. Without apply nothing
+      is written. The caller binds the root and must gate on reach itself.
+    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
+    returns: ReachabilityMigrationPlan
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan (true) or only plan it (false)
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-06T19:14:11.468Z'
+updatedAt: '2026-10-06T19:59:27.460Z'

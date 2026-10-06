@@ -3452,23 +3452,36 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
+          Plan every hosted project's migration onto the reachability model via the host adapter,
+          writing it only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 5
+        description: >-
+          Print each project's rewrites counted by form, the forms left for an author and any
+          failure, or that every hosted project is on the reachability model; say that a rewritten
+          project owes a re-lock, and warn when it was a dry run
+        type: local
+      - stepNumber: 6
+        description: >-
           Run the stage-7 member upgrade via the host adapter — a dry-run plan, applied all or
           nothing only with --fix
         type: call
         targetComponent: cli_host_adapter
         targetMethod: upgradeMembers
-      - stepNumber: 5
+      - stepNumber: 7
         description: Nothing to upgrade?
         type: branch
         condition: >-
           no unfinished transaction was found, and the plan has no member to register or relocate,
           no key to rewrite and no refusal
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 9
+      - stepNumber: 8
         description: Report the members as registered
         type: return
         outcome: nothing to upgrade
-      - stepNumber: 7
+      - stepNumber: 9
         label: members
         description: >-
           Print each unfinished transaction found under the data directory (rolled back or cleaned
@@ -3478,7 +3491,7 @@ methods:
           unreadable member named with why); warn when it was a dry run (re-run with --fix) or a
           blocked plan (nothing written), and say what was restored when the apply failed
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: Return after the report
         type: return
         outcome: reported
@@ -3735,4 +3748,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T18:33:14.356Z'
+updatedAt: '2026-10-06T19:54:58.903Z'

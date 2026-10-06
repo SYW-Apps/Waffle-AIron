@@ -27,6 +27,13 @@ name: Approved design (wairon lock-check)
 # Pull-request review is what establishes who reviewed — this establishes that
 # the thing merging is the thing reviewed.
 #
+# WHAT IT ALSO RUNS (input `validate`, default true): `wairon validate --ci` in
+# the same directory, after the approval check — whether the design is LEGAL.
+# Point `working-directory` at the FAMILY ROOT (the project that declares the
+# members): there the plain gate is the family run, the one place the network
+# proofs (ENTRY_UNPROVEN, gateways, cross-project reach) are judged. A member
+# validated alone judges only its own gate.
+#
 # It also does not BLOCK a merge on its own. A workflow can only fail a job;
 # making a failing job stop a merge is a branch-protection / ruleset setting on
 # the repository ("Require status checks to pass"), which no workflow can
@@ -53,6 +60,14 @@ on:
         type: boolean
         required: false
         default: false
+      validate:
+        description: >-
+          Also run `wairon validate --ci` in working-directory after the approval check (default
+          true). At the family root (the project that declares the members) this is the family
+          run, which judges the network proofs no member's own gate can.
+        type: boolean
+        required: false
+        default: true
       node-version:
         description: 'Node.js version used to install and run the CLI.'
         type: string
@@ -89,7 +104,15 @@ jobs:
       # Reads the spec tree, hashes it together with the governing doctrine, and
       # compares that gate identity against the committed lock record. It does
       # NOT run the conformance validator — that is `wairon validate`, a
-      # different question (is this design legal) and a much larger job.
+      # different question (is this design legal), run by the next step.
       - name: Is the merged design the approved design?
         working-directory: ${{ inputs.working-directory }}
         run: wairon lock-check ${{ inputs.strict && '--strict' || '' }}
+
+      # Is the design LEGAL: the conformance gate, warnings fatal (--ci). At a
+      # project that declares members this is the family run — every member's
+      # own gate, plus the family proofs only the root can make.
+      - name: Is the design legal (family run at the root)?
+        if: ${{ inputs.validate }}
+        working-directory: ${{ inputs.working-directory }}
+        run: wairon validate --ci

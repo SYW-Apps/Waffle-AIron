@@ -448,6 +448,15 @@ methods:
         type: ScopeKind
       - name: scopeId
         type: string
+  - name: migrateReachability
+    description: >-
+      Plan, and with apply write, every hosted project's migration onto the reachability model
+      (`wairon host doctor [--fix]`); a dry run writes nothing.
+    signature: 'migrateReachability(apply: bool): list<HostedReachMigration>'
+    returns: list<HostedReachMigration>
+    params:
+      - name: apply
+        type: bool
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-10-05T17:30:40.627Z'
+updatedAt: '2026-10-06T19:59:28.714Z'

@@ -219,6 +219,13 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: describeProject
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward the reachability migration to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: migrateReachability
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-10-06T19:14:10.292Z'
+updatedAt: '2026-10-06T19:54:03.430Z'

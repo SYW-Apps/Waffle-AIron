@@ -77,6 +77,49 @@ tables, and rules — see [Extending wairon](docs/extending-wairon.md).
 
 ---
 
+## Reachability: what reaches each verb
+
+Every Portal verb must be **reached**: either a modelled caller in the design
+calls it (a `call` step along a `dependsOn` edge, or `alias::portal.verb` across
+projects), or the verb is declared an **entry** — callers outside the design
+reach it. Nothing else counts, so a Portal nobody calls and nobody enters is
+reported (`UNUSED_COMPONENT` / `UNUSED_METHOD`), with both remedies named.
+
+- **Transports.** A Portal states its `transport`, one vocabulary with its
+  endpoints: network (`HTTP`, `gRPC`, `GraphQL`, `MessageBus`, `Custom`), local
+  (`CLI`, `IPC`, `NamedPipe`, `JSONRPC` for stdio JSON-RPC such as a language
+  server or stdio MCP) or `InProcess` (a library, which binds no endpoint).
+- **Entries.** `invokedBy: { kind: entry, caller: "…" }` on the Portal (every
+  verb inherits it) or on one verb. Declare one only where the callers really are
+  outside the design: browsers, a CLI user, an AI tool over stdio, the
+  applications that link a library. Never invent one to silence a finding —
+  model the caller instead.
+- **Networks.** A project may declare `network: true` (or `{ description }`) in
+  `.wai/project.yaml`: it and its members form an isolated network. An entry's
+  `scope` is relative — `outside` (the default) or `network` (sibling services
+  inside the innermost network). Inside a network only a `gateway` Portal takes
+  entries from outside, and a modelled call crossing in must land on one. The
+  family run at the root proves every `network` entry has a modelled caller
+  (`ENTRY_UNPROVEN`). A project with no network never sees any of this.
+- **Libraries are called directly.** Another project's `InProcess` Portal is
+  called from any component — no client Adapter needed. Pure and read logic may
+  only call library verbs whose `effect` allows it (`LIBRARY_CALL_IMPURE`), and a
+  native library called from another language needs an `abi` (`c` or `wasm`)
+  (`LANGUAGE_BRIDGE_MISSING`). Wrapping a volatile third-party API in an Adapter
+  stays a good habit, never a rule.
+- **Extension points.** A producer exports a contract consumers implement with
+  `role: implement`; the consumer's interface declares `implements: alias::name`.
+- **Networking is derived.** `wairon network flows | policy | diagram | check |
+  why` turns the modelled reach into an allowed-flows matrix, Kubernetes
+  `NetworkPolicy`, a trust-boundary diagram and live-flow checks — the specs
+  never hold an address. See [Derived networking](docs/network.md).
+
+Upgrading a tree written before this model: `wairon doctor --fix` migrates the
+retired forms (`portalType`, listener `mounts`, the old `invokedBy` kinds), then
+declare the entries it will not invent.
+
+---
+
 ## Domains & agents
 
 Agents are **derived from the spec tree** — you never hand-maintain an agent
@@ -180,7 +223,9 @@ git add .wai && git commit -m "Approve the design"
 #    --strict also fails when .wai/lock.json is missing or a member project was
 #    never approved; plain lock-check only fails an approval that no longer matches.
 wairon lock-check --strict
-wairon validate --ci        # the conformance gate; externals are judged against their pins
+wairon validate --ci        # the conformance gate, run at the FAMILY ROOT (the project that
+                            # declares the members): there it is the family run, which judges
+                            # the network proofs; externals are judged against their pins
 # Optional: gate on the LIVE producers of your externals as well
 # (exit 1 when one is incompatible, 2 when one could not be compared).
 wairon externals status
@@ -216,6 +261,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon list` / `wairon show <id>` / `wairon agent brief <id>` | Inspect agents resolved from the spec tree; print one's live brief |
 | `wairon export [--out <file>]` | The whole design, resolved, as one JSON document ([format](docs/design-export.md)) |
 | `wairon diagram [--all] [--canvas] [--drawio] [--excalidraw] [--sequence <comp:method>]` | Mermaid, interactive canvas, and editable draw.io/Excalidraw exports |
+| `wairon network flows \| policy \| diagram \| check \| why` | Networking derived from the design: allowed flows, Kubernetes `NetworkPolicy`, a trust-boundary diagram, live-flow checks ([details](docs/network.md)) |
 | `wairon rules list` | The conformance rule registry (the architecture linter) |
 | `wairon pack init \| build \| install \| use \| unuse \| impact \| sync \| bundle \| which \| list \| add \| remove` | Extension packs: injected profiles, language tables, and rules |
 | `wairon member …` / `wairon subsystem externalize` / `wairon project rename` | Members (parts and projects) and the family migrations |

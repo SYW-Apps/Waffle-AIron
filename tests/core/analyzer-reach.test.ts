@@ -404,3 +404,54 @@ describe('`fn().method()` and `this.method()` — followed only where the code s
     expect(facts.returnTypes).toEqual({ one: 'A', two: 'B' });
   });
 });
+
+describe('lazy loads — a destructured require(…) / await import(…) binds like a static named import', () => {
+  it('a call through `const { f } = require(…)` realizes the claimed call (old analysis: unrealized)', () => {
+    const proj = createTempProject();
+    store(proj);
+    caller(proj, 'src/orch.ts', "export function runFlow(): void {\n  const { listSnapshots } = require('./store.js') as typeof import('./store.js');\n  listSnapshots();\n}\n");
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a renamed element of `await import(…)` binds the module export it names', () => {
+    const proj = createTempProject();
+    store(proj);
+    caller(proj, 'src/orch.ts', "export async function runFlow(): Promise<void> {\n  const { listSnapshots: list } = await import('./store.js');\n  list();\n}\n");
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('records the binding in the facts, and stays silent where the name is ambiguous', () => {
+    const { facts } = factsOf({
+      'src/a.ts': 'export function f(): void {}\nexport function g(): void {}\n',
+      'src/b.ts': 'export function f(): void {}\n',
+      'src/use.ts': [
+        "export function one(): void { const { g } = require('./a.js'); g(); }",
+        // the same local name lazily loaded from two modules: ambiguous, so unbound
+        "export function two(): void { const { f } = require('./a.js'); f(); }",
+        "export function three(): void { const { f } = require('./b.js'); f(); }",
+        // a rest element and a nested pattern bind nothing nameable
+        "export function four(): void { const { ...rest } = require('./a.js'); const { x: { y } } = require('./a.js'); void rest; void y; }",
+      ].join('\n') + '\n',
+    }, 'src/use.ts');
+    const bindings = facts.importBindings ?? {};
+    expect(bindings['g']).toEqual({ from: './a.js' });
+    expect(bindings['f']).toBeUndefined();
+    expect(bindings['rest']).toBeUndefined();
+    expect(bindings['y']).toBeUndefined();
+  });
+
+  it('never overrides a static import binding of the same name', () => {
+    const { facts } = factsOf({
+      'src/a.ts': 'export function f(): void {}\n',
+      'src/b.ts': 'export function f(): void {}\n',
+      'src/use.ts': "import { f } from './a.js';\nexport function one(): void { f(); }\nexport function two(): void { const { f: _f } = require('./b.js'); void _f; }\nexport function three(): void { const { f } = require('./b.js'); f(); }\n",
+    }, 'src/use.ts');
+    expect((facts.importBindings ?? {})['f']).toEqual({ from: './a.js' });
+  });
+});

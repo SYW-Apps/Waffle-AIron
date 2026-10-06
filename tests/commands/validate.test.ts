@@ -301,3 +301,57 @@ describe('renderSpecFindings (truncation and --all)', () => {
     expect(out).not.toContain('not shown');
   });
 });
+
+// ---------------------------------------------------------------------------
+// A member validated on its own judges its own gate, with its network entries
+// counted as declared: it says in one line that its network proofs are judged
+// at the family root, so a green member run is never read as a proven one. A
+// project nobody declares as a member prints no such line.
+// ---------------------------------------------------------------------------
+
+describe('runValidate at a member: the network proofs line', () => {
+  const now = new Date().toISOString();
+  const project = (root: string, name: string, extra: Record<string, unknown> = {}): void => {
+    fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', id: name, name, targets: [], rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now, ...extra,
+    }));
+    fs.writeFileSync(path.join(root, '.wai', 'specs', '.index.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', name, vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    }));
+  };
+  const run = async (root: string): Promise<string> => {
+    const { runValidate } = await import('../../src/commands/validate.js');
+    const lines: string[] = [];
+    const push = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation(push),
+      vi.spyOn(console, 'warn').mockImplementation(push),
+      vi.spyOn(console, 'error').mockImplementation(push),
+      vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never),
+    ];
+    setProjectRoot(root);
+    invalidateSpecCache();
+    try { await runValidate({}); } finally {
+      for (const s of spies) s.mockRestore();
+      setProjectRoot(null);
+      invalidateSpecCache();
+    }
+    return stripVTControlCharacters(lines.join('\n'));
+  };
+
+  it('prints it at a member, naming its alias and the family root, and not at the root', async () => {
+    const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-member-line-'));
+    try {
+      project(top, 'family', { members: { inner: 'inner' } });
+      project(path.join(top, 'inner'), 'inner');
+      const atMember = await run(path.join(top, 'inner'));
+      expect(atMember).toContain('Member "inner" of');
+      expect(atMember).toContain('its network proofs are judged at the family root');
+      const atRoot = await run(top);
+      expect(atRoot).not.toContain('network proofs are judged at the family root');
+    } finally {
+      try { fs.rmSync(top, { recursive: true, force: true }); } catch { /* win file locks */ }
+    }
+  });
+});

@@ -65,6 +65,12 @@ Point the subagent at that skill and spend the brief on what only you know:
 * **The premise you are asking them to act on**, stated *as* a premise, so it can
   be contradicted.
 
+One design decision never goes into a brief as an instruction: **an entry**. A
+subagent that meets an unreached Portal verb (`UNUSED_COMPONENT` /
+`UNUSED_METHOD`) reports it; whether to model the caller, declare an entry for
+real outside callers, or remove the verb is the architect's call, made in the
+spec — never an entry invented in passing to make a gate green.
+
 ## Receiving the report
 
 * **A measurement or a refusal is a delivery, not a failure.** "This lights up 362

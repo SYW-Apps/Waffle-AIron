@@ -32,7 +32,8 @@ dependsOn:
   - project_repository
   - host_server
   - member_registration
+  - hosted_spec_upgrade
 transport: InProcess
 status: complete
 createdAt: '2026-09-25T22:39:10.822Z'
-updatedAt: '2026-10-06T18:55:00.581Z'
+updatedAt: '2026-10-06T19:54:47.404Z'

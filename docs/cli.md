@@ -68,6 +68,15 @@ warnings as errors (notices are printed and counted, never fatal).
   member's own gate, and this project's externals composed against their live
   producers. `--no-recursive` runs this project's gate alone; `--family` runs
   the family run from a member.
+- **Where the network proofs run.** The proofs that need the whole family —
+  `ENTRY_UNPROVEN` (a `network` entry no modelled caller reaches), the gateway
+  rules for members, cross-project reach — are judged by the family run at the
+  **family root** (the project that declares the members). A member validated on
+  its own judges its own gate with its `network` entries counted as declared, and
+  says so in one line, so a green member run is never read as a proven one.
+  **In CI, run `wairon validate --ci` at the family root**; a member in its own
+  repository adds the root's run to its pipeline or relies on the root
+  repository's.
 - **Externals, compared live (advisory: the pin gates).** The gate judges each
   external against its pin. Then every external the run did not compose is
   compared with its **live** producer, offline, and printed in its own section:
@@ -150,8 +159,8 @@ release and changes nothing: a lock never reaches below its project.)
 
 **Code linkage is not part of the approval.** The gate identity and the per-spec
 digests read each spec's **design**: where it is realized — `sourcePath`,
-`symbol`, `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a mount's
-`via`, `externalLinks` — and the `createdAt`/`updatedAt` timestamps are left
+`symbol`, `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a Portal's
+`router`, `externalLinks` — and the `createdAt`/`updatedAt` timestamps are left
 out (`specsReading: design`). Linking code to an approved design, or a change and
 its revert, never stales the lock; declare planned `sourcePath`s at design time.
 
@@ -276,6 +285,7 @@ With inputs (all optional):
       working-directory: packages/api   # where the .wai/ tree lives (default: .)
       wairon-version: '6.0.0'           # version or npm dist-tag, 6.0.0 or later (default: latest)
       strict: true                      # fail when nothing was approved — use it once you have locked (default: false)
+      validate: true                    # also run `wairon validate --ci` there (default: true)
       node-version: '20'                # (default: '20')
       runs-on: ubuntu-latest            # (default: ubuntu-latest)
 ```
@@ -288,6 +298,11 @@ releases, and the default `latest` moves.
 
 On a `pull_request` event the default checkout is the merge commit, so what the
 gate judges is literally the design that would land.
+
+After the approval check the job runs `wairon validate --ci` in the same
+directory (`validate: false` turns it off). Point `working-directory` at the
+**family root** — the project that declares the members — so that run is the
+family run, which judges the network proofs no member's own gate can.
 
 **A failing job does not block a merge on its own.** A workflow can only fail;
 making a failing job stop a merge is a branch-protection / ruleset setting on
@@ -304,7 +319,8 @@ machine-wide MCP config) also needs `--global`; each file it replaces is backed
 up beside itself. `--report <section>` prints one section's report and writes
 nothing: `chaining` (the member/reference migration plan) or
 `composed-validation` (what the family run changes about each member's
-findings); it never combines with `--fix`.
+findings) or `reachability` (the reachability migration's plan); it never
+combines with `--fix`.
 
 Among its spec repairs, `--fix` rewrites every stored type position that is an
 alias of its canonical spelling (`string[]` becomes `list<string>`, `boolean`
@@ -315,6 +331,22 @@ listed, and every position no rewrite can settle (an inline function type, a
 literal union, a union mixing in a primitive, a `number` with no proposal) is
 listed with its replacement for an author. Plain `wairon doctor` prints the same
 plan without writing it.
+
+**The reachability migration.** `--fix` also moves the tree onto the
+reachability model: `portalType` becomes `transport` (`HTTP_API` → `HTTP`, a
+`Custom` Portal that binds no wire address → `InProcess`), a listener's `mounts`
+become a Portal-level entry on each mounted Portal and its implementation's
+`router` (the mount's `via`), `invokedBy: external` becomes `entry` on a Portal
+verb and `runtime` elsewhere, an authored export `type` that agrees with the derived kind is dropped,
+in-process `Custom` endpoint addresses are removed, and allows of retired codes
+are dropped or renamed. It never invents design: a Portal that was neither a
+listener nor mounted gets no entry, and a `sibling-subsystem` caller, an export
+type that disagrees, an endpoint outside every old prefix and a router already
+set otherwise are listed for an author. Plain `wairon doctor` prints the plan;
+`--report reachability` lists every rewrite and every form left for an author.
+The design changes, so one `wairon lock` follows. After it, declare the entries
+the migration cannot know — a CLI, a stdio tool surface (`JSONRPC`), a library
+(`InProcess`) — and model a caller or remove each verb still reported unreached.
 
 `--fix` also re-expresses a format-2 lock record that still provably covers the
 tree as format 3 (see `wairon lock`), keeping who approved it and when; when it
@@ -784,7 +816,7 @@ principal.
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
 | `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
-| `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
+| `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, migrate every hosted project's spec tree onto the reachability model (each rewritten project is audited as `migration.reachability` and owes one re-lock by its approvers; the server never does this on its own when it binds a project, because the rewrite moves the approved design and a read-only request must not write), then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 3) against the hosted project |

@@ -590,16 +590,19 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
       logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
     }
   }
-  // Step 4: then the member-record upgrade — a dry-run plan, applied all or nothing only with --fix.
+  // Steps 4-5: every hosted project's migration onto the reachability model —
+  // operator-invoked, never at bind, because it rewrites the design and owes a re-lock.
+  printReachMigrations(localAdmin.migrateReachability(cfg, fix), fix);
+  // Step 6: then the member-record upgrade — a dry-run plan, applied all or nothing only with --fix.
   const upgrade = localAdmin.upgradeMemberRecords(cfg, fix);
   const plan = upgrade.plan;
   const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
-  // Steps 5-6.
+  // Steps 7-8.
   if (upgrade.recovered.length === 0 && writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
     logger.success('Hosted members are records — nothing to upgrade.');
     return;
   }
-  // Step 7.
+  // Step 9.
   printRecovered(upgrade.recovered, fix);
   if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
     logger.success('Hosted members are records — nothing to upgrade.');
@@ -608,7 +611,39 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
   printMemberUpgrade(upgrade, fix);
 }
 
-/** Step 7: each transaction a crash left unfinished under the data directory, and what was done about it. */
+/** Step 5: each hosted project's reachability rewrites by form, what it left for an author, and any failure. */
+function printReachMigrations(migrations: ReturnType<typeof localAdmin.migrateReachability>, fix: boolean): void {
+  const failed = migrations.filter((m) => m.failure !== undefined);
+  const pending = migrations.filter((m) => m.plan && (m.plan.rewrites.length > 0 || m.plan.reported.length > 0));
+  if (failed.length === 0 && pending.length === 0) {
+    logger.success('Hosted projects are on the reachability model — nothing to migrate.');
+    return;
+  }
+  let rewritten = 0;
+  for (const m of pending) {
+    const plan = m.plan!;
+    if (plan.rewrites.length > 0) {
+      rewritten++;
+      logger.info(`  [reach   ] ${m.projectId}: ${plan.rewrites.length} rewrite(s)${plan.applied ? ' written' : ''} — ${describeForms(plan.rewrites)}`);
+    }
+    if (plan.reported.length > 0) {
+      logger.warn(`  [reach   ] ${m.projectId}: ${plan.reported.length} form(s) left for an author — ${describeForms(plan.reported)} (\`wairon doctor --report reachability\` in its tree lists each)`);
+    }
+  }
+  for (const m of failed) logger.error(`  [reach   ] ${m.projectId}: the reachability migration failed — ${m.failure}`);
+  if (rewritten === 0) return;
+  if (fix) logger.warn(`${rewritten} hosted project(s) migrated onto the reachability model: each design moved, so each owes one re-lock by its approvers.`);
+  else logger.warn(`${rewritten} hosted project(s) await the reachability migration (dry run; re-run with --fix to write it — each then owes one re-lock).`);
+}
+
+/** Reachability rewrites counted by form, e.g. "3 portal-type, 1 listener-mounts". */
+function describeForms(entries: { form: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const e of entries) counts.set(e.form, (counts.get(e.form) ?? 0) + 1);
+  return [...counts].map(([form, n]) => `${n} ${form}`).join(', ');
+}
+
+/** Step 9: each transaction a crash left unfinished under the data directory, and what was done about it. */
 function printRecovered(recovered: ReturnType<typeof localAdmin.upgradeMemberRecords>['recovered'], fix: boolean): void {
   for (const t of recovered) {
     const line = `  unfinished ${t.verb} transaction ${t.id} (coordinator phase ${t.phase}): ${t.action} — ${t.detail}`;
@@ -618,7 +653,7 @@ function printRecovered(recovered: ReturnType<typeof localAdmin.upgradeMemberRec
   if (recovered.length > 0 && !fix) logger.warn('A crashed transaction is pending under the data directory — re-run with --fix to roll it back first.');
 }
 
-/** Step 7: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
+/** Step 9: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
 function printMemberUpgrade(upgrade: ReturnType<typeof localAdmin.upgradeMemberRecords>, fix: boolean): void {
   const plan = upgrade.plan;
   const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');

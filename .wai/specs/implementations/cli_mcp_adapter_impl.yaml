@@ -202,19 +202,7 @@ methods:
       there is none, and a warning (never a throw) when the move fails. Nothing is deleted.
 detail: intent
 lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      at: serveMcpStdio
-      covers:
-        - mcp_hosting_portal.serveStdio
-      reason: >-
-        The call is real: runMcpServe (src/commands/mcp.ts) ends in `await startMcpServer()`, the
-        symbol serveStdio realizes in src/mcp/server.ts. It reaches it through a lazy `const {
-        startMcpServer } = require('../mcp/server.js') as typeof import(...)` so the MCP SDK loads
-        only when this command runs, and the call graph resolves call sites through STATIC import
-        bindings only, so a lazily required name resolves to the calling file. An analyzer limit on
-        lazy imports, not a missing call; teaching the exact analyzer destructured require/import()
-        bindings would retire this allow.
+  allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-06T19:14:44.451Z'
+updatedAt: '2026-10-06T20:00:27.629Z'

@@ -281,6 +281,17 @@ methods:
       - name: members
         type: list<ProjectParentLink>
         description: The members registered or returned, each with its parent record
+  - name: upgrade
+    description: >-
+      Plan, and with apply commit, the stage-7 member upgrade of the data dir (`wairon host doctor
+      [--fix]`): first every transaction a crash left unfinished under the data directory — resolved
+      and audited with apply, reported without it; then the plan, applied all or nothing only when
+      asked and not blocked. A dry run or a blocked plan drops its rehearsal and writes nothing.
+    signature: 'upgrade(apply: bool): MemberUpgradeReport'
+    returns: MemberUpgradeReport
+    params:
+      - name: apply
+        type: bool
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-04T10:28:32.328Z'
+updatedAt: '2026-10-06T19:59:09.403Z'
