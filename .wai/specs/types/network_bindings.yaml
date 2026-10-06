@@ -3,10 +3,13 @@ id: network_bindings
 name: NetworkBindings
 description: >-
   The deployment side of the derived networking, kept by the team outside .wai/ and passed by path:
-  which workload each design name runs as, and what outside means for a policy. Keys are project
-  ids, `project::subsystem` or `project::portal`, the most specific winning. A name with no binding
-  gets the placeholder label wairon.dev/workload: <name>, listed in the output, so nothing is
-  silently opened.
+  which workload each design name runs as, and what outside means for a policy. A key is a project
+  id, a `project::subsystem` (a bare subsystem for the bound root's own), a `project::portal` (a
+  bare component for the root's own), or `network:<id>` for callers anywhere inside a declared
+  network; the most specific key a party has wins, and a party no key maps falls back to its default
+  workload name (flow_party.workload). A name with no binding gets the placeholder label
+  wairon.dev/workload: <name> (made a valid label value), listed in the output, so nothing is
+  silently opened; a flow from outside with no outside blocks admits nothing and is listed too.
 subsystem: sdd_network
 fields:
   - name: workloads
@@ -22,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:37.680Z'
-updatedAt: '2026-10-06T13:09:38.286Z'
+updatedAt: '2026-10-06T19:24:51.260Z'

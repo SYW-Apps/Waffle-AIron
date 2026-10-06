@@ -73,6 +73,9 @@ import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp 
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
+// The read-only network tools' workflows (mcp_network_orchestrator).
+import { flows as networkFlows, explain as explainNetworkFlow } from './network.js';
+import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
 import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
@@ -430,6 +433,49 @@ function additionAnswer(request: ExternalRequest, addition: ExternalAddition): C
       + (addition.unreachable ? `. Declared but not pinned: ${addition.unreachable}` : '')
       + '.';
   return structured(summary, { ...addition });
+}
+
+/** One end of a flow, as sdd_get_network_flows and sdd_explain_flow answer it. */
+const flowPartyOutput = z.object({
+  project: z.string().optional(),
+  subsystem: z.string().optional(),
+  component: z.string().optional(),
+  verb: z.string().optional(),
+  scope: z.enum(['outside', 'network']).optional(),
+  network: z.string().optional(),
+});
+
+/** One allowed flow of the matrix. */
+const networkFlowOutput = z.object({
+  from: flowPartyOutput,
+  to: flowPartyOutput,
+  transport: z.string(),
+  binding: z.string().optional(),
+  crosses: z.array(z.string()),
+  via: z.string().optional(),
+  evidence: z.array(z.string()),
+  verbs: z.array(z.string()).optional(),
+});
+
+/** sdd_get_network_flows' structured answer: the allowed flows, filtered when asked. */
+const networkFlowsOutput = {
+  flows: z.array(networkFlowOutput).describe('One allowed flow per row: who reaches which Portal verb, over which transport and binding, through which networks and gateway, on what evidence.'),
+  ...staleServerOutput,
+};
+
+/** sdd_explain_flow's structured answer. */
+const flowExplanationOutput = {
+  allowed: z.boolean().describe('Whether any flow of the design allows it.'),
+  flows: z.array(networkFlowOutput).describe('The flows that allow it.'),
+  chain: z.array(z.string()).describe('Each step of the justification, one line each; when not allowed, what reaches the callee instead.'),
+  ...staleServerOutput,
+};
+
+/** One flow as one line. */
+function flowLine(f: NetworkFlow): string {
+  const from = f.from.scope !== undefined ? (f.from.scope === 'network' ? `network${f.from.network ? `:${f.from.network}` : ''}` : 'outside') : (f.from.component ?? '?');
+  return `${from} -> ${f.to.component}.${f.to.verb} over ${f.transport}${f.binding ? ` (${f.binding})` : ''}`
+    + `${f.crosses.length ? `, entering ${f.crosses.map((n) => n || '(root network)').join(' > ')}` : ''}${f.via ? ` via ${f.via}` : ''}`;
 }
 
 /** sdd_get_externals_status' structured answer: one status per declared external. */
@@ -2944,6 +2990,47 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     (request) => {
       try {
         return additionAnswer(request, addExternal(request));
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ to?: string }>(server,
+    'sdd_get_network_flows',
+    {
+      description: 'The allowed-flows matrix derived from the design: who reaches which Portal verb, over which transport and binding, through which declared networks and gateway, on what evidence (a modelled call, or a declared entry with its caller). Only network transports (HTTP, gRPC, GraphQL, MessageBus, Custom) produce flows; in-process and local verbs never do. At a project that declares members it is the matrix of the whole family, and a network-scoped entry the family proves is narrowed to its modelled callers. Optionally filtered to the flows into one project, Portal or verb. A tree-scoped read: writes nothing.',
+      inputSchema: {
+        to: z.string().optional().describe('Keep only the flows into this project, project::portal or project::portal.verb'),
+      },
+      outputSchema: networkFlowsOutput,
+    },
+    ({ to }) => {
+      try {
+        const flows = networkFlows(to ?? null);
+        const text = flows.length ? flows.map(flowLine).join('\n') : (to ? `No flow reaches ${to}.` : 'No network-transport flows: in-process and local verbs never produce one.');
+        return structured(text, { flows });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ from: string; to: string }>(server,
+    'sdd_explain_flow',
+    {
+      description: 'Why one party may reach another, from the design: each allowing flow with its chain from the declared entry or the modelled call through every network and gateway it crosses, or that nothing allows it (with what reaches the callee instead). The parties are design names: from is outside, network[:<id>], a project, a subsystem or a component; to is a project, a Portal or a portal.verb. A tree-scoped read: writes nothing.',
+      inputSchema: {
+        from: z.string().describe('The caller: outside, network[:<id>], a project, a subsystem, or a (project::)component'),
+        to: z.string().describe('The callee: a project, a (project::)portal, or a (project::)portal.verb'),
+      },
+      outputSchema: flowExplanationOutput,
+    },
+    ({ from, to }) => {
+      try {
+        const explanation = explainNetworkFlow(from, to);
+        const head = explanation.allowed ? `${from} may reach ${to}:` : `${from} may NOT reach ${to}:`;
+        return structured([head, ...explanation.chain.map((l) => `  ${l}`)].join('\n'), { ...explanation });
       } catch (e) {
         return errMessage(e);
       }

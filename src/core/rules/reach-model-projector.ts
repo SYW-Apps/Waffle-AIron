@@ -106,6 +106,7 @@ export function project(ctx: RuleContext, network: NetworkDeclaration | undefine
           project: '',
           portal: comp.id,
           verb: m.name,
+          subsystem: comp.subsystem,
           transport: comp.transport,
           ...(binding !== undefined ? { binding } : {}),
           ...(ownNetwork ? { network: ownNetwork.id } : {}),
@@ -127,6 +128,7 @@ export function project(ctx: RuleContext, network: NetworkDeclaration | undefine
     calls.push({
       fromProject: '',
       fromComponent: from.id,
+      fromSubsystem: from.subsystem,
       ...(ownNetwork ? { fromNetwork: ownNetwork.id } : {}),
       toPortal: to.id,
       verb,
@@ -213,7 +215,13 @@ export function compose(
     const net = innermost(key);
     for (const v of model.verbs) {
       const { network: _own, ...rest } = v;
-      const placed: VerbReach = { ...rest, project: key, portal: qualify(key, v.portal), ...(net !== undefined ? { network: net } : {}) };
+      const placed: VerbReach = {
+        ...rest,
+        project: key,
+        portal: qualify(key, v.portal),
+        ...(v.subsystem !== undefined ? { subsystem: qualify(key, v.subsystem) } : {}),
+        ...(net !== undefined ? { network: net } : {}),
+      };
       verbs.push(placed);
       if (net !== undefined && placed.gateway && isOutsideEntry(placed.entry)) {
         const gateways = boundaries.get(net)!.gateways;
@@ -226,6 +234,7 @@ export function compose(
         ...rest,
         fromProject: key,
         fromComponent: qualify(key, c.fromComponent),
+        ...(c.fromSubsystem !== undefined ? { fromSubsystem: qualify(key, c.fromSubsystem) } : {}),
         toPortal: qualify(key, c.toPortal),
         ...(net !== undefined ? { fromNetwork: net } : {}),
       });

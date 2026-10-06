@@ -512,6 +512,28 @@ promise and how a consumer follows renames).
 - A tree without an L0 is refused. The JSON Schema ships in the package as
   `schemas/design-export-1.json`, and the library twin is `exportDesign()`.
 
+### `wairon network flows|policy|diagram|check|why`
+Networking derived from the design: the reach the validator already models
+(modelled calls, Portal entries and their scopes, declared networks and their
+gateways), never addresses. Run at the family root.
+
+- `flows [--format json|csv|markdown] [--out <file>]` prints the allowed-flows
+  matrix, narrowed to the modelled callers wherever the family proves a
+  `network` entry.
+- `policy --bindings <file> [--out <file>]` generates Kubernetes
+  `NetworkPolicy` from the matrix and a bindings file you keep outside
+  `.wai/`. Names it cannot bind are listed, never guessed.
+- `diagram [--out <file>]` prints a Mermaid flowchart of the networks as
+  trust boundaries, with the gateways, outside and the flows.
+- `check --observed <file> [--bindings <file>]` compares observed live flows
+  (CSV or JSON) with the matrix. It exits 1 on an unexpected flow or an
+  unknown verb.
+- `why <from> <to>` prints the modelled chain behind one flow. It exits 1
+  when nothing allows it.
+
+[Derived networking](network.md) describes every output, the bindings file
+and the observed-flow format.
+
 ---
 
 ## Members

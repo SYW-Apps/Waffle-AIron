@@ -3,6 +3,7 @@ name: Network Orchestrator Implementation
 description: The derived networking workflows.
 contract: inetwork_orchestrator
 sourcePath: src/network/orchestrator.ts
+simPath: tests/network/network-family.test.ts
 methods:
   - name: flows
     narrative:
@@ -157,4 +158,4 @@ methods:
         outcome: FlowExplanation
 status: complete
 createdAt: '2026-10-06T13:11:35.270Z'
-updatedAt: '2026-10-06T13:11:35.845Z'
+updatedAt: '2026-10-06T19:44:43.934Z'

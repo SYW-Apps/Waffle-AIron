@@ -26,7 +26,40 @@ fields:
     type: string
     description: The declared network the party sits in, or that a network scope names
     optional: true
-methods: []
+  - name: subsystem
+    type: string
+    description: The subsystem holding the component, for a modelled party, when the model knows it
+    optional: true
+methods:
+  - name: workload
+    signature: 'workload(): string'
+    params: []
+    returns: string
+    description: >-
+      The party's default workload name, the unit a policy, a diagram and an observed flow are keyed
+      by when no binding is more specific: outside for callers outside, network:<id> (or network)
+      for callers anywhere inside a network, the project key for a member's party, and for the bound
+      root's own party (its key is empty) its subsystem, else its component. Pure
+  - name: key
+    signature: 'key(): string'
+    params: []
+    returns: string
+    description: >-
+      The party as one stable line, the way the matrix, its CSV and the explanation name it: the
+      component (portal.verb on the called end), or the workload name of a scope. Pure
+  - name: isNamed
+    signature: 'isNamed(name: string): bool'
+    params:
+      - name: name
+        type: string
+        description: >-
+          outside, network or network:<id>, a project, a subsystem, a workload name, a component, or
+          a portal.verb
+    returns: bool
+    description: >-
+      Whether a name denotes this party or a whole it lies within: outside and network[:<id>] name
+      scopes; any other name matches the party's project, subsystem, component, workload name or
+      key. How why, the observed-flow check and a binding key find a party. Pure
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:26.411Z'
-updatedAt: '2026-10-06T13:09:27.063Z'
+updatedAt: '2026-10-06T19:27:24.460Z'

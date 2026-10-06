@@ -1039,7 +1039,8 @@ methods:
         targetComponent: web_graph_orchestrator
         targetMethod: getProjectNetwork
     detail: calls-only
+    symbol: getProjectNetwork
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-10-06T18:55:18.901Z'
+updatedAt: '2026-10-06T19:24:56.779Z'

@@ -76,6 +76,21 @@ export function CanvasView({
   const hashCmdRef = useRef(hashCmd);
   hashCmdRef.current = hashCmd;
 
+  /** The network view's URL for this project, keeping the unit ancestry. */
+  const networkUrl = (): string => {
+    const up = unitPrefixRef.current;
+    return '/canvas/' + (up ? up + '/' : '') + encodeURIComponent(projectIdRef.current) + '/network';
+  };
+
+  // A project whose diagram config opens on the network view (defaultView:
+  // network) lands there — unless the visitor just came back to the components.
+  useEffect(() => {
+    const diagram = (model as { system?: { diagram?: { defaultView?: string } } } | undefined)?.system?.diagram;
+    const back = (location.state as { components?: boolean } | null)?.components;
+    if (diagram?.defaultView === 'network' && route === '' && !back) navigate(networkUrl(), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model]);
+
   // Mount (or remount) whenever a fresh model arrives; tear down on unmount.
   // NOTE: `route` is intentionally NOT a dependency — drill-down must not remount
   // the graph; it drives the engine via openRoute (the effect below) instead.
@@ -131,6 +146,8 @@ export function CanvasView({
       // stamps recordId only on records the caller may read, so a node without
       // one never offers the link.
       onOpenProject: (recordId: string) => navigate('/projects/' + encodeURIComponent(recordId)),
+      // The Network mode tab opens the derived network view (/canvas/<project>/network).
+      onOpenNetwork: () => navigate(networkUrl()),
       // Stage G: focus a component / open a method's narrative modal when the URL hash asks.
       initialFlow: hashCmdRef.current.flow,
       initialSelect: hashCmdRef.current.select,

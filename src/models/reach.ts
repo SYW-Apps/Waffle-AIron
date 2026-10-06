@@ -36,6 +36,8 @@ export interface VerbReach {
   portal: string;
   /** The contract method's name. */
   verb: string;
+  /** The subsystem key holding the Portal, qualified like the portal in a family-scoped model: the unit a deployment usually runs as one workload. */
+  subsystem?: string;
   /** The Portal's transport. */
   transport: Transport;
   /** The endpoint as one line (POST /orders, orders.v1.Orders/Create, topic orders.created); absent for InProcess. */
@@ -61,6 +63,8 @@ export interface ModelledCall {
   fromProject: string;
   /** The calling component's key (the bridging Adapter, or any component for a library call). */
   fromComponent: string;
+  /** The calling component's subsystem key, qualified like the component in a family-scoped model; absent when the reference that records a cross-project call does not say. */
+  fromSubsystem?: string;
   /** The innermost declared network the caller sits inside; absent when none encloses it. */
   fromNetwork?: string;
   /** The called Portal's component key. */

@@ -361,6 +361,7 @@ methods:
         type: return
         outcome: NetworkViewModel
     detail: full
+    symbol: getWebProjectNetwork
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-06T13:14:52.897Z'
+updatedAt: '2026-10-06T19:24:57.820Z'

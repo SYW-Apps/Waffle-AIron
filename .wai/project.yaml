@@ -202,6 +202,9 @@ rules:
       - web/src/views/Home.tsx
       - web/src/views/Instance.tsx
       - web/src/views/Login.tsx
+      # The canvas's network view (DiagramView network) over GET /web/projects/network:
+      # a SPA view like its siblings here, which are not spec'd as View components.
+      - web/src/views/NetworkView.tsx
       - web/src/views/Permissions.tsx
       - web/src/views/ProjectOps.tsx
       - web/src/views/Projects.tsx

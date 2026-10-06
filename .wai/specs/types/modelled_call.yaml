@@ -32,7 +32,13 @@ fields:
       Where the call is written: <implementation>.<method>#<step>, or <implementation>.<method>
       calls for a declared call
     optional: false
+  - name: fromSubsystem
+    type: string
+    description: >-
+      The calling component's subsystem key, qualified like the component in a family-scoped model;
+      absent when the reference that records a cross-project call does not say
+    optional: true
 methods: []
 sourcePath: src/models/reach.ts
 createdAt: '2026-10-06T12:57:15.682Z'
-updatedAt: '2026-10-06T12:57:16.311Z'
+updatedAt: '2026-10-06T19:24:45.251Z'

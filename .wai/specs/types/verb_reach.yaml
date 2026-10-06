@@ -43,7 +43,13 @@ fields:
     type: string
     description: The widest audience an L0 export entry exposing this verb declares, when one does
     optional: true
+  - name: subsystem
+    type: string
+    description: >-
+      The subsystem key holding the Portal, qualified like the portal in a family-scoped model: the
+      unit a deployment usually runs as one workload
+    optional: true
 methods: []
 sourcePath: src/models/reach.ts
 createdAt: '2026-10-06T12:57:11.849Z'
-updatedAt: '2026-10-06T12:57:12.415Z'
+updatedAt: '2026-10-06T19:24:43.922Z'

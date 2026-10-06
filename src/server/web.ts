@@ -31,6 +31,7 @@ import * as shareadmin from './shareadmin.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import * as hostSurfaces from './adapters/surfaces.js';
+import * as hostNetwork from './adapters/network.js';
 import { validateAsComplete } from './adapters/validator.js';
 import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
@@ -525,6 +526,16 @@ export function getProjectExternals(cfg: HostConfig, sessionId: string, projectI
 }
 
 /**
+ * Return one authorized project's network view — its declared networks, the
+ * workloads inside them, the gateways and the allowed flows per workload pair,
+ * derived from the design — by delegating to the web graph orchestrator, which
+ * authenticates the session and scopes the read to the caller's reach.
+ */
+export function getProjectNetwork(cfg: HostConfig, sessionId: string, projectId: string): hostNetwork.NetworkViewModel {
+  return getWebProjectNetwork(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
  * Return one authorized project's API explorer page by delegating to the web
  * graph orchestrator, which authenticates the session, scopes the project and
  * chooses between the explorer and the index of the project's APIs.
@@ -739,6 +750,25 @@ export function getWebProjectExternals(cfg: HostConfig, sessionId: string, proje
   if (!root) throw new ForbiddenError('project not authorized or unknown');
   // Steps 4-6: bound with the caller's reach — the caller must gate on reach itself.
   return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostSurfaces.getExternalsStatus());
+}
+
+/**
+ * The network view of ONE authorized project, derived from the design: same
+ * scoped authorization and reach as getWebProjectExternals — the family above
+ * the project is composed only when its root is listed too.
+ */
+export function getWebProjectNetwork(cfg: HostConfig, sessionId: string, projectId: string): hostNetwork.NetworkViewModel {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  // Step 2.
+  const readable = webproject.listProjects(cfg, sessionId);
+  if (!readable.some((r) => r.id === projectId)) throw new ForbiddenError('project not authorized or unknown');
+  // Step 3.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  // Steps 4-6: bound with the caller's reach, the view read over it.
+  return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostNetwork.view({}));
 }
 
 /** The caller's read reach around a project: its family root (when readable) and a hosted record lookup over its readable records. */
@@ -3524,6 +3554,14 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'externals') {
       const projectId = url.searchParams.get('projectId') ?? '';
       return sendJson(res, 200, { externals: getProjectExternals(cfg, sessionId, projectId) });
+    }
+
+    // GET /web/projects/network?projectId= → one authorized project's network
+    // view (the canvas's network view): networks, workloads, gateways and the
+    // allowed flows per workload pair, derived from the design. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'network') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      return sendJson(res, 200, getProjectNetwork(cfg, sessionId, projectId));
     }
 
     // GET /web/openapi?projectId= → the project's full public surface as an

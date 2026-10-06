@@ -761,6 +761,16 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .canvas-frame { flex: 1; border: none; width: 100%; background: var(--bg); }
 /* Shadow-root host for the in-React classic canvas engine (web/src/canvas). */
 .canvas-host { flex: 1; min-height: 0; width: 100%; display: flex; }
+/* The canvas's network view (NetworkView.tsx): trust boundaries, gateways, workloads. */
+.net-view { display: flex; flex-direction: column; height: 100%; overflow: auto; }
+.net-picture { padding: 16px; }
+.net-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.net-boundary { border: 2px dashed var(--border-strong); border-radius: 10px; padding: 8px 12px 12px; margin: 8px 0; }
+.net-boundary > legend { padding: 0 6px; }
+.net-chip { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono, monospace); font-size: 12.5px; }
+.net-gateway { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.net-scope { border-radius: 999px; border-style: dotted; }
+
 
 /* Environment (org hierarchy) graph view. */
 .env-view { display: flex; flex-direction: column; height: 100%; }

@@ -38,6 +38,19 @@ import {
 } from '../commands/remote.js';
 import { composeAgentBrief, loadProjectConfig, resolveAgentTopology } from '../commands/adapters/core.js';
 import { summarize } from '../models/execution.js';
+import { NetworkOptionsError } from '../utils/errors.js';
+import type { NetworkCommandOptions } from '../commands/network.js';
+import {
+  flows as networkFlows,
+  policy as networkPolicy,
+  diagram as networkDiagram,
+  check as networkCheck,
+  why as networkWhy,
+  type FlowCheckReport,
+  type NetworkDocument,
+  type NetworkOutputFormat,
+  type ObservedFlow,
+} from '../commands/adapters/network.js';
 
 // ---------------------------------------------------------------------------
 // lock
@@ -414,4 +427,124 @@ export function mcpInstallCommand(opts: {
     hostedProject: opts.project,
     hostedToken,
   });
+}
+
+// ---------------------------------------------------------------------------
+// network — the derived networking (sdd_network): flows, policy, diagram,
+// check, why. Every output is derived from the design; deployment facts come
+// only from the bindings file the team keeps outside .wai/.
+// ---------------------------------------------------------------------------
+
+/** The selection: the family at a project that declares members, unless --no-recursive. */
+function networkSelection(options: NetworkCommandOptions): { memberDepth?: number } {
+  return options.recursive === false ? { memberDepth: 0 } : {};
+}
+
+/** A --format value checked against the formats the command writes. */
+function networkFormat(given: string | undefined, fallback: NetworkOutputFormat, allowed: NetworkOutputFormat[]): NetworkOutputFormat {
+  const format = (given ?? fallback) as NetworkOutputFormat;
+  if (!allowed.includes(format)) {
+    throw new NetworkOptionsError(`--format ${given} is not one of ${allowed.join(', ')}`);
+  }
+  return format;
+}
+
+/** Print a document, or write it to --out and say where. */
+function emitNetworkDocument(doc: NetworkDocument, out: string | undefined): void {
+  if (!out) {
+    process.stdout.write(doc.content);
+    return;
+  }
+  writeFile(path.resolve(out), doc.content);
+  logger.success(`Wrote ${doc.format} to ${out}`);
+}
+
+/** cli_runner.runNetworkFlows — print (or write) the allowed-flows matrix. */
+export async function runNetworkFlows(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: the matrix in the asked format, the family unless --no-recursive.
+  const doc = networkFlows(networkSelection(options), networkFormat(options.format, 'json', ['json', 'csv', 'markdown']));
+  // Step 2.
+  emitNetworkDocument(doc, options.out);
+}
+
+/** cli_runner.runNetworkPolicy — generate network policy from the matrix and the team's bindings. */
+export async function runNetworkPolicy(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: a policy needs the team's bindings.
+  if (!options.bindings) {
+    // Step 4.
+    throw new NetworkOptionsError('policy needs --bindings <file>: the bindings file the team keeps outside .wai/ (specs hold no deployment facts — see docs/network.md)');
+  }
+  // Step 2.
+  const format = networkFormat(options.format, 'kubernetes-network-policy', ['kubernetes-network-policy']);
+  const doc = networkPolicy(networkSelection(options), options.bindings, format);
+  // Step 3: print or write it, then list each unbound name with its placeholder label.
+  emitNetworkDocument(doc, options.out);
+  for (const name of doc.unbound) {
+    logger.warn(name === 'outside'
+      ? 'unbound: outside — the bindings name no `outside:` blocks, so nothing from outside is admitted'
+      : `unbound: ${name} — selected by the placeholder label wairon.dev/workload, which matches no pod until it is bound`);
+  }
+}
+
+/** cli_runner.runNetworkDiagram — print (or write) the network picture as Mermaid. */
+export async function runNetworkDiagram(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1.
+  const doc = networkDiagram(networkSelection(options));
+  // Step 2.
+  emitNetworkDocument(doc, options.out);
+}
+
+/** One observed flow as one line. */
+function observedLine(o: ObservedFlow): string {
+  const l7 = o.method || o.path ? ` ${[o.method, o.path].filter(Boolean).join(' ')}` : '';
+  return `${o.source} -> ${o.destination}${o.transport ? ` [${o.transport}]` : ''}${l7}${o.count !== undefined ? ` (seen ${o.count}x)` : ''}`;
+}
+
+/** The check report, unexpected first, then unknown verbs, then unexercised. */
+function printFlowCheck(report: FlowCheckReport): void {
+  logger.header(`Unexpected flows (${report.unexpected.length}) — observed, but the design allows none`);
+  for (const o of report.unexpected) console.log(`  ${observedLine(o)}`);
+  logger.header(`Unknown verbs (${report.unknownVerbs.length}) — an allowed pair, but no declared verb has this method and path`);
+  for (const o of report.unknownVerbs) console.log(`  ${observedLine(o)}`);
+  logger.header(`Unexercised flows (${report.unexercised.length}) — allowed, never observed in the window`);
+  for (const f of report.unexercised) {
+    const from = f.from.scope ?? f.from.component ?? '';
+    console.log(`  ${from} -> ${f.to.component}.${f.to.verb}${f.binding ? ` (${f.binding})` : ''}`);
+  }
+}
+
+/** cli_runner.runNetworkCheck — observed live flows against the matrix; non-zero when anything unexpected or unknown ran. */
+export async function runNetworkCheck(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: a check needs an observed-flow export.
+  if (!options.observed) {
+    // Step 5.
+    throw new NetworkOptionsError('check needs --observed <file>: a CSV or JSON export of observed flows (see docs/network.md)');
+  }
+  // Step 2.
+  const report = networkCheck(networkSelection(options), options.observed, options.bindings ?? null);
+  // Step 3.
+  if (options.format === 'json') process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  else printFlowCheck(report);
+  // Step 4: an unexercised flow is a review item, not a failure.
+  if (report.unexpected.length > 0 || report.unknownVerbs.length > 0) process.exitCode = 1;
+}
+
+/** cli_runner.runNetworkWhy — why one party may reach another; non-zero when nothing allows it. */
+export async function runNetworkWhy(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  if (!options.from || !options.to) throw new NetworkOptionsError('why needs <from> <to>');
+  // Step 1.
+  const explanation = networkWhy(networkSelection(options), options.from, options.to);
+  // Step 2.
+  if (options.format === 'json') {
+    process.stdout.write(JSON.stringify(explanation, null, 2) + '\n');
+  } else {
+    logger.header(explanation.allowed ? `${options.from} may reach ${options.to}` : `${options.from} may NOT reach ${options.to}`);
+    for (const line of explanation.chain) console.log(`  ${line}`);
+  }
+  if (!explanation.allowed) process.exitCode = 1;
 }

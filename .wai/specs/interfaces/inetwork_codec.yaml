@@ -18,10 +18,12 @@ methods:
   - name: encodePolicy
     description: >-
       The matrix as generated policy in a target format (kubernetes-network-policy): one ingress
-      policy per bound workload, admitting exactly its matrix sources and the bindings' outside
-      blocks for an outside-entered gateway, with the port when the binding names one. A design name
-      with no binding gets the placeholder label wairon.dev/workload: <name> and is listed as
-      unbound. Deterministic. Pure.
+      policy per callee workload, admitting exactly its matrix sources and the bindings' outside
+      blocks for a flow from outside, with the port when the binding names one. A design name with
+      no binding gets the placeholder label wairon.dev/workload: <name> and is listed as unbound; a
+      flow from outside with no outside blocks admits nothing and lists outside as unbound. The
+      unbound names also head the output as comments, so the file says what it could not bind.
+      Deterministic. Pure.
     signature: >-
       encodePolicy(flows: list<NetworkFlow>, bindings: NetworkBindings, format:
       NetworkOutputFormat): NetworkDocument
@@ -38,4 +40,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-10-06T13:10:53.369Z'
-updatedAt: '2026-10-06T13:10:53.994Z'
+updatedAt: '2026-10-06T19:25:02.661Z'

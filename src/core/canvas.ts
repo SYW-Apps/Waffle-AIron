@@ -901,6 +901,7 @@ body.presentation #exitPresent, body.presentation #presentDetails { display:bloc
     <button data-vm="components" class="active">Components</button>
     <button data-vm="types">Types</button>
     <button data-vm="databases">Databases</button>
+    <button data-vm="network" style="display:none" title="The derived network view: declared networks, gateways, outside and the allowed flows">Network</button>
   </div>
   <div class="dropdown" id="modeDd" style="display:none">
     <button class="tbtn" id="modeBtn" title="Switch between the component architecture, the type ERD, or the database schemas">Components ▾</button>
@@ -3446,9 +3447,14 @@ var MODEL = __MODEL_JSON__;
         if (b.getAttribute('data-vm') === 'databases' && !showDatabaseTab) {
           b.style.display = 'none';
         }
+        // The network view is the host's (the web app's /canvas/<project>/network):
+        // shown only when the host can open it.
+        var canOpenNetwork = typeof opts !== 'undefined' && opts && typeof opts.onOpenNetwork === 'function';
+        if (b.getAttribute('data-vm') === 'network' && canOpenNetwork) b.style.display = '';
         b.addEventListener('click', function () {
           var vm = b.getAttribute('data-vm');
-          if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
+          if (vm === 'network' && canOpenNetwork) opts.onOpenNetwork();
+          else if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
           else if (vm === 'types') navigateTo('types', typesScopeFromView());
           else if (vm === 'components') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
         });

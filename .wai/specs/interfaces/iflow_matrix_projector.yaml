@@ -7,9 +7,10 @@ methods:
     description: >-
       The allowed-flows matrix of a reach model, in a stable order. Only network-transport verbs
       produce flows. A modelled call gives a flow from its calling component, with the networks it
-      enters and the gateway it crosses. An outside entry gives a flow from outside. A network entry
-      gives a flow from the whole network, narrowed in a family-scoped model to its modelled callers
-      when any exist. Pure.
+      enters and the gateway it crosses. An outside entry gives a flow from outside the verb's
+      innermost network: from the next network out when that network is nested (scopes are
+      relative), else from outside everything. A network entry gives a flow from the whole network,
+      narrowed in a family-scoped model to its modelled callers when any exist. Pure.
     signature: 'project(model: ReachModel): list<NetworkFlow>'
     returns: list<NetworkFlow>
     params:
@@ -40,4 +41,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-10-06T13:10:49.063Z'
-updatedAt: '2026-10-06T13:10:49.676Z'
+updatedAt: '2026-10-06T19:37:47.171Z'

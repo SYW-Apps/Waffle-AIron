@@ -65,6 +65,17 @@ export class DoctorOptionsError extends WaironError {
 }
 
 /**
+ * Thrown by the `wairon network` commands for a missing input: a policy needs
+ * the team's bindings file, a check needs an observed-flow export.
+ */
+export class NetworkOptionsError extends WaironError {
+  constructor(detail: string) {
+    super(`wairon network: ${detail}`);
+    this.name = 'NetworkOptionsError';
+  }
+}
+
+/**
  * Thrown when the chaining migration refuses to apply a plan, before its first
  * write: the family was only partly in reach, or a project the plan writes has
  * no configuration. `reasons` names each blocking finding.

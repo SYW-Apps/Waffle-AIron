@@ -1,8 +1,6 @@
 id: inetwork_file_adapter
 name: Network File Adapter Interface
-description: >-
-  The deployment-side inputs, read from files the team keeps outside .wai/. Both reads are I/O
-  (effect io once the effect vocabulary carries it).
+description: The deployment-side inputs, read from files the team keeps outside .wai/. Both reads are I/O.
 component: network_file_adapter
 methods:
   - name: readBindings
@@ -16,6 +14,7 @@ methods:
       - name: path
         type: string
         description: The bindings file, absolute or relative to the working directory
+    effect: io
   - name: readObservedFlows
     description: >-
       Read and parse an observed-flow export: CSV with a header row (source, destination, transport,
@@ -27,6 +26,7 @@ methods:
       - name: path
         type: string
         description: The export file
+    effect: io
 status: complete
 createdAt: '2026-10-06T13:10:44.461Z'
-updatedAt: '2026-10-06T13:10:45.184Z'
+updatedAt: '2026-10-06T19:24:55.441Z'

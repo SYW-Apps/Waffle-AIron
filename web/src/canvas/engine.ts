@@ -2471,9 +2471,14 @@ export function mountCanvas(host, model, opts = {}) {
         if (b.getAttribute('data-vm') === 'databases' && !showDatabaseTab) {
           b.style.display = 'none';
         }
+        // The network view is the host's (the web app's /canvas/<project>/network):
+        // shown only when the host can open it.
+        var canOpenNetwork = typeof opts !== 'undefined' && opts && typeof opts.onOpenNetwork === 'function';
+        if (b.getAttribute('data-vm') === 'network' && canOpenNetwork) b.style.display = '';
         b.addEventListener('click', function () {
           var vm = b.getAttribute('data-vm');
-          if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
+          if (vm === 'network' && canOpenNetwork) opts.onOpenNetwork();
+          else if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
           else if (vm === 'types') navigateTo('types', typesScopeFromView());
           else if (vm === 'components') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
         });
