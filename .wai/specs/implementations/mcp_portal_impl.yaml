@@ -339,6 +339,40 @@ methods:
         targetComponent: mcp_network_orchestrator
         targetMethod: explain
     symbol: sdd_explain_flow
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the network declaration workflow
+        type: call
+        targetComponent: mcp_network_orchestrator
+        targetMethod: declare
+    symbol: sdd_set_network
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the remove-external workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: remove
+    symbol: sdd_remove_external
+  - name: updateExternal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Gather the tool's arguments into an ExternalUseRequest and dispatch to the update-external
+          workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: updateUse
+    symbol: sdd_update_external
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameField workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameField
+    symbol: sdd_rename_field
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T19:07:11.349Z'
+updatedAt: '2026-10-06T23:07:33.479Z'

@@ -92,7 +92,7 @@ describe('gate StateId vs content StateId', () => {
       const content = computeStateId();
       const gate = computeGateStateId();
       expect(content.algorithm).toBe('sha256');
-      expect(gate.algorithm).toBe('sha256+design+doctrine+inputs+members');
+      expect(gate.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
       expect(stateIdEquals(content, gate)).toBe(false);
     } finally { proj.cleanup(); }
   });

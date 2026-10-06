@@ -365,6 +365,21 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: setNetwork
+    description: >-
+      Declare (or, with null, remove) the bound project's `network`: that it and every member below
+      it form one isolated network boundary. A declaration with no description is written in its
+      short form `network: true`. Refused for a project without a configuration and for a part's (a
+      part declares no network: the project declaring one encloses it). The same value writes
+      nothing. Returns whether it wrote.
+    signature: 'setNetwork(network: NetworkDeclaration?): bool'
+    returns: bool
+    params:
+      - name: network
+        type: NetworkDeclaration?
+        description: The declaration, or null to remove it
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-04T10:19:19.210Z'
+updatedAt: '2026-10-06T23:05:20.489Z'

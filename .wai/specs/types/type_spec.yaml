@@ -50,7 +50,10 @@ fields:
     optional: true
   - name: fields
     type: list<any>
-    description: Data fields declared by this type; none on a signature (SIGNATURE_TYPE_MEMBERS)
+    description: >-
+      Data fields declared by this type; none on a signature (SIGNATURE_TYPE_MEMBERS). A field
+      renamed by the rename-field tool carries its rename trace (previousNames, oldest first), which
+      the design export shows as `formerly`
     optional: false
   - name: methods
     type: list<TypeMethod>
@@ -230,4 +233,4 @@ methods:
     symbol: typeDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-06T10:25:59.277Z'
+updatedAt: '2026-10-06T23:08:16.731Z'

@@ -191,7 +191,9 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   scanAllSpecs({ memberDepth: options.memberDepth });
 
   const system = loadSystemSpec();
-  const loaderErrors = getLoaderIssues();
+  // Only a file that would not load fails the report: a loader WARNING (a key
+  // the schema does not know) is validate's to report, not a reason to refuse.
+  const loaderErrors = getLoaderIssues().filter((issue) => issue.severity === 'error');
 
   // Step 2/3: a tree that will not load is precisely when somebody asks after
   // its status, so name each failure rather than refusing to answer — and say
@@ -216,7 +218,14 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // here: `wairon init` is advice only a terminal can give, and the MCP client
   // reading the same report cannot run it.
   if (!system && !partOf) {
-    return { text: 'L0 System specification (system.yaml) is missing.', failed: true };
+    // Two different states, said apart: no project binds this folder at all
+    // (an MCP server started where no .wai/ is), or a project whose design
+    // has not been started. Naming a retired file name sent readers looking
+    // for a system.yaml that never exists.
+    if (!pathExists(fromProjectRoot('.wai/project.yaml'))) {
+      return { text: `No wairon project binds this folder (no .wai/project.yaml at ${fromProjectRoot('.')}): there is no design to report.`, failed: true };
+    }
+    return { text: 'This project has no L0 System spec yet (.wai/specs/.index.yaml): its design has not been started.', failed: true };
   }
 
   // Step 6: read the subsystems, components, interfaces and implementations
@@ -243,6 +252,17 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // rather than colours, so this renderer never learns what a terminal is.
   let output = '';
   const componentScores = new Map<string, number>();
+  // The project graph, read once: the scores below and the tree after them
+  // judge a source file against the root of the project that owns its spec,
+  // so the percentage and the line beside it can never disagree.
+  const family = graph();
+  const ownerOf = (key: string): string => family.owners.get(key) ?? '';
+  /** A source file a spec names, read against the root of the project that owns the spec. */
+  const sourceExists = (specId: string, file: string): boolean => {
+    const owner = ownerOf(specId);
+    const dir = owner === '' ? undefined : family.nodes.find((n) => n.namespace === owner)?.directory;
+    return pathExists(dir ? path.resolve(dir, file) : fromProjectRoot(file));
+  };
 
   for (const comp of components) {
     let score = 20;
@@ -256,7 +276,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     if (impl) {
       score += 30;
       const sourceFiles = implementationSourceFiles(impl);
-      if (sourceFiles.length > 0 && sourceFiles.every(f => pathExists(fromProjectRoot(f)))) {
+      if (sourceFiles.length > 0 && sourceFiles.every(f => sourceExists(impl.id, f))) {
         score += 20;
       }
     }
@@ -305,14 +325,6 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
 
   // Step 7: the project graph — each member the tree reaches prints as a
   // project holding its own subsystems, never as a subsystem of its parent.
-  const family = graph();
-  const ownerOf = (key: string): string => family.owners.get(key) ?? '';
-  /** A source file a spec names, read against the root of the project that owns the spec. */
-  const sourceExists = (specId: string, file: string): boolean => {
-    const owner = ownerOf(specId);
-    const dir = owner === '' ? undefined : family.nodes.find((n) => n.namespace === owner)?.directory;
-    return pathExists(dir ? path.resolve(dir, file) : fromProjectRoot(file));
-  };
   /** Whether a project, or a member below it, holds a subsystem this report shows (narrowed reports only). */
   const holdsShown = (ns: string): boolean =>
     subsystems.some((s) => ownerOf(s.id) === ns)
@@ -366,7 +378,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
         if (impl.sourcePath) {
           pathStr = sourceExists(impl.id, impl.sourcePath)
             ? mark.present(` -> ${impl.sourcePath}`)
-            : mark.missing(` -> ${impl.sourcePath} (File Missing!)`);
+            : mark.draft(` -> ${impl.sourcePath} (planned — not written yet)`);
         } else if (methodsWithOwnPath.length > 0) {
           pathStr = '';
         } else {
@@ -382,7 +394,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
           const methodPath = method.sourcePath as string;
           const methodLine = sourceExists(impl.id, methodPath)
             ? mark.present(`method ${method.name} -> ${methodPath}`)
-            : mark.missing(`method ${method.name} -> ${methodPath} (File Missing!)`);
+            : mark.draft(`method ${method.name} -> ${methodPath} (planned — not written yet)`);
           output += `${mark.structure(methodIndent + methodPrefix)}${methodLine}\n`;
         }
       } else {

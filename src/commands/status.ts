@@ -73,7 +73,7 @@ const TERMINAL_DECOR: StatusDecor = {
  * left here — the report says THAT it failed, never which way — so the two
  * spellings are pinned together by a test rather than by hope.
  */
-const NO_SYSTEM_SPEC = 'L0 System specification (system.yaml) is missing.';
+const NO_SYSTEM_SPEC = 'This project has no L0 System spec yet (.wai/specs/.index.yaml): its design has not been started.';
 const INIT_HINT = ' Run `wairon init` first.';
 
 /**

@@ -39,11 +39,15 @@ export const externalDeclarationsRule: SddRule = {
       if (external.sourceKind !== 'unresolved') continue;
       if (pinned.get(external.alias)?.snapshot && !external.problem?.startsWith('the `use`') && !isMalformed(external.problem)) continue;
       reported.add(external.alias);
-      // Step 6.
+      // Step 6: an unpinned producer outside this root is its pin's to judge —
+      // say so instead of blaming the declaration.
+      const unpinnedOutside = external.problem?.startsWith('no project of the family answers') && !pinned.get(external.alias)?.snapshot;
       ctx.addIssue(
         'notice',
         'EXTERNAL_UNRESOLVED',
-        `This project's .wai/project.yaml declares the external "${external.alias}" (producer "${external.project}"), which does not resolve: ${external.problem}. Fix the alias or the producer id, add \`source: { path: <the producer's root> }\` to say where it lives, or pin it (\`wairon externals pin\`) so this project's gate has something to judge it against.`,
+        unpinnedOutside
+          ? `This project's .wai/project.yaml declares the external "${external.alias}" (producer "${external.project}"), which this project's own gate cannot resolve: no project this root contains answers to "${external.project}", and nothing is pinned for it. A parent or sibling is never climbed to from a project's own gate — its pin is the one thing the gate judges it against. Pin it here (\`wairon externals pin ${external.alias}\`), or give it \`source: { path: <the producer's root> }\`.`
+          : `This project's .wai/project.yaml declares the external "${external.alias}" (producer "${external.project}"), which does not resolve: ${external.problem}. Fix the alias or the producer id, add \`source: { path: <the producer's root> }\` to say where it lives, or pin it (\`wairon externals pin\`) so this project's gate has something to judge it against.`,
       );
     }
     // An alias a legacy L1 mount also takes: one alias names one project.

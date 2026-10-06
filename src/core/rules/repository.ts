@@ -77,6 +77,7 @@ import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
 import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
 import { entryDeclarationsRule } from './wiring/entry-declarations.js';
 import { networkBoundariesRule } from './wiring/network-boundaries.js';
+import { adapterTransportRule } from './wiring/adapter-transport.js';
 import { reachabilityRule } from './wiring/unused-detection.js';
 import { invokedByDescriptionRule } from './wiring/invoked-by-description.js';
 import { unusedTypesRule } from './wiring/unused-types.js';
@@ -278,6 +279,7 @@ export const SDD_RULES: SddRule[] = [
   invokedByDescriptionRule,
   reachabilityRule,
   networkBoundariesRule,
+  adapterTransportRule,
   unusedTypesRule,
   // The declaration (spec-scoped, refused at the write boundary) before the
   // round-trip consequences it enables.

@@ -221,7 +221,7 @@ describe('e2e wairon status exit codes (built binary)', () => {
     const res = await runStatus(scratchTree('no-system'));
 
     expect(res.code, fullOutput(res)).not.toBe(0);
-    expect(res.stderr, fullOutput(res)).toContain('L0 System specification (system.yaml) is missing.');
+    expect(res.stderr, fullOutput(res)).toContain('This project has no L0 System spec yet (.wai/specs/.index.yaml): its design has not been started.');
     // The hint is the terminal's own — a person here can act on it in the next
     // second, and it is the sentence this command printed before the collapse.
     expect(res.stderr, fullOutput(res)).toContain('Run `wairon init` first.');

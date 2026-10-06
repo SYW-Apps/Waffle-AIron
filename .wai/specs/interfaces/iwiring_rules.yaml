@@ -374,6 +374,26 @@ methods:
         summary: >-
           An export at an audience wider than project on a network-transport verb that callers
           beyond the network cannot reach
+  - name: adapterTransport
+    description: >-
+      Rule adapter-transport. An Adapter calls a verb on its target Portal's interface, so its
+      transport is the target's: inferred from the target Portal when the Adapter states none (HTTP
+      for an HTTP API, a database connection for a database Portal, ...). An Adapter MAY state its
+      own transport; when it does and a Portal it calls (one it names in dependsOn, or the target of
+      one of its call, register or dispatch steps or declared calls) has another transport, that is
+      ADAPTER_TRANSPORT_MISMATCH, one finding per target — so changing a Portal's transport shows
+      its impact on every Adapter that calls it. A Portal the tree cannot resolve (an external one)
+      is not judged here. Reads the components and narratives of the tree.
+    signature: 'adapterTransport(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ADAPTER_TRANSPORT_MISMATCH
+        severity: error
+        summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-06T18:32:49.374Z'
+updatedAt: '2026-10-06T23:07:19.895Z'

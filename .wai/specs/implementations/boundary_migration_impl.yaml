@@ -209,8 +209,10 @@ methods:
         description: >-
           Bind the bound project's rehearsal root and externalize the subsystem — into a part, or
           with `as: project` into a member project; a core refusal propagates. As a project, record
-          what the core answers — each respelled reference, export, import and dropped consumers
-          entry — as the plan's edits, so the plan lists exactly what the rehearsal wrote
+          what the core answers — each respelled reference, export, import, dropped consumers entry,
+          entry declared on a verb the parent calls, and topic now crossing the boundary — as the
+          plan's edits and notes, so the plan lists exactly what the rehearsal wrote and what the
+          family run, not the new project's own gate, pairs
         type: call
         targetComponent: migration_core_adapter
         targetMethod: externalizeSubsystem
@@ -235,9 +237,10 @@ methods:
       - stepNumber: 16
         description: >-
           Bind the bound project's rehearsal root and promote the part in place; a core refusal
-          propagates. Record what the core answers — each respelled reference, export, import and
-          dropped consumers entry — as the plan's edits, so the plan lists exactly what the
-          rehearsal wrote
+          propagates. Record what the core answers — each respelled reference, export, import,
+          dropped consumers entry, entry declared on a verb the parent calls, and topic now crossing
+          the boundary — as the plan's edits and notes, so the plan lists exactly what the rehearsal
+          wrote and what the family run, not the new project's own gate, pairs
         type: call
         targetComponent: migration_core_adapter
         targetMethod: promoteMember
@@ -430,4 +433,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-06T00:38:05.884Z'
+updatedAt: '2026-10-06T23:08:27.840Z'

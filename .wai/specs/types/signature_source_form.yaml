@@ -11,5 +11,10 @@ values:
     description: A contract method component.method
   - name: signature
     description: A signature type
+  - name: export
+    description: >-
+      A contract method of another project's export entry, `alias::name.method`: the method of a
+      declared external's pinned entry, or of a contained member's live L0 entry, its types written
+      as the referrer spells them (`alias::type`).
 createdAt: '2026-10-04T23:33:37.758Z'
-updatedAt: '2026-10-04T23:33:38.226Z'
+updatedAt: '2026-10-06T23:03:52.415Z'

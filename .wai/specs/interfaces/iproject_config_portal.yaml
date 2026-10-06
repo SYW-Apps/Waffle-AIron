@@ -269,6 +269,18 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: setNetwork
+    description: >-
+      Published write: declare (or, with null, remove) the project's network. Routed through the
+      core orchestrator.
+    signature: 'setNetwork(network: NetworkDeclaration?): bool'
+    returns: bool
+    params:
+      - name: network
+        type: NetworkDeclaration?
+        description: The declaration, or null to remove it
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:06.947Z'
-updatedAt: '2026-10-04T10:19:18.783Z'
+updatedAt: '2026-10-06T23:05:36.238Z'

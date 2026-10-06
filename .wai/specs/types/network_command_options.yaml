@@ -36,7 +36,13 @@ fields:
     type: bool
     description: '--no-recursive: the bound project alone instead of its family'
     optional: true
+  - name: description
+    type: string
+    description: >-
+      declare --description: what the network encloses, in the project's words; shown on the network
+      diagram
+    optional: true
 methods: []
 sourcePath: src/commands/network.ts
 createdAt: '2026-10-06T13:12:51.479Z'
-updatedAt: '2026-10-06T13:12:52.110Z'
+updatedAt: '2026-10-06T23:05:46.290Z'

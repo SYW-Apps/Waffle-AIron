@@ -2,8 +2,9 @@ kind: value-object
 id: network_document
 name: NetworkDocument
 description: >-
-  One generated networking output: its format, the text to write, and the design names it had no
-  binding for (each given the placeholder label, never silently opened).
+  One generated networking output: its format, the text to write, the design names it had no binding
+  for (each given the placeholder label, never silently opened), and the gate findings that refused
+  or marked rows of it.
 subsystem: sdd_network
 fields:
   - name: format
@@ -18,7 +19,21 @@ fields:
     type: list<string>
     description: The design names the bindings did not map
     optional: false
+  - name: gateFindings
+    type: list<string>
+    description: >-
+      The gate findings over the reach model that refused rows of this output or marked them, each
+      as `CODE (severity): message`; empty when the design passes the network rules. A policy
+      written while one is an error is refused by its caller (non-zero exit)
+    optional: false
+  - name: refused
+    type: bool
+    description: >-
+      Whether the gate refused a flow of the design (an error sits on it): marked in a matrix, left
+      out of a policy. A policy written while it is true is a design that fails the gate, and its
+      caller exits non-zero
+    optional: false
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:55.363Z'
-updatedAt: '2026-10-06T13:09:55.989Z'
+updatedAt: '2026-10-06T23:03:46.749Z'

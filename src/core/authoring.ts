@@ -628,6 +628,17 @@ function carryInto(restatement: SpecRestatement, existing: Spec | null, candidat
       carried.push(`previousNames (${String(method.name)})`);
     }
   }
+  // A field's rename trace likewise: re-defining a type states its fields
+  // again, and a field stated under its current name keeps the names it retired.
+  if (restatement.kind === 'type' && Array.isArray(candidate.fields)) {
+    const stored: Record<string, unknown>[] = (existing as { fields?: Record<string, unknown>[] }).fields ?? [];
+    for (const field of candidate.fields as Record<string, unknown>[]) {
+      const prev = stored.find((p) => p.name === field.name);
+      if (prev?.previousNames === undefined || field.previousNames !== undefined) continue;
+      field.previousNames = prev.previousNames;
+      carried.push(`previousNames (field ${String(field.name)})`);
+    }
+  }
   // createdAt is kept by stampLifecycle and named first above, never carried as data.
   carried.push(...carryUnexpressed(existing as Record<string, unknown>, candidate, [...restatement.fields, 'createdAt']));
   return carried;

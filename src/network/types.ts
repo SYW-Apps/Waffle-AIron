@@ -87,6 +87,10 @@ export interface NetworkFlow {
   evidence: string[];
   /** On an aggregated edge of the network view: each verb it carries, as portal.verb with its binding. */
   verbs?: string[];
+  /** The gate's error findings that sit on it, each `CODE: message`: the design refuses it, so nothing admits it. */
+  refusedBy?: string[];
+  /** The gate's warnings and notices that sit on it, each `CODE: message`: allowed, but marked. */
+  flaggedBy?: string[];
 }
 
 /**
@@ -145,6 +149,10 @@ export interface FlowCheckReport {
   unexercised: NetworkFlow[];
   /** Observed at L7 on an allowed workload pair, but no verb of the called Portal has that method and path. */
   unknownVerbs: ObservedFlow[];
+  /** Observed on a verb the destination declares, but no admitted flow allows it from this source: a boundary violation. */
+  disallowed: ObservedFlow[];
+  /** The gate findings over the reach model, each `CODE (severity): message`; a flow an error sits on allowed nothing. */
+  gateFindings: string[];
 }
 
 /**
@@ -157,6 +165,12 @@ export interface FlowExplanation {
   flows: NetworkFlow[];
   /** Each step of the justification as one line. */
   chain: string[];
+  /** True when the callee takes no network flow at all: it is reached in-process. */
+  inProcess?: boolean;
+  /** The party names the design does not know: a typo, not a refusal. */
+  unknown?: string[];
+  /** The gate's error findings on the flows between the pair: the design names them, the gate refuses them. */
+  refusedBy?: string[];
 }
 
 /**
@@ -170,6 +184,10 @@ export interface NetworkDocument {
   content: string;
   /** The design names the bindings did not map. */
   unbound: string[];
+  /** The gate findings that refused rows of it or marked them, each `CODE (severity): message`. */
+  gateFindings: string[];
+  /** Whether the gate refused a flow of the design: marked in a matrix, left out of a policy. */
+  refused: boolean;
 }
 
 /**

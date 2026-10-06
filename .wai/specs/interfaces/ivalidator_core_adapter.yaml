@@ -256,6 +256,28 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: computeOwnDesignIdAsRecorded
+    description: >-
+      Forward to approval_portal.computeOwnDesignIdAsRecorded: the own design identity in the
+      earlier design reading, status put back as approved.
+    signature: 'computeOwnDesignIdAsRecorded(approvedStatus: map<string, SpecStatus>): StateId'
+    returns: StateId
+    params:
+      - name: approvedStatus
+        type: map<string, SpecStatus>
+        description: Each spec's approved status, keyed `<kind>:<id>`
+    guarantees:
+      - idempotent
+  - name: approvedStatuses
+    description: 'Forward to approval_portal.approvedStatuses: each own spec''s status as the record approved it.'
+    signature: 'approvedStatuses(record: LockRecord): map<string, SpecStatus>'
+    returns: map<string, SpecStatus>
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval record
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T18:01:26.495Z'
+updatedAt: '2026-10-06T23:05:11.377Z'

@@ -84,6 +84,25 @@ methods:
       `async T → Promise<T>`, `result<T, E> → T, throwing E`, an enum → a string-literal union
       alias, a named scalar → a type alias of its primitive, ...), so an implementer maps a
       contract's types by rule rather than by guess.
+  - name: mappingFor
+    signature: 'mappingFor(language: string): list<string>?'
+    params:
+      - name: language
+        type: string
+        description: >-
+          The language an implementer writes in: an analyzer language key, a technology name, or the
+          L0 targetLanguage
+    returns: list<string>?
+    description: >-
+      The write table an implementer brief carries for a language: a shipped dialect's mappingLines
+      when one reads the language, else a MAPPING-ONLY table shipped for it — Rust (String, i64,
+      f64, bool, Vec<u8>, chrono types, Vec<T>, HashSet<T>, HashMap<K, V>, Option<T>, Result<T, E>,
+      async fn, an enum, a newtype) and Python (str, int, float, bool, bytes, datetime types,
+      list[T], set[T], dict[K, V], Optional / `T | None`, async def, raising E, an Enum, a NewType).
+      A mapping-only table spells types for the implementer and nothing else: no analyzer reads that
+      language's annotations, so code conformance does not compare them, and the table's last line
+      says so. None for a language with neither.
+    symbol: typeMappingFor
 sourcePath: src/models/type-dialects.ts
 createdAt: '2026-10-03T22:03:39.838Z'
-updatedAt: '2026-10-05T06:47:58.188Z'
+updatedAt: '2026-10-06T23:08:24.287Z'

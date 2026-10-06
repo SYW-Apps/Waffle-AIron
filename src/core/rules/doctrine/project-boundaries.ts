@@ -6,6 +6,8 @@ import {
   producerOf,
   PROJECT_ID_RE,
   EXTERNAL_ALIAS_RE,
+  nameKey,
+  type AuthoredReference,
   type ProjectNode,
 } from '../../../models/index.js';
 
@@ -38,6 +40,66 @@ function label(node: ProjectNode | null, namespace: string): string {
   if (!node) return `"${namespace}"`;
   const id = node.id ?? node.name ?? '(no id)';
   return node.namespace === '' ? `"${id}"` : `"${id}" (keyed "${node.namespace}")`;
+}
+
+/** The last segment of a possibly-qualified id. */
+function lastSegment(id: string): string {
+  return id.split('::').pop()!.split('.').pop()!;
+}
+
+/** The edit distance between two names. */
+function distance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const next = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = row[j];
+      row[j] = next;
+    }
+  }
+  return row[b.length];
+}
+
+/**
+ * The "did you mean" of an unexported reference: the public name the
+ * producer's rename trace carries the written name to — a contained member's
+ * renamed component, interface or type (its previousIds), or a pin's
+ * `formerly` and unresolved re-exports — else up to three public names closest
+ * to it. '' when the producer's table cannot be read.
+ */
+function didYouMean(ctx: RuleContext, ref: AuthoredReference): string {
+  const written = lastSegment(ref.authored);
+  const key = nameKey(written);
+  let names: string[] = [];
+  let renamedTo: string | undefined;
+  const table = ref.producer !== undefined ? (ctx.exportTables ?? []).find((t) => t.level === 'project' && t.owner === ref.producer) : undefined;
+  if (table) {
+    names = table.entries.map((e) => e.publicName);
+    const traced = (holder: { previousIds?: string[] } | undefined): boolean => (holder?.previousIds ?? []).some((p) => nameKey(lastSegment(p)) === key);
+    for (const e of table.entries) {
+      const holder = e.kind === 'type'
+        ? ctx.types.find((t) => t.id === e.typeDef || t.id === `${ref.producer}::${e.typeDef}`)
+        : e.interface !== undefined ? ctx.interfaceMap.get(e.interface) : ctx.componentMap.get(e.component ?? '');
+      if (traced(holder)) { renamedTo = e.publicName; break; }
+    }
+  } else {
+    const alias = ref.authored.includes('::') ? ref.authored.split('::')[0] : undefined;
+    const pin = alias !== undefined ? ctx.pinnedExternals.find((p) => p.alias === alias)?.snapshot : undefined;
+    if (pin) {
+      names = [...pin.interfaces.map((e) => e.id), ...(pin.exportedTypes ?? []).map((t) => t.id)];
+      renamedTo = pin.interfaces.find((e) => (e.formerly ?? []).some((f) => nameKey(f) === key))?.id
+        ?? (pin.exportedTypes ?? []).find((t) => (pin.types.find((d) => d.id === t.type)?.formerly ?? []).some((f) => nameKey(f) === key))?.id
+        ?? pin.unresolvedExports?.find((u) => nameKey(u.id) === key)?.renamedTo;
+    }
+  }
+  if (renamedTo !== undefined && renamedTo !== written) return ` It was renamed to "${renamedTo}" (the producer's rename trace records "${written}") — did you mean "${renamedTo}"?`;
+  const close = [...new Set(names)].filter((n) => n !== written)
+    .sort((a, b) => distance(written, a) - distance(written, b) || (a < b ? -1 : 1))
+    .filter((n) => distance(written, n) <= Math.max(2, Math.floor(written.length / 2)))
+    .slice(0, 3);
+  return close.length ? ` Did you mean ${close.map((n) => `"${n}"`).join(' or ')}?` : '';
 }
 
 /** The `externals` entry that would declare the producer. */
@@ -94,7 +156,7 @@ export const projectBoundariesRule: SddRule = {
           ctx.addIssue(
             'error',
             'EXTERNAL_NOT_EXPORTED',
-            `${where}, which reaches "${resolution.canonicalTarget}" at no public name the referrer may see: ${resolution.reason}. Another project may reach it only through a public name of its L0 table whose audience covers the referrer — export it from that project's L0 (a project-level type takes one own \`{ typeDef }\` entry) and re-pin, or reach it by a name the producer exports.`,
+            `${where}, which reaches "${resolution.canonicalTarget}" at no public name the referrer may see: ${resolution.reason}.${didYouMean(ctx, ref)} Another project may reach it only through a public name of its L0 table whose audience covers the referrer — export it from that project's L0 (a project-level type takes one own \`{ typeDef }\` entry) and re-pin, or reach it by a name the producer exports.`,
             ref.specId,
             draft,
             resolution,

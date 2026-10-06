@@ -36,9 +36,11 @@ methods:
         description: >-
           Bind each NAMED re-export by its target in the source's table (the component, narrowed to
           the interface when one is named). A missing source, an unknown item, or an item the source
-          does not export is an invalid problem; an item the source owns but does not export is
-          still bound, leniently, so no existing name moves. Inside a group whose tables are not yet
-          complete, a name that never grounds is a named-cycle problem
+          does not export is an invalid problem — carrying the `from` it names and, when the source
+          records the item in a rename trace (a component's, interface's or type's former ids), the
+          public name it was renamed to; an item the source owns but does not export is still bound,
+          leniently, so no existing name moves. Inside a group whose tables are not yet complete, a
+          name that never grounds is a named-cycle problem
         type: local
       - stepNumber: 6
         description: >-
@@ -120,10 +122,12 @@ methods:
         label: project-source
         description: >-
           Bind against the producing project's table from the sources — the member's or the
-          external's, by alias: only its public names can be bound; a producer present as null
-          (still on this resolution path) is a named-cycle problem naming the projects on the loop
-          and binds nothing; an entry whose declared audience (default instance) ranks wider than
-          the producer export's audience is a widens problem naming both
+          external's, by alias: only its public names can be bound, and a named item it no longer
+          exports is an invalid problem carrying the alias and, when the producer's rename trace
+          records the item, the public name it was renamed to; a producer present as null (still on
+          this resolution path) is a named-cycle problem naming the projects on the loop and binds
+          nothing; an entry whose declared audience (default instance) ranks wider than the producer
+          export's audience is a widens problem naming both
         type: jump
         toStep: 11
       - stepNumber: 10
@@ -141,7 +145,8 @@ methods:
         description: >-
           Carry the entry's audience, name, role, details, auth policy, version and stability onto
           every name it brought in, with the export kind derived from the backing Portal's transport
-          (transport.exportKind; an authored kind is read only as the legacy value), and record a
+          (transport.exportKind; an InProcess Portal — a library — is shown as InProcess, never as
+          the free-form Custom; an authored kind is read only as the legacy value), and record a
           re-exported component that cannot serve its role (a called entry neither a Portal nor an
           Observer; an implemented entry neither a Portal nor an Adapter) as an unconsumable problem
         type: local
@@ -159,4 +164,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-10-06T13:16:20.139Z'
+updatedAt: '2026-10-06T23:09:08.257Z'

@@ -439,6 +439,26 @@ methods:
     endpoint:
       transport: CLI
       command: wairon network why
+  - name: networkDeclare
+    description: '`wairon network declare [--description <text>]`: declare this project''s network.'
+    signatureFrom: cli_runner.runNetworkDeclare
+    endpoint:
+      transport: CLI
+      command: wairon network declare
+  - name: networkUndeclare
+    description: '`wairon network undeclare`: remove this project''s network declaration.'
+    signatureFrom: cli_runner.runNetworkUndeclare
+    endpoint:
+      transport: CLI
+      command: wairon network undeclare
+  - name: typeRenameField
+    description: >-
+      `wairon type rename-field <type> <field> <new-name>`: rename a field of a type and respell
+      every reference to it, keeping the old name in its rename trace.
+    signatureFrom: cli_runner.runTypeRenameField
+    endpoint:
+      transport: CLI
+      command: wairon type rename-field <type> <field> <new-name>
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-06T13:13:46.313Z'
+updatedAt: '2026-10-06T23:08:05.339Z'

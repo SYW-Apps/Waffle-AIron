@@ -58,6 +58,7 @@ import {
   renameComponent,
   renameMethod,
   renameType,
+  renameField,
   loadProjectConfig,
   getStatusReport,
   approvalVerdict,
@@ -73,8 +74,12 @@ import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp 
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
+// removeExternal as dropExternal / updateExternalUse as changeExternalUse:
+// sdd_remove_external's and sdd_update_external's workflows
+// (mcp_externals_orchestrator.remove and .updateUse).
+import { removeExternal as dropExternal, updateExternalUse as changeExternalUse } from './adapters/surfaces.js';
 // The read-only network tools' workflows (mcp_network_orchestrator).
-import { flows as networkFlows, explain as explainNetworkFlow } from './network.js';
+import { flows as networkFlows, explain as explainNetworkFlow, declare as declareNetwork } from './network.js';
 import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
 import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals } from './adapters/validator.js';
@@ -416,6 +421,26 @@ const externalAdditionOutput = {
   ...staleServerOutput,
 };
 
+/** sdd_remove_external's structured answer: what removing the external took out — or the refusal. */
+const externalRemovalOutput = {
+  alias: z.string(),
+  removed: z.boolean().describe('Whether .wai/project.yaml no longer carries the declaration because this call took it out.'),
+  unpinned: z.boolean().describe('Whether the alias\'s lock entry and pinned snapshot were removed (or would be, on a dry run).'),
+  refusal: z.string().optional().describe('Why nothing was removed, in one sentence.'),
+  ...staleServerOutput,
+};
+
+/** sdd_update_external's structured answer: the `use` list after the change and what moved — or the refusal. */
+const externalUseChangeOutput = {
+  alias: z.string(),
+  written: z.boolean().describe('Whether .wai/project.yaml now carries the changed `use` (false on a refusal, a dry run and when nothing changed).'),
+  use: z.array(z.string()).describe('The `use` list after the change, in order.'),
+  added: z.array(z.string()).describe('The names this change imports that were not imported before.'),
+  removed: z.array(z.string()).describe('The names this change stops importing.'),
+  refusal: z.string().optional().describe('Why nothing was written, in one sentence.'),
+  ...staleServerOutput,
+};
+
 /**
  * sdd_add_external's answer, shaped from the addition the surfaces adapter
  * answered (mcp_externals_orchestrator.declare): the addition as structured
@@ -427,7 +452,7 @@ function additionAnswer(request: ExternalRequest, addition: ExternalAddition): C
     return { ...structured(addition.refusal, { ...addition }), isError: true };
   }
   const summary = request.dryRun
-    ? `Dry run: would declare "${addition.alias}" → ${addition.project ?? addition.alias} as ${JSON.stringify(addition.declaration)}; the producer is checked and the external pinned on the real run. Nothing was written.`
+    ? `Dry run: would declare "${addition.alias}" → ${addition.project ?? addition.alias} as ${JSON.stringify(addition.declaration)}${addition.unreachable ? `; ${addition.unreachable}` : '; the producer was read and agrees'}. Nothing was written.`
     : `Declared "${addition.alias}" → ${addition.project ?? addition.alias} as ${JSON.stringify(addition.declaration)}`
       + (addition.pin ? `; pin ${addition.pin.outcome}${addition.pin.detail ? ` — ${addition.pin.detail}` : ''}` : '')
       + (addition.unreachable ? `. Declared but not pinned: ${addition.unreachable}` : '')
@@ -455,6 +480,8 @@ const networkFlowOutput = z.object({
   via: z.string().optional(),
   evidence: z.array(z.string()),
   verbs: z.array(z.string()).optional(),
+  refusedBy: z.array(z.string()).optional().describe('The gate\'s error findings on this flow (`CODE: message`): the design refuses it, so it is never allowed.'),
+  flaggedBy: z.array(z.string()).optional().describe('The gate\'s warnings and notices on this flow (`CODE: message`): allowed, but marked.'),
 });
 
 /** sdd_get_network_flows' structured answer: the allowed flows, filtered when asked. */
@@ -467,7 +494,17 @@ const networkFlowsOutput = {
 const flowExplanationOutput = {
   allowed: z.boolean().describe('Whether any flow of the design allows it.'),
   flows: z.array(networkFlowOutput).describe('The flows that allow it.'),
-  chain: z.array(z.string()).describe('Each step of the justification, one line each; when not allowed, what reaches the callee instead.'),
+  chain: z.array(z.string()).describe('Each step of the justification, one line each; when not allowed, why not: refused by the gate, in-process, an unknown party, or what reaches the callee instead.'),
+  inProcess: z.boolean().optional().describe('True when the callee takes no network flow at all: it is reached in-process, never over the network.'),
+  unknown: z.array(z.string()).optional().describe('The party names the design does not know: a typo, not a refusal.'),
+  refusedBy: z.array(z.string()).optional().describe('The gate\'s error findings on the flows between the pair: the design names them, the gate refuses them.'),
+  ...staleServerOutput,
+};
+
+/** sdd_set_network's structured answer. */
+const networkDeclarationOutput = {
+  written: z.boolean().describe('Whether .wai/project.yaml changed: false when it already read that way.'),
+  declared: z.boolean().describe('Whether the project now declares a network.'),
   ...staleServerOutput,
 };
 
@@ -1196,6 +1233,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_rename_component',
   'sdd_rename_method',
   'sdd_rename_type',
+  'sdd_rename_field',
   'sdd_add_component',
   'sdd_define_interface',
   'sdd_set_endpoints',
@@ -2113,6 +2151,29 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  reg<{ id: string; field: string; newName: string }>(server,
+    'sdd_rename_field',
+    {
+      description: 'Rename a field of a type and respell every reference to it in the bound tree: a foreign key\'s `references: <type>.<field>` naming it from any type (the type\'s own self-references included). The field keeps its place, type and description under the new name, and its old name joins the field\'s rename trace (previousNames), which the design export shows as `formerly` so a consumer holding the old name can follow the move. Rename traces and prose are never rewritten. Refuses, writing nothing: a type that does not exist (type-missing), one in another project (chained-type), a field the type does not declare (field-missing), a new name that is not an identifier (invalid-name), and a name another field of the type holds (name-taken) or retired (name-retired — unsetting the holder\'s previousNames releases it). Returns the type, from and to, and the specs rewritten. The approval reads the type as changed until the next `wairon lock`, as with any edit.',
+      inputSchema: {
+        id: z.string().describe('The type whose field is renamed (qualified by its owning subsystem if needed, `subsystem::id`)'),
+        field: z.string().describe('The field\'s name as it stands'),
+        newName: z.string().describe('Its new name: an identifier'),
+      },
+    },
+    ({ id, field, newName }) => {
+      try {
+        // mcp_orchestrator.renameField: resolve the id in the bound tree,
+        // rename through the core adapter, and return the report as the result.
+        const bare = id.startsWith('::') ? id.slice(2) : id;
+        const resolved = loadTypeSpec(bare) ? bare : id;
+        return json(renameField(resolved, field, newName));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
   reg<{ from: string; to: string; methods: string[]; dryRun?: boolean }>(server,
     'sdd_move_methods',
     {
@@ -2150,7 +2211,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry', 'Adapter', 'Observer', 'Repository']).describe('The building block, or the pattern Repository. Specialist and Gateway are retired and cannot be authored: logic is an Orchestrator with a dependencyClass, a gateway is a Portal with the gateway variant'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
-        transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']).optional().describe('Portal-only, and expected on every Portal: how callers reach its verbs, one vocabulary with the endpoint discriminator. Network: HTTP, gRPC, GraphQL, MessageBus, Custom. Local: CLI, NamedPipe, IPC, JSONRPC (JSON-RPC over stdio, e.g. a language server or stdio MCP). InProcess: a library (or FFI/DLL with an abi), whose verbs are its contract methods and bind no endpoint. Replaces the retired portalType (HTTP_API is HTTP). OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
+        transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']).optional().describe('Expected on every Portal: how callers reach its verbs, one vocabulary with the endpoint discriminator. Network: HTTP, gRPC, GraphQL, MessageBus, Custom. Local: CLI, NamedPipe, IPC, JSONRPC (JSON-RPC over stdio, e.g. a language server or stdio MCP). InProcess: a library (or FFI/DLL with an abi), whose verbs are its contract methods and bind no endpoint. Replaces the retired portalType (HTTP_API is HTTP). On an Adapter, optional: the transport it calls its target Portal over — omit it and it is taken from the Portals its dependsOn names when they share one; a stated one that differs from the target\'s is ADAPTER_TRANSPORT_MISMATCH. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         abi: z.string().optional().describe('Portal-only, InProcess only: how a foreign language links this library — "c" (a C-ABI shared library, DLL or FFI) or "wasm" (a WebAssembly component). Omit for a native API in the project\'s targetLanguage.'),
         invokedBy: z.object({
           kind: z.enum(['entry']).describe('entry: callers outside the design reach every verb of this Portal over its transport'),
@@ -2196,7 +2257,17 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         if (invokedBy?.scope !== undefined && transport !== undefined && transportKind(transport) !== 'network') {
           return errText(`Component "${id}": an entry scope applies only to a network transport, and "${transport}" is ${transportKind(transport)} — drop the scope.`);
         }
-        // mcp_orchestrator.addComponent step 1: the restatement. Re-adding an
+        // mcp_orchestrator.addComponent steps 1-2: an Adapter that states no
+        // transport takes its target Portals' when they share one — it calls
+        // their verbs over it (ADAPTER_TRANSPORT_MISMATCH guards a stated one).
+        let inferredTransport: Transport | undefined;
+        if (componentType === 'Adapter' && transport === undefined) {
+          const portals = (dependsOn ?? []).map((dep) => loadComponentSpec(dep)).filter((c): c is ComponentSpec => c?.componentType === 'Portal' && c.transport !== undefined);
+          const kinds = [...new Set(portals.map((p) => p.transport!))];
+          if (kinds.length === 1) inferredTransport = kinds[0];
+        }
+        const statedTransport = transport ?? inferredTransport;
+        // Step 3: the restatement. Re-adding an
         // existing component used to erase everything this input cannot express
         // — lint.allow above all, whose only symptom is the suppressed warning
         // silently coming back — so the seam carries it, and says so.
@@ -2210,7 +2281,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             componentType,
             owns: owns ?? [],
             dependsOn: dependsOn ?? [],
-            ...(transport ? { transport } : {}),
+            ...(statedTransport ? { transport: statedTransport } : {}),
             ...(abi ? { abi } : {}),
             ...(invokedBy ? { invokedBy } : {}),
             ...(basePath ? { basePath } : {}),
@@ -2228,8 +2299,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // carried fields included, so retyping a Portal carries its `auth` into
         // the judgement — before anything reaches disk. Step 3: the receipt.
         const receipt = writeSpec(restatement);
+        const inferred = inferredTransport ? ` Its transport, ${inferredTransport}, was taken from the Portal it calls (an Adapter calls its target's verbs over the target's transport).` : '';
         return writeReceipt(
-          `Successfully ${receipt.replacedExisting ? 're-authored' : 'added'} L2 Component Spec "${name}" (${id}, ${componentType}).`,
+          `Successfully ${receipt.replacedExisting ? 're-authored' : 'added'} L2 Component Spec "${name}" (${id}, ${componentType}).${inferred}`,
           receipt,
         );
       } catch (e) {
@@ -2996,6 +3068,58 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  reg<{ alias: string; dryRun?: boolean }>(server,
+    'sdd_remove_external',
+    {
+      description: 'Remove one external of the bound project: its declaration in .wai/project.yaml and its pin (the lock entry and the pinned snapshot) together, so no orphaned pin is left; an orphaned pin alone (a declaration someone deleted by hand) is removed too. Refused in one sentence when the alias is neither declared nor pinned. References to the alias are the validator\'s to report afterwards. Use it instead of editing .wai/project.yaml by hand. A tree-scoped write.',
+      inputSchema: {
+        alias: z.string().describe('The external to remove'),
+        dryRun: z.boolean().optional().describe('Answer what would be removed, writing nothing'),
+      },
+      outputSchema: externalRemovalOutput,
+    },
+    ({ alias, dryRun }) => {
+      try {
+        const removal = dropExternal(alias, dryRun);
+        if (removal.refusal) return { ...structured(removal.refusal, { ...removal }), isError: true };
+        const what = [removal.removed || dryRun ? 'its declaration' : '', removal.unpinned ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
+        return structured(dryRun ? `Dry run: would remove "${alias}" — ${what}. Nothing was written.` : `Removed "${alias}": ${what}.`, { ...removal });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ alias: string; addUse?: string[]; removeUse?: string[]; dryRun?: boolean }>(server,
+    'sdd_update_external',
+    {
+      description: 'Add and remove `use` imports of one declared external, so this project\'s specs may name the producer\'s public names bare — e.g. so an `implements` of another project\'s trait may spell the producer\'s types as the producer does. An added name is checked against what the producer exports to this project (refused naming the closest exported names, or the audience that keeps it out). The pin is untouched. Use it instead of editing .wai/project.yaml by hand. A tree-scoped write.',
+      inputSchema: {
+        alias: z.string().describe('The declared external whose `use` changes'),
+        addUse: z.array(z.string()).optional().describe('Public names to import bare (`*` for all)'),
+        removeUse: z.array(z.string()).optional().describe('Names to stop importing'),
+        dryRun: z.boolean().optional().describe('Answer the resulting list, writing nothing'),
+      },
+      outputSchema: externalUseChangeOutput,
+    },
+    ({ alias, addUse, removeUse, dryRun }) => {
+      try {
+        const change = changeExternalUse({
+          alias,
+          ...(addUse !== undefined ? { add: addUse } : {}),
+          ...(removeUse !== undefined ? { remove: removeUse } : {}),
+          ...(dryRun ? { dryRun: true } : {}),
+        });
+        if (change.refusal) return { ...structured(change.refusal, { ...change }), isError: true };
+        const moved = [change.added.length ? `+ ${change.added.join(', ')}` : '', change.removed.length ? `- ${change.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'no change';
+        const list = change.use.length ? change.use.join(', ') : '(none)';
+        return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved}).`, { ...change });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
   reg<{ to?: string }>(server,
     'sdd_get_network_flows',
     {
@@ -3029,8 +3153,36 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     ({ from, to }) => {
       try {
         const explanation = explainNetworkFlow(from, to);
-        const head = explanation.allowed ? `${from} may reach ${to}:` : `${from} may NOT reach ${to}:`;
+        const head = explanation.allowed ? `${from} may reach ${to}:`
+          : explanation.unknown?.length ? `unknown party: ${explanation.unknown.join(', ')}:`
+            : explanation.refusedBy?.length ? `${from} may NOT reach ${to} — the gate refuses the flow:`
+              : explanation.inProcess ? `${to} is reached in-process — never a network flow:`
+                : `${from} may NOT reach ${to}:`;
         return structured([head, ...explanation.chain.map((l) => `  ${l}`)].join('\n'), { ...explanation });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ declared: boolean; description?: string }>(server,
+    'sdd_set_network',
+    {
+      description: 'Declare (declared: true, with an optional description) or remove (declared: false) the bound project\'s `network` in .wai/project.yaml: that this project and every member below it form one isolated network boundary. It changes which rules fire (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so run sdd_validate_tree after it; it is part of the gate identity, so the human re-locks. Use it instead of editing .wai/project.yaml by hand. A project-scoped write.',
+      inputSchema: {
+        declared: z.boolean().describe('true declares the network, false removes the declaration'),
+        description: z.string().optional().describe('What the network encloses, in the project\'s words (shown on the network diagram); only with declared: true'),
+      },
+      outputSchema: networkDeclarationOutput,
+    },
+    ({ declared, description }) => {
+      try {
+        if (!declared && description !== undefined) return errText('sdd_set_network: a description goes with declared: true — removing the declaration takes none.');
+        const written = declareNetwork(declared, description ?? null);
+        const text = declared
+          ? (written ? `Declared this project's network${description ? ` ("${description}")` : ''}. Run sdd_validate_tree: the network rules now judge the design. The human re-locks once it validates.` : 'This project already declares that network: nothing was written.')
+          : (written ? 'Removed this project\'s network declaration. Run sdd_validate_tree; the human re-locks.' : 'This project declares no network: nothing was removed.');
+        return structured(text, { written, declared });
       } catch (e) {
         return errMessage(e);
       }

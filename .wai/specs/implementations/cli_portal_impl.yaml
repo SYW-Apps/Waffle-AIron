@@ -650,6 +650,32 @@ methods:
         targetComponent: cli_runner
         targetMethod: runNetworkWhy
     symbol: why <from> <to>
+  - name: networkDeclare
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network declare` with its flags to cli_runner.runNetworkDeclare.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkDeclare
+    symbol: declare
+  - name: networkUndeclare
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon network undeclare` to cli_runner.runNetworkUndeclare.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runNetworkUndeclare
+    symbol: undeclare
+  - name: typeRenameField
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon type rename-field <type> <field> <new-name>` with its parsed arguments to
+          cli_runner.runTypeRenameField.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runTypeRenameField
+    symbol: rename-field <type> <field> <new-name>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-06T13:14:00.669Z'
+updatedAt: '2026-10-06T23:08:06.331Z'

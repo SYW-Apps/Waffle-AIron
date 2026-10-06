@@ -1221,6 +1221,46 @@ methods:
       - name: newId
         type: string
         description: Its new id, under the same owner
+  - name: setNetwork
+    description: >-
+      Declare (or, with null, remove) the bound project's network, through the project config
+      Repository: the design-level fact the network rules and the derived networking read. Returns
+      whether it wrote.
+    signature: 'setNetwork(network: NetworkDeclaration?): bool'
+    returns: bool
+    params:
+      - name: network
+        type: NetworkDeclaration?
+        description: The declaration, or null to remove it
+    guarantees:
+      - idempotent
+  - name: renameField
+    description: >-
+      Rename a field of a type and every reference to it. The field keeps its place, type and
+      description under the new name, its old name appended to its rename trace (previousNames — the
+      design export shows it as `formerly`, so a consumer holding the old name can follow the move);
+      every reference to it in the bound tree is respelled: a foreign key `references:
+      <type>.<field>` naming it from any type. Rename traces are never rewritten, and prose is never
+      rewritten. Refuses, writing nothing: a type that does not exist (type-missing), one in another
+      project (chained-type), a field the type does not declare (field-missing), a new name that is
+      not an identifier (invalid-name), and a name another field of the type holds or retired in its
+      trace (name-taken, name-retired). A lock goes stale as with any edit. Inside a hosted request
+      every spec it would write is judged against the request's write reach before the first write
+      (SubsystemWriteDenied).
+    signature: 'renameField(typeId: string, field: string, newName: string): FieldRename'
+    returns: FieldRename
+    params:
+      - name: typeId
+        type: string
+        description: >-
+          The type whose field is renamed, qualified by its owning subsystem when two subsystems own
+          that id
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T13:04:19.308Z'
+updatedAt: '2026-10-06T23:07:10.625Z'

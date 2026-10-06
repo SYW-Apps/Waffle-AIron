@@ -18,6 +18,7 @@ export {
   loadProjectConfig,
   createProjectConfig,
   setExecutionTier,
+  setNetwork,
   projectConfigExists,
   resolveAgentTopology,
   ensureProjectInitialized,
@@ -25,6 +26,8 @@ export {
   defaultPackSelections,
   readLockState,
   retireSpecialists,
+  // `wairon type rename-field` (spec_maintenance_portal renameField).
+  renameField,
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,

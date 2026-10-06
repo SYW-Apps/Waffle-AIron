@@ -398,9 +398,9 @@ methods:
           subsystems/ file, each component naming it, their contracts and those contracts'
           implementations; a destination already taken refuses before anything moves, and a folder
           the move empties goes. Each moved implementation's file paths — sourcePath, each method's
-          sourcePath, simPath — are re-expressed relative to the part's root, the same files. Keys
-          and references are untouched: the moved specs are still the bound project's own, so
-          nothing is respelled
+          sourcePath, simPath — and each moved type's — sourcePath and each method's sourcePath —
+          are re-expressed relative to the part's root, the same files. Keys and references are
+          untouched: the moved specs are still the bound project's own, so nothing is respelled
         type: local
       - stepNumber: 6
         description: >-
@@ -506,9 +506,10 @@ methods:
         description: >-
           Move every subsystem subtree of the member and its project-level types under the bound
           project's specs, their keys becoming local, and re-express each moved implementation's
-          file paths (sourcePath, each method's sourcePath, simPath) relative to the bound root.
-          Each reference that crossed the old boundary is re-expressed with the target the scan
-          bound it to before the move, so the re-save below keeps every target
+          file paths (sourcePath, each method's sourcePath, simPath) and each moved type's
+          (sourcePath, each method's sourcePath) relative to the bound root. Each reference that
+          crossed the old boundary is re-expressed with the target the scan bound it to before the
+          move, so the re-save below keeps every target
         type: local
       - stepNumber: 13
         description: Is there a project boundary to dissolve, or only storage to move?
@@ -1443,30 +1444,45 @@ methods:
         type: throw
         error: 'spec-missing: no spec of that kind holds that id'
       - stepNumber: 4
+        description: >-
+          Guard: a spec of a member project (its key lives in a chained subproject of the bound
+          tree) is written from that project's own root, as every other write tool refuses it
+        type: branch
+        condition: the addressed spec belongs to a member project
+        onFalseStep: 6
+      - stepNumber: 5
+        label: member-spec
+        description: >-
+          Refuse, writing nothing, naming the member project and its folder and the call to make in
+          a session there (the same guidance the renames give)
+        type: throw
+        error: 'chained-spec: the spec lives in another project'
+      - stepNumber: 6
+        label: system-kind-guard
         description: 'Guard: a system-kind update must actually address the singleton L0'
         type: branch
         condition: the kind is system and the id names neither the singleton nor the system's own name
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 8
+      - stepNumber: 7
         label: mis-selected-kind
         description: >-
           Refuse a mis-selected kind rather than silently rewriting the L0, and name the kind the
           caller probably meant
         type: throw
         error: 'mis-selected-kind: kind system targets the singleton L0'
-      - stepNumber: 6
+      - stepNumber: 8
         description: 'Guard: every delta key must be a field of the level, or one of the delta''s own verbs'
         type: branch
         condition: the delta names a key the level's canonical schema does not know
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 10
+      - stepNumber: 9
         label: unknown-key
         description: >-
           Refuse the whole delta, naming each unknown key and its nearest known field — an unknown
           key is dropped on write, so the edit would report success and change nothing
         type: throw
         error: 'unknown-key: the delta names a field the level does not have'
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Merge the delta onto the stored spec: references qualify against the spec's namespace
           first, identity-keyed arrays upsert element by element and honour their delete markers at
@@ -1488,14 +1504,14 @@ methods:
           label or description does not match it, or when it is a region header whose body would be
           left standing
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: >-
           Resolve the narratives' symbolic label references against the merged numbering, a label
           supplied by the delta replacing the stored number it twins; an unresolved reference aborts
           the whole update, because a dropped reference would silently become a dangling numeric
           jump
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
           Collect every difference between the stored spec and the merged one as an addressed
           change, both read through the level's canonical schema so a key the writer would drop
@@ -1508,30 +1524,30 @@ methods:
           does not know, each as `path: value` (strippedKeys): the parse already discarded them, and
           the write re-serializes through the schema, so they would otherwise be lost without a word
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: Decide whether there is anything to write
         type: branch
         condition: the merged spec matches what is stored
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Write nothing, leave the stored updatedAt untouched, and report that the delta matched
           what is stored, naming the paths it did not act on; a caller asking only what the delta
           would do is answered the same way, because there is nothing it would do
         type: return
         outcome: unchanged
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           Run the caller's injected judgement on the merged spec — the last point before anything
           could reach disk, and run for a caller asking only what the delta would do as well, so an
           answer that reports changes reports a write that would really be accepted
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: Decide whether the caller wanted the write or only the account of it
         type: branch
         condition: the caller asked only what the delta would do
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 18
+      - stepNumber: 17
         label: dry-run
         description: >-
           Answer with the changes the write would make, the paths it would not act on and the stored
@@ -1539,14 +1555,14 @@ methods:
           stamped and not one byte of the stored file moves
         type: return
         outcome: dry run
-      - stepNumber: 16
+      - stepNumber: 18
         description: >-
           Stamp updatedAt and persist the merged spec through the saver for its level, allowing a
           deliberate status demotion when the delta carried an explicit status
         type: call
         targetComponent: spec_loader
         targetMethod: saveComponentSpec
-      - stepNumber: 17
+      - stepNumber: 19
         description: >-
           Report what was written: every change it made, every path of the delta it did not act on,
           the stored keys the write dropped (strippedKeys), the store's placement notices and the
@@ -2129,26 +2145,42 @@ methods:
         targetMethod: normalizeReferences
       - stepNumber: 10
         description: >-
+          Declare the entries the new boundary made necessary: each verb of a new project's Portal
+          that a parent-side implementation calls (a call, register or dispatch step, or a declared
+          call, read before the respelling) and that has no entry of its own nor from its Portal
+          gets one on its contract method — kind entry, scope network on a network transport, the
+          caller prose naming the calling components and the parent — so the Portal is not left
+          unreached in its own gate; record each. Derived from the modelled calls, never invented: a
+          verb nobody calls gets none
+        type: local
+      - stepNumber: 11
+        description: >-
+          Record each topic the boundary now separates from its pair (emitted on one side and
+          subscribed only on the other, by emits/subscribesTo or a MessageBus endpoint), for the
+          plan: the family run pairs it across projects
+        type: local
+      - stepNumber: 12
+        description: >-
           Drop each publicInterfaces consumers entry, on either side, that names a subsystem across
           the new boundary — a consumers list admits only subsystems of its own tree, and between
           projects the L0 export table governs who may use a name — removing the field when no entry
           is left, and record each drop
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Under the new project's scope, declare the parent as an external under the parent's id
           when its specs reference it (the same declaration again writes nothing)
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Re-point the parent's L0 entries that re-exported the part's subsystems (`from:
           <subsystem>`) at the member (`from: <alias>`)
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           Export on its own side every name that crosses the new boundary and is not yet a public
           name there — a type through its own subsystem (`{ typeDef }`) and an L0 entry re-exporting
@@ -2159,17 +2191,18 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
           Import by name each bare type a side no longer owns through the `use` of the alias that
           now supplies it, so the text stays as written, and record each
         type: call
         targetComponent: project_config_repository
         targetMethod: importNames
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Part promoted to a project in place; nothing locked. Answer what was written across the
-          boundary: the respelled references, the exports, the imports and the dropped consumers
+          boundary: the respelled references, the exports, the imports, the dropped consumers, the
+          entries declared and the topics now crossing
         type: return
         outcome: the promote result
     conformance: 'off'
@@ -2604,6 +2637,65 @@ methods:
           keptPublicNames and carried
         type: return
         outcome: renamed
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setNetwork
+    conformance: 'off'
+  - name: renameField
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 2
+        description: >-
+          Resolve the type: an `alias::` qualifier naming no own subsystem is another project's
+          (chained-type); a subsystem-qualified id names the type within that owner; none found is
+          type-missing
+        type: local
+      - stepNumber: 3
+        description: >-
+          The field must be declared on the type (field-missing), the new name must be an identifier
+          (invalid-name), and no other field of the type may hold it (name-taken) or list it in its
+          previousNames (name-retired): refuse before any write
+        type: branch
+        condition: >-
+          the field exists, the new name is an identifier, and it is neither taken nor retired on
+          the type
+        onFalseStep: 8
+      - stepNumber: 4
+        description: >-
+          Collect, without writing, every other type whose foreign key `references: <type>.<field>`
+          names the field (its head resolving to this type as the loader would), and judge the
+          type's file and each of those against the hosted request's write reach
+        type: local
+      - stepNumber: 5
+        description: Respell each such reference in place to `<type>.<newName>`
+        type: local
+      - stepNumber: 6
+        description: >-
+          Save the type with the field renamed and its old name appended to the field's
+          previousNames
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 7
+        description: 'Answer the FieldRename: the type, from, to, and the ids of the specs respelled'
+        type: return
+        outcome: FieldRename
+      - stepNumber: 8
+        label: refuse
+        description: >-
+          Refuse with the reason that applies, naming what holds or retired the name; nothing was
+          written
+        type: throw
+        error: WaironError
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T13:05:21.193Z'
+updatedAt: '2026-10-06T23:09:31.905Z'

@@ -137,7 +137,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     // The GATE flavour, not the content one: a lock certifies that these specs
     // passed THIS gate, so the governing doctrine is part of the frozen identity
     // and a later pack change invalidates the lock by state mismatch.
-    expect(record!.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
+    expect(record!.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
     // …and it is exactly the validator's gate identity, the one readLockState
     // is later handed to compare against.
@@ -366,7 +366,7 @@ describe('readLockState (the shared lock verdict)', () => {
     const { state, record, current } = readLockState(computeGateStateId());
     expect(state).toBe('locked');
     // The verdict is decided against the gate flavour, and they agree.
-    expect(current.algorithm).toBe('sha256+design+doctrine+inputs+members');
+    expect(current.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     expect(record!.stateId.digest).toBe(current.digest);
   });
 

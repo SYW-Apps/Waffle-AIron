@@ -7,6 +7,7 @@ import {
   pathKey,
   resolveImport,
   type CallSiteFact,
+  type ComponentSpec,
   type MethodImplementation,
 } from '../../../models/index.js';
 import { CodeIndex, ForwardedName, RuleContext, SddRule } from '../types.js';
@@ -112,6 +113,16 @@ export function closedCallSites(
     queue.push(...next.sites.map(s => ({ ...s, from: s.from ?? site.from })));
   }
   return out;
+}
+
+/**
+ * Whether a claim is a link over a transport rather than an in-process call:
+ * the caller is an Adapter and the target a Portal declaring any transport but
+ * InProcess — the boundary the call crosses is the network (or a process).
+ */
+function isRemoteLink(caller: Pick<ComponentSpec, 'componentType'>, target: Pick<ComponentSpec, 'componentType' | 'transport'>): boolean {
+  return caller.componentType === 'Adapter' && target.componentType === 'Portal'
+    && target.transport !== undefined && target.transport !== 'InProcess';
 }
 
 /** A modelled method's identity in its file: `<exportedVia>.<symbol>` when it is reached through a handle, else its symbol. */
@@ -398,6 +409,13 @@ export const callConformanceRule: SddRule = {
         // A target this tree does not contain is cross-tree-references'
         // finding (and surface-reference-backing's once it resolves).
         if (!ctx.componentMap.has(claim.component)) continue;
+        // An Adapter's call on a verb of a Portal reached over an out-of-process
+        // transport (HTTP, gRPC, a database, a bus, a CLI…) is the LINK the
+        // design models: what realizes it is the transport client the Adapter
+        // drives, never a call into the remote Portal's source file — so it is
+        // never resolved to that file, and never reported. The caller's own
+        // call to the Adapter stays checked like any other.
+        if (isRemoteLink(component, ctx.componentMap.get(claim.component)!)) continue;
 
         const target = resolveCallTarget(ctx, claim.component, claim.method);
 

@@ -219,12 +219,22 @@ methods:
       source files (a component maps to every file its implementations and their methods name) must
       be justified by declared relations — a direct dependsOn/owns pair, a shared component,
       membership in a depended-on pattern, or (across subsystems) a declared edge to the target
-      subsystem's published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns
-      edge between components realized in different files should be visible as an import between any
-      file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can
-      defeat this, hence warning). A type-only import never accuses, but it does realize a declared
-      edge: a constructor-injected collaborator is reached through its type, and `import type` is
-      what dependency injection writes down. Only exact-grade analyzed files participate; chained
+      subsystem's published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses
+      — type coupling is allowed — but a CALL of a modelled contract method through a collaborator
+      whose declared type comes from another component's file is runtime collaboration whatever the
+      import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge).
+      Conversely, a declared dependsOn/owns edge between components realized in different files
+      should be visible as an import between any file of the source and any file of the target
+      (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning); a type-only import
+      realizes it, since `import type` is what dependency injection writes down. Two twins of design
+      rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract
+      method of a Repository, Index, Store or Registry is the persistence shortcut the design rule
+      PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own narrative already claims that call (the
+      design rule's finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE); and a file importing a
+      technology's package — a bare specifier whose package name is one of the technology's declared
+      tokens (its name, or its `matches` when it declares them), compared exactly, never guessed —
+      while no component it realizes is that technology's home is the leak TECH_LEAKAGE refuses in
+      the design (TECH_LEAKAGE_IN_CODE). Only exact-grade analyzed files participate; chained
       subprojects validate standalone.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
@@ -236,13 +246,24 @@ methods:
       - code: UNDECLARED_DEPENDENCY
         severity: warning
         summary: >-
-          A runtime import between component-mapped files has no declared dependsOn/owns (or
-          published-surface) justification
+          A runtime import, or a call through a type-only-imported collaborator, between
+          component-mapped files has no declared dependsOn/owns (or published-surface) justification
       - code: UNREALIZED_DEPENDENCY
         severity: warning
         summary: >-
           A declared dependsOn/owns edge between components in different files is realized by no
           import between any of their files
+      - code: PORTAL_WRITE_SHORTCUT_IN_CODE
+        severity: error
+        summary: >-
+          A Portal's code calls a write- or lifecycle-effect method of a data component (Repository,
+          Index, Store, Registry) directly — the code twin of PORTAL_WRITE_SHORTCUT: mutations route
+          through an Orchestrator
+      - code: TECH_LEAKAGE_IN_CODE
+        severity: warning
+        summary: >-
+          A source file imports a technology's package although no component it realizes binds that
+          technology — the code twin of TECH_LEAKAGE
   - name: integrationSimDeclaration
     description: >-
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
@@ -682,4 +703,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-06T13:20:52.740Z'
+updatedAt: '2026-10-06T23:06:15.637Z'

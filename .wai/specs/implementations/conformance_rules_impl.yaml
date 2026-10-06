@@ -193,6 +193,67 @@ methods:
           across subsystems or the target's files: the collaboration is wired indirectly (DI) or the
           declared edge is stale
         type: local
+      - stepNumber: 15
+        label: callLoop
+        description: >-
+          Every call a mapped file makes through a collaborator is collaboration, whatever the form
+          of the import that typed it
+        type: loop
+        over: each mapped path fromPath and each call site of its source_file_facts.functionCallSites
+        endStep: 19
+      - stepNumber: 16
+        description: >-
+          toPaths = the mapped files other than fromPath among code.possibleOriginsOf(site,
+          fromPath) — the module the receiver's declared type, class or annotation names — each of
+          which realizes a component with a contract method the call's name is (its name or a
+          per-method symbol): a call into anything else is no modelled collaboration
+        type: local
+      - stepNumber: 17
+        description: >-
+          A Portal file calling a write- or lifecycle-effect contract method of a Repository, Index,
+          Store or Registry that its own narrative does not already claim (the design rule reports a
+          claimed one) is the persistence shortcut in code
+        type: branch
+        condition: >-
+          a component at fromPath is a Portal, the called method's effect is write or lifecycle on a
+          data component at a toPath, and no implementation of the Portal claims that call
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Report PORTAL_WRITE_SHORTCUT_IN_CODE (error; site `<fromPath> -> <component>.<method>`)
+          naming the call and its target: route the mutation through an Orchestrator that owns the
+          workflow
+        type: local
+      - stepNumber: 19
+        label: typeOnlyEdge
+        description: >-
+          For each toPath that only a type-only import connects (graph.importsOf(fromPath) does not
+          hold it — a runtime edge was judged above) and edgeJustified refuses, report
+          UNDECLARED_DEPENDENCY once per edge (site `<fromPath> -> <toPath>`, the same site a
+          runtime import of it reports under), naming the call written through the
+          type-only-imported collaborator
+        type: local
+      - stepNumber: 20
+        description: >-
+          Build each technology's home: for every implementation declaring technologies, its
+          component, the components it owns and the pattern that owns it, keyed by every declared
+          token (the name, or its `matches` when it declares them) lower-cased
+        type: local
+      - stepNumber: 21
+        label: techLoop
+        description: Every package a mapped file imports
+        type: loop
+        over: >-
+          each mapped path and each bare (package) specifier among its runtime imports and type-only
+          bindings, local packages of this repository excluded
+        endStep: 22
+      - stepNumber: 22
+        description: >-
+          When the specifier's package name (`@scope/name` or its first segment) equals a technology
+          token exactly and no component realized at the file is in that technology's home, report
+          TECH_LEAKAGE_IN_CODE (warning; site `<path> -> <package>`) naming the technology and its
+          home: move the vendor call behind the component that binds it
+        type: local
     symbol: check
     exportedVia: dependencyConformanceRule
   - name: sourceFileLinkage
@@ -1066,9 +1127,16 @@ methods:
       - stepNumber: 8
         description: >-
           A target this tree does not contain is cross-tree-references' finding, and
-          surface-reference-backing's once it resolves: continue with the next claim
+          surface-reference-backing's once it resolves; and an Adapter's claim on a verb of a Portal
+          that declares an out-of-process transport (any transport but InProcess — HTTP, gRPC, a
+          database, a bus, a CLI) is the LINK the design models, never a call into the remote
+          Portal's source file: what realizes it is the transport client the Adapter drives, so it
+          is never resolved to that file and never reported (the caller's call to the Adapter stays
+          checked as any call): continue with the next claim
         type: branch
-        condition: ctx.componentMap has claim.component
+        condition: >-
+          ctx.componentMap has claim.component, and it is not an Adapter's claim on a Portal whose
+          transport is out of process
         onFalseStep: 7
       - stepNumber: 9
         description: >-
@@ -1816,4 +1884,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-06T13:20:56.847Z'
+updatedAt: '2026-10-06T23:06:40.909Z'

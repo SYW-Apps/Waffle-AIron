@@ -97,6 +97,8 @@ export const DesignFieldSchema = z.object({
   description: z.string().optional(),
   key: z.string().optional(),
   references: z.string().optional(),
+  /** The field's rename trace, oldest first — present only when it was renamed. */
+  formerly: z.array(z.string()).optional(),
 }).passthrough();
 export type DesignField = z.infer<typeof DesignFieldSchema>;
 

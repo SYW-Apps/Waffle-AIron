@@ -97,6 +97,29 @@ warnings as errors (notices are printed and counted, never fatal).
   `METHOD_SOURCE_PATH_MISSING` (warning). `rules.conformance.requireCode: true`
   in `project.yaml` reports the two notices as errors, for a CI that must say
   every designed implementation has code.
+- **What the closing line says.** Plain `validate` passes with warnings and
+  says so — `Passed with N warning(s)` (`--ci` fails on them); `All checks
+  passed` means none. A tree holding no design yet (no L0, or an L0 with nothing
+  below it) says there is nothing to check.
+- **Unknown keys are reported.** A key a spec's schema does not know (an
+  `exports:` table in the L0 — the export table is `publicInterfaces`; a
+  misspelt field) is `UNKNOWN_SPEC_KEY`, and an unknown setting in
+  `.wai/project.yaml` is `UNKNOWN_CONFIG_KEY` (both warnings): the parse would
+  otherwise drop them without a word.
+- **Code that crosses the design.** A call through a constructor-injected
+  collaborator is collaboration whatever the import's form: when its type comes
+  from a component the caller never declared, even through `import type`, it is
+  `UNDECLARED_DEPENDENCY`; a Portal calling a write- or lifecycle-effect method
+  of a Repository, Index, Store or Registry that way is
+  `PORTAL_WRITE_SHORTCUT_IN_CODE` (error, the code twin of
+  `PORTAL_WRITE_SHORTCUT`); and a file importing a technology's package — a
+  package named by one of the technology's declared tokens (its name, or its
+  `matches`), never a guessed vendor list — outside the components that bind it
+  is `TECH_LEAKAGE_IN_CODE`. An Adapter's call step to a verb of a Portal that
+  declares an out-of-process transport (HTTP, gRPC, a database, a bus, a CLI…)
+  is the link the design models: it is never resolved to the remote Portal's
+  file, so it never reads as `CALL_ORIGIN_UNRESOLVED`; the call to the Adapter
+  stays checked.
 
 ### `wairon generate [--target <name>] [--domain <id>] [--domains <ids>] [--root] [--family] [--no-prune] [--global] [--dry-run]`
 Reconcile the generated guides, skills and context, and — only when the project
@@ -164,11 +187,27 @@ digests read each spec's **design**: where it is realized — `sourcePath`,
 out (`specsReading: design`). Linking code to an approved design, or a change and
 its revert, never stales the lock; declare planned `sourcePath`s at design time.
 
-A **format-2** record (written before this reading) still passes `lock-check`
-while nothing it covered moved. `wairon doctor --fix` re-expresses it as format 3
-in place — keeping `lockedAt`, `lockedBy`, the results and the member pins, and
-recording `reexpressed: { at, fromAlgorithm, fromReading, by }`. A format-2 record
-that no longer matches reads stale once; one `wairon lock` clears it for good.
+**Readiness is not part of the approval either.** A spec's `status` (`draft`,
+`design`, `complete`) says how far authoring is, never what the design says, so
+it is left out of the design view: promoting a spec to `complete` after the lock
+never reopens it. A format-3 record taken while the view still carried `status`
+keeps passing when nothing but a status moved — it is judged in the reading it
+was taken in, each spec's approved status recovered from its digest — and
+`wairon doctor --fix` carries it into the current reading without a review.
+
+A **format-2** record (written before code linkage left the approval) still passes
+`lock-check` while nothing it covered moved. `wairon doctor --fix` re-expresses it
+as format 3 in place — before any other repair touches a spec — keeping
+`lockedAt`, `lockedBy`, the results and the member pins, and recording
+`reexpressed: { at, fromAlgorithm, fromReading, by }`. When no spec file moved
+but the record still does not match, what moved is the **gate** it was judged
+under — the design rules of a newer wairon release, the project's rule tuning,
+`composition`, the network declaration, consumed contracts or a member's
+approval — never your design: `lock-check` and `doctor` say exactly that, `doctor
+--fix` still carries the record into the design reading (its claim stays as
+certified, so it reads stale for that stated cause), and one `wairon lock`
+re-approves the unchanged design. A format-2 record whose specs moved reads stale
+once; one `wairon lock` clears it for good.
 
 It writes **nothing into your spec tree**. The approval is one sha256 per spec
 (over its design view) on `.wai/lock.json`, the record that was always committed — so your
@@ -348,9 +387,12 @@ The design changes, so one `wairon lock` follows. After it, declare the entries
 the migration cannot know — a CLI, a stdio tool surface (`JSONRPC`), a library
 (`InProcess`) — and model a caller or remove each verb still reported unreached.
 
-`--fix` also re-expresses a format-2 lock record that still provably covers the
-tree as format 3 (see `wairon lock`), keeping who approved it and when; when it
-no longer covers the tree, doctor says that one `wairon lock` is needed.
+`--fix` also re-expresses an earlier lock record — format 2, or format 3 taken
+while `status` was still in the approval — in the current reading, first, before
+any repair touches a spec (see `wairon lock`), keeping who approved it and when.
+A format-2 record over a tree no file of which moved is carried into the design
+reading even when the gate it was judged under moved; doctor then says the cause
+(the gate, not the design) and that one `wairon lock` re-approves it.
 
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
@@ -544,7 +586,18 @@ promise and how a consumer follows renames).
 - A tree without an L0 is refused. The JSON Schema ships in the package as
   `schemas/design-export-1.json`, and the library twin is `exportDesign()`.
 
-### `wairon network flows|policy|diagram|check|why`
+### `wairon type rename-field <type> <field> <new-name>`
+Renames a field of a type and respells every reference to it — each foreign
+key `references: <type>.<field>` naming it, the type's own included. The field
+keeps its place, type and description; its old name joins the field's rename
+trace (`previousNames`), which `wairon export` shows as `formerly`, so a
+consumer holding the old name reads a rename, not a removal and an addition.
+Traces and prose are never rewritten. It refuses, writing nothing, a type or
+field that does not exist, a name that is not an identifier, and a name another
+field of the type holds or retired. The MCP twin is `sdd_rename_field`. As with
+any design edit, the next `wairon lock` approves it.
+
+### `wairon network flows|policy|diagram|check|why|declare|undeclare`
 Networking derived from the design: the reach the validator already models
 (modelled calls, Portal entries and their scopes, declared networks and their
 gateways), never addresses. Run at the family root.
@@ -562,6 +615,9 @@ gateways), never addresses. Run at the family root.
   unknown verb.
 - `why <from> <to>` prints the modelled chain behind one flow. It exits 1
   when nothing allows it.
+- `declare [--description <text>]` writes the project's `network` declaration
+  into `.wai/project.yaml`; `undeclare` removes it (the assistant's twin is
+  `sdd_set_network`). It changes which rules fire: validate, then re-lock.
 
 [Derived networking](network.md) describes every output, the bindings file
 and the observed-flow format.
@@ -610,6 +666,60 @@ then move the pin with `wairon member update`. An uncached git part offline is
 `alias::name`: the alias is one of the referring project's project members or
 declared `externals`, the name a public name in that project's L0 export table.
 An id without `::` is local — a part's subsystems included.
+
+**Authoring the L0 export table.** What another project may reference is the
+project's **L0 export table**: the `publicInterfaces` list of the L0 spec
+(`.wai/specs/.index.yaml`). It is authored in two steps, both through the MCP
+tools (an assistant runs them; a human may edit the YAML the same way):
+
+1. Each subsystem publishes its own surface — its inbound Portal, and the types
+   it shares — with `sdd_set_public_interfaces` (an L1 `publicInterfaces`).
+2. The L0 **re-exports** from those subsystems with `sdd_update_spec` on kind
+   `system`, delta `publicInterfaces`. Each entry names a subsystem in `from`;
+   `from` alone re-exports everything it publishes, `component` (optionally
+   narrowed with `interface`) or `typeDef` picks one item, `as` renames it
+   (the public name consumers write after `alias::`), `role: implement` marks
+   an extension point consumers implement, and `audience` decides who may see
+   it (below).
+
+```yaml
+# .wai/specs/.index.yaml (excerpt)
+publicInterfaces:
+  - from: distance            # everything the distance subsystem publishes
+  - from: tiles
+    component: tile_portal
+    as: tiles                 # consumers write geo::tiles
+    audience: external
+  - from: shared
+    typeDef: coordinate       # a shared type, as geo::coordinate
+```
+
+The key is `publicInterfaces` — an `exports:` (or any other key the schema does
+not know) is reported as `UNKNOWN_SPEC_KEY`, never silently ignored, and an
+unknown setting in `.wai/project.yaml` as `UNKNOWN_CONFIG_KEY`. A reference to a
+name the producer does not export is `EXTERNAL_NOT_EXPORTED`.
+
+**Export audiences.** Each L0 entry carries an `audience` (default `instance`)
+that decides who may see the public name. Narrowest first:
+
+| Audience | Who sees it |
+|----------|-------------|
+| `project` | Only this project's family: its members, its parent and their siblings. |
+| `department` | The family, and — on a hosted instance — the projects of the owning department. A local sibling checkout or git consumer does **not** see it. |
+| `instance` | The default. Any project on the instance, and any local consumer by path or git. |
+| `partner` | Also consumers outside the instance that a partner grant admits. |
+| `external` | Publicly consumable. |
+
+A consumer is read at one audience: a family project at `project`, so it sees
+everything; a path, git or hosted consumer outside the family at `instance`, so
+it sees `instance`, `partner` and `external` entries only. A name exported to a
+narrower audience is refused by `externals add` (and `externals use`), naming
+the export's audience, the consumer's and this ranking. Because a project cannot
+tell from its own tree whether its consumers are hosted department units,
+`validate` notes every `department` export (`EXPORT_AUDIENCE_NARROW`, a
+notice): widen it to `instance` when a sibling checkout or a git consumer uses
+it, or keep it and allow the notice. A re-export can narrow an audience, never
+widen it (`EXPORT_WIDENS_AUDIENCE`).
 
 | Command | Description |
 |---------|-------------|
@@ -740,7 +850,7 @@ The local server offers 38 tools:
 | Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
 | Renames and moves (in this tree) | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_type`, `sdd_move_methods` |
 | Members and family migrations (each takes `dryRun`) | `sdd_add_member`, `sdd_move_member`, `sdd_externalize_subsystem`, `sdd_promote_member`, `sdd_demote_member`, `sdd_internalize_member`, `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias` |
-| Externals | `sdd_add_external`, `sdd_pin_externals`, `sdd_get_externals_status` |
+| Externals | `sdd_add_external`, `sdd_update_external`, `sdd_remove_external`, `sdd_pin_externals`, `sdd_get_externals_status` |
 | Packs | `sdd_pack_impact` |
 | Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
 
@@ -851,10 +961,13 @@ return the impact of every pack they applied in their results.
 
 | Command | Description |
 |---------|-------------|
-| `wairon externals add <alias> [<source>] [--project <id>] [--ref <ref>] [--dir <dir>] [--use a,b\|'*'] [--description <text>] [--no-pin] [--dry-run] [--json]` | Declare one external in `.wai/project.yaml`. The source is the location grammar members use: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>` (the commit is the ref the pin follows, fixed there); omit it when the family provides the producer. It is checked against the producer it reaches: one answering to another id, or not exporting a `use` name to this project, takes the declaration back out and names the id or the closest exported names. Pins by default; a producer that cannot be read leaves it declared and unpinned, saying why. A refusal is one sentence naming the accepted form, and exits 1 |
-| `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`; exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
-| `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`). Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
-| `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration is listed with its problem, never hidden |
+| `wairon externals add <alias> [<source>] [--project <id>] [--ref <ref>] [--dir <dir>] [--use a,b\|'*'] [--description <text>] [--no-pin] [--dry-run] [--json]` | Declare one external in `.wai/project.yaml`. The source is the location grammar members use: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>` (the commit is the ref the pin follows, fixed there); omit it when the family provides the producer. Text that is no location (braces, quotes, whitespace) is refused. The declaration is checked against the producer it reaches **before** anything is written — `--dry-run` included: one answering to another id, or not exporting a `use` name to this project, is refused naming the id, the closest exported names, or the narrower audience the name is exported to (see Export audiences). Pins by default; a producer that cannot be read leaves it declared and unpinned, saying why, and exits 2 (nothing was pinned). A refusal is one sentence naming the accepted form, and exits 1 |
+| `wairon externals use <alias> [--add a,b\|'*'] [--remove c] [--dry-run] [--json]` | Change one declared external's `use` imports, so the specs may name the producer's public names bare (e.g. so an `implements` of the producer's trait spells its types as the producer does — though `alias::name` and the bare imported name compare as one type either way). An added name the producer does not export to this project is refused. The pin is untouched. Exits 1 on a refusal |
+| `wairon externals remove <alias> [--dry-run] [--json]` | Remove one external: its declaration and its pin (`.wai/externals/<alias>.yaml` and its lock entry) together. An orphaned pin — one whose declaration was deleted by hand, which `externals list` shows — is removed too. Exits 1 when the alias is neither declared nor pinned |
+| `wairon externals consumers [--json]` | From a producer's root: the family projects in reach that consume it — each with the alias and section it declares it under and the public names its specs use — so a producer sees who breaks before it changes its surface. A sibling checkout, git or hosted consumer outside the family declares its dependency on its own side and is not visible here |
+| `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
+| `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
+| `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration, and an orphaned pin whose declaration is gone, are listed with their problem, never hidden |
 | `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI document per portal), import one, or list them |
 | `wairon produce <notion\|miro> [--page <id>] [--token <token>]` | Project the local spec tree to Notion or Miro (the token comes from `--token`, the environment, else a prompt; nothing is stored) |
 

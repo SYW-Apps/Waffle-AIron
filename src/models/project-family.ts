@@ -1,5 +1,6 @@
 import * as path from 'path';
 import type { ExportUsage } from './exports.js';
+import type { DeclaredExternal } from './project.js';
 import type { SubsystemSpec } from './specs.js';
 // TYPE-ONLY: a part is recorded by the scan that read it (spec_index), and the graph carries it as read.
 import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
@@ -257,6 +258,75 @@ export interface ExternalBinding {
   usage?: ExportUsage;
   /** Whether the climb reached the whole family. */
   reachable: boolean;
+}
+
+/**
+ * external_consumer — one family project that consumes the bound project, as
+ * `wairon externals consumers` lists it from the producer's root.
+ */
+export interface ExternalConsumer {
+  /** The consumer's effective project id, else its key in the family. */
+  project: string;
+  /** The consumer's key in the family graph read ('' for the family's top root). */
+  key: string;
+  /** The consumer's root on disk. */
+  directory: string;
+  /** The alias the consumer reaches the producer by. */
+  alias: string;
+  /** Where the consumer declares it: externals, or members (a project containing the producer). */
+  section: 'externals' | 'members';
+  /** The producer's public names the consumer's specs use, sorted. */
+  names: string[];
+}
+
+/** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */
+function directoryKey(dir: string): string {
+  const resolved = path.resolve(dir);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+/** How a family producer stands to its consumer. */
+function relationOf(consumer: ProjectNode, producer: ProjectNode): ResolvedExternal['relation'] {
+  if (consumer.parent === producer.namespace) return 'parent';
+  if (producer.parent === consumer.namespace) return 'member';
+  if (consumer.parent !== undefined && consumer.parent === producer.parent) return 'sibling';
+  return 'family';
+}
+
+/** A family producer: the consumer sees `project`. */
+function familyExternal(alias: string, project: string, consumer: ProjectNode, producer: ProjectNode): ResolvedExternal {
+  return { alias, project, sourceKind: 'family', relation: relationOf(consumer, producer), producer: producer.namespace, directory: producer.directory, audience: 'project', role: 'external' };
+}
+
+/**
+ * project_family.bindExternal — one external declaration bound to its
+ * producer the way the graph binds every declared external: its own problem,
+ * else a hosted record id or a git source (resolved later), a source.path
+ * landing on a family project (which must answer to the declared id) or on a
+ * directory outside the family (audience instance), else the one family
+ * project answering to the declared id (audience project). Pure, so a
+ * declaration not yet written binds exactly as the written one will.
+ */
+export function bindDeclaredExternal(declared: DeclaredExternal, consumer: ProjectNode, nodes: readonly ProjectNode[]): ResolvedExternal {
+  const unresolved = (problem: string): ResolvedExternal => ({ alias: declared.alias, project: declared.project, sourceKind: 'unresolved', audience: 'instance', problem, role: 'external' });
+  if (declared.problem) return unresolved(declared.problem);
+  // A hosted record id is resolved by external_producers through the hosting server's record lookup.
+  if (declared.sourceHosted !== undefined) return { alias: declared.alias, project: declared.project, sourceKind: 'hosted', hosted: declared.sourceHosted, audience: 'instance', role: 'external' };
+  // A git producer (stage 8): external_producers resolves its ref and materializes it.
+  if (declared.sourceGit !== undefined) return { alias: declared.alias, project: declared.project, sourceKind: 'git', audience: 'instance', role: 'external' };
+  if (declared.sourcePath !== undefined) {
+    const directory = path.resolve(consumer.directory, declared.sourcePath);
+    const found = nodes.find((n) => directoryKey(n.directory) === directoryKey(directory));
+    if (!found) return { alias: declared.alias, project: declared.project, sourceKind: 'path', directory, audience: 'instance', role: 'external' };
+    if (found.id !== declared.project) {
+      return unresolved(`the family project at source.path "${declared.sourcePath}" answers to ${found.id === undefined ? 'no id' : `"${found.id}"`}, not "${declared.project}"`);
+    }
+    return familyExternal(declared.alias, declared.project, consumer, found);
+  }
+  const holders = nodes.filter((n) => n.id === declared.project && n !== consumer);
+  if (holders.length === 0) return unresolved(`no project of the family answers to "${declared.project}", and no source.path says where to find it`);
+  if (holders.length > 1) return unresolved(`${holders.length} projects of the family answer to "${declared.project}" (${holders.map((n) => `"${n.namespace || '(the bound root)'}"`).join(', ')}), so the declaration could mean either`);
+  return familyExternal(declared.alias, declared.project, consumer, holders[0]);
 }
 
 // ---- reading a reference without position ----------------------------------

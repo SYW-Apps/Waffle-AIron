@@ -202,15 +202,19 @@ describe('the rename trace a snapshot carries (formerly) moves no digest', () =>
     expect(memberDigest(bare, 'ledger-portal', 'record')).toBe(memberDigest(snapshot, 'ledger-portal', 'record'));
   });
 
-  it('a producer gaining a rename trace re-pins unchanged: no existing pin moves', () => {
+  it('a producer gaining a rename trace moves no digest, and the re-pin refreshes the snapshot it carries', () => {
     const p = pinned();
     bind(p.billing);
     const lockBefore = JSON.stringify(externalsRepository.readLock());
     // The same contract, now carrying a trace of a former name nothing uses.
     p.setLedgerContract({ formerly: ['iledger-portal.enter'] });
     bind(p.billing);
-    expect(pinExternals().map((x) => [x.alias, x.outcome])).toEqual([['ledger', 'unchanged']]);
+    // The trace is provenance: the lock (digest, used digests) does not move...
+    expect(pinExternals().map((x) => [x.alias, x.outcome])).toEqual([['ledger', 'pinned']]);
     expect(JSON.stringify(externalsRepository.readLock())).toBe(lockBefore);
+    // ...but the snapshot carries what the producer says now (round-2 R2-30).
+    expect(externalsRepository.readSnapshot('ledger')!.interfaces[0].methods.find((m) => m.name === 'post')?.formerly).toEqual(['enter']);
+    expect(pinExternals().map((x) => [x.alias, x.outcome])).toEqual([['ledger', 'unchanged']]);
   });
 
   it('the pin snapshot keeps the trace once the contract itself moves', () => {

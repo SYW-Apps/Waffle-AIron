@@ -93,6 +93,17 @@ methods:
       has none to read. Pure.
     sourcePath: src/models/type-grammar.ts
     symbol: interfaceCanonicalTypes
+  - name: designView
+    signature: 'designView(): InterfaceSpec'
+    params: []
+    returns: InterfaceSpec
+    description: >-
+      This contract as the approval sees it: its status (authoring readiness, never what the design
+      says) and createdAt/updatedAt left out; every other field stays, the methods, endpoints and
+      findings included. Pure: over the spec's own fields, and a stored (raw) file reads as readily
+      as a loaded spec.
+    sourcePath: src/models/specs.ts
+    symbol: interfaceDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T12:54:23.518Z'
+updatedAt: '2026-10-06T23:03:31.586Z'

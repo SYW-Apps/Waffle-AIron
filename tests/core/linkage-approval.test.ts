@@ -125,7 +125,7 @@ describe('state_hash.ownDesign — the design identity', () => {
     root = project();
     const design = computeOwnDesignStateId();
     const content = computeOwnStateId();
-    expect(design.algorithm).toBe('sha256-design');
+    expect(design.algorithm).toBe('sha256-design-2');
     resave(root, LINKAGE);
     expect(stateIdEquals(computeOwnDesignStateId(), design)).toBe(true);
     expect(stateIdEquals(computeOwnStateId(), content)).toBe(false);
@@ -150,7 +150,7 @@ describe('the gate identity hashes the design identity', () => {
     root = project();
     const gate = computeGateStateId();
     expect(gate.algorithm).toBe(GATE_ALGORITHM);
-    expect(gate.algorithm).toBe('sha256+design+doctrine+inputs+members');
+    expect(gate.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     expect(gate.asRecorded).toBeUndefined();
     resave(root, LINKAGE);
     expect(stateIdEquals(computeGateStateId(), gate)).toBe(true);

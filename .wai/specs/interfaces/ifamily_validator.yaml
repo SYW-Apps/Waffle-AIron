@@ -39,10 +39,14 @@ methods:
       producers alike since stage 8 — so a type used only bare is covered, and a producer outside
       the family that breaks a used method is EXTERNAL_INCOMPATIBLE, not only drifted. A used method
       or type that changed, was renamed (the producer's rename trace names the new name, and the
-      message names it) or vanished is EXTERNAL_INCOMPATIBLE (error); a producer whose canonical
-      contract changed while nothing used changed is EXTERNAL_DRIFTED (notice; prose never drifts);
-      a use that cannot be compared — unpinned, used but not in the lock, an unreachable or
-      unfetchable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the
+      message names it) or vanished is EXTERNAL_INCOMPATIBLE (error) — pinned or not: a use the lock
+      does not hold is still compared with the live producer the run can read, and one gone from its
+      live table is a break the composed gate reports at the family root, never left to a pin nobody
+      took (the member's own gate keeps it advisory); a producer whose canonical contract changed
+      while nothing used changed, or whose pinned snapshot no longer carries what the producer says
+      (a stale abi, transport or role), is EXTERNAL_DRIFTED (notice; prose never drifts); a use that
+      cannot be compared — unpinned and still present live, used but not in the lock, an unreachable
+      or unfetchable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the
       family run's gate over producers inside its reach (one checkout, so live is reproducible
       there); everything else is advise's to report.
     signature: 'compose(project: string): ExternalComposition'
@@ -334,8 +338,10 @@ methods:
     description: >-
       The family's reach model at the bound root, for the derived networking outputs: the same
       selection and reach the family run makes, each selected project's own model
-      (spec_validator.reachModel under its own binding), composed with the family's references. At a
-      project without members it is that project's own model. Reads; writes nothing.
+      (spec_validator.reachModel under its own binding), composed with the family's references, and
+      JUDGED: its network findings (network_arbiter.judge) carried on the model, tuned and
+      lint-allow filtered as checkReach tunes them, so no derived output trusts a design that fails
+      the gate. At a project without members it is that project's own model. Reads; writes nothing.
     signature: 'reachModel(options: ValidationOptions): ReachModel'
     returns: ReachModel
     params:
@@ -345,4 +351,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-06T18:32:17.955Z'
+updatedAt: '2026-10-06T23:09:47.041Z'

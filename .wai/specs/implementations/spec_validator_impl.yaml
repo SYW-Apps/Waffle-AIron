@@ -317,7 +317,7 @@ methods:
           it was taken, never forced into a re-lock of an unchanged design
         type: branch
         condition: the record exists and its stateId.algorithm is the full-content gate algorithm
-        onFalseStep: 17
+        onFalseStep: 18
       - stepNumber: 15
         description: >-
           Compute the full-content identity of the own specs (code linkage included), the content
@@ -335,8 +335,41 @@ methods:
         targetComponent: gate_identity
         targetMethod: compute
       - stepNumber: 17
+        description: That record is judged; answer
+        type: jump
+        toStep: 22
+      - stepNumber: 18
+        label: earlierDesign
+        description: >-
+          Was it taken in the earlier design reading (`sha256+design+doctrine+inputs+members`,
+          status still in the view)? Then it is judged as it was taken too, with each spec's status
+          as approved, so a tree in which nothing but a status moved still matches it
+        type: branch
+        condition: the record exists and its stateId.algorithm is the earlier design gate algorithm
+        onFalseStep: 22
+      - stepNumber: 19
+        description: Recover each own spec's approved status from the record's design digests
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvedStatuses
+      - stepNumber: 20
+        description: Compute the own design identity in the earlier reading, statuses put back as approved
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: computeOwnDesignIdAsRecorded
+      - stepNumber: 21
+        description: >-
+          Recompute the gate identity from it and the SAME doctrine, inputs, gate config and
+          members' subjects — gate_identity.compute marks it with the earlier design gate algorithm
+          — and carry it as the answer's asRecorded
+        type: call
+        targetComponent: gate_identity
+        targetMethod: compute
+      - stepNumber: 22
         label: answer
-        description: Return the gate identity, with asRecorded when the record on disk is a format-2 one
+        description: >-
+          Return the gate identity, with asRecorded when the record on disk was taken under an
+          earlier algorithm this release still recomputes
         type: return
         outcome: StateId (the gate identity)
   - name: findTestsReferencing
@@ -789,4 +822,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T19:12:34.044Z'
+updatedAt: '2026-10-06T23:05:24.879Z'

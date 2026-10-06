@@ -42,13 +42,16 @@ methods:
       portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess,
       and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its
       scope. The tool never defaults an entry: a blanket entry the author did not decide would hide
-      unreached verbs. The input may state the spec's lifecycle status, so a component can be
-      authored straight at design or complete instead of being born draft and needing a follow-up
-      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
-      a re-authoring, and a stated status that would lower the stored one is refused by name:
-      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
-      as structured content beside the sentence, so a caller learns the status written and whether a
-      spec already held that id without parsing English; the sentence itself is unchanged.
+      unreached verbs. An Adapter may state the transport it calls its target Portal over; when it
+      states none and the Portals its dependsOn names share one transport, the tool fills it in from
+      them and says so (a stated transport that disagrees with the target's is
+      ADAPTER_TRANSPORT_MISMATCH). The input may state the spec's lifecycle status, so a component
+      can be authored straight at design or complete instead of being born draft and needing a
+      follow-up edit nobody remembers. An unstated status means draft for a new spec and the stored
+      status for a re-authoring, and a stated status that would lower the stored one is refused by
+      name: reopening a frozen spec is an update, not a restatement. The answer carries the write
+      receipt as structured content beside the sentence, so a caller learns the status written and
+      whether a spec already held that id without parsing English; the sentence itself is unchanged.
     signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -930,9 +933,9 @@ methods:
     description: >-
       Tool (scope: tree, a read): the allowed-flows matrix derived from the design. It lists who
       reaches which Portal verb, over which transport and binding, through which networks and
-      gateway, on what evidence (a modelled call, or a declared entry). It is optionally filtered to
-      the flows into one project, Portal or verb. Only network transports produce flows. Writes
-      nothing.
+      gateway, on what evidence (a modelled call, or a declared entry); a flow the gate refuses
+      carries refusedBy with the findings and is never allowed. It is optionally filtered to the
+      flows into one project, Portal or verb. Only network transports produce flows. Writes nothing.
     signature: 'getNetworkFlows(to: string?): list<NetworkFlow>'
     returns: list<NetworkFlow>
     params:
@@ -947,8 +950,10 @@ methods:
   - name: explainFlow
     description: >-
       Tool (scope: tree, a read): why one party may reach another, from the design: each allowing
-      flow with its chain from the entry or modelled call through every gateway, or that nothing
-      allows it. Writes nothing.
+      flow with its chain from the entry or modelled call through every gateway, or why not, said as
+      what it is — an unknown party name, a flow the gate refuses (with its findings), a
+      collaborator reached in-process (never a network flow), or that nothing allows it. Writes
+      nothing.
     signature: 'explainFlow(from: string, to: string): FlowExplanation'
     returns: FlowExplanation
     params:
@@ -963,6 +968,100 @@ methods:
       method: tools/call sdd_explain_flow
     previousNames:
       - imcp_portal.sdd_explain_flow
+  - name: setNetwork
+    description: >-
+      Tool (scope: tree, a write): declare (declared: true, with an optional description) or remove
+      (declared: false) the bound project's `network` in .wai/project.yaml: that this project and
+      every member below it form one isolated network boundary. It changes which rules fire
+      (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so run sdd_validate_tree after it; it is part of the
+      gate identity, so the human re-locks. Use it instead of editing .wai/project.yaml by hand.
+      Answers whether it wrote.
+    signature: 'setNetwork(declared: bool, description?: string?): bool'
+    returns: bool
+    params:
+      - name: declared
+        type: bool
+        description: true declares the network, false removes the declaration
+      - name: description
+        type: string?
+        description: >-
+          What the network encloses, in the project's words (shown on the network diagram); only
+          with declared
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_set_network
+  - name: removeExternal
+    description: >-
+      Tool (scope: tree, a write): remove one external of the bound project — its declaration in
+      .wai/project.yaml and its pin (lock entry and snapshot) together, so no orphaned pin is left;
+      an orphaned pin alone is removed too. A refusal is one sentence. Use it instead of editing
+      .wai/project.yaml by hand.
+    signature: 'removeExternal(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_remove_external
+  - name: updateExternal
+    description: >-
+      Tool (scope: tree, a write): add and remove `use` imports of one declared external, so the
+      project's specs may name the producer's public names bare (an `implements` of another
+      project's trait may then spell the producer's types as the producer does). An added name is
+      checked against what the producer exports to this project; refusals are one sentence naming
+      the closest exported names or the audience. Use it instead of editing .wai/project.yaml by
+      hand.
+    signature: >-
+      updateExternal(alias: string, addUse?: list<string>, removeUse?: list<string>, dryRun?: bool):
+      ExternalUseChange
+    returns: ExternalUseChange
+    params:
+      - name: alias
+        type: string
+        description: The declared external whose `use` changes
+      - name: addUse
+        type: list<string>
+        description: Public names to import bare (`*` for all)
+        optional: true
+      - name: removeUse
+        type: list<string>
+        description: Names to stop importing
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the resulting list, writing nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_update_external
+  - name: renameField
+    description: >-
+      Tool: rename a field of a type and respell every reference to it (a foreign key's `references:
+      <type>.<field>`); the old name joins the field's rename trace (previousNames), which the
+      design export shows as `formerly`. Refuses a name another field of the type holds or retired.
+      Reports the specs rewritten.
+    signature: 'renameField(id: string, field: string, newName: string): FieldRename'
+    returns: FieldRename
+    params:
+      - name: id
+        type: string
+        description: The type whose field is renamed (qualified by its owning subsystem if needed)
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_field
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T19:07:10.620Z'
+updatedAt: '2026-10-06T23:07:48.263Z'

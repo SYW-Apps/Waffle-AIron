@@ -70,6 +70,9 @@ const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
  * the legacy value, where no transport derives one.
  */
 function exportKindOf(comp: ComponentSpec, authored: string | undefined): string | undefined {
+  // A library is called in-process: shown as InProcess, never as the
+  // free-form network kind Custom a generator would read as a wire surface.
+  if (comp.componentType === 'Portal' && comp.transport === 'InProcess') return 'InProcess';
   if (comp.componentType === 'Portal' && comp.transport) return transportExportKind(comp.transport);
   return authored;
 }
@@ -171,6 +174,87 @@ interface NamedRequest {
   component?: string;
   interface?: string;
   typeDef?: string;
+  /** The public name the entry asks for, when it renames. */
+  as?: string;
+}
+
+/**
+ * The public name a source table exports a renamed item by: the component,
+ * interface or type of the world whose rename trace (previousIds) records the
+ * requested id, as the source table publishes it. Undefined when nothing
+ * records the name.
+ */
+function renamedInSource(world: ExportWorld, table: ResolvedExportTable, request: NamedRequest): string | undefined {
+  const wanted = localName(request.interface ?? request.component ?? request.typeDef ?? '');
+  if (!wanted) return undefined;
+  const traced = (holder: { id: string; previousIds?: string[] }): boolean => (holder.previousIds ?? []).some((p) => localName(p) === wanted);
+  for (const entry of table.entries) {
+    if (request.typeDef !== undefined && entry.kind === 'type') {
+      const holders = world.types.get(entry.typeDef ?? '') ?? [];
+      if (holders.some(traced)) return entry.publicName;
+    }
+    if (request.interface !== undefined && entry.interface !== undefined) {
+      const intf = world.interfaces.get(entry.interface);
+      if (intf && traced(intf)) return entry.publicName;
+    }
+    if (request.component !== undefined && entry.kind === 'component' && entry.component !== undefined) {
+      const comp = world.components.get(entry.component);
+      if (comp && traced(comp)) return entry.publicName;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Follow a producer's rename trace on a table's invalid named re-exports: each
+ * re-export of a name the producer (`source` → its key) no longer exports
+ * whose former local id the producer's trace records is told the public name
+ * it is exported by now (`renamedTo`, and a "did you mean" in its detail).
+ * The scan runs it once every producer's table is resolved; it rewrites the
+ * problems in place.
+ */
+export function followProducerRenames(
+  table: ResolvedExportTable,
+  producerOf: (source: string) => { table: ResolvedExportTable; specs: Parameters<typeof publicRenameTrace>[1] } | undefined,
+): void {
+  for (const problem of table.problems) {
+    if (problem.kind !== 'invalid' || problem.source === undefined || problem.renamedTo !== undefined) continue;
+    const requested = /^re-exports "([^"]+)" from /.exec(problem.detail)?.[1];
+    const producer = requested !== undefined ? producerOf(problem.source) : undefined;
+    const renamedTo = producer ? publicRenameTrace(producer.table, producer.specs).get(requested!) : undefined;
+    if (renamedTo === undefined) continue;
+    problem.renamedTo = renamedTo;
+    problem.detail = problem.detail.replace(' — another project is reached only through its L0 exports', ` — it was renamed to "${renamedTo}" there (did you mean "${renamedTo}"?): re-export the new name`);
+  }
+}
+
+/**
+ * A project's rename trace over its public names: each former local id of an
+ * exported component, interface or type → the public name it is exported by
+ * now. What a parent's named re-export of a renamed member name is told.
+ */
+function publicRenameTrace(
+  table: ResolvedExportTable,
+  specs: { components: ReadonlyArray<{ id: string; previousIds?: string[] }>; interfaces: ReadonlyArray<{ id: string; previousIds?: string[] }>; types: ReadonlyArray<{ id: string; previousIds?: string[] }> },
+): Map<string, string> {
+  const trace = new Map<string, string>();
+  const byId = <T extends { id: string }>(list: ReadonlyArray<T>): Map<string, T[]> =>
+    list.reduce((m, x) => m.set(x.id, [...(m.get(x.id) ?? []), x]), new Map<string, T[]>());
+  const components = byId(specs.components);
+  const interfaces = byId(specs.interfaces);
+  const types = byId(specs.types);
+  for (const entry of table.entries) {
+    const holders = entry.kind === 'type'
+      ? types.get(entry.typeDef ?? '') ?? []
+      : entry.interface !== undefined ? interfaces.get(entry.interface) ?? [] : components.get(entry.component ?? '') ?? [];
+    for (const holder of holders) {
+      for (const former of holder.previousIds ?? []) {
+        const name = localName(former);
+        if (name !== entry.publicName && !trace.has(name)) trace.set(name, entry.publicName);
+      }
+    }
+  }
+  return trace;
 }
 
 /**
@@ -230,7 +314,14 @@ function bindNamed(
   const { found, item } = findInSource(world, source, sourceTable, request);
   const what = request.typeDef ? `type "${request.typeDef}"` : `component "${request.component}"${request.interface ? ` (interface "${request.interface}")` : ''}`;
   if (!item) {
-    problems.push({ kind: 'invalid', owner, detail: `re-exports ${what} from "${source.id}", which has no such item` });
+    const renamedTo = renamedInSource(world, sourceTable, request);
+    problems.push({
+      kind: 'invalid', owner,
+      ...(request.as !== undefined ? { publicName: request.as } : {}),
+      detail: `re-exports ${what} from "${source.id}", which has no such item${renamedTo ? ` — it was renamed to "${renamedTo}" there (did you mean "${renamedTo}"?)` : ''}`,
+      ...(renamedTo ? { renamedTo } : {}),
+      source: source.id,
+    });
     return undefined;
   }
   const name = publicName(item);
@@ -307,7 +398,7 @@ function subsystemCandidates(
     const sourceTable = tables.get(source.id) ?? emptyTable(source.id, 'subsystem');
     if (pi.component !== undefined || pi.typeDef !== undefined || pi.interface !== undefined) {
       const bound = bindNamed(world, sub.id, source, sourceTable,
-        { component: pi.component, interface: pi.interface, typeDef: pi.typeDef },
+        { component: pi.component, interface: pi.interface, typeDef: pi.typeDef, ...(pi.as !== undefined ? { as: pi.as } : {}) },
         (item) => pi.as ?? localName(pi.interface ?? item.typeDef ?? item.component ?? ''),
         group.has(source.id), problems);
       if (!bound) return;
@@ -595,7 +686,14 @@ function bindFromProject(
   const requested = named ? localName(e.interface ?? e.component ?? e.typeDef!) : undefined;
   const picked = named ? table.entries.filter((x) => x.publicName === requested) : table.entries;
   if (named && picked.length === 0) {
-    problems.push({ kind: 'invalid', owner, publicName: e.as ?? e.id ?? requested, detail: `re-exports "${requested}" from ${source.label}, whose export table has no such public name — another project is reached only through its L0 exports` });
+    // The source is recorded, so the scan can follow the producer's rename
+    // trace (followProducerRenames) and a consumer is told where the name went.
+    const from = e.from ?? e.subsystem;
+    problems.push({
+      kind: 'invalid', owner, publicName: e.as ?? e.id ?? requested,
+      detail: `re-exports "${requested}" from ${source.label}, whose export table has no such public name — another project is reached only through its L0 exports`,
+      ...(from !== undefined ? { source: from } : {}),
+    });
     return [];
   }
   const declared = e.audience ?? 'instance';
@@ -631,7 +729,7 @@ function bindFromSubsystem(
   const sourceTable = subsystemTables.get(subsystem.id) ?? emptyTable(subsystem.id, 'subsystem');
   if (e.component !== undefined || e.typeDef !== undefined || e.interface !== undefined) {
     const bound = bindNamed(world, owner, subsystem, sourceTable,
-      { component: e.component, interface: e.interface, typeDef: e.typeDef },
+      { component: e.component, interface: e.interface, typeDef: e.typeDef, ...((e.as ?? e.id) !== undefined ? { as: e.as ?? e.id } : {}) },
       // The default public name is the item's own LOCAL id: a member's L0 is
       // read with its ids keyed under its project, and its entry names the
       // item as the member wrote it.

@@ -295,16 +295,33 @@ function whatMoved(record: LockRecord): string {
   const direct = familyApprovals(1).filter((a) => a.parent === '');
   const members = direct.filter((a) => a.as !== 'part');
   const named: string[] = [];
+  // A part is a member too (the lock records its pin): never call it removed.
+  const current = new Set(direct.map((m) => m.alias ?? m.key));
+  const gone = Object.keys(record.members ?? {}).filter((alias) => !current.has(alias));
+  const added = members.filter((m) => m.pinned === 'unpinned');
+  // A renamed alias is one gone alias and one new one naming the same project
+  // (its id, or — the only pair left — an alias renamed with its project id):
+  // named as renamed, never as one added and one removed.
+  const renamedFrom = new Map<string, string>();
+  for (const m of added) {
+    const from = gone.find((alias) => !renamedFrom.has(alias) && m.projectId !== undefined && record.members?.[alias]?.project === m.projectId);
+    if (from !== undefined) renamedFrom.set(m.alias ?? m.key, from);
+  }
+  const leftAdded = added.filter((m) => !renamedFrom.has(m.alias ?? m.key));
+  const leftGone = gone.filter((alias) => ![...renamedFrom.values()].includes(alias));
+  if (leftAdded.length === 1 && leftGone.length === 1 && record.members?.[leftGone[0]]?.as !== 'part' && leftAdded[0].as !== 'part') {
+    renamedFrom.set(leftAdded[0].alias ?? leftAdded[0].key, leftGone[0]);
+  }
   for (const m of members) {
     const name = m.alias ?? m.key;
-    if (m.pinned === 'unpinned') named.push(`${name} (added since the approval)`);
+    const from = renamedFrom.get(name);
+    if (from !== undefined) named.push(`${name} (renamed from ${from} since the approval)`);
+    else if (m.pinned === 'unpinned') named.push(`${name} (added since the approval)`);
     else if (m.pinned === 'moved') named.push(`${name} (its approval moved since this one was taken${m.state === 'approved' ? '' : `; now ${m.state}`})`);
     else if (m.state !== 'approved') named.push(`${name} (${m.state} at its own root)`);
   }
-  // A part is a member too (the lock records its pin): never call it removed.
-  const current = new Set(direct.map((m) => m.alias ?? m.key));
-  for (const alias of Object.keys(record.members ?? {})) {
-    if (!current.has(alias)) named.push(`${alias} (removed since the approval)`);
+  for (const alias of gone) {
+    if (![...renamedFrom.values()].includes(alias)) named.push(`${alias} (removed since the approval)`);
   }
   const parts: string[] = [];
   if (own !== null && own > 0) parts.push(`${own} own spec file(s) changed since the approval`);
@@ -315,6 +332,16 @@ function whatMoved(record: LockRecord): string {
     : "No own spec file and no direct member's approval moved, so what changed is the doctrine, a declared input or `composition`.";
 }
 
+/**
+ * Why an approval no own spec file of which moved still no longer matches:
+ * the gate the design was judged under moved, never the tree.
+ */
+const GATE_MOVED =
+  'no own spec file changed since it was taken — not even its code linkage — so what moved is the gate it was '
+  + 'judged under: the design rules this wairon release judges by, or the project\'s rule tuning, `composition`, '
+  + 'network declaration, consumed contracts or a member\'s approval. Fix: one `wairon lock` re-approves the '
+  + 'unchanged design under the current gate';
+
 /** The gate-identity upgrade verdict: stale, said plainly, with the one remedy. */
 function upgradedCheck(record: LockRecord): ApprovalCheck {
   const diff = diffAgainstApproval();
@@ -323,6 +350,18 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     : diffSize(diff) === 0
       ? 'No own spec file has changed since the approval.'
       : `${diffSize(diff)} own spec file(s) changed since the approval.`;
+  if (diff && diffSize(diff) === 0) {
+    // Nothing in the tree moved — in a format-2 record's raw-content reading
+    // not even code linkage did — so the cause is the gate, and naming the
+    // design would send the reader looking for an edit nobody made.
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}, taken by wairon `
+        + `${record.validatorVersion}) no longer matches, but ${GATE_MOVED}, and commit the updated .wai/lock.json.`
+        + (record.format === 2 ? ' (`wairon doctor --fix` first carries this format-2 record into the design reading, so code linkage never drifts it again.)' : ''),
+    };
+  }
   if (record.format === 2) {
     // A format-2 record judged under its own algorithm and still not matching:
     // something it covered moved, and it cannot say whether only linkage did.
@@ -340,9 +379,9 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     state: 'stale',
     approved: false,
     message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) was taken under an `
-      + `earlier gate identity (written by wairon ${record.validatorVersion}). Since wairon 6.0.0 the gate identity `
-      + 'also covers members\' composition subjects and `composition`, and code conformance is recorded beside the claim. '
-      + `${specs} Fix: re-lock once (\`wairon lock\`) and commit the updated .wai/lock.json.`,
+      + `earlier gate identity (written by wairon ${record.validatorVersion})${diff ? ', and the design moved since' : ''}: ${specs} `
+      + (diff ? '`wairon status` names them. Fix: review them, ' : 'Fix: ')
+      + 're-lock once (`wairon lock`) and commit the updated .wai/lock.json.',
   };
 }
 

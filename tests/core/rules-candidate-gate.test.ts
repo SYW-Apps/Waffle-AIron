@@ -55,9 +55,14 @@ describe('candidate gate — what it refuses', () => {
     expect(codes(verdict.errors)).toContain('UNEXPECTED_PORTAL_FIELD');
   });
 
-  it('refuses a transport on a non-Portal', () => {
-    const verdict = validateComponentCandidate(comp({ componentType: 'Adapter', transport: 'HTTP' }));
+  it('refuses a transport on a non-Portal other than an Adapter', () => {
+    const verdict = validateComponentCandidate(comp({ componentType: 'Orchestrator', transport: 'HTTP' }));
     expect(codes(verdict.errors)).toContain('UNEXPECTED_PORTAL_FIELD');
+  });
+
+  it('accepts a transport on an Adapter: the one it calls its target Portal over', () => {
+    const verdict = validateComponentCandidate(comp({ componentType: 'Adapter', transport: 'HTTP' }));
+    expect(codes(verdict.errors)).not.toContain('UNEXPECTED_PORTAL_FIELD');
   });
 
   it('refuses durability on a non-Store', () => {

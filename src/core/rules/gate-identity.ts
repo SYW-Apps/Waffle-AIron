@@ -53,7 +53,16 @@ export interface GateConfig {
  * one never matches by accident, and a spec identity (sha256, sha256-design)
  * never compares equal to a gate identity.
  */
-export const GATE_ALGORITHM = 'sha256+design+doctrine+inputs+members';
+export const GATE_ALGORITHM = 'sha256+design-2+doctrine+inputs+members';
+
+/**
+ * The gate algorithm of the EARLIER design reading, whose content half still
+ * carried each spec's status: what every format-3 lock written before
+ * readiness left the approval was taken under. compute marks an identity with
+ * it when handed an earlier-reading design identity (state_hash.ownDesignAsRecorded),
+ * which is how such a lock is recomputed exactly as it was taken.
+ */
+const EARLIER_DESIGN_GATE_ALGORITHM = 'sha256+design+doctrine+inputs+members';
 
 /**
  * The previous gate algorithm, whose content half was the FULL content
@@ -65,7 +74,10 @@ export const GATE_ALGORITHM = 'sha256+design+doctrine+inputs+members';
 const CONTENT_GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
 
 /** The spec-identity marker of a design identity (state_hash.ownDesign). */
-const DESIGN_CONTENT_ALGORITHM = 'sha256-design';
+const DESIGN_CONTENT_ALGORITHM = 'sha256-design-2';
+
+/** The spec-identity marker of the earlier design reading (state_hash.ownDesignAsRecorded). */
+const EARLIER_DESIGN_CONTENT_ALGORITHM = 'sha256-design';
 
 // Ordinal, never localeCompare: collation is locale- and ICU-dependent, and it
 // re-weights exactly the characters rule names are full of (hyphens,
@@ -208,8 +220,12 @@ export function computeGateIdentity(
   };
   const digest = crypto.createHash('sha256').update(canonicalize(payload)).digest('hex');
   // The marker follows the content identity handed in: a design identity
-  // gives the current gate algorithm, a full-content one the previous.
-  return { algorithm: content.algorithm === DESIGN_CONTENT_ALGORITHM ? GATE_ALGORITHM : CONTENT_GATE_ALGORITHM, digest };
+  // gives the current gate algorithm, an earlier-reading design identity the
+  // earlier design gate's, a full-content one the previous.
+  const algorithm = content.algorithm === DESIGN_CONTENT_ALGORITHM ? GATE_ALGORITHM
+    : content.algorithm === EARLIER_DESIGN_CONTENT_ALGORITHM ? EARLIER_DESIGN_GATE_ALGORITHM
+      : CONTENT_GATE_ALGORITHM;
+  return { algorithm, digest };
 }
 
 /**

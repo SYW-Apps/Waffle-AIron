@@ -3,6 +3,10 @@ import type { z } from 'zod';
 import {
   ComponentSpecSchema,
   DESIGN_VIEW_FIELDS,
+  InterfaceSpecSchema,
+  SubsystemSpecSchema,
+  interfaceDesignView,
+  subsystemDesignView,
   ImplementationSpecSchema,
   MethodImplementationSchema,
   TypeMethodSchema,
@@ -27,14 +31,16 @@ const SCHEMAS: Array<[keyof typeof DESIGN_VIEW_FIELDS, z.AnyZodObject]> = [
   ['type', TypeSpecSchema],
   ['typeMethod', TypeMethodSchema],
   ['component', ComponentSpecSchema],
+  ['subsystem', SubsystemSpecSchema],
+  ['interface', InterfaceSpecSchema],
 ];
 
 describe('the design view classifies every schema field', () => {
   for (const [name, schema] of SCHEMAS) {
     it(`${name}: every field is design or linkage, never both, never neither`, () => {
       const fields = Object.keys(schema.shape).sort();
-      const { linkage, design } = DESIGN_VIEW_FIELDS[name];
-      const placed = [...linkage, ...design];
+      const { linkage, readiness, design } = DESIGN_VIEW_FIELDS[name];
+      const placed = [...linkage, ...readiness, ...design];
       expect(new Set(placed).size, `${name} places a field twice`).toBe(placed.length);
       expect([...placed].sort(), `${name}: a schema field is unplaced (or the table names one the schema lacks)`).toEqual(fields);
     });
@@ -56,7 +62,7 @@ describe('the projections drop exactly the linkage', () => {
       createdAt: now, updatedAt: now,
     };
     expect(implementationDesignView(impl)).toEqual({
-      id: 'x_impl', name: 'X', description: 'd', contract: 'ix', status: 'complete',
+      id: 'x_impl', name: 'X', description: 'd', contract: 'ix',
       technologies: ['postgres'], detail: 'full', previousIds: ['old_impl'], lint: { allow: [] }, ext: { 'a:b': 1 },
       methods: [{ name: 'run', narrative: [{ stepNumber: 1, description: 'go', type: 'local' }], intent: 'i', ext: { 'a:c': 2 } }],
     });
@@ -90,6 +96,14 @@ describe('the projections drop exactly the linkage', () => {
       transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'Browsers', scope: 'outside' },
       mounts: [{ portal: 'api', prefixes: ['/api'] }],
     });
+  });
+
+  it('readiness leaves every view: a status never reaches the approval', () => {
+    const status = { status: 'draft', createdAt: now, updatedAt: now };
+    expect(implementationDesignView({ id: 'i', methods: [], ...status })).toEqual({ id: 'i', methods: [] });
+    expect(componentDesignView({ id: 'c', componentType: 'Store', ...status })).toEqual({ id: 'c', componentType: 'Store' });
+    expect(subsystemDesignView({ id: 's', parentSystem: 'x', ...status })).toEqual({ id: 's', parentSystem: 'x' });
+    expect(interfaceDesignView({ id: 'ii', component: 'c', methods: [], ...status })).toEqual({ id: 'ii', component: 'c', methods: [] });
   });
 
   it('reads a malformed stored spec without throwing (absent or non-array methods pass through)', () => {

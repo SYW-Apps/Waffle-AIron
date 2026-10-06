@@ -10,7 +10,10 @@ methods:
       enters and the gateway it crosses. An outside entry gives a flow from outside the verb's
       innermost network: from the next network out when that network is nested (scopes are
       relative), else from outside everything. A network entry gives a flow from the whole network,
-      narrowed in a family-scoped model to its modelled callers when any exist. Pure.
+      narrowed in a family-scoped model to its modelled callers when any exist. Each flow carries
+      the model's findings that sit on it: an error refuses it (refusedBy), a warning or notice
+      marks it (flaggedBy) — a verb's finding sits on its entry flows, a call's on the flows its
+      evidence gives. Pure.
     signature: 'project(model: ReachModel): list<NetworkFlow>'
     returns: list<NetworkFlow>
     params:
@@ -23,9 +26,13 @@ methods:
     description: >-
       Why one party may reach another: the flows from the first to the second, each with its chain
       from the entry or modelled call through every gateway it crosses. A party is named as a
-      project, a project::component, or outside. Not allowed when no flow matches, which is itself
-      the answer. Pure.
-    signature: 'explain(flows: list<NetworkFlow>, from: string, to: string): FlowExplanation'
+      project, a subsystem, a component (portal, or portal.verb), outside or network[:<id>]. Not
+      allowed when no flow the gate admits matches, which is itself the answer, said as what it is:
+      a party the model does not know is unknown (never 'nothing allows'), a flow the gate refuses
+      names the findings, and a callee that takes no network flow is reached in-process. Pure.
+    signature: >-
+      explain(flows: list<NetworkFlow>, from: string, to: string, model: ReachModel):
+      FlowExplanation
     returns: FlowExplanation
     params:
       - name: flows
@@ -33,12 +40,15 @@ methods:
         description: The matrix
       - name: from
         type: string
-        description: 'The caller: a project, a project::component, or outside'
+        description: 'The caller: a project, a subsystem, a component, outside or network[:<id>]'
       - name: to
         type: string
-        description: 'The callee: a project, a project::portal, or a project::portal.verb'
+        description: 'The callee: a project, a subsystem, a portal, or a portal.verb'
+      - name: model
+        type: ReachModel
+        description: 'The reach model the matrix was derived from: its placements and verbs name the parties'
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-10-06T13:10:49.063Z'
-updatedAt: '2026-10-06T19:37:47.171Z'
+updatedAt: '2026-10-06T23:03:55.791Z'

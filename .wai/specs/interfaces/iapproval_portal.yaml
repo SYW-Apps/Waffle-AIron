@@ -131,6 +131,35 @@ methods:
       when the gate identity's asRecorded proves the design unchanged, else null. A read; the caller
       writes the answer through writeLockRecord.
     signatureFrom: approval_comparison.reexpress
+  - name: computeOwnDesignIdAsRecorded
+    description: >-
+      The design identity of the bound project's own specs in the earlier design reading, status put
+      back from approvedStatus (state_hash.ownDesignAsRecorded): how a lock taken in that reading is
+      recomputed exactly as it was taken.
+    signature: 'computeOwnDesignIdAsRecorded(approvedStatus: map<string, SpecStatus>): StateId'
+    returns: StateId
+    params:
+      - name: approvedStatus
+        type: map<string, SpecStatus>
+        description: Each spec's approved status, keyed `<kind>:<id>`
+    guarantees:
+      - idempotent
+  - name: approvedStatuses
+    description: >-
+      The status each own spec had when the record was approved, recovered from its design digests
+      (approval_comparison.approvedStatuses).
+    signature: 'approvedStatuses(record: LockRecord, root?: string): map<string, SpecStatus>'
+    returns: map<string, SpecStatus>
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval record
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-10-06T10:10:40.563Z'
+updatedAt: '2026-10-06T23:05:06.470Z'

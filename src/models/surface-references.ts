@@ -205,6 +205,60 @@ export function contentDigest(snapshot: SurfaceSnapshot): string {
   return sha256(canonicalize(contract));
 }
 
+/** A value as a fact compares it: its canonical JSON, or '' when absent. */
+function factValue(value: unknown): string {
+  return value === undefined || value === null ? '' : canonicalize(value);
+}
+
+/**
+ * surface_snapshot.carriedFactChanges — the carried facts a pinned snapshot
+ * holds differently from the live one, each named where it sits: per public
+ * entry its export kind, transport, abi, role, stereotype, basePath, auth
+ * scheme and rename trace, per contract method its effect and rename trace,
+ * per type its rename trace, the producer's id and targetLanguage, and the
+ * names it declares but no longer resolves. Facts no digest reads, which the
+ * rules judge from a pin (LANGUAGE_BRIDGE_MISSING reads the abi), so a pin
+ * whose content digest is unchanged can still be stale. Prose and provenance
+ * are never a fact. Empty when the snapshot says what the producer says now.
+ */
+export function carriedFactChanges(pinned: SurfaceSnapshot, live: SurfaceSnapshot): string[] {
+  const changes: string[] = [];
+  const differs = (label: string, a: unknown, b: unknown): void => {
+    if (factValue(a) !== factValue(b)) changes.push(label);
+  };
+  differs("the producer's id", pinned.projectId, live.projectId);
+  differs('targetLanguage', pinned.targetLanguage, live.targetLanguage);
+  const liveEntries = new Map(live.interfaces.map((e) => [e.id, e] as const));
+  for (const entry of pinned.interfaces) {
+    const now = liveEntries.get(entry.id);
+    // A name gone from the live table is a used-name verdict (removed or renamed), never a carried fact.
+    if (!now) continue;
+    differs(`export kind of ${entry.id}`, entry.type, now.type);
+    differs(`transport of ${entry.id}`, entry.transport, now.transport);
+    differs(`abi of ${entry.id}`, entry.abi, now.abi);
+    differs(`role of ${entry.id}`, entry.role, now.role);
+    differs(`stereotype of ${entry.id}`, entry.componentType, now.componentType);
+    differs(`basePath of ${entry.id}`, entry.basePath, now.basePath);
+    differs(`auth of ${entry.id}`, entry.auth?.scheme, now.auth?.scheme);
+    differs(`rename trace of ${entry.id}`, entry.formerly, now.formerly);
+    const liveMethods = new Map(now.methods.map((m) => [m.name, m] as const));
+    for (const method of entry.methods) {
+      const nowMethod = liveMethods.get(method.name);
+      if (!nowMethod) continue;
+      differs(`effect of ${entry.id}.${method.name}`, method.effect, nowMethod.effect);
+      differs(`rename trace of ${entry.id}.${method.name}`, method.formerly, nowMethod.formerly);
+    }
+  }
+  const liveTypes = new Map(live.types.map((t) => [t.id, t] as const));
+  for (const def of pinned.types) {
+    const now = liveTypes.get(def.id);
+    if (now) differs(`rename trace of ${def.id}`, def.formerly, now.formerly);
+  }
+  const unresolved = (snapshot: SurfaceSnapshot): unknown => [...(snapshot.unresolvedExports ?? [])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  differs('the unresolved re-exports', unresolved(pinned), unresolved(live));
+  return changes;
+}
+
 /**
  * surface_snapshot.memberDigest — sha256 over one used member of one public
  * name, canonicalized so only what a caller depends on moves it: a contract

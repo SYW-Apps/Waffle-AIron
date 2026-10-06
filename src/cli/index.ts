@@ -26,6 +26,8 @@ import {
   runNetworkDiagram,
   runNetworkCheck,
   runNetworkWhy,
+  runNetworkDeclare,
+  runNetworkUndeclare,
 } from './runner.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
@@ -72,6 +74,7 @@ import {
   runMemberUpdate,
 } from '../commands/subsystem.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
+import { runTypeRenameField } from '../commands/type.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -626,7 +629,7 @@ program
 
 program
   .command('externals <action> [aliases...]')
-  .description('declared externals: add <alias> [<source>] | pin [alias…] | status (exit 1 incompatible, 2 not compared) | list')
+  .description('declared externals: add <alias> [<source>] | pin [alias…] | status (exit 1 incompatible, 2 not compared) | list | remove <alias> | use <alias> --add/--remove | consumers')
   .option('--json', 'print the structured answer instead of the table')
   .option('--project <id>', "add: the producer's project id when it differs from the alias")
   .option('--ref <ref>', 'add: git only — the branch, tag or full commit the pin follows')
@@ -634,7 +637,9 @@ program
   .option('--use <names>', "add: public names to import bare, comma-separated ('*' for all)")
   .option('--description <text>', 'add: what the producer is to this project')
   .option('--no-pin', 'add: declare only, without pinning')
-  .option('--dry-run', 'add: say what would be declared, write nothing')
+  .option('--dry-run', 'add, use, remove: say what would change, write nothing (add still reads the producer)')
+  .option('--add <names>', "use: public names to import bare, comma-separated ('*' for all)")
+  .option('--remove <names>', 'use: names to stop importing, comma-separated')
   .action(async (action: string, aliases: string[] | undefined, opts) => {
     await runExternals(action, aliases ?? [], {
       json: opts.json,
@@ -645,6 +650,8 @@ program
       description: opts.description,
       pin: opts.pin,
       dryRun: opts.dryRun,
+      ...(opts.add !== undefined ? { add: String(opts.add).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
+      ...(opts.remove !== undefined ? { remove: String(opts.remove).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
     });
   });
 
@@ -933,7 +940,7 @@ memberCmd
   .description('Make the existing project at <path> a member, keeping its L0, subsystems, packs and lock (`member add` scaffolds a new one)')
   .option('--description <text>', 'what the member is to this project')
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, memberPath: string, opts) => {
     await runMemberAttach(alias, memberPath, { description: opts.description, report: opts.report, yes: opts.yes });
   });
@@ -943,7 +950,7 @@ memberCmd
   .description('Take a member out of the family: this project and every family consumer then reach it as an external by path, pinned')
   .option('--widen', 'widen exactly the exports the family uses that the member gives the family alone to the instance audience (shown in the plan), instead of refusing')
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {
     await runMemberDetach(alias, { widen: opts.widen, report: opts.report, yes: opts.yes });
   });
@@ -952,7 +959,7 @@ memberCmd
   .command('adopt <alias>')
   .description("Make this project's external found by a path inside it a member again (detach's inverse)")
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {
     await runMemberAdopt(alias, { report: opts.report, yes: opts.yes });
   });
@@ -961,7 +968,7 @@ memberCmd
   .command('rename-alias <old> <new>')
   .description("Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes")
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, newAlias: string, opts) => {
     await runMemberRenameAlias(alias, newAlias, { report: opts.report, yes: opts.yes });
   });
@@ -973,7 +980,7 @@ memberCmd
   .option('--packs <adopt|drop>', 'what to do with a pack only the member selects')
   .option('--export <name>', "a public name of the member this project exports afterwards (repeatable), beyond those the family uses", collect, [])
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {
     await runMemberInternalize(alias, { into: opts.into, packs: opts.packs, exports: opts.export, report: opts.report, yes: opts.yes });
   });
@@ -983,7 +990,7 @@ memberCmd
   .description('Make a part an independent project in place: its id, an L0 exporting what this project uses of it, references respelled alias::name, pins on both sides')
   .option('--id <id>', "the new project's id (default: the alias)")
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {
     await runMemberPromote(alias, { id: opts.id, report: opts.report, yes: opts.yes });
   });
@@ -994,7 +1001,7 @@ memberCmd
   .option('--home <subsystem>', "the subsystem that receives the member's L0 vision (required when it holds several subsystems and its vision says more than its name)")
   .option('--packs <adopt|drop>', 'what to do with a pack only the member selects')
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {
     await runMemberDemote(alias, { into: opts.home, packs: opts.packs, report: opts.report, yes: opts.yes });
   });
@@ -1012,9 +1019,24 @@ projectCmd
   .description("Move a project's id — this project's, or a member's named by --project — and every reference to the old id across the family; lists every project to re-lock")
   .option('--project <alias-path>', "the member whose id moves, as an alias path from this project (e.g. billing/payments)")
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (newId: string, opts) => {
     await runProjectRename(newId, { project: opts.project, report: opts.report, yes: opts.yes });
+  });
+
+// ---------------------------------------------------------------------------
+// type rename-field — a field of a type, its references respelled, its old name traced
+// ---------------------------------------------------------------------------
+
+const typeCmd = program
+  .command('type')
+  .description("Act on a type of this project's spec tree");
+
+typeCmd
+  .command('rename-field <type> <field> <new-name>')
+  .description("Rename a field of a type and respell every reference to it (a foreign key's `references: <type>.<field>`); the old name joins the field's rename trace (previousNames, `formerly` in the design export)")
+  .action(async (typeId: string, field: string, newName: string) => {
+    await runTypeRenameField(typeId, field, newName);
   });
 
 // ---------------------------------------------------------------------------
@@ -1031,7 +1053,7 @@ subsystemCmd
   .requiredOption('--path <dir>', "the part's directory (a new one, or an existing part's)")
   .option('--as <part|project>', 'part (default): a storage move; project: the move followed by a promote')
   .option('--report', 'print the plan and write nothing')
-  .option('--yes', 'apply without asking (required in a non-interactive shell)')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (id: string, opts) => {
     await runSubsystemExternalize(id, { path: opts.path, as: opts.as, report: opts.report, yes: opts.yes });
   });
@@ -1156,7 +1178,7 @@ networkCmd
 
 networkCmd
   .command('check')
-  .description('Compare observed live flows (CSV or JSON: source, destination[, transport, method, path, count]) with the matrix; exits 1 on an unexpected flow or unknown verb')
+  .description('Compare observed live flows (CSV or JSON: source, destination[, transport, method, path, count]) with the matrix; exits 1 on an unexpected or disallowed flow or an unknown verb')
   .option('--observed <file>', 'the observed-flow export (required)')
   .option('--bindings <file>', 'the bindings file the observed names follow (lets a selector label value stand for its design name)')
   .option('--format <format>', 'text | json', 'text')
@@ -1172,6 +1194,21 @@ networkCmd
   .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
   .action(async (from: string, to: string, opts) => {
     await runNetworkWhy({ ...opts, from, to });
+  });
+
+networkCmd
+  .command('declare')
+  .description('Declare that this project and every member below it form one isolated network boundary (writes `network` in .wai/project.yaml — no hand edit); the network rules then judge the design')
+  .option('--description <text>', 'what the network encloses, in your words; shown on the network diagram')
+  .action(async (opts) => {
+    await runNetworkDeclare(opts);
+  });
+
+networkCmd
+  .command('undeclare')
+  .description("Remove this project's network declaration from .wai/project.yaml")
+  .action(async (opts) => {
+    await runNetworkUndeclare(opts);
   });
 
 // ---------------------------------------------------------------------------

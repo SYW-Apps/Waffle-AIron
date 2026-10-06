@@ -171,11 +171,14 @@ methods:
         targetMethod: read
       - stepNumber: 2
         description: >-
-          Only a format-2 record whose certified identity still holds can be carried forward: the
-          record exists, names no design reading, and its stateId equals gate.asRecorded — the
-          identity it certified recomputed over the tree as it stands
+          Is there an earlier-reading record whose certified identity still holds: a record that
+          names no design reading (format 2), or one taken in the earlier design reading (its
+          stateId under the earlier design gate algorithm), whose stateId equals gate.asRecorded —
+          the identity it certified recomputed over the tree as it stands?
         type: branch
-        condition: the record exists and specsReading is absent and record.stateId equals gate.asRecorded
+        condition: >-
+          the record exists, is format 2 or in the earlier design reading, and record.stateId equals
+          gate.asRecorded
         onFalseStep: 6
       - stepNumber: 3
         description: Take the design-reading digests of the tree as it stands
@@ -187,20 +190,81 @@ methods:
           Build the carried record: lockedAt, lockedBy, validatorVersion, validationResult, code,
           members, projectId and the git provenance exactly as recorded; stateId = gate without
           asRecorded; specs = the design digests; specsReading = design; format = 3; reexpressed = {
-          at: now, fromAlgorithm: the record's algorithm, fromReading: content, by: the command }
+          at: now, fromAlgorithm: the record's algorithm, fromReading: content or design as the
+          record named, by: the command }
         type: local
       - stepNumber: 5
         description: Answer the carried record for the caller to write
         type: return
         outcome: carried
       - stepNumber: 6
+        label: tree-unchanged
+        description: >-
+          Is it a format-2 record whose every own spec file still matches its raw-content digest —
+          none added, changed or removed? Then only the gate it was judged under moved, never the
+          tree
+        type: branch
+        condition: >-
+          the record exists, names no design reading, and diffAgainstApproval in the content reading
+          is empty
+        onFalseStep: 10
+      - stepNumber: 7
+        description: Take the design-reading digests of the tree as it stands
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 8
+        description: >-
+          Build the carried record as in step 4, except that stateId stays the identity the record
+          certified: the reading is carried, the claim is not, so the lock still reads stale — for
+          the gate that moved — until one `wairon lock` re-approves it
+        type: local
+      - stepNumber: 9
+        description: Answer the reading-only carried record for the caller to write
+        type: return
+        outcome: reading carried
+      - stepNumber: 10
         label: unprovable
         description: >-
-          Answer null: nothing to carry (no record, or already in the design reading) or nothing
-          proves the design unchanged (something the record covered moved), so only a human re-lock
+          Answer null: nothing to carry (no record, or already in the current reading) or nothing
+          proves the tree unchanged (something the record covered moved), so only a human re-lock
           can record the approval anew
         type: return
         outcome: not carried
+  - name: approvedStatuses
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer an empty map unless the record names the design reading and carries per-spec
+          digests
+        type: branch
+        condition: record.specsReading is design and record.specs is present
+        onFalseStep: 5
+      - stepNumber: 2
+        description: >-
+          Read each own spec file of the root (its key, kind and content) through the spec loader's
+          snapshot, a member project's files left out
+        type: call
+        targetComponent: spec_loader
+        targetMethod: snapshot
+      - stepNumber: 3
+        description: >-
+          For each file the record holds a digest for: parse it, take its design view with the
+          status put back as each candidate (none, draft, design, complete) in turn, and when one
+          digests to the recorded digest, record that status (none as complete) under `<kind>:<id>`
+          — a file matching no candidate moved in its design and is left out
+        type: local
+      - stepNumber: 4
+        description: Answer the map
+        type: return
+        outcome: statuses
+      - stepNumber: 5
+        label: none
+        description: >-
+          Answer an empty map: a record in another reading carries no design digests to recover
+          statuses from
+        type: return
+        outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-06T10:10:17.404Z'
+updatedAt: '2026-10-06T23:09:06.952Z'

@@ -156,9 +156,11 @@ methods:
         description: >-
           Project each kept spec to its design view: an implementation through
           implementation_spec.designView, a type through type_spec.designView, a component through
-          component_spec.designView, and every other kind with createdAt and updatedAt dropped. A
-          part's implementation needs no re-expression of its paths from the part's root, because
-          the paths are linkage and the view leaves them out
+          component_spec.designView, a subsystem through subsystem_spec.designView, a contract
+          through interface_spec.designView (each leaving status out: readiness is not design), and
+          every other kind with createdAt and updatedAt dropped. A part's implementation needs no
+          re-expression of its paths from the part's root, because the paths are linkage and the
+          view leaves them out
         type: local
       - stepNumber: 10
         description: >-
@@ -166,10 +168,67 @@ methods:
           compared by codepoint), canonicalize, and digest with sha256 in hex
         type: local
       - stepNumber: 11
-        description: 'Return the StateId {algorithm: ''sha256-design'', digest}'
+        description: 'Return the StateId {algorithm: ''sha256-design-2'', digest}'
         type: return
         outcome: StateId (own design)
     symbol: computeOwnDesignStateId
+  - name: ownDesignAsRecorded
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Read the scan's project graph for the owner of every spec key
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: Keep only the specs the bound root owns, exactly as ownDesign selects them
+        type: local
+      - stepNumber: 9
+        description: >-
+          Project each kept spec to the EARLIER design view: its design view as ownDesign takes it,
+          with the spec's status put back — approvedStatus's entry for `<kind>:<id>` when it names
+          one (an absent stored status reads as complete, as the loader parses it), else the status
+          the spec has now
+        type: local
+      - stepNumber: 10
+        description: >-
+          Put each kind into identity order exactly as ownDesign does, canonicalize, and digest with
+          sha256 in hex
+        type: local
+      - stepNumber: 11
+        description: 'Return the StateId {algorithm: ''sha256-design'', digest}'
+        type: return
+        outcome: StateId (own design, earlier reading)
+    symbol: computeOwnDesignStateIdAsRecorded
 status: complete
 createdAt: '2026-07-04T12:54:31.981Z'
-updatedAt: '2026-10-06T10:08:32.228Z'
+updatedAt: '2026-10-06T23:03:53.323Z'

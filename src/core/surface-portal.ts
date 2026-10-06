@@ -20,6 +20,10 @@ import type {
   DesignApproval,
   DesignExport,
   ExternalAddition,
+  ExternalConsumer,
+  ExternalRemoval,
+  ExternalUseChange,
+  ExternalUseRequest,
   ExternalRequest,
   ExternalListing,
   ExternalPin,
@@ -90,4 +94,19 @@ export function declareExternal(request: ExternalRequest): ExternalAddition {
 /** isurface_portal.pinnedParent — a part's pinned parent, from its own .wai/externals files only (stage 8); null at a project. */
 export function pinnedParent(): PinnedParent | null {
   return surfaceOrchestrator.pinnedParent();
+}
+
+/** isurface_portal.removeExternal — remove one external of the bound project and its pin (`wairon externals remove`, sdd_remove_external). Dispatched to the external-declarations workflow. */
+export function removeExternal(alias: string, dryRun?: boolean): ExternalRemoval {
+  return externalDeclarations.remove(alias, dryRun);
+}
+
+/** isurface_portal.updateExternalUse — add and remove `use` imports of one declared external (`wairon externals use`, sdd_update_external). Dispatched to the external-declarations workflow. */
+export function updateExternalUse(request: ExternalUseRequest): ExternalUseChange {
+  return externalDeclarations.updateUse(request);
+}
+
+/** isurface_portal.listConsumers — the family projects in reach that consume the bound project (`wairon externals consumers`). Read-only. */
+export function listConsumers(): ExternalConsumer[] {
+  return surfaceOrchestrator.listConsumers();
 }

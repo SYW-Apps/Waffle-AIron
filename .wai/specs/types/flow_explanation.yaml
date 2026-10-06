@@ -3,8 +3,9 @@ id: flow_explanation
 name: FlowExplanation
 description: >-
   Why one party may reach another, from the design: the flows that allow it, each with its chain
-  from the entry or modelled call through every gateway it crosses. Empty when nothing allows it,
-  which is itself the answer.
+  from the entry or modelled call through every gateway it crosses. Not allowed when nothing allows
+  it, which is itself the answer — and said as what it is: a flow the gate refuses, a party the
+  design does not know, or a collaborator reached in-process, which is never a network flow.
 subsystem: sdd_network
 fields:
   - name: allowed
@@ -21,7 +22,25 @@ fields:
       Each step of the justification as one line: the entry and its caller prose, the gateway
       entered, the Adapter's call step
     optional: false
+  - name: inProcess
+    type: bool
+    description: >-
+      True when the callee takes no network flow at all (it is no network-transport Portal verb):
+      the design reaches it by a direct call inside one process, so no flow allows or forbids it
+    optional: true
+  - name: unknown
+    type: list<string>
+    description: >-
+      The party names the design does not know (no project, subsystem, component, verb, outside or
+      network of the model is named so): a typo, not a refusal
+    optional: true
+  - name: refusedBy
+    type: list<string>
+    description: >-
+      The gate's error findings on the flows between the pair, each as `CODE: message`: the design
+      names the flow, and the gate refuses it
+    optional: true
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:52.485Z'
-updatedAt: '2026-10-06T13:09:53.090Z'
+updatedAt: '2026-10-06T23:03:49.508Z'

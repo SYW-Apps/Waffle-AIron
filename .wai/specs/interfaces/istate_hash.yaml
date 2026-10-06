@@ -38,17 +38,37 @@ methods:
     description: >-
       The DESIGN identity of the bound project's own specs: exactly ownTree's selection,
       storage-independence and ordering, but each spec digested in its design view — an
-      implementation, a type and a component through their type's designView (code linkage and
-      timestamps out), every other kind with createdAt/updatedAt out. Algorithm marker
-      `sha256-design`, so it can never compare equal to a content identity. The content half of the
-      gate identity from format 3 on: adding, moving or removing a sourcePath, symbol, exportedVia,
-      simPath, injectedParams, conformance tier, mount `via` or external link never moves it; any
-      change to what the design says does.
+      implementation, a type, a component, a subsystem and a contract through their type's
+      designView (code linkage, readiness and timestamps out), every other kind with
+      createdAt/updatedAt out. Algorithm marker `sha256-design-2` (readiness left the view in this
+      reading; `sha256-design` named the reading that still carried status), so it can never compare
+      equal to a content identity or to the earlier design reading. The content half of the gate
+      identity from format 3 on: adding, moving or removing a sourcePath, symbol, exportedVia,
+      simPath, injectedParams, conformance tier, mount `via` or external link, or promoting or
+      demoting a status, never moves it; any change to what the design says does.
     signature: 'ownDesign(): StateId'
     returns: StateId
     params: []
     guarantees:
       - idempotent
+  - name: ownDesignAsRecorded
+    description: >-
+      The design identity of the bound project's own specs in the EARLIER design reading
+      (`sha256-design`, status still in the view), with each spec's status taken from approvedStatus
+      where it names one (keyed `<kind>:<id>`, the status the approval recorded) and as it stands
+      otherwise — so a lock taken in that reading is recomputed exactly as it was taken, and a tree
+      in which nothing but a status moved still matches it. What validator_portal.computeGateStateId
+      hands gate_identity.compute for StateId.asRecorded on such a record.
+    signature: 'ownDesignAsRecorded(approvedStatus: map<string, SpecStatus>): StateId'
+    returns: StateId
+    params:
+      - name: approvedStatus
+        type: map<string, SpecStatus>
+        description: >-
+          The status each spec had when it was approved, keyed `<kind>:<id>`
+          (approval_comparison.approvedStatuses)
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-10-06T10:08:22.688Z'
+updatedAt: '2026-10-06T23:03:40.206Z'

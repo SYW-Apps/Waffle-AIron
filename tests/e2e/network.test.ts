@@ -59,7 +59,7 @@ describe('e2e wairon network (built CLI and MCP server)', () => {
     expect(flows).toHaveLength(7);
     const csv = await runCli(['network', 'flows', '--format', 'csv', '--out', 'flows.csv'], dir);
     expect(csv.code).toBe(0);
-    expect(fs.readFileSync(path.join(dir, 'flows.csv'), 'utf8').split('\n')[0]).toBe('"from","to","transport","binding","crosses","via","evidence"');
+    expect(fs.readFileSync(path.join(dir, 'flows.csv'), 'utf8').split('\n')[0]).toBe('"from","to","transport","binding","crosses","via","evidence","gate"');
     expect((await runCli(['network', 'flows', '--format', 'yaml'], dir)).code).toBe(1);
   });
 

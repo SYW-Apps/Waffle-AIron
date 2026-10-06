@@ -45,7 +45,24 @@ fields:
       position the loader parses it — each reference back into the parent as `<parent id>::name`,
       and each self-prefixed one (its id now equal to the prefix) as the bare local id.
     optional: false
+  - name: entriesDeclared
+    type: list<string>
+    description: >-
+      One line per entry the promote declared on a verb of the new project that callers left behind
+      in the parent call (it has their modelled calls, so it never invents one): the verb, the scope
+      (network on a network transport) and the callers, e.g. "payment_portal.openIntent: entry
+      (network) — orders' payments_client". Without it the new project's own gate would find its
+      Portal unreached
+    optional: false
+  - name: topicsCrossing
+    type: list<string>
+    description: >-
+      One line per topic the new boundary now separates from its pair: emitted on one side and
+      consumed only on the other, e.g. "payments.payment_captured: emitted by payment_publisher (new
+      project), consumed in the parent by payment_outcome_observer". The family run pairs them
+      across projects; the new project's own gate, run alone, reports them
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-05T23:34:25.221Z'
-updatedAt: '2026-10-05T23:45:22.681Z'
+updatedAt: '2026-10-06T23:08:02.583Z'

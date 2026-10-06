@@ -35,18 +35,29 @@ methods:
   - name: addComponent
     narrative:
       - stepNumber: 1
+        description: 'An Adapter that states no transport: read the components its dependsOn names'
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          When the Portals among them share one transport, the Adapter takes it — it calls their
+          verbs over it — and the receipt says it was inferred; none, or Portals of several
+          transports, leaves it unstated
+        type: local
+      - stepNumber: 3
         description: >-
           State the restatement: the component as the tool's arguments give it, the fields this
           tool's input can express, and the status stated, if any
         type: local
-      - stepNumber: 2
+      - stepNumber: 4
         description: >-
           Write it through the authoring client adapter, which requires the subsystem and judges the
           candidate against the intrinsic rules before anything reaches disk
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: writeSpec
-      - stepNumber: 3
+      - stepNumber: 5
         description: Answer with the receipt
         type: return
         outcome: written
@@ -681,7 +692,26 @@ methods:
           names kept, the register edits
         type: return
         outcome: TypeRename
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the type through the core client adapter, resolving the tool's id — qualified by its
+          owning subsystem when two subsystems own that id — to the type it names, so core receives
+          an unambiguous id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: Rename the field and respell every reference to it via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameField
+      - stepNumber: 3
+        description: 'Shape the tool response from the report: the type, from and to, and the specs rewritten'
+        type: return
+        outcome: FieldRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-06T13:15:18.913Z'
+updatedAt: '2026-10-06T23:07:43.462Z'

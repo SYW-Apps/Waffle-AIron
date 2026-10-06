@@ -1007,6 +1007,35 @@ methods:
         outcome: network findings reported
     symbol: check
     exportedVia: networkBoundariesRule
+  - name: adapterTransport
+    sourcePath: src/core/rules/wiring/adapter-transport.ts
+    narrative:
+      - stepNumber: 1
+        label: adapters
+        description: For each Adapter that states a transport
+        type: loop
+        loopKind: forEach
+        over: the Adapters of ctx.components with a transport
+        endStep: 3
+      - stepNumber: 2
+        description: >-
+          Its target Portals: the Portals it names in dependsOn and the Portals its implementations'
+          call, register and dispatch steps and declared calls land on, each resolved in
+          ctx.componentMap (an unresolved one is not judged)
+        type: local
+      - stepNumber: 3
+        label: adaptersEnd
+        description: >-
+          Report ADAPTER_TRANSPORT_MISMATCH (error; draft context when the Adapter is draft) for
+          each target whose transport differs, sited at the target, naming both transports and the
+          two fixes: follow the Portal's transport, or drop the Adapter's to take the target's
+        type: local
+      - stepNumber: 4
+        description: Done
+        type: return
+        outcome: adapter transports judged
+    symbol: check
+    exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-06T18:32:45.154Z'
+updatedAt: '2026-10-06T23:07:25.924Z'

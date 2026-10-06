@@ -136,7 +136,7 @@ describe('composeAgentBrief (live delegation briefs)', () => {
     proj.writeSpec('subsystem', 'beta', SUB.replace(/alpha/g, 'beta').replace('Alpha', 'Beta'));
     proj.writeSpec('component', 'engine', 'id: engine\nname: Engine\ndescription: d\nsubsystem: beta\ncomponentType: Orchestrator');
     proj.writeSpec('interface', 'iengine', 'id: iengine\nname: IEngine\ndescription: d\ncomponent: engine\nmethods: []');
-    proj.writeSpec('implementation', 'engine_impl', 'id: engine_impl\nname: Engine\ndescription: d\ncontract: iengine\nsourcePath: src/engine.rs\nmethods: []');
+    proj.writeSpec('implementation', 'engine_impl', 'id: engine_impl\nname: Engine\ndescription: d\ncontract: iengine\nsourcePath: src/engine.go\nmethods: []');
     proj.activate();
     try {
       expect(composeAgentBrief('alpha-owner').typeMapping).toBeUndefined();
@@ -144,6 +144,59 @@ describe('composeAgentBrief (live delegation briefs)', () => {
       expect(beta.typeMapping).toBeUndefined();
       expect(beta.instructions).not.toContain('## Types in');
       expect(composeAgentBrief('system-architect').typeMapping).toBeUndefined();
+    } finally { proj.cleanup(); }
+  });
+
+  it('a Rust implementer gets a mapping-only table that says code conformance does not read it', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'beta', SUB.replace(/alpha/g, 'beta').replace('Alpha', 'Beta'));
+    proj.writeSpec('component', 'engine', 'id: engine\nname: Engine\ndescription: d\nsubsystem: beta\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'iengine', 'id: iengine\nname: IEngine\ndescription: d\ncomponent: engine\nmethods: []');
+    proj.writeSpec('implementation', 'engine_impl', 'id: engine_impl\nname: Engine\ndescription: d\ncontract: iengine\nsourcePath: src/engine.rs\nmethods: []');
+    proj.activate();
+    try {
+      const beta = composeAgentBrief('beta-owner');
+      expect(beta.instructions).toContain('## Types in rust');
+      expect(beta.typeMapping).toContain('T? → Option<T>');
+      expect(beta.typeMapping!.at(-1)).toContain('mapping only');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a Python design with no code yet takes its mapping from the L0 targetLanguage', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', 'schemaVersion: 1.0.0\nname: TestSystem\nvision: testing\ntargetLanguage: python');
+    proj.writeSpec('subsystem', 'beta', SUB.replace(/alpha/g, 'beta').replace('Alpha', 'Beta'));
+    proj.writeSpec('component', 'engine', 'id: engine\nname: Engine\ndescription: d\nsubsystem: beta\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'iengine', 'id: iengine\nname: IEngine\ndescription: d\ncomponent: engine\nmethods: []');
+    proj.writeSpec('implementation', 'engine_impl', 'id: engine_impl\nname: Engine\ndescription: d\ncontract: iengine\nmethods: []');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('engine');
+      expect(brief.instructions).toContain('## Types in python');
+      expect(brief.typeMapping).toContain('T? → T | None (Optional[T])');
+    } finally { proj.cleanup(); }
+  });
+
+  it("a subsystem owner's fence holds the project's shared setup files; a consumer's brief names the externals it uses", () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'beta', SUB.replace(/alpha/g, 'beta').replace('Alpha', 'Beta'));
+    proj.writeSpec('component', 'planner', 'id: planner\nname: Planner\ndescription: d\nsubsystem: beta\ncomponentType: Orchestrator\ndependsOn: [geo::distance]');
+    proj.writeSpec('interface', 'iplanner', 'id: iplanner\nname: IPlanner\ndescription: d\ncomponent: planner\nmethods: []');
+    proj.writeSpec('implementation', 'planner_impl', 'id: planner_impl\nname: Planner\ndescription: d\ncontract: iplanner\nsourcePath: src/beta/planner.ts\nmethods: []');
+    proj.writeFile('package.json', '{"name":"x"}');
+    proj.writeFile('tsconfig.json', '{}');
+    proj.writeFile('.wai/externals/geo.yaml', 'projectName: geo-sdk\ninterfaces:\n  - id: distance\n    transport: InProcess\n    abi: c\n    methods: []\n');
+    proj.activate();
+    try {
+      const owner = composeAgentBrief('beta-owner');
+      expect(owner.codeFence).toEqual(expect.arrayContaining(['package.json', 'tsconfig.json']));
+      expect(owner.instructions).toContain('Shared with the other subsystem owners');
+      const planner = composeAgentBrief('planner');
+      expect(planner.instructions).toContain('## Externals used');
+      expect(planner.instructions).toContain('`geo::distance` (transport InProcess, abi c)');
+      expect(planner.readPaths).toContain('.wai/externals/geo.yaml');
+      // A component implementer is not a subsystem owner: the setup files are not its fence.
+      expect(planner.codeFence).not.toContain('package.json');
     } finally { proj.cleanup(); }
   });
 

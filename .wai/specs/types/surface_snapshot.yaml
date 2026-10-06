@@ -70,6 +70,14 @@ fields:
       native-ABI library call against (LANGUAGE_BRIDGE_MISSING); absent when the producer declares
       none, or on snapshots written before it was carried
     optional: true
+  - name: unresolvedExports
+    type: list<SurfaceUnresolvedExport>
+    description: >-
+      The public names the producer's L0 declares that no longer resolve (a named re-export whose
+      source dropped or renamed the item), with the source's rename trace when it has one: a
+      consumer that used one hears "re-exported from X, which renamed it to Y" instead of a bare
+      removal. Provenance, outside every digest; absent when every entry resolves.
+    optional: true
 methods:
   - name: isProvidedBy
     signature: 'isProvidedBy(provider: string): boolean'
@@ -125,6 +133,23 @@ methods:
       kept as written. A text that does not parse is kept as written, identifier by identifier, as
       before the grammar. Pure: the snapshot is the whole input.
     sourcePath: src/models/surface-references.ts
+  - name: carriedFactChanges
+    signature: 'carriedFactChanges(live: SurfaceSnapshot): list<string>'
+    params:
+      - name: live
+        type: SurfaceSnapshot
+        description: The producer's live projection at the same audience
+    returns: list<string>
+    description: >-
+      The carried facts this pinned snapshot holds differently from the live one, each named where
+      it sits: per public entry its export kind, transport, abi, role, stereotype, basePath, auth
+      scheme and rename trace, per contract method its effect and rename trace, per type its rename
+      trace, the producer's id and targetLanguage, and the names the producer declares but no longer
+      resolves. These are what the rules judge from a pin beside the signatures
+      (LANGUAGE_BRIDGE_MISSING reads the abi), so a pin whose content digest is unchanged can still
+      be stale; prose (descriptions, display names) and provenance (stateId, generatedAt) are never
+      a fact here. Empty when the snapshot says what the producer says now. Pure.
+    sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-06T13:01:35.516Z'
+updatedAt: '2026-10-06T23:03:45.327Z'

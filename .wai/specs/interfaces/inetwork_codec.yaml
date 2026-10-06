@@ -4,7 +4,10 @@ description: The flow matrix encoded as neutral text, or as generated policy.
 component: network_codec
 methods:
   - name: encodeFlows
-    description: 'The matrix as JSON, CSV or Markdown: every fact of every flow, in the matrix''s order. Pure.'
+    description: >-
+      The matrix as JSON, CSV or Markdown: every fact of every flow, in the matrix's order, each
+      flow the gate refuses marked REFUSED with its findings and each flagged one marked with its
+      codes; the document lists the gate findings and whether a flow was refused. Pure.
     signature: 'encodeFlows(flows: list<NetworkFlow>, format: NetworkOutputFormat): NetworkDocument'
     returns: NetworkDocument
     params:
@@ -19,11 +22,12 @@ methods:
     description: >-
       The matrix as generated policy in a target format (kubernetes-network-policy): one ingress
       policy per callee workload, admitting exactly its matrix sources and the bindings' outside
-      blocks for a flow from outside, with the port when the binding names one. A design name with
-      no binding gets the placeholder label wairon.dev/workload: <name> and is listed as unbound; a
-      flow from outside with no outside blocks admits nothing and lists outside as unbound. The
-      unbound names also head the output as comments, so the file says what it could not bind.
-      Deterministic. Pure.
+      blocks for a flow from outside, with the port when the binding names one. A flow the gate
+      refuses is never admitted: it is left out and named in the head of the output with its
+      findings, and the document says a flow was refused. A design name with no binding gets the
+      placeholder label wairon.dev/workload: <name> and is listed as unbound; a flow from outside
+      with no outside blocks admits nothing and lists outside as unbound. The unbound names also
+      head the output as comments, so the file says what it could not bind. Deterministic. Pure.
     signature: >-
       encodePolicy(flows: list<NetworkFlow>, bindings: NetworkBindings, format:
       NetworkOutputFormat): NetworkDocument
@@ -40,4 +44,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-10-06T13:10:53.369Z'
-updatedAt: '2026-10-06T19:25:02.661Z'
+updatedAt: '2026-10-06T23:04:50.313Z'

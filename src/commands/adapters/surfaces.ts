@@ -14,4 +14,8 @@ export {
   listExternals,
   // `wairon externals add`: declare one external.
   declareExternal,
+  // `wairon externals remove | use | consumers`.
+  removeExternal,
+  updateExternalUse,
+  listConsumers,
 } from '../../core/surface-portal.js';

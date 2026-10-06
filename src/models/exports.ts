@@ -67,6 +67,10 @@ export interface ExportProblem {
   targets?: string[];
   /** What is wrong, in words a finding can quote. */
   detail: string;
+  /** On an invalid named re-export: the public name the source's rename trace carries the item to. */
+  renamedTo?: string;
+  /** On an invalid named re-export: the `from` it names, as written. */
+  source?: string;
 }
 
 /** Whose export table: one subsystem's L1 table, or a project's L0 table. */

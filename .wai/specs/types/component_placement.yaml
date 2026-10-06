@@ -1,0 +1,29 @@
+kind: value-object
+id: component_placement
+name: ComponentPlacement
+description: >-
+  Where one component of a reach model sits: its project, its subsystem (the unit a deployment
+  usually runs as one workload) and its block. It is how a caller recorded only by a cross-project
+  reference is named by its workload, and how a question about a component that takes no network
+  flow (an in-process collaborator) is answered as such, never as a refusal.
+fields:
+  - name: project
+    type: string
+    description: The key of the project holding it ('' for the bound root)
+    optional: false
+  - name: component
+    type: string
+    description: Its component key, qualified like the verbs in a family-scoped model
+    optional: false
+  - name: subsystem
+    type: string
+    description: Its subsystem key, qualified like the component
+    optional: true
+  - name: componentType
+    type: string
+    description: Its building block or pattern (Portal, Adapter, Orchestrator, ...)
+    optional: false
+methods: []
+sourcePath: src/models/reach.ts
+createdAt: '2026-10-06T23:02:24.233Z'
+updatedAt: '2026-10-06T23:02:24.940Z'

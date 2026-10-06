@@ -34,8 +34,11 @@ function nodeKey(party: FlowParty, networks: NetworkBoundary[]): string {
 
 /** One aggregated edge, merged from one flow. */
 function mergeInto(edges: Map<string, NetworkFlow>, from: FlowParty, to: FlowParty, flow: NetworkFlow, networks: NetworkBoundary[]): void {
-  const id = `${nodeKey(from, networks)}\u0000${nodeKey(to, networks)}\u0000${flow.transport}`;
-  const edge = edges.get(id) ?? { from, to, transport: flow.transport, crosses: [...flow.crosses], evidence: [], verbs: [] };
+  // A flow the gate refuses joins a refused edge of its own: it is never drawn as allowed.
+  const refused = (flow.refusedBy?.length ?? 0) > 0;
+  const id = `${nodeKey(from, networks)}\u0000${nodeKey(to, networks)}\u0000${flow.transport}\u0000${refused ? 'refused' : 'allowed'}`;
+  const edge = edges.get(id) ?? { from, to, transport: flow.transport, crosses: [...flow.crosses], evidence: [], verbs: [], ...(refused ? { refusedBy: [] } : {}) };
+  for (const line of flow.refusedBy ?? []) if (!edge.refusedBy!.includes(line)) edge.refusedBy!.push(line);
   if (edge.via === undefined && flow.via !== undefined) edge.via = flow.via;
   for (const n of flow.crosses) if (!edge.crosses.includes(n)) edge.crosses.push(n);
   for (const e of flow.evidence) if (!edge.evidence.includes(e)) edge.evidence.push(e);
@@ -53,7 +56,7 @@ export function view(model: ReachModel, flows: NetworkFlow[]): NetworkViewModel 
   const networks = model.networks;
   // Step 2: the workloads that send or receive a flow, each in its network, outside among them.
   const workloads = new Map<string, FlowParty>();
-  // Step 3: the flows aggregated per caller workload, callee workload and transport.
+  // Step 3: the flows aggregated per caller workload, callee workload, transport and verdict.
   const edges = new Map<string, NetworkFlow>();
   for (const flow of flows) {
     const from = workloadParty(flow.from, networks);
@@ -110,10 +113,13 @@ function subgraphLines(network: NetworkBoundary, vm: NetworkViewModel, ids: Map<
   return lines;
 }
 
-/** An aggregated edge's label: its transport and how many verbs it carries. */
+/** An aggregated edge's label: its transport and how many verbs it carries; a refused edge says so with its codes. */
 function edgeLabel(edge: NetworkFlow): string {
   const count = edge.verbs?.length ?? 1;
-  return `${edge.transport}, ${count} verb${count === 1 ? '' : 's'}`;
+  const base = `${edge.transport}, ${count} verb${count === 1 ? '' : 's'}`;
+  if (!edge.refusedBy?.length) return base;
+  const codes = [...new Set(edge.refusedBy.map((l) => l.split(':')[0]))].join(', ');
+  return `REFUSED (${codes}): ${base}`;
 }
 
 /**
@@ -132,7 +138,11 @@ export function mermaid(view: NetworkViewModel): NetworkDocument {
     lines.push(nodeLine(ids.get(w)!, w, false, '  '));
   }
   // Step 3: each aggregated edge, in the view's stable order.
-  for (const edge of view.edges) lines.push(`  ${idOf(edge.from)} -->|${label(edgeLabel(edge))}| ${idOf(edge.to)}`);
+  for (const edge of view.edges) {
+    const arrow = edge.refusedBy?.length ? '-.->' : '-->';
+    lines.push(`  ${idOf(edge.from)} ${arrow}|${label(edgeLabel(edge))}| ${idOf(edge.to)}`);
+  }
   // Step 4.
-  return { format: 'mermaid', content: lines.join('\n') + '\n', unbound: [] };
+  const gateFindings = [...new Set(view.edges.flatMap((e) => (e.refusedBy ?? []).map((l) => `${l.split(':')[0]} (error)${l.slice(l.indexOf(':'))}`)))];
+  return { format: 'mermaid', content: lines.join('\n') + '\n', unbound: [], gateFindings, refused: gateFindings.length > 0 };
 }

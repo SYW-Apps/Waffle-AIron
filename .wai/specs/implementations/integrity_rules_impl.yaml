@@ -825,10 +825,10 @@ methods:
       - stepNumber: 12
         label: invalid
         description: >-
-          Report EXPORT_INVALID (error since stage 4, when the owner's gate judges every entry
-          exactly) with the problem's detail: the missing source or item, the item the source does
-          not export, the own item the level does not own, or the public name that breaks
-          [a-z0-9-_]+
+          Report EXPORT_INVALID (error), naming the entry and what is wrong with it — and, for a
+          named re-export whose source no longer exports the item but records it in a rename trace,
+          the name the source renamed it to ("did you mean"), so the re-export is fixed by following
+          the rename
         type: local
       - stepNumber: 13
         description: Next problem
@@ -858,6 +858,18 @@ methods:
         description: The problem is reported
         type: local
       - stepNumber: 18
+        label: audiences
+        description: >-
+          For each entry of the bound project's own L0 table exported to `department`: report
+          EXPORT_AUDIENCE_NARROW (notice) naming the public name, that a path, git or hosted
+          consumer outside the family is read at `instance` and does not see it, that only this
+          project's family — and, on a hosted instance, the units of the owning department — can,
+          and that whether any consumer is hosted cannot be told from this tree: widen it to
+          instance if a sibling checkout or a git consumer uses it, or keep it (and allow the
+          notice) when its consumers are hosted department units. A notice, never failing the gate:
+          the audience may be exactly what is meant
+        type: local
+      - stepNumber: 19
         description: Every problem is judged
         type: return
         outcome: judged
@@ -941,7 +953,10 @@ methods:
           id and the external's problem (a malformed alias or id, an alias `members` already
           declares, no family project and no source.path, two family projects answering to the id,
           or a family project at source.path answering to another id), and how to fix it in
-          .wai/project.yaml
+          .wai/project.yaml. When the problem is that no project this root contains answers to the
+          id and nothing is pinned, say the true reason: a parent or sibling is never climbed to
+          from this project's own gate, so the pin is the only thing it is judged against — run
+          `wairon externals pin <alias>` here (or give it a source.path)
         type: local
       - stepNumber: 7
         label: checked
@@ -1235,7 +1250,9 @@ methods:
         description: Is a method source off the design's edges?
         type: branch
         condition: >-
-          the fact's form is method and the target's component is in neither the owning component's
+          the fact's form is method (a source in this project; an `export` source — another
+          project's export entry, `alias::name.method` — is reached through the declared dependency,
+          never a dependsOn edge) and the target's component is in neither the owning component's
           dependsOn nor its owns (ctx.componentMap)
         onFalseStep: 14
       - stepNumber: 13
@@ -1418,8 +1435,11 @@ methods:
         endStep: 6
       - stepNumber: 5
         description: >-
-          Does the interface declare it with the same params and returns (compared in canonical type
-          form)?
+          Does the interface declare it with the same params and returns? Types are compared
+          semantically, not by spelling: every type expression in canonical form, the extension
+          point's named types read as the public names its producer exports them by, and the
+          implementer's `alias::name` and the bare name its `use` imports from that alias both read
+          as `name` — so `geo::coordinate` and the producer's own `coordinate` are one type
         type: branch
         condition: the interface lacks the method, or declares it with other params or returns
         onFalseStep: 4
@@ -1433,4 +1453,4 @@ methods:
     exportedVia: implementsContractsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-06T18:32:03.469Z'
+updatedAt: '2026-10-06T23:08:15.351Z'

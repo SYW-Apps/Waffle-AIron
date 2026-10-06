@@ -695,10 +695,13 @@ export const ComponentSpecSchema = z.object({
   /** Other L2 component ids this component collaborates with (facades / standalone blocks). */
   dependsOn: z.array(z.string()).default([]),
   /**
-   * Portal-only, and expected on every Portal: how callers reach its verbs (see
-   * TransportSchema). Replaces the retired portalType, which the loader reads
-   * compatibly for one release (HTTP_API as HTTP). Which process serves which
-   * Portal is implementation: there are no listener mounts.
+   * On a Portal (and expected on every Portal): how callers reach its verbs
+   * (see TransportSchema). Replaces the retired portalType, which the loader
+   * reads compatibly for one release (HTTP_API as HTTP). Which process serves
+   * which Portal is implementation: there are no listener mounts. On an
+   * Adapter, optional: the transport it calls its target Portal over —
+   * inferred from the target when absent, and ADAPTER_TRANSPORT_MISMATCH when
+   * stated and different from the target's. On no other block.
    */
   transport: TransportSchema.optional(),
   /**
@@ -1675,6 +1678,12 @@ export const TypeFieldSchema = z.object({
    * and optionally field (e.g. "billing.Invoice.id").
    */
   references: z.string().optional(),
+  /**
+   * The field's rename trace: every name it held before, oldest first.
+   * Written only by the rename-field tool, never rewritten; the design export
+   * shows it as `formerly`, so a consumer holding the old name can follow it.
+   */
+  previousNames: PreviousNamesSchema.optional(),
 });
 export type TypeField = z.infer<typeof TypeFieldSchema>;
 
@@ -1878,28 +1887,33 @@ export function typeSourceFiles(
 //
 // Code linkage says WHERE or HOW a design is realized in code, never WHAT the
 // design is: pointing a spec at the file that realizes it must not reopen the
-// human approval. One table names every field of the three kinds that carry
-// linkage, in or out, and the projections below drop exactly the `linkage`
-// half (with the volatile timestamps). Both the gate identity
-// (state_hash.ownDesign) and the per-spec approval digests read it, so the
-// two can never disagree about what is design.
+// human approval. Readiness — a spec's `status`, draft, design or complete —
+// says how far AUTHORING is, never what the design says either: promoting a
+// spec to complete must not reopen it. One table names every field of the
+// kinds that carry either, in or out, and the projections below drop exactly
+// the `linkage` and `readiness` halves (with the volatile timestamps). Both
+// the gate identity (state_hash.ownDesign) and the per-spec approval digests
+// read it, so the two can never disagree about what is design.
 //
 // A test classifies EVERY schema field against this table, so a new field
 // cannot slip into (or out of) the approval silently: it must be placed.
 // ---------------------------------------------------------------------------
 
-/** Each schema's fields, split into the design (approved) and the code linkage (not approved). */
+/** Each schema's fields, split into the design (approved), the code linkage and the readiness (neither approved). */
 export const DESIGN_VIEW_FIELDS = {
   implementation: {
     linkage: ['sourcePath', 'simPath', 'router', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
-    design: ['id', 'name', 'description', 'contract', 'technologies', 'methods', 'detail', 'previousIds', 'lint', 'ext', 'status'],
+    readiness: ['status'],
+    design: ['id', 'name', 'description', 'contract', 'technologies', 'methods', 'detail', 'previousIds', 'lint', 'ext'],
   },
   implementationMethod: {
     linkage: ['sourcePath', 'symbol', 'exportedVia', 'conformance'],
+    readiness: [],
     design: ['name', 'narrative', 'detail', 'intent', 'calls', 'ext'],
   },
   type: {
     linkage: ['sourcePath', 'symbol', 'createdAt', 'updatedAt'],
+    readiness: [],
     design: [
       'kind', 'id', 'name', 'description', 'subsystem', 'group', 'fields', 'methods', 'componentClass', 'invariants',
       'database', 'table', 'linkedEntity', 'previousIds', 'lint', 'ext', 'params', 'returns', 'values', 'holds',
@@ -1907,15 +1921,30 @@ export const DESIGN_VIEW_FIELDS = {
   },
   typeMethod: {
     linkage: ['sourcePath', 'symbol'],
+    readiness: [],
     design: ['name', 'signature', 'params', 'returns', 'description'],
   },
   component: {
     linkage: ['externalLinks', 'createdAt', 'updatedAt'],
+    readiness: ['status'],
     design: [
       'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'transport', 'abi', 'invokedBy',
       'basePath', 'auth', 'dispatch', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'patterns', 'variant',
-      'previousIds', 'lint', 'ext', 'status',
+      'previousIds', 'lint', 'ext',
     ],
+  },
+  subsystem: {
+    linkage: ['createdAt', 'updatedAt'],
+    readiness: ['status'],
+    design: [
+      'id', 'name', 'description', 'parentSystem', 'publicInterfaces', 'lifecycle', 'profile', 'projectPath',
+      'targetLanguage', 'trustedLinks', 'designDepth', 'lint', 'ext',
+    ],
+  },
+  interface: {
+    linkage: ['createdAt', 'updatedAt'],
+    readiness: ['status'],
+    design: ['id', 'name', 'description', 'component', 'methods', 'previousIds', 'lint', 'ext', 'implements'],
   },
   /**
    * A retired listener mount as a stored file may still hold it until doctor
@@ -1924,9 +1953,15 @@ export const DESIGN_VIEW_FIELDS = {
    */
   retiredMount: {
     linkage: ['via'],
+    readiness: [],
     design: ['portal', 'prefixes'],
   },
 } as const;
+
+/** What the approval leaves out of one kind's top level: its linkage and its readiness. */
+function outOfApproval(kind: keyof typeof DESIGN_VIEW_FIELDS): readonly string[] {
+  return [...DESIGN_VIEW_FIELDS[kind].linkage, ...DESIGN_VIEW_FIELDS[kind].readiness];
+}
 
 /** A copy of an object without the named keys; anything that is not a plain object passes through. */
 function withoutFields<T>(value: T, fields: readonly string[]): T {
@@ -1947,13 +1982,14 @@ function eachOf<T>(items: T, project: (item: unknown) => unknown): T {
  * implementation_spec.designView — this implementation as the approval sees it:
  * its own sourcePath, simPath, injectedParams and conformance tier, each
  * method's sourcePath, symbol, exportedVia and conformance tier, and the
- * timestamps left out. Everything else — the contract, technologies, the
- * detail dial, each method's narrative, intent and calls, the rename trace,
- * lint, ext, status — stays. Pure: a sourcePath added, moved or removed never
- * changes it. Reads a stored (raw) spec as readily as a loaded one.
+ * readiness (status) and the timestamps left out. Everything else — the
+ * contract, technologies, the detail dial, each method's narrative, intent and
+ * calls, the rename trace, lint, ext — stays. Pure: a sourcePath added, moved
+ * or removed, or a status promoted, never changes it. Reads a stored (raw)
+ * spec as readily as a loaded one.
  */
 export function implementationDesignView<T extends object>(impl: T): T {
-  const view = withoutFields(impl, DESIGN_VIEW_FIELDS.implementation.linkage) as Record<string, unknown>;
+  const view = withoutFields(impl, outOfApproval('implementation')) as Record<string, unknown>;
   if ('methods' in view) view.methods = eachOf(view.methods, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.implementationMethod.linkage));
   return view as T;
 }
@@ -1965,23 +2001,43 @@ export function implementationDesignView<T extends object>(impl: T): T {
  * holds, rename trace, lint and ext stay. Pure.
  */
 export function typeDesignView<T extends object>(type: T): T {
-  const view = withoutFields(type, DESIGN_VIEW_FIELDS.type.linkage) as Record<string, unknown>;
+  const view = withoutFields(type, outOfApproval('type')) as Record<string, unknown>;
   if ('methods' in view) view.methods = eachOf(view.methods, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.typeMethod.linkage));
   return view as T;
 }
 
 /**
  * component_spec.designView — this component as the approval sees it: its
- * externalLinks and the timestamps left out; every other field stays,
+ * externalLinks, its readiness (status) and the timestamps left out; every
+ * other field stays,
  * including transport, abi and invokedBy. Pure. It reads a stored (raw) file
  * as readily as a loaded spec, so a file still holding a retired listener
  * mount (until doctor --fix migrates it) keeps that mount's `via` out, as the
  * approval always did: an unmigrated file digests as it did when it was locked.
  */
 export function componentDesignView<T extends object>(component: T): T {
-  const view = withoutFields(component, DESIGN_VIEW_FIELDS.component.linkage) as Record<string, unknown>;
+  const view = withoutFields(component, outOfApproval('component')) as Record<string, unknown>;
   if ('mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.retiredMount.linkage));
   return view as T;
+}
+
+/**
+ * subsystem_spec.designView — this subsystem as the approval sees it: its
+ * readiness (status) and the timestamps left out; every other field stays.
+ * Pure, and reads a stored (raw) spec as readily as a loaded one.
+ */
+export function subsystemDesignView<T extends object>(subsystem: T): T {
+  return withoutFields(subsystem, outOfApproval('subsystem'));
+}
+
+/**
+ * interface_spec.designView — this contract as the approval sees it: its
+ * readiness (status) and the timestamps left out; every other field stays,
+ * the methods, endpoints and findings included. Pure, and reads a stored
+ * (raw) spec as readily as a loaded one.
+ */
+export function interfaceDesignView<T extends object>(contract: T): T {
+  return withoutFields(contract, outOfApproval('interface'));
 }
 
 /**
@@ -2329,6 +2385,21 @@ export const SurfaceContractEntrySchema = z.object({
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
+/**
+ * surface_unresolved_export — a public name the producer's L0 still declares
+ * but no longer resolves, carried so a consumer that used it is told why it is
+ * gone and where the source's rename trace leads. Provenance, never contract.
+ */
+export const SurfaceUnresolvedExportSchema = z.object({
+  /** The public name the entry declares. */
+  id: z.string(),
+  /** Where it re-exports from: the `from` the entry names. */
+  source: z.string(),
+  /** The name the source's rename trace carries the item to, when it records one. */
+  renamedTo: z.string().optional(),
+});
+export type SurfaceUnresolvedExport = z.infer<typeof SurfaceUnresolvedExportSchema>;
+
 export const SurfaceSnapshotSchema = z.object({
   /** Producing project/system name — the snapshot's resolution identity. */
   projectName: z.string(),
@@ -2357,6 +2428,13 @@ export const SurfaceSnapshotSchema = z.object({
    * producer declares none, or on snapshots written before it was carried.
    */
   targetLanguage: z.string().optional(),
+  /**
+   * The public names the producer's L0 declares that no longer resolve (a
+   * named re-export whose source dropped or renamed the item), with the
+   * source's rename trace when it has one. Provenance, outside every digest;
+   * absent when every entry resolves.
+   */
+  unresolvedExports: z.array(SurfaceUnresolvedExportSchema).optional(),
 });
 export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
 
@@ -2517,6 +2595,53 @@ export interface ExternalAddition {
   unreachable?: string;
 }
 
+/**
+ * external_removal — the answer to removing one external: whether its
+ * declaration and its pin (lock entry and snapshot) went, or why nothing was
+ * removed, in one sentence.
+ */
+export interface ExternalRemoval {
+  alias: string;
+  /** Whether this call took the declaration out of `.wai/project.yaml` (false on a refusal, a dry run, and an orphaned pin). */
+  removed: boolean;
+  /** Whether the alias's lock entry and pinned snapshot were removed (or would be, on a dry run). */
+  unpinned: boolean;
+  /** Why nothing was removed: the alias is neither declared nor pinned. */
+  refusal?: string;
+}
+
+/**
+ * external_use_request — what `wairon externals use` and sdd_update_external
+ * ask for: names to add to and remove from one declared external's `use`.
+ */
+export interface ExternalUseRequest {
+  alias: string;
+  /** Public names to import bare (`*` for all). */
+  add?: string[];
+  /** Names to stop importing. */
+  remove?: string[];
+  /** Answer what the `use` would become, writing nothing. */
+  dryRun?: boolean;
+}
+
+/**
+ * external_use_change — the answer to changing one external's `use`: the
+ * list after the change, what was added and removed, or the refusal.
+ */
+export interface ExternalUseChange {
+  alias: string;
+  /** Whether `.wai/project.yaml` now carries the changed `use` (false on a refusal, a dry run and when nothing changed). */
+  written: boolean;
+  /** The `use` list after the change, in order. */
+  use: string[];
+  /** The names this change imports that were not imported before. */
+  added: string[];
+  /** The names this change stops importing. */
+  removed: string[];
+  /** Why nothing was written, in one sentence. */
+  refusal?: string;
+}
+
 /** The verdict on one used member of a pinned external. */
 export type ExternalUseState = 'unchanged' | 'changed' | 'removed' | 'unlocked' | 'unavailable' | 'renamed';
 
@@ -2557,6 +2682,13 @@ export interface ExternalStatus {
   pinnedDigest?: string;
   /** The producer's commit as the lock recorded it (another repository only); provenance only. */
   pinnedCommit?: string;
+  /**
+   * The carried facts the pinned snapshot no longer matches in the live
+   * producer (an abi, a transport, a role, the targetLanguage, a rename
+   * trace): the snapshot is stale and a re-pin refreshes it. Absent when the
+   * producer was not read or nothing carried moved.
+   */
+  staleFacts?: string[];
 }
 
 /** ok | drifted | incompatible | unavailable — a relation's health in one word. */
@@ -2571,7 +2703,7 @@ export type RelationHealth = 'ok' | 'drifted' | 'incompatible' | 'unavailable';
 export function relationHealth(status: ExternalStatus): RelationHealth {
   if (status.uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed')) return 'incompatible';
   if (!status.reachable || status.outOfReach || status.uses.some((u) => u.state === 'unavailable' || u.state === 'unlocked')) return 'unavailable';
-  if (status.drifted) return 'drifted';
+  if (status.drifted || (status.staleFacts?.length ?? 0) > 0) return 'drifted';
   return 'ok';
 }
 

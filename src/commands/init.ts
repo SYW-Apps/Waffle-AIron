@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -199,9 +200,28 @@ async function runInitAsMember(
 // Non-interactive (--yes) path: sensible defaults, no prompts
 // ---------------------------------------------------------------------------
 
+/**
+ * The name a new project defaults to: the one the folder's own manifest
+ * already gives it — package.json's `name` (its npm scope dropped), else
+ * Cargo.toml's `[package] name` — and the folder's name when it has none.
+ */
+function defaultProjectNameAt(cwd: string): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf8')) as { name?: unknown };
+    if (typeof pkg.name === 'string' && pkg.name.trim() !== '') return pkg.name.trim().replace(/^@[^/]+\//, '');
+  } catch { /* no package.json, or not JSON */ }
+  try {
+    const cargo = fs.readFileSync(path.join(cwd, 'Cargo.toml'), 'utf8');
+    const section = cargo.split(/^\[/m).find((s) => s.startsWith('package]'));
+    const name = section?.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
+    if (name) return name;
+  } catch { /* no Cargo.toml */ }
+  return path.basename(cwd);
+}
+
 async function runInitNonInteractive(): Promise<void> {
   const cwd = process.cwd();
-  const projectName = path.basename(cwd);
+  const projectName = defaultProjectNameAt(cwd);
   const now = new Date().toISOString();
 
   // Claude only: a tool nobody chose gets no files. Another target is one
@@ -232,7 +252,7 @@ async function runInitNonInteractive(): Promise<void> {
 
 async function runInitInteractive(): Promise<void> {
   const cwd = process.cwd();
-  const defaultProjectName = path.basename(cwd);
+  const defaultProjectName = defaultProjectNameAt(cwd);
 
   // ------------------------------------------------------------------
   // Phase 1 — Project name

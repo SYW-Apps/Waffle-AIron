@@ -78,6 +78,9 @@ import {
   deriveMethodSignature,
   qualifiedTypeId,
   typeMatchesRef,
+  parseDeclaredCall,
+  transportKind,
+  type Transport,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -1170,7 +1173,7 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   }
   // Step 8: an asserted `as: part` would now contradict the content.
   if (declaration?.as === 'part') projectConfigRepository.updateMember(alias, { as: '' });
-  const result: PromoteResult = { respelled: [], memberRespelled: [], exported: [], imported: [], consumersDropped: [] };
+  const result: PromoteResult = { respelled: [], memberRespelled: [], exported: [], imported: [], consumersDropped: [], entriesDeclared: [], topicsCrossing: [] };
   // Step 9: every reference across the new boundary respelled, targets unchanged.
   const parentSide = rewriteRefsIn(crossing.in.map((c) => c.spec).filter(unique), (ref, position) =>
     (INTO_MEMBER_POSITIONS.has(position) && crossing.insideTargets.has(ref) ? `${alias}::${ref}` : ref), { result, member: false });
@@ -1183,6 +1186,11 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   invalidateSpecCache();
   // Step 10: a consumers entry naming a subsystem across the boundary is dropped.
   dropCrossingConsumers(inside, outside, result);
+  // Steps 10-11 (reach): the entries the new boundary made necessary, derived
+  // from the parent's modelled calls (read before the respelling), and the
+  // topics it now separates from their pair, for the plan.
+  declareCrossingEntries(inside, outside, parentId || parentName, result);
+  recordCrossingTopics(inside, outside, parentId || parentName, result);
   // Step 10 (declare): the new project declares the parent as its external when it references it.
   if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, {}));
   // Step 11: the parent's re-exports of the part's subsystems re-export the member.
@@ -1234,6 +1242,117 @@ export interface PromoteResult {
   imported: string[];
   /** One line per consumers entry dropped because it named a subsystem across the boundary. */
   consumersDropped: string[];
+  /** One line per entry declared on a verb of the new project that callers left in the parent call. */
+  entriesDeclared: string[];
+  /** One line per topic the new boundary separates from its pair (the family run pairs it). */
+  topicsCrossing: string[];
+}
+
+/** The calls a set of implementations makes into a set of Portals: portal → verb → the calling components. */
+function callsInto(callers: RawSpec[], portals: Set<string>): Map<string, Map<string, Set<string>>> {
+  const componentOf = new Map(callers.filter((s) => s.kind === 'interface').map((s) => [s.id, String(s.raw.component ?? '')] as const));
+  const out = new Map<string, Map<string, Set<string>>>();
+  const add = (target: string | undefined, verb: string | undefined, caller: string): void => {
+    // A reference the respelling already qualified (`alias::portal`) names the same Portal.
+    const portal = target?.includes('::') ? target.slice(target.lastIndexOf('::') + 2) : target;
+    if (!portal || !verb || !portals.has(portal)) return;
+    const verbs = out.get(portal) ?? new Map<string, Set<string>>();
+    verbs.set(verb, new Set([...(verbs.get(verb) ?? []), caller]));
+    out.set(portal, verbs);
+  };
+  for (const impl of callers.filter((s) => s.kind === 'implementation')) {
+    const caller = componentOf.get(String(impl.raw.contract ?? ''));
+    if (!caller) continue;
+    for (const method of Array.isArray(impl.raw.methods) ? impl.raw.methods : []) {
+      for (const step of Array.isArray(method?.narrative) ? method.narrative : []) {
+        if (step?.type === 'call' || step?.type === 'register') add(step.targetComponent, step.targetMethod, caller);
+      }
+      for (const entry of Array.isArray(method?.calls) ? method.calls : []) {
+        const call = typeof entry === 'string' ? parseDeclaredCall(entry) : null;
+        if (call) add(call.compId, call.methodName, caller);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Step 10 (reach): each verb of a new project's Portal that a parent-side
+ * implementation calls, with no entry of its own nor from its Portal, gets
+ * one on its contract method — kind entry, scope network on a network
+ * transport, the callers named — so the Portal is not left unreached in its
+ * own gate. Derived from the modelled calls, never invented: a verb nobody
+ * calls gets none. Each recorded.
+ */
+function declareCrossingEntries(inside: RawSpec[], outside: RawSpec[], parent: string, result: PromoteResult): void {
+  const portals = new Map(inside.filter((s) => s.kind === 'component' && s.raw.componentType === 'Portal').map((s) => [s.id, s] as const));
+  const called = callsInto(outside, new Set(portals.keys()));
+  for (const [portalId, verbs] of [...called].sort(([a], [b]) => a.localeCompare(b))) {
+    const portal = portals.get(portalId)!;
+    if (portal.raw.invokedBy?.kind === 'entry') continue;
+    const transport = portal.raw.transport as Transport | undefined;
+    const network = transport !== undefined && transportKind(transport) === 'network';
+    for (const contract of inside.filter((s) => s.kind === 'interface' && s.raw.component === portalId)) {
+      patchKeepingStamp(contract.file, (raw) => {
+        let changed = false;
+        for (const method of Array.isArray(raw.methods) ? raw.methods : []) {
+          const callers = verbs.get(method?.name);
+          if (!callers || method.invokedBy !== undefined) continue;
+          const names = [...callers].sort().join(', ');
+          method.invokedBy = {
+            kind: 'entry',
+            ...(network ? { scope: 'network' } : {}),
+            caller: `${names} of ${parent}, calling ${portalId}.${method.name} across the project boundary (modelled calls in ${parent}; declared when this project was promoted out of it)`,
+          };
+          result.entriesDeclared.push(`${portalId}.${method.name}: entry${network ? ' (network)' : ''} — called by ${names} of ${parent}`);
+          changed = true;
+        }
+        return changed;
+      });
+    }
+  }
+}
+
+/** Each component's topic ends on one side of the boundary: topic → emitting or subscribing component ids. */
+function topicEnds(specs: RawSpec[]): { emits: Map<string, Set<string>>; subscribes: Map<string, Set<string>> } {
+  const emits = new Map<string, Set<string>>();
+  const subscribes = new Map<string, Set<string>>();
+  const add = (into: Map<string, Set<string>>, topic: unknown, component: string): void => {
+    if (typeof topic !== 'string' || topic === '') return;
+    into.set(topic, new Set([...(into.get(topic) ?? []), component]));
+  };
+  for (const c of specs.filter((s) => s.kind === 'component')) {
+    for (const e of Array.isArray(c.raw.emits) ? c.raw.emits : []) add(emits, e?.topic, c.id);
+    for (const e of Array.isArray(c.raw.subscribesTo) ? c.raw.subscribesTo : []) add(subscribes, e?.topic, c.id);
+  }
+  for (const i of specs.filter((s) => s.kind === 'interface')) {
+    for (const m of Array.isArray(i.raw.methods) ? i.raw.methods : []) {
+      const ep = m?.endpoint;
+      if (ep?.transport !== 'MessageBus') continue;
+      add(ep.direction === 'publish' ? emits : subscribes, ep.topic, String(i.raw.component ?? i.id));
+    }
+  }
+  return { emits, subscribes };
+}
+
+/**
+ * Step 11 (reach): each topic the new boundary separates from its pair —
+ * emitted in the new project and consumed only in the parent, or consumed in
+ * it and emitted only in the parent. The family run pairs them across
+ * projects; the new project's own gate, run alone, reports them.
+ */
+function recordCrossingTopics(inside: RawSpec[], outside: RawSpec[], parent: string, result: PromoteResult): void {
+  const mine = topicEnds(inside);
+  const theirs = topicEnds(outside);
+  const list = (ids: Set<string> | undefined): string => [...(ids ?? [])].sort().join(', ');
+  for (const [topic, emitters] of [...mine.emits].sort(([a], [b]) => a.localeCompare(b))) {
+    if (mine.subscribes.has(topic) || !theirs.subscribes.has(topic)) continue;
+    result.topicsCrossing.push(`${topic}: emitted by ${list(emitters)} (the new project), consumed in ${parent} by ${list(theirs.subscribes.get(topic))} — the family run pairs it; the new project's own gate alone reports UNCONSUMED_TOPIC`);
+  }
+  for (const [topic, subscribers] of [...mine.subscribes].sort(([a], [b]) => a.localeCompare(b))) {
+    if (mine.emits.has(topic) || !theirs.emits.has(topic)) continue;
+    result.topicsCrossing.push(`${topic}: consumed by ${list(subscribers)} (the new project), emitted in ${parent} by ${list(theirs.emits.get(topic))} — the family run pairs it; the new project's own gate alone reports UNSOURCED_SUBSCRIPTION`);
+  }
 }
 
 /** Record one respelling once. */
@@ -2567,8 +2686,9 @@ function rekeyLintAllows(specsDir: string, rename: IdentityRename, dryRun = fals
 
 /**
  * Re-express every implementation file path (sourcePath, each method's
- * sourcePath, simPath) under `specsDir` so it is read against `toRoot` instead
- * of `fromRoot`. The file a path names never changes — only the root it is
+ * sourcePath, simPath) and every type's (sourcePath, each method's
+ * sourcePath) under `specsDir` so it is read against `toRoot` instead of
+ * `fromRoot`. The file a path names never changes — only the root it is
  * relative to. Empty and absolute paths are left as they are.
  */
 function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: string, only?: string[]): void {
@@ -2579,7 +2699,10 @@ function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: s
     } catch {
       continue;
     }
-    if (!raw || typeof raw !== 'object' || !('contract' in raw)) continue;
+    if (!raw || typeof raw !== 'object') continue;
+    const isImplementation = 'contract' in raw;
+    // A type claims code too: its declaration's file, and each method's own.
+    if (!isImplementation && specKind(raw) !== 'type') continue;
     let changed = false;
     /** Rebase `holder[key]` in place when it holds a relative path. */
     const rebase = (holder: any, key: string): void => {
@@ -2591,7 +2714,7 @@ function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: s
         changed = true;
       }
     };
-    for (const key of ['sourcePath', 'simPath']) rebase(raw, key);
+    for (const key of isImplementation ? ['sourcePath', 'simPath'] : ['sourcePath']) rebase(raw, key);
     if (Array.isArray(raw.methods)) {
       for (const method of raw.methods) {
         if (method && typeof method === 'object') rebase(method, 'sourcePath');
@@ -3492,6 +3615,121 @@ export function renameType(typeId: string, newId: string): TypeRename {
     keptPublicNames: kept.names,
     carried,
   };
+}
+
+/** What renaming a field of a type changed (field_rename). */
+export interface FieldRename {
+  /** The type whose field moved, qualified by its owning subsystem when it has one. */
+  type: string;
+  /** The field's name before the rename. */
+  from: string;
+  /** The field's name after the rename. */
+  to: string;
+  /** Ids of the other specs whose references to the field were respelled. */
+  rewritten: string[];
+}
+
+/**
+ * Rename a field of a type and every reference to it in the bound tree
+ * (core_orchestrator.renameField). The field keeps its place, type and
+ * description under the new name, its old name appended to its rename trace
+ * (previousNames — `formerly` in the design export); every foreign key
+ * `references: <type>.<field>` naming it is respelled. Traces and prose are
+ * never rewritten. Refuses before any write: a type that does not exist
+ * (type-missing), one in another project (chained-type), a field it does not
+ * declare (field-missing), a new name that is not an identifier
+ * (invalid-name), and a name another field holds or retired (name-taken,
+ * name-retired).
+ */
+export function renameField(typeId: string, field: string, newName: string): FieldRename {
+  // Steps 1-2: the type, resolved as renameType resolves it.
+  const all = loadTypeSpecs();
+  const cut = typeId.lastIndexOf('::');
+  const qualifier = cut >= 0 ? typeId.slice(0, cut) : undefined;
+  const ownSubsystem = qualifier !== undefined && loadSubsystemSpecs().some((s) => s.id === qualifier);
+  if (qualifier !== undefined && !ownSubsystem) {
+    throw new WaironError(`chained-type: "${typeId}" lives in another project; rename its field from that project's own root. ${memberRootWay(typeId, `sdd_rename_field ${typeId.slice(cut + 2)} ${field} <new name>`)}`);
+  }
+  const type: TypeSpec | null = qualifier !== undefined
+    ? all.find((t) => t.id === typeId.slice(cut + 2) && t.subsystem === qualifier) ?? null
+    : loadTypeSpec(typeId);
+  if (!type) throw new WaironError(`type-missing: no type has the id "${typeId}".`);
+  if (type.id.includes('::')) {
+    throw new WaironError(`chained-type: "${type.id}" lives in another project; rename its field from that project's own root.`);
+  }
+  // Step 3: the field, the new name, and the names the type holds or retired.
+  const fields = type.fields ?? [];
+  const moving = fields.find((f) => f.name === field);
+  if (!moving) {
+    throw new WaironError(`field-missing: type "${type.id}" declares no field "${field}"${fields.length ? ` (it declares ${fields.map((f) => f.name).join(', ')})` : ''}.`);
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
+    throw new WaironError(`invalid-name: "${newName}" is not an identifier (a letter or underscore, then letters, digits or underscores).`);
+  }
+  const taken = fields.find((f) => f !== moving && f.name === newName);
+  if (taken) throw new WaironError(`name-taken: type "${type.id}" already has a field "${newName}".`);
+  const retired = fields.find((f) => f !== moving && (f.previousNames ?? []).includes(newName));
+  if (retired) {
+    throw new WaironError(`name-retired: field "${retired.name}" of type "${type.id}" lists "${newName}" in its previousNames — the name is retired on this type. Unsetting that previousNames releases it.`);
+  }
+  if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [] };
+
+  // Step 4: every foreign key naming the field, collected without writing.
+  const others = all.filter((t) => t !== type);
+  /** Whether a `references` value names this type's moving field. */
+  const namesField = (ref: unknown, owner: string | undefined): boolean => {
+    if (typeof ref !== 'string') return false;
+    const dot = ref.lastIndexOf('.');
+    if (dot <= 0 || ref.slice(dot + 1) !== field) return false;
+    const head = ref.slice(0, dot);
+    if (!typeMatchesRef(type, head)) return false;
+    if (!others.some((t) => typeMatchesRef(t, head))) return true;
+    return (owner ?? '') === (type.subsystem ?? '');
+  };
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const respell = (dryRun: boolean): RewrittenSpec[] => {
+    const out: RewrittenSpec[] = [];
+    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+      let raw: any;
+      try {
+        raw = readYamlFile(file);
+      } catch {
+        continue;
+      }
+      if (!raw || typeof raw !== 'object' || specKind(raw) !== 'type') continue;
+      // The type's own self-references move with it below.
+      if (raw.id === type.id && (raw.subsystem ?? '') === (type.subsystem ?? '')) continue;
+      const owner = typeof raw.subsystem === 'string' ? raw.subsystem : undefined;
+      let changed = false;
+      for (const f of Array.isArray(raw.fields) ? raw.fields : []) {
+        if (!namesField(f?.references, owner)) continue;
+        f.references = `${f.references.slice(0, f.references.lastIndexOf('.'))}.${newName}`;
+        changed = true;
+      }
+      if (!changed) continue;
+      if (!dryRun) writeYamlFile(file, raw);
+      out.push({ kind: 'type', id: String(raw.id) });
+    }
+    return out;
+  };
+  assertSpecsInReach([{ kind: 'type', id: type.id }, ...respell(true)], `renaming field "${field}" of type "${typeId}"`, false);
+  // Step 5: the references.
+  const rewritten = respell(false).map((spec) => spec.id);
+  invalidateSpecCache();
+  // Step 6: the field under its new name, its old one traced; a self-reference moves with it.
+  const stored = loadTypeSpecs().find((t) => t.id === type.id && (t.subsystem ?? '') === (type.subsystem ?? '')) ?? type;
+  const renamed = (stored.fields ?? []).map((f) => {
+    const self = namesField(f.references, type.subsystem)
+      ? { references: `${f.references!.slice(0, f.references!.lastIndexOf('.'))}.${newName}` }
+      : {};
+    return f.name === field
+      ? { ...f, ...self, name: newName, previousNames: [...(f.previousNames ?? []), field] }
+      : { ...f, ...self };
+  });
+  saveSpec('type', { ...stored, fields: renamed } as TypeSpec);
+  invalidateSpecCache();
+  // Step 7.
+  return { type: qualifiedTypeId(type), from: field, to: newName, rewritten };
 }
 
 /** The file the loader keeps a type in, by its id, owner and group. */

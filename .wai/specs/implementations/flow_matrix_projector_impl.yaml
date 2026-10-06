@@ -46,6 +46,13 @@ methods:
         description: Add the outside flow when the entry's scope is outside
         type: local
       - stepNumber: 7
+        description: >-
+          Mark each flow with the model's findings that sit on it, each as `CODE: message`: a
+          finding sited at a verb (its Portal and the verb) sits on that verb's entry flows, one
+          sited at a call (its calling component and the call's evidence) on the flow that evidence
+          gives; an error joins refusedBy, a warning or notice flaggedBy
+        type: local
+      - stepNumber: 8
         description: 'Answer the flows in a stable order: by callee, then caller'
         type: return
         outcome: list<NetworkFlow>
@@ -54,35 +61,54 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Parse both parties: a project, a project::component (or portal, or portal.verb), or
-          outside
+          Parse both parties: a project, a subsystem, a component (or portal, or portal.verb),
+          outside, or network[:<id>]
         type: local
       - stepNumber: 2
+        description: >-
+          Is either name unknown to the model: no placement's project, subsystem or component, no
+          verb, and neither outside nor a network names it?
+        type: branch
+        condition: a party name denotes nothing in the model
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer not allowed with the unknown names: a typo, not a refusal — the chain says so and
+          how a party is named
+        type: return
+        outcome: unknown party
+      - stepNumber: 4
         description: >-
           Select the flows whose caller lies within the first party and whose callee lies within the
           second
         type: local
-      - stepNumber: 3
-        description: Nothing allows it
-        type: branch
-        condition: the selection is empty
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Answer not allowed, naming the nearest flows to the callee so the asker sees what is
-          allowed instead
-        type: return
-        outcome: not allowed
       - stepNumber: 5
-        description: >-
-          Build each flow's chain as lines: the entry with its caller prose or the modelled call's
-          evidence, each network crossed with the gateway entered, and the verb with its binding
+        description: 'Set the flows the gate refuses (refusedBy) apart: they allow nothing'
         type: local
       - stepNumber: 6
+        description: Nothing allows it
+        type: branch
+        condition: no flow the gate admits is selected
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Answer not allowed: when a refused flow joins the pair, naming its findings (the design
+          has it, the gate refuses it); else, when no network-transport verb lies within the callee,
+          as in-process (a direct call inside one process, never a network flow); else naming the
+          nearest admitted flows to the callee so the asker sees what is allowed instead
+        type: return
+        outcome: not allowed
+      - stepNumber: 8
+        description: >-
+          Build each flow's chain as lines: the entry with its caller prose or the modelled call's
+          evidence, each network crossed with the gateway entered, the verb with its binding, and
+          each warning that marks it
+        type: local
+      - stepNumber: 9
         description: Answer allowed with the flows and their chains
         type: return
         outcome: allowed
     detail: full
 status: complete
 createdAt: '2026-10-06T13:11:56.327Z'
-updatedAt: '2026-10-06T19:37:43.195Z'
+updatedAt: '2026-10-06T23:04:18.728Z'

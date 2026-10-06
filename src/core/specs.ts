@@ -15,6 +15,7 @@ import {
   type ProjectProfileSelection,
   type ExternalDeclaration,
   type ExternalSource,
+  type NetworkDeclaration,
 } from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
@@ -47,6 +48,9 @@ import {
   TypeSpecSchema,
   GroupSpec,
   GroupSpecSchema,
+  parseTypeExpression,
+  canonicalTypeText,
+  type TypeExpression,
   SpecStatus,
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
@@ -102,7 +106,7 @@ import { buildGraphModel, renderDiagram as renderArchitectureDiagram, type Diagr
 import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, pinnedUsageOf } from './exports.js';
 // The pure export resolver the scan resolves every project's tables through,
 // before it binds any `alias::name` against them.
-import { resolveProjectTable, resolveSubsystemTables } from './exports.js';
+import { followProducerRenames, resolveProjectTable, resolveSubsystemTables } from './exports.js';
 import type { ExportUsage, ResolvedExport, ResolvedExportTable } from '../models/exports.js';
 import {
   approvalKeyIn,
@@ -342,6 +346,20 @@ export function assertSpecWritesPermitted(owners: SpecWriteOwner[], what: string
     + `${denied.join('; ')}. Nothing was written.`,
   );
 }
+
+/**
+ * Top-level keys older writers stamped on every spec file and the schema no
+ * longer reads: harmless, and no author meant anything by them.
+ */
+const TOLERATED_KEYS: ReadonlySet<string> = new Set(['schemaVersion']);
+
+/** What an unknown key most likely meant, by `<kind>.<key>`: said beside the finding. */
+const UNKNOWN_KEY_HINTS: Readonly<Record<string, string>> = {
+  'system.exports': 'The L0 export table is `publicInterfaces` (sdd_set_public_interfaces writes it).',
+  'system.export': 'The L0 export table is `publicInterfaces` (sdd_set_public_interfaces writes it).',
+  'subsystem.exports': 'A subsystem publishes through `publicInterfaces`.',
+  'component.type': 'A component\'s stereotype is `componentType`.',
+};
 
 /**
  * The keys of `raw` that `parsed` (its schema's reading) no longer carries,
@@ -1607,6 +1625,86 @@ function keyedSystem(system: SystemSpec | null, key: string, subsystems: Readonl
   };
 }
 
+/** A type expression with every named reference rewritten through `rename`; a text that does not parse is kept. */
+function referrerSpelling(text: string | undefined, rename: (name: string) => string): string | undefined {
+  if (text === undefined) return undefined;
+  const parsed = parseTypeExpression(text, 'returns');
+  if (!parsed.expression) return text;
+  const walk = (expr: TypeExpression): TypeExpression => {
+    const args = expr.args.map(walk);
+    return (expr.form === 'named' || expr.form === 'applied') && !isTypeVocabulary(expr.name!) ? { ...expr, name: rename(expr.name!), args } : { ...expr, args };
+  };
+  return canonicalTypeText(walk(parsed.expression));
+}
+
+/** One export method spelled as the referrer writes it: every named type through `rename`, no source of its own. */
+function spelledForReferrer(method: MethodSignature, rename: (name: string) => string): MethodSignature {
+  const { signatureFrom: _source, ...rest } = method;
+  return {
+    ...rest,
+    returns: referrerSpelling(method.returns, rename) ?? method.returns,
+    ...(method.params ? { params: method.params.map((p) => ({ ...p, type: referrerSpelling(p.type, rename) ?? p.type })) } : {}),
+  };
+}
+
+/**
+ * The methods of other projects' export entries a signatureFrom may name, per
+ * referring root: `<namespace>|<alias>::<public name>.<method>` → the method,
+ * its named types written as the referrer spells them (`<alias>::<public
+ * name>`). A declared external's entries come from the root's own pinned
+ * snapshot (.wai/externals/<alias>.yaml); a contained member's from its live
+ * L0 table. A method that names a source of its own is left out: sources do
+ * not chain.
+ */
+function exportMethodsOf(raws: RawRoot[]): Map<string, MethodSignature> {
+  const out = new Map<string, MethodSignature>();
+  const byKey = new Map(raws.map((r) => [r.record.namespace, r] as const));
+  const last = (id: string): string => id.split('::').pop()!.split('.').pop()!;
+  for (const raw of raws) {
+    const ns = raw.record.namespace;
+    // A contained member's live L0 entries.
+    for (const [alias, key] of raw.record.aliases) {
+      const producer = byKey.get(key);
+      const table = producer?.record.exports;
+      if (!producer || !table) continue;
+      const typeNames = new Map<string, string>();
+      for (const e of table.entries) if (e.kind === 'type' && e.typeDef) typeNames.set(last(e.typeDef), e.publicName);
+      const rename = (name: string): string => `${alias}::${typeNames.get(last(name)) ?? last(name)}`;
+      for (const entry of table.entries) {
+        if (entry.kind !== 'component' || !entry.component) continue;
+        const contracts = producer.index.interfaces.filter((i) => (entry.interface ? i.id === entry.interface : i.component === entry.component));
+        for (const method of contracts.flatMap((i) => i.methods)) {
+          if (method.signatureFrom !== undefined) continue;
+          out.set(`${ns}|${alias}::${entry.publicName}.${method.name}`, spelledForReferrer(method, rename));
+        }
+      }
+    }
+    // A declared external's pinned entries.
+    const config = raw.record.config;
+    if (!config) continue;
+    for (const declared of declaredExternals(config)) {
+      if (declared.problem || raw.record.aliases.has(declared.alias)) continue;
+      let snapshot: SurfaceSnapshot;
+      try {
+        const file = path.join(aiPathsAt(raw.dir).root(), 'externals', `${declared.alias}.yaml`);
+        if (!fs.existsSync(file)) continue;
+        snapshot = SurfaceSnapshotSchema.parse(readYamlFile(file));
+      } catch {
+        continue;
+      }
+      const publicOf = new Map((snapshot.exportedTypes ?? []).map((t) => [t.type, t.id] as const));
+      const closure = new Set(snapshot.types.map((t) => t.id));
+      const rename = (name: string): string => (closure.has(name) ? `${declared.alias}::${publicOf.get(name) ?? last(name)}` : name);
+      for (const entry of snapshot.interfaces) {
+        for (const method of entry.methods) {
+          out.set(`${ns}|${declared.alias}::${entry.id}.${method.name}`, spelledForReferrer(method as MethodSignature, rename));
+        }
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Phase two: every root's L1 tables and L0 table through the pure export
  * resolver, each after the producers its L0 re-exports from; a producer met
@@ -1642,6 +1740,12 @@ function resolveFamilyTables(raws: RawRoot[]): void {
         aliases: raw.record.aliases,
         producerTables,
         audienceOf,
+      });
+      // A re-export of a name its producer renamed is told the new name.
+      followProducerRenames(raw.record.exports, (source) => {
+        const key = raw.record.aliases.get(source);
+        const producer = key !== undefined ? byKey.get(key) : undefined;
+        return producer?.record.exports ? { table: producer.record.exports, specs: producer.index } : undefined;
       });
       done.add(key);
       return raw.record.exports;
@@ -3117,7 +3221,9 @@ export class SpecWorkspace {
     // facts kept on the index, the one place the stored form stays visible.
     // Every root's authored references go with them, so an `alias::` signature
     // type lands where the scan bound it, as every other type reference does.
-    const signatures = resolveTree(index.interfaces, index.components, index.types, raws.flatMap((r) => r.record.authoredReferences));
+    // Other projects' export entries a signatureFrom may name (`alias::name.method`):
+    // each root's pinned externals and its contained members' live L0 entries.
+    const signatures = resolveTree(index.interfaces, index.components, index.types, raws.flatMap((r) => r.record.authoredReferences), exportMethodsOf(raws));
     index.interfaces = signatures.interfaces;
     index.types = signatures.types;
     // Step 23: a stored text stale only because its params are stored in alias
@@ -3148,6 +3254,9 @@ export class SpecWorkspace {
     // Step 2: the root's configuration, through its own binding.
     const config = configAt(dir);
     this.scanVisitedConfigFiles.push(aiPathsAt(dir).projectConfig());
+    // The bound root's configuration keys its schema does not know: the parse
+    // drops them, so a misspelt setting (`requireCod`) would silently do nothing.
+    if (!parent && config) this.reportUnknownConfigKeys(aiPathsAt(dir).projectConfig(), rawConfigAt(dir), config);
     const id = config ? effectiveProjectId(config) : null;
     // Step 5: the key — '' for the bound root, else the effective id unless a
     // member already holds it, then the alias path.
@@ -3257,6 +3366,7 @@ export class SpecWorkspace {
         const doc = readSpecFile(systemYaml);
         if (doc && typeof doc === 'object') raw.index.retiredReach.push(...readRetiredReachForms('system', doc as Record<string, unknown>));
         raw.rawSystem = SystemSpecSchema.parse(doc);
+        this.reportUnknownKeys(systemYaml, 'system', doc, raw.rawSystem, keyIn(raw.record.namespace, 'system'));
       } catch {
         raw.rawSystem = null; // the bound root's L0 is reported by the loader's own read
       }
@@ -3449,6 +3559,47 @@ export class SpecWorkspace {
   }
 
   /**
+   * A spec file's keys its schema does not know — which the parse drops, so
+   * they would mean nothing without a word — reported as UNKNOWN_SPEC_KEY,
+   * once per file. A retired reachability form is read compatibly and
+   * reported by its own rule, so a component's `mounts` is no unknown key.
+   */
+  private reportUnknownKeys(file: string, kind: string, doc: unknown, parsed: unknown, specId: string): void {
+    const unknown: string[] = [];
+    unknownKeysIn(doc, parsed, '', unknown);
+    const keys = unknown.map((entry) => entry.slice(0, entry.indexOf(':')))
+      .filter((key) => !(kind === 'component' && key.startsWith('mounts')) && !TOLERATED_KEYS.has(key));
+    if (keys.length === 0) return;
+    const hint = keys.map((key) => UNKNOWN_KEY_HINTS[`${kind}.${key}`]).filter(Boolean);
+    this.loaderIssues.push({
+      severity: 'warning',
+      code: 'UNKNOWN_SPEC_KEY',
+      message: `Spec file "${file}" holds ${keys.length === 1 ? 'a key' : 'keys'} its ${kind} schema does not know, which ${keys.length === 1 ? 'is' : 'are'} ignored: ${keys.join(', ')}. `
+        + `${hint.length ? `${hint.join(' ')} ` : ''}Remove ${keys.length === 1 ? 'it' : 'them'}, or move what ${keys.length === 1 ? 'it means' : 'they mean'} into a field the schema has — a spec edited through the sdd_* tools never holds one.`,
+      specId,
+    });
+  }
+
+  /**
+   * The bound root's .wai/project.yaml keys its schema does not know, reported
+   * as UNKNOWN_CONFIG_KEY (a warning): the configuration's parse drops them, so
+   * a misspelt setting would otherwise silently configure nothing.
+   */
+  private reportUnknownConfigKeys(file: string, raw: Record<string, unknown> | null, config: ProjectConfig): void {
+    if (!raw) return;
+    const unknown: string[] = [];
+    unknownKeysIn(raw, config, '', unknown);
+    const keys = unknown.map((entry) => entry.slice(0, entry.indexOf(':')));
+    if (keys.length === 0) return;
+    this.loaderIssues.push({
+      severity: 'warning',
+      code: 'UNKNOWN_CONFIG_KEY',
+      message: `"${file}" holds ${keys.length === 1 ? 'a setting' : 'settings'} wairon does not know, which ${keys.length === 1 ? 'is' : 'are'} ignored: ${keys.join(', ')}. `
+        + 'Check the spelling against docs/cli.md (configuration) — a misspelt setting configures nothing.',
+    });
+  }
+
+  /**
    * Read every spec document under a specs directory into a root's index, as
    * written: the root's own (`systemYaml` is its L0, skipped here) or a part's
    * (stage 8). Each implementation's file paths are re-expressed from
@@ -3500,6 +3651,7 @@ export class SpecWorkspace {
         if ('parentSystem' in doc) {
           detectedType = 'subsystem';
           const parsed = SubsystemSpecSchema.parse(doc);
+          this.reportUnknownKeys(file, 'subsystem', doc, parsed, keyIn(key, parsed.id));
           if (!(parsed.projectPath && parsed.projectPath.trim() !== '')) {
             index.retiredReach.push(...readRetiredReachForms('subsystem', doc as Record<string, unknown>));
           }
@@ -3511,6 +3663,7 @@ export class SpecWorkspace {
           // a listener's mounts stay read (untyped) on the loaded spec.
           const facts = readRetiredReachForms('component', doc as Record<string, unknown>);
           const parsed = attachRetiredMounts(ComponentSpecSchema.parse(doc), doc as Record<string, unknown>);
+          this.reportUnknownKeys(file, 'component', doc, parsed, keyIn(key, parsed.id));
           index.retiredReach.push(...facts);
           keep('component', index.components, parsed, file);
         } else if ('component' in doc) {
@@ -3519,11 +3672,13 @@ export class SpecWorkspace {
           // `external` as an entry once it knows the contract is a Portal's.
           const facts = readRetiredReachForms('interface', doc as Record<string, unknown>);
           const parsed = InterfaceSpecSchema.parse(doc);
+          this.reportUnknownKeys(file, 'interface', doc, parsed, keyIn(key, parsed.id));
           index.retiredReach.push(...facts);
           keep('interface', index.interfaces, parsed, file);
         } else if ('contract' in doc) {
           detectedType = 'implementation';
           const parsed = ImplementationSpecSchema.parse(doc);
+          this.reportUnknownKeys(file, 'implementation', doc, parsed, keyIn(key, parsed.id));
           // Every source file the implementation names, its own and each
           // method's, is normalized against the root of the project holding it.
           const normalizeSourcePath = (p: string): string =>
@@ -3541,7 +3696,9 @@ export class SpecWorkspace {
             keep('group', index.groups, GroupSpecSchema.parse(doc), file);
           } else {
             detectedType = 'type';
-            keep('type', index.types, TypeSpecSchema.parse(doc), file);
+            const parsed = TypeSpecSchema.parse(doc);
+            this.reportUnknownKeys(file, 'type', doc, parsed, keyIn(key, parsed.id));
+            keep('type', index.types, parsed, file);
           }
         }
         if (detectedType === 'spec') {
@@ -5433,6 +5590,24 @@ export class SpecWorkspace {
 
     if (!result) {
       throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
+    }
+
+    // A spec of a member project is written from that project's own root, as
+    // every other write tool refuses it: from here the write would change a
+    // design the member approves on its own, unnoticed until its lock-check.
+    if (kind !== 'system') {
+      const stored = String((result as { id?: string }).id ?? id);
+      const member = this.getSubprojectPrefix(stored) ?? this.getSubprojectPrefix(id);
+      // A member declared in `members` is its own project; a legacy L1 mount
+      // (deprecated, `doctor --fix` rewrites it) keeps its old cross-tree writes.
+      if (member !== null && this.rootCovering(member)?.legacyMount === null) {
+        const local = stored.startsWith(`${member}::`) ? stored.slice(member.length + 2) : stored;
+        const dir = this.resolveSubprojectForNamespace(member);
+        const folder = dir ? path.relative(this.rootDir, dir).split(path.sep).join('/') || '.' : undefined;
+        throw new Error(
+          `chained-spec: "${stored}" lives in another project; update it from that project's own root. It belongs to the member project "${member}"${folder ? ` at ${folder}` : ''}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call sdd_update_spec ${kind} ${local} there. Nothing was written.`,
+        );
+      }
     }
 
     // The L0 is a singleton and its load ignores the id — reject a mismatched
@@ -7706,6 +7881,15 @@ export function setProjectType(projectType: string): void {
 /** Set the project's human-readable `name` and, when given, its `description`. */
 export function describeProject(name: string, description?: string): void {
   projectConfigRepository.describeProject(name, description);
+}
+
+/**
+ * core_orchestrator.setNetwork — declare (or, with null, remove) the bound
+ * project's network, through the project config Repository. Returns whether
+ * it wrote.
+ */
+export function setNetwork(network: NetworkDeclaration | null): boolean {
+  return projectConfigRepository.setNetwork(network);
 }
 
 /** Record the profile selection hosted policy applied. */

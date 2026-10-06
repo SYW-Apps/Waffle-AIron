@@ -229,3 +229,50 @@ describe('sdd_add_external', () => {
     expect(isExplicitlyClassifiedTool('sdd_add_external')).toBe(true);
   });
 });
+
+describe('round 2: exit codes, remove and use through the CLI and MCP', () => {
+  it('a declaration that pinned nothing exits 2; `remove` and `use` exit 1 on a refusal', async () => {
+    undeclared();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await runExternals('add', ['ledger', '../ledger-elsewhere']);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = undefined;
+    await runExternals('add', ['other', '../nowhere'], { pin: false });
+    expect(process.exitCode).toBeUndefined();
+    await runExternals('remove', ['nope']);
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+    await runExternals('use', ['nope'], { add: ['x'] });
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+    await runExternals('remove', ['ledger']);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('sdd_update_external and sdd_remove_external answer with structured content and are tree-scoped writes', async () => {
+    const p = undeclared();
+    const server = createMcpServer();
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'round2-external-test', version: '0.0.1' });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      await client.callTool({ name: 'sdd_add_external', arguments: { alias: 'ledger', source: '../ledger' } });
+      const used: any = await client.callTool({ name: 'sdd_update_external', arguments: { alias: 'ledger', addUse: ['ledger-portal'] } });
+      expect(used.structuredContent).toMatchObject({ alias: 'ledger', written: true, use: ['ledger-portal'] });
+      const refused: any = await client.callTool({ name: 'sdd_update_external', arguments: { alias: 'ledger', addUse: ['ledger-portl'] } });
+      expect(refused.isError).toBe(true);
+      expect(refused.content[0].text).toMatch(/closest: "ledger-portal"/);
+      const removed: any = await client.callTool({ name: 'sdd_remove_external', arguments: { alias: 'ledger' } });
+      expect(removed.structuredContent).toMatchObject({ alias: 'ledger', removed: true, unpinned: true });
+      expect(externalsOnDisk(p)).toBeUndefined();
+      expect(externalsRepository.readSnapshot('ledger')).toBeNull();
+    } finally {
+      await client.close();
+    }
+    for (const tool of ['sdd_update_external', 'sdd_remove_external']) {
+      expect(requiredDataPlaneCapability(tool)).toBe('project:write');
+      expect(toolScope(tool)).toBe('tree');
+    }
+  });
+});

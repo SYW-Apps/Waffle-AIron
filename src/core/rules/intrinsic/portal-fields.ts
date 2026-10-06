@@ -17,10 +17,10 @@ export const portalFieldsRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    "A Portal declares its transport (the retired portalType is read as it for one release); only an InProcess Portal may declare an abi. Non-Portal components carry no transport, abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
+    "A Portal declares its transport (the retired portalType is read as it for one release); only an InProcess Portal may declare an abi. An Adapter may declare a transport: the one it calls its target Portal over (adapter-transport judges it against the target). Every other non-Portal component carries no transport, and no non-Portal carries an abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
   codes: [
     { code: 'MISSING_PORTAL_TRANSPORT', defaultSeverity: 'error', summary: 'Portal without a transport' },
-    { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with transport, abi or basePath, or an abi on a Portal whose transport is not InProcess' },
+    { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with an abi or basePath, or a transport on one that is not an Adapter, or an abi on a Portal whose transport is not InProcess' },
     { code: 'AUTH_ON_NON_PORTAL', defaultSeverity: 'warning', summary: 'Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a Portal)' },
   ],
   check(ctx) {
@@ -53,11 +53,13 @@ export const portalFieldsRule: SddRule = {
         continue;
       }
 
-      if (comp.transport !== undefined || comp.abi !== undefined || comp.basePath !== undefined) {
+      // An Adapter may state the transport it calls its target Portal over.
+      const strayTransport = comp.transport !== undefined && comp.componentType !== 'Adapter';
+      if (strayTransport || comp.abi !== undefined || comp.basePath !== undefined) {
         ctx.addIssue(
           'error',
           'UNEXPECTED_PORTAL_FIELD',
-          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but has "transport", "abi" or "basePath" configured. They are Portal-only — drop them, or make this component a Portal.`,
+          `Component "${comp.id}" is a ${comp.componentType}, not a Portal, but has "transport", "abi" or "basePath" configured. abi and basePath are Portal-only, and a transport belongs to a Portal (or to an Adapter, as the one it calls its target over) — drop them, or make this component a Portal.`,
           comp.id,
           isDraftCtx,
         );

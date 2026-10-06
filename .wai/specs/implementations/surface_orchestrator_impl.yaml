@@ -204,13 +204,20 @@ methods:
         targetComponent: externals_repository
         targetMethod: readSnapshot
       - stepNumber: 16
-        description: Is the pinned snapshot's content the same?
+        description: Does the pinned snapshot already say everything the new one says?
         type: branch
-        condition: a snapshot is pinned and its content digest equals the new one
+        condition: >-
+          a snapshot is pinned, its content digest equals the new one, and it carries the same facts
+          beside the signatures (SurfaceSnapshot.carriedFactChanges is empty — an abi, a transport,
+          a role, an export kind, the producer's targetLanguage, a rename trace, an unresolved
+          re-export) and the same prose; provenance (stateId, generatedAt) aside
         onTrueStep: 18
         onFalseStep: 17
       - stepNumber: 17
-        description: Write the new snapshot to .wai/externals/<alias>.yaml
+        description: >-
+          Write the new snapshot to .wai/externals/<alias>.yaml — whenever anything it carries
+          moved, not only its digest: the rules read facts no digest covers (LANGUAGE_BRIDGE_MISSING
+          reads the abi), so a re-pin is the documented way to refresh them
         type: call
         targetComponent: externals_repository
         targetMethod: saveSnapshot
@@ -321,10 +328,15 @@ methods:
           is unchanged, a different one changed; one absent under its name is RENAMED when a live
           entry's `formerly` (the producer's rename trace) names it — renamedTo is that entry's
           public name (and member), and its signature is still compared so the detail says whether
-          it also changed — and removed otherwise; a member used now but not in the lock is
-          unlocked; an unexported reference of a family producer is unavailable. Stale when a used
-          member changed, was renamed or went away; drifted when the live content digest differs
-          from the pinned one
+          it also changed — and removed otherwise, the detail naming the source's rename when the
+          live snapshot lists the name among its unresolved re-exports; a name or member used now
+          but not in the lock is compared live too: gone from the live table it is renamed or
+          removed (a break the live producer already proves, pinned or not), present it is unlocked
+          (not in the lock — re-pin); an unexported reference of a family producer is unavailable.
+          Stale when a used member changed, was renamed or went away; drifted when the live content
+          digest differs from the pinned one, or when the pinned snapshot carries facts the live one
+          no longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
+          against the live one) — a stale snapshot is never ok
         type: local
       - stepNumber: 9
         description: Next external
@@ -366,10 +378,13 @@ methods:
       - stepNumber: 3
         description: >-
           One row per declared external: alias, producer id, source kind, relation, directory,
-          audience, problem, and the lock's entry when pinned
+          audience, problem, and the lock's entry when pinned — then one row per ORPHANED pin, a
+          lock entry whose alias is no longer declared (a hand-removed declaration), unresolved with
+          the problem "pinned but no longer declared — `wairon externals remove <alias>` removes the
+          pin", so an orphan is never hidden
         type: local
       - stepNumber: 4
-        description: Answer the rows in declaration order
+        description: 'Answer the rows: the declared in declaration order, then the orphaned pins'
         type: return
         outcome: ExternalListing[]
     detail: full
@@ -635,8 +650,21 @@ methods:
         description: Return the design export
         type: return
         outcome: DesignExport
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the family projects in reach that consume the bound project, through the core: each
+          with its alias, section and the public names it uses
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: listExternalConsumers
+      - stepNumber: 2
+        description: 'Answer them as read: read-only, nothing written'
+        type: return
+        outcome: ExternalConsumer[]
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-06T10:13:40.817Z'
+updatedAt: '2026-10-06T23:15:25.700Z'

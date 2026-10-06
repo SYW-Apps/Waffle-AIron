@@ -24,11 +24,13 @@ import {
   canonicalTypeRef,
   contentDigest,
   memberDigest,
+  carriedFactChanges,
   declaredExternals,
   declaredMembers,
   type PinnedExternal,
   type ExportUsage,
   type ExternalBinding,
+  type ExternalConsumer,
   type ExternalListing,
   type ExternalLockEntry,
   type ExternalPin,
@@ -53,6 +55,7 @@ import {
   loadProjectConfig,
   resolveExternals,
   excerptParent,
+  listExternalConsumers,
 } from './adapters/surfaces-core.js';
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
@@ -306,6 +309,13 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
   // native-ABI library call against.
   const projectId = boundProjectId();
   const targetLanguage = system.targetLanguage?.trim().toLowerCase();
+  // The public names the L0 declares that no longer resolve (a named
+  // re-export whose source dropped or renamed the item): provenance a
+  // consumer that used one is told, outside every digest.
+  const unresolvedExports = table.problems
+    .filter((p) => p.kind === 'invalid' && p.publicName !== undefined && p.source !== undefined
+      && !table.entries.some((e) => e.publicName === p.publicName))
+    .map((p) => ({ id: p.publicName!, source: p.source!, ...(p.renamedTo ? { renamedTo: p.renamedTo } : {}) }));
   return canonicalReferences(SurfaceSnapshotSchema.parse({
     projectName: system.name,
     ...(projectId ? { projectId } : {}),
@@ -318,6 +328,7 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
     ...(exportedTypes.length
       ? { exportedTypes: exportedTypes.map(e => ({ id: e.publicName, type: closureIdOf(e), audience: e.audience ?? 'instance' })) }
       : {}),
+    ...(unresolvedExports.length ? { unresolvedExports } : {}),
   }));
 }
 
@@ -871,7 +882,10 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   const digest = contentDigest(snapshot);
   // Steps 11-13: the snapshot is rewritten only when its content moved.
   const pinned = externalsRepository.readSnapshot(external.alias);
-  const snapshotChanged = !pinned || contentDigest(pinned) !== digest;
+  // Rewritten whenever anything the snapshot carries moved — not only its
+  // digest: the rules read facts no digest covers (a library's abi, an
+  // entry's transport and role), and a re-pin is how they are refreshed.
+  const snapshotChanged = !pinned || contentDigest(pinned) !== digest || pinnedContentKey(pinned) !== pinnedContentKey(snapshot);
   if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
   // Step 14: the lock entry — `used` maps each used member to its digest.
   const { used, missing } = usedDigests(binding.usage, snapshot);
@@ -1093,7 +1107,16 @@ function sameSignatureAfterRename(live: SurfaceSnapshot, from: { publicName: str
 function goneUse(live: SurfaceSnapshot, publicName: string, member: string | undefined, digest: string | undefined): ExternalUseStatus {
   const to = renamedIn(live, publicName, member);
   const at = { publicName, ...(member !== undefined ? { member } : {}) };
-  if (!to) return { ...at, state: 'removed' };
+  if (!to) {
+    // A name the producer still declares but no longer resolves: say where it
+    // went — the rename trace of the source it re-exports from.
+    const broken = (live.unresolvedExports ?? []).find((u) => u.id === publicName);
+    if (!broken) return { ...at, state: 'removed' };
+    return {
+      ...at, state: 'removed',
+      detail: `the producer re-exports it from "${broken.source}", which ${broken.renamedTo ? `renamed it to "${broken.renamedTo}"` : 'no longer exports it'}, so the producer's re-export no longer resolves — ${broken.renamedTo ? `the producer must re-export "${broken.renamedTo}", or depend on "${broken.source}" directly` : 'the producer must fix its re-export'}`,
+    };
+  }
   const renamedTo = renamedName(to);
   const signature = member === undefined || digest === undefined
     ? ''
@@ -1116,13 +1139,21 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
       uses.push(now === null ? goneUse(live, publicName, member, digest) : { publicName, member, state: now === digest ? 'unchanged' : 'changed' });
     }
   }
+  // A use the lock does not hold is still compared with the live producer: one
+  // gone from its table is a break the live producer proves, pinned or not.
+  const unlocked = (publicName: string, member?: string): ExternalUseStatus => {
+    const present = member === undefined ? liveHas(publicName) : memberDigest(live, publicName, member) !== null;
+    if (!present) return goneUse(live, publicName, member, undefined);
+    return { publicName, ...(member !== undefined ? { member } : {}), state: 'unlocked', detail: entry === undefined ? 'used, and present in the live producer, but never pinned — pin it (`wairon externals pin`) to record what it is judged against' : 'used now, but not in the lock — re-pin' };
+  };
   for (const use of usage?.used ?? []) {
     if (!(use.publicName in locked)) {
-      uses.push({ publicName: use.publicName, state: 'unlocked', detail: 'used now, but not in the lock — re-pin' });
+      const gone = use.members.map((m) => unlocked(use.publicName, m)).filter((u) => u.state !== 'unlocked');
+      uses.push(...(gone.length ? gone : [unlocked(use.publicName)]));
       continue;
     }
     for (const member of use.members) {
-      if (!(member in locked[use.publicName])) uses.push({ publicName: use.publicName, member, state: 'unlocked', detail: 'used now, but not in the lock — re-pin' });
+      if (!(member in locked[use.publicName])) uses.push(unlocked(use.publicName, member));
     }
   }
   for (const ref of usage?.unexported ?? []) {
@@ -1182,11 +1213,16 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   // alike — family, path, git, hosted, a referenced project (stage 8).
   const drifted = entry !== undefined ? contentDigest(live) !== entry.digest : undefined;
   const uses = compareUses(entry, binding.usage, live);
+  // A pinned snapshot that no longer carries what the producer says (an abi,
+  // a transport, a role) is stale even when its digest is not: never ok.
+  const snapshot = entry !== undefined ? externalsRepository.readSnapshot(external.alias) : null;
+  const staleFacts = snapshot ? carriedFactChanges(snapshot, live) : [];
   return {
     ...base,
     reachable: true,
     stale: uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed'),
     ...(drifted !== undefined ? { drifted } : {}),
+    ...(staleFacts.length ? { staleFacts } : {}),
     uses,
   };
 }
@@ -1227,8 +1263,8 @@ export function listExternals(): ExternalListing[] {
   const bindings = resolveExternals();
   // Step 2: the lock.
   const lock = externalsRepository.readLock();
-  // Steps 3-4: one row per declared external, in declaration order.
-  return bindings.map(({ external }) => {
+  // Step 3: one row per declared external, in declaration order.
+  const declared = bindings.map(({ external }): ExternalListing => {
     const entry = lock?.externals[external.alias];
     return {
       alias: external.alias,
@@ -1241,11 +1277,44 @@ export function listExternals(): ExternalListing[] {
       ...(external.problem ? { problem: external.problem } : {}),
     };
   });
+  // Then each orphaned pin: a lock entry whose alias is no longer declared.
+  const aliases = new Set(bindings.map((b) => b.external.alias));
+  const orphans = Object.entries(lock?.externals ?? {})
+    .filter(([alias]) => !aliases.has(alias))
+    .map(([alias, entry]): ExternalListing => ({
+      alias, project: entry.project, sourceKind: 'unresolved', audience: 'instance', lock: entry,
+      problem: `pinned but no longer declared — \`wairon externals remove ${alias}\` removes the pin`,
+    }));
+  // Step 4.
+  return [...declared, ...orphans];
+}
+
+/**
+ * surface_orchestrator.listConsumers — the family projects in reach that
+ * consume the bound project, each with the alias and section it declares it
+ * under and the public names its specs use, read through the core. Read-only.
+ */
+export function listConsumers(): ExternalConsumer[] {
+  // Steps 1-2.
+  return listExternalConsumers();
 }
 
 // ---------------------------------------------------------------------------
 // Snapshot content identity
 // ---------------------------------------------------------------------------
+
+/**
+ * A pinned snapshot's content minus provenance, as the file holds it: read
+ * through the schema and canonicalized, so a snapshot read back from YAML and
+ * a fresh projection of the same producer compare equal.
+ */
+function pinnedContentKey(snapshot: SurfaceSnapshot): string {
+  const { stateId: _s, generatedAt: _g, origin: _o, ...content } = SurfaceSnapshotSchema.parse(JSON.parse(JSON.stringify(snapshot)));
+  // The backing component is named by its local name, wherever inside the
+  // producer it now lives: a move between the producer's own projects is no
+  // change a consumer's pin can see.
+  return canonicalize({ ...content, interfaces: content.interfaces.map((e) => ({ ...e, component: lastSegment(e.component) })) });
+}
 
 /** Snapshot content minus provenance — whether two snapshots say the same thing. */
 function surfaceContentKey(snapshot: SurfaceSnapshot): string {

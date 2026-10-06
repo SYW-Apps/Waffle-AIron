@@ -1,0 +1,41 @@
+kind: value-object
+id: external_consumer
+name: ExternalConsumer
+description: >-
+  One family project that consumes the bound project, as `wairon externals consumers` lists it from
+  the producer's root: which project, under which alias and declaration section it reaches the
+  producer, and which of the producer's public names its specs use. Read-only and within reach: the
+  family graph read from the highest root the climb reaches; a sibling checkout, git or hosted
+  consumer outside that family declares its dependency on its own side and is never listed here.
+subsystem: sdd_core
+fields:
+  - name: project
+    type: string
+    description: The consumer's effective project id, else its key in the family
+    optional: false
+  - name: key
+    type: string
+    description: The consumer's key in the family graph read ('' for the family's top root)
+    optional: false
+  - name: directory
+    type: string
+    description: The consumer's root on disk
+    optional: false
+  - name: alias
+    type: string
+    description: The alias the consumer reaches the producer by
+    optional: false
+  - name: section
+    type: string
+    description: 'Where the consumer declares it: externals, or members (a project containing the producer)'
+    optional: false
+  - name: names
+    type: list<string>
+    description: >-
+      The producer's public names the consumer's specs use, sorted; empty when it declares the
+      producer but uses nothing yet
+    optional: false
+methods: []
+sourcePath: src/models/project-family.ts
+createdAt: '2026-10-06T23:03:22.646Z'
+updatedAt: '2026-10-06T23:03:23.402Z'

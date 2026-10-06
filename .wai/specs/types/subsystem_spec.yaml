@@ -91,6 +91,15 @@ methods:
     returns: bool
     description: Whether the subsystem's status is draft or design
     symbol: isDraftSubsystem
+  - name: designView
+    signature: 'designView(): SubsystemSpec'
+    params: []
+    returns: SubsystemSpec
+    description: >-
+      This subsystem as the approval sees it: its status (authoring readiness, never what the design
+      says) and createdAt/updatedAt left out; every other field stays. Pure: over the spec's own
+      fields, and a stored (raw) file reads as readily as a loaded spec.
+    symbol: subsystemDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-04T23:38:06.647Z'
+updatedAt: '2026-10-06T23:03:29.929Z'

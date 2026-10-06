@@ -33,4 +33,10 @@ export {
   // the producer contradicts it.
   declareExternal,
   removeExternal,
+  // `wairon externals add` checks a declaration against its producer before it
+  // writes it; `wairon externals use` appends `use` imports; `wairon externals
+  // consumers` lists the family projects in reach that consume this one.
+  resolveExternalCandidate,
+  importNames,
+  listExternalConsumers,
 } from '../index.js';

@@ -436,8 +436,9 @@ describe('the approval', () => {
     approve();
     const verdict = approvalVerdict([own({ state: 'drifted', upgraded: true })]);
     expect(verdict.drifted).toBe(true);
-    expect(verdict.text).toContain('the gate identity gained inputs in this release');
-    expect(verdict.text).toContain('Re-lock once');
+    // No own spec moved: the cause named is the gate, never the design.
+    expect(verdict.text).toContain('what moved is the gate it was judged under');
+    expect(verdict.text).toContain('One `wairon lock` re-approves the unchanged design');
   });
 
   it('only DIRECT members are this project\'s pins — a grandchild is its parent\'s', () => {

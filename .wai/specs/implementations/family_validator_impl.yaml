@@ -77,18 +77,26 @@ methods:
           shown under it), add the composition findings, and record the project's totals
         type: local
       - stepNumber: 10
+        description: >-
+          Pair topics across the family: a selected project's UNCONSUMED_TOPIC (or
+          UNSOURCED_SUBSCRIPTION) on a component is dropped when every topic that component leaves
+          unpaired inside its own project is subscribed (or emitted) by another selected project,
+          read from the topic ends of the projects' own reach models — a topic a sibling consumes
+          goes somewhere. The project's own gate, run alone, still reports it
+        type: local
+      - stepNumber: 11
         description: Run the family checks over the root's graph
         type: call
         targetComponent: family_validator
         targetMethod: checkMembers
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Run the governance checks over the root's graph: each requiring project's
           composition.requirePolicies judged against the members below it
         type: call
         targetComponent: family_validator
         targetMethod: checkPolicies
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Run the reachability and network checks only the family can make: the networks around each
           member, the proof of every network-scoped entry, and every call that crosses into a
@@ -96,12 +104,12 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: checkReach
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           When externals were left out because their producers lie outside the reach, add a one-line
           hint counting them and naming `validate --family` from the member that declares them
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Return the family verdict: valid when no project's gate and no family finding holds an
           error, with every project's totals and the aliases of the bound project's externals it
@@ -799,9 +807,21 @@ methods:
         targetComponent: reach_model_projector
         targetMethod: compose
       - stepNumber: 6
+        description: Judge the composed model, so the derived outputs never trust a design that fails the gate
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: judge
+      - stepNumber: 7
+        description: >-
+          Keep each finding as a ReachFinding on the model: tuned by the rules.sddRuleSeverity of
+          the project whose spec it sits on (a code turned off there is dropped), and dropped when a
+          lint.allow on that spec covers it at its site — an error is never allowed, so a refused
+          flow stays refused
+        type: local
+      - stepNumber: 8
         description: Answer it
         type: return
         outcome: the family's reach model
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-06T18:32:23.879Z'
+updatedAt: '2026-10-06T23:03:07.274Z'

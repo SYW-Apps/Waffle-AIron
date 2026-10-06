@@ -357,6 +357,20 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: migrateReachability
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: setNetwork
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameField
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T13:07:48.366Z'
+updatedAt: '2026-10-06T23:07:59.838Z'

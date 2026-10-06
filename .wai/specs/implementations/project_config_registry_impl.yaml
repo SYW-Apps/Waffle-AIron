@@ -308,7 +308,19 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: setNetwork
+    narrative: []
+    intent: >-
+      Reads the configuration through the store. Refuses when there is none (`wairon init` first)
+      and when it declares partOf (a part's network is the enclosing project's). When the stored
+      network already reads as the value (absent and null, or the same description), returns false
+      and writes nothing; otherwise writes `network: true` for a declaration without a description,
+      `{ description }` with one, or removes the key for null, through the store, leaving every
+      other field and key untouched, and returns true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-10-03T17:10:06.201Z'
+updatedAt: '2026-10-06T23:05:22.713Z'
