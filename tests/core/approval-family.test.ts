@@ -312,10 +312,10 @@ describe('property: status-agrees', () => {
     await lockAt(fam.mid);
     const approvals = approvalsAt(fam.top);
     const report = getStatusReport({ approvals });
-    expect(report.text).toMatch(/\[Project\] mid \(mid\) \[approved · pin unpinned\]/);
-    expect(report.text).toMatch(/\[Project\] sib \(sib\) \[never · pin unpinned\]/);
-    expect(report.text).toMatch(/\[Project\] leaf \(leaf\) \[never · pin matches\]/);
-    expect(report.text.trimEnd().split('\n').pop()).toBe('Approval: this project is never');
+    expect(report.text).toMatch(/\[Project\] mid \(mid\) \[approved · not pinned\]/);
+    expect(report.text).toMatch(/\[Project\] sib \(sib\) \[never approved · not pinned\]/);
+    expect(report.text).toMatch(/\[Project\] leaf \(leaf\) \[never approved · pinned\]/);
+    expect(report.text.trimEnd().split('\n').pop()).toBe('Approval: this project is never approved (`wairon lock` approves the design)');
   });
 });
 
@@ -417,7 +417,10 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     bind(fam.top);
     const check = checkApproval(false);
     expect(check.state).toBe('stale');
-    expect(check.message).toContain('What moved: direct member(s): mid (its approval moved since this one was taken).');
+    // Only the member's own approval moved: expected, and the verdict says exactly what is needed.
+    expect(check.message).toContain('re-approved at their own roots since this project\'s approval was taken: mid.');
+    expect(check.message).toContain('No own spec file changed.');
+    expect(check.message).toContain('run `wairon lock` here to pin');
     expect(check.message).not.toContain('sib');
 
     fam.touch(fam.sib, 'edited');
@@ -455,5 +458,81 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     expect(readLockRecordAt(fam.top)!.children).toBeUndefined();
     writeLockRecord({ ...record, children: { mid: 'x' } });
     expect(readLockRecordAt(fam.top)!.children).toBeUndefined();
+  });
+});
+
+describe('gate truth — the root lock-check judges every member project, and plain lock-check says what it guarantees', () => {
+  it('refuses at every strictness while a member (at any depth) carries spec changes nobody approved', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    // The root's identity reads each member's RECORDED approval, so this edit
+    // does not move it: only reading the member's own approval catches it.
+    fam.touch(fam.leaf, 'edited');
+    bind(fam.top);
+    for (const strict of [false, true]) {
+      const check = checkApproval(strict);
+      expect(check.approved).toBe(false);
+      expect(check.message).toContain('carry spec changes nobody approved');
+      expect(check.message).toContain('leaf (changed since its own approval');
+      expect(check.message).toContain("This project's own approval still covers its design.");
+    }
+  });
+
+  it('never calls the family approved while a member was never approved: --strict refuses, plain passes naming it NOT gated', async () => {
+    fam = buildApprovalFamily();
+    await lockAt(fam.leaf);
+    await lockAt(fam.mid);
+    await lockAt(fam.top); // sib never locked
+    bind(fam.top);
+    const strict = checkApproval(true);
+    expect(strict.approved).toBe(false);
+    expect(strict.message).toContain('sib (never approved');
+    const plain = checkApproval(false);
+    expect(plain.approved).toBe(true);
+    expect(plain.message).toContain('NOT gated: sib');
+    expect(plain.message).not.toContain('The design in this tree is the approved design');
+  });
+
+  it('a deleted lock record: plain passes and says plainly it gates nothing and CI runs --strict; --strict refuses', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    fs.rmSync(path.join(fam.top, '.wai', 'lock.json'));
+    bind(fam.top);
+    const plain = checkApproval(false);
+    expect(plain.approved).toBe(true);
+    expect(plain.message).toContain('nothing is gated');
+    expect(plain.message).toContain('the record deleted');
+    expect(plain.message).toContain('`wairon lock-check --strict`');
+    expect(checkApproval(true).approved).toBe(false);
+  });
+
+  it('a member re-approval names only the stale pin; an own edit beside it is plain stale', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    fam.touch(fam.sib, 'edited');
+    await lockAt(fam.sib);
+    bind(fam.top);
+    const repin = checkApproval(false);
+    expect(repin.approved).toBe(false);
+    expect(repin.message).toContain('re-approved at their own roots since this project\'s approval was taken: sib.');
+    // An own edit too: the verdict no longer claims only the pin moved.
+    fam.touch(fam.top, 'edited');
+    bind(fam.top);
+    const both = checkApproval(false);
+    expect(both.message).toContain('What moved: 1 own spec file(s) changed since the approval; direct member(s): sib (its approval moved since this one was taken)');
+  });
+});
+
+describe('the approval verdict carries every moved spec for `wairon status --all`', () => {
+  it('names each moved spec in full, prefixed by how it moved', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    fam.touch(fam.top, 'edited');
+    bind(fam.top);
+    const { approvalVerdict } = await import('../../src/core/approval.js');
+    const verdict = approvalVerdict(familyApprovals());
+    expect(verdict.drifted).toBe(true);
+    expect(verdict.moved).toHaveLength(1);
+    expect(verdict.moved![0]).toMatch(/^~ \.wai\/specs\//);
   });
 });

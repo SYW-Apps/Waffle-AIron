@@ -230,10 +230,13 @@ methods:
       contained member's live L0 table, or the pin of a declared external (its exported types; a
       type only inside a signature's closure is not importable). A contained member's types are
       never matched otherwise: the suffix match that used to accept `WafflerError` from anywhere in
-      the scan is gone. A reference written through an alias (`billing::money`, `billing.money`)
-      resolves to a public type of that project the same way. A first segment equal to the project's
-      own id is read as its own id and resolves locally, reported by reference-forms as a deprecated
-      form.
+      the scan is gone. A reference written through an alias (`billing::money`) resolves to a public
+      type of that project the same way. The dotted form `billing.money` is a SUBSYSTEM reference:
+      when its first segment names no subsystem of the bound project but one of its aliases, it does
+      NOT resolve — another project is reached only as `alias::name`, and a dotted spelling left
+      behind by a boundary move must never pass silently (aliasSpelling names the replacement). A
+      first segment equal to the project's own id is read as its own id and resolves locally,
+      reported by reference-forms as a deprecated form.
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
     returns: string?
@@ -397,6 +400,19 @@ methods:
       validator gathered it from the registered rules and loaded assertions. None for a code the run
       does not know. The lint-allows audit reads it to tell an allow that names an error — which no
       allow can cover — from a stale one
+  - name: aliasSpelling
+    signature: 'aliasSpelling(ref: string): string?'
+    params:
+      - name: ref
+        type: string
+        description: The type reference as written
+    returns: string?
+    description: >-
+      For a dotted type reference `<first>.<name>` whose first segment is an alias the bound project
+      declares (a member or an external) rather than one of its subsystems, and whose supplier
+      exports the name: the `alias::publicName` text it must be written as; null otherwise. The
+      type-reference rules append it to UNDEFINED_TYPE_REFERENCE, so the finding says the project is
+      another project and how to name its type.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-04T11:53:42.021Z'
+updatedAt: '2026-10-05T23:35:59.207Z'

@@ -70,13 +70,16 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     throw new WaironError(
       'Non-interactive shell: `wairon init` asks questions and there is no terminal to ask them on. '
         + 'Re-run with --yes (-y) to use the defaults (project name from the directory, profile backend, '
-        + 'targets claude and agy). Nothing was written.',
+        + 'target claude). Nothing was written.',
     );
   }
 
-  // Case (c): cwd sits inside a parent wairon project → offer to make this
-  // directory a member of that parent instead of dead-ending.
+  // Case (c): a parent project binds this folder (the binding rule: inside the
+  // same repository, or across it only where the parent declares it). A
+  // project.yaml outside this folder is never edited without a question:
+  // --yes refuses with the exact commands, a terminal asks.
   if (ancestorRoot) {
+    if (options.yes) throw new WaironError(boundByParentMessage(ancestorRoot, cwd));
     await runInitAsMember(ancestorRoot, cwd, options);
     return;
   }
@@ -99,6 +102,24 @@ function memberAliasOf(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'member';
 }
 
+/** The two ways out of a folder a parent project binds: become its member, or become an independent repository. */
+function boundByParentCommands(parentRoot: string, cwd: string): string[] {
+  const relPath = (path.relative(parentRoot, cwd) || '.').split(path.sep).join('/');
+  const alias = memberAliasOf(path.basename(cwd));
+  return [
+    `make it a member project of that parent: cd "${parentRoot}" && wairon member add ${alias} ${relPath} --project`,
+    'or start an independent project here: make this folder its own repository (`git init`), then re-run `wairon init`',
+  ];
+}
+
+/** Step 6: the refusal under --yes — the project and root that bind this folder, and the exact commands. */
+function boundByParentMessage(parentRoot: string, cwd: string): string {
+  const [member, independent] = boundByParentCommands(parentRoot, cwd);
+  return `This folder is bound by the wairon project at ${parentRoot}, and --yes cannot answer whether it should join it — `
+    + 'init never edits a project.yaml outside this folder without asking. Nothing was written. To '
+    + `${member}; ${independent}.`;
+}
+
 async function runInitAsMember(
   parentRoot: string,
   cwd: string,
@@ -107,22 +128,23 @@ async function runInitAsMember(
   const relPath = (path.relative(parentRoot, cwd) || '.').split(path.sep).join('/');
   const defaultAlias = memberAliasOf(path.basename(cwd));
 
-  logger.info(`Detected a parent wairon project at ${parentRoot}`);
+  logger.info(`Detected a parent wairon project at ${parentRoot} — it binds this folder.`);
   logger.info(`This directory ("${relPath}") is not yet a wairon project.`);
 
-  // Steps 5-7: ask, and stop without changes when declined.
+  // Steps 7-9: ask (yes edits the parent's project.yaml, outside this folder),
+  // and stop without changes when declined.
   if (!options.yes) {
     const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
       {
         type: 'confirm',
         name: 'proceed',
-        message: `Create "${relPath}" as a member project of the parent project?`,
-        default: true,
+        message: `Create "${relPath}" as a member project of the parent project? (edits ${path.join(parentRoot, '.wai', 'project.yaml')})`,
+        default: false,
       },
     ]);
     if (!proceed) {
       logger.info('Cancelled — no changes made.');
-      logger.info('To add this directory later, run `wairon member add <alias> <path>` from the parent project.');
+      for (const line of boundByParentCommands(parentRoot, cwd)) logger.info(`To ${line}.`);
       return;
     }
   }
@@ -146,25 +168,25 @@ async function runInitAsMember(
   setProjectRoot(parentRoot);
   let creation: MemberCreation;
   try {
-    // Step 8: the parent's system spec; a parent without one is refused.
+    // Step 10: the parent's system spec; a parent without one is refused.
     const system = loadSystemSpec();
     if (!system) {
       throw new WaironError(`Parent project at ${parentRoot} has no system spec.`);
     }
-    // Step 9: the members the parent already declares — a re-run finds this
+    // Step 11: the members the parent already declares — a re-run finds this
     // directory under the alias it was declared with.
     const config = loadProjectConfig();
     const declared = config ? declaredMembers(config).find((m) => m.path === relPath) : undefined;
-    // Step 10: the member — its alias and its path from the parent root.
+    // Step 12: the member — its alias and its path from the parent root.
     if (declared) alias = declared.alias;
-    // Step 11: scaffold this directory's project and declare it in the
+    // Step 13: scaffold this directory's project and declare it in the
     // parent's `members`; no L1 spec is written into the parent.
     creation = createMember(alias, relPath, undefined, 'project');
   } finally {
     setProjectRoot(prevOverride);
   }
 
-  // Step 12: the member was created.
+  // Step 14: the member was created.
   logger.success(`Created "${relPath}" as the member "${alias}" of the parent project.`);
   logger.info(`Declared it in the parent's project.yaml \`members\` and scaffolded this directory as its project (id "${alias}").`);
   // What scaffolding applied: the parent's required packs, the projectType, and
@@ -182,15 +204,16 @@ async function runInitNonInteractive(): Promise<void> {
   const projectName = path.basename(cwd);
   const now = new Date().toISOString();
 
-  // Claude and Antigravity are active by default
-  const targets: TargetConfig[] = [defaultTargetConfig('claude'), defaultTargetConfig('agy')];
+  // Claude only: a tool nobody chose gets no files. Another target is one
+  // `wairon init` question (interactive) or a project.yaml `targets` entry away.
+  const targets: TargetConfig[] = [defaultTargetConfig('claude')];
   const projectConfig = buildProjectConfig(projectName, targets, now, 'backend');
 
   const guidePlan: AiGuidePlan = {
     claudeGlobal: false,
     claudeLocal: true,
     geminiGlobal: false,
-    geminiLocal: true,
+    geminiLocal: false,
   };
 
   await executeInit(

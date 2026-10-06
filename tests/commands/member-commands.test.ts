@@ -167,16 +167,23 @@ describe('the retired subsystem commands (real CLI)', () => {
 });
 
 describe('wairon init inside a parent project (real CLI)', () => {
-  it('declares this directory a member of the parent and scaffolds it — no L1 spec in the parent', async () => {
+  it('with --yes refuses, naming the member add command, which declares the member and scaffolds it — no L1 spec in the parent', async () => {
     const parent = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-child-')));
     roots.push(parent);
     await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd: parent, timeout: 180_000 });
     const child = path.join(parent, 'services', 'pharmacy');
     fs.mkdirSync(child, { recursive: true });
 
-    const { stdout } = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd: child, timeout: 180_000 });
+    // --yes cannot answer whether this folder joins the parent: init refuses,
+    // naming the exact command, and never edits the parent's project.yaml.
+    const refused = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], { cwd: child, timeout: 180_000 })
+      .then(() => null, (e: { stdout?: string; stderr?: string }) => `${e.stdout ?? ''}${e.stderr ?? ''}`);
+    expect(refused).toContain('wairon member add pharmacy services/pharmacy --project');
+    expect(membersOf(parent)).toBeUndefined();
+    expect(fs.existsSync(path.join(child, '.wai'))).toBe(false);
 
-    expect(stdout).toContain('Created "services/pharmacy" as the member "pharmacy" of the parent project.');
+    // The command it names declares the member and scaffolds it — no L1 spec in the parent.
+    await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'member', 'add', 'pharmacy', 'services/pharmacy', '--project'], { cwd: parent, timeout: 180_000 });
     expect(membersOf(parent)).toEqual({ pharmacy: 'services/pharmacy' });
     setProjectRoot(parent);
     invalidateSpecCache();

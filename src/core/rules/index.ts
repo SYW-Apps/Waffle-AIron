@@ -512,9 +512,22 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     if (ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
     // A `::` reference the scan recorded as leaving the project is project-boundaries' to judge.
     if (ref.includes('::') && authoredTypeRefs.has(ref)) return true;
-    // `alias.name`: a public type of that project, the same way.
+    // The dotted form names a subsystem's type: a first segment that is an
+    // alias, not a subsystem, does not resolve — another project is reached
+    // only as `alias::name`, and a dotted spelling left behind by a boundary
+    // move must never pass silently (aliasSpelling names the replacement).
+    return false;
+  };
+
+  /** rule_context.aliasSpelling — the `alias::publicName` a dotted `alias.name` must be written as; null otherwise. */
+  const aliasSpelling = (ref: string): string | null => {
+    const segments = ref.split('.');
+    if (segments.length !== 2 || ref.includes('::')) return null;
+    const [first, name] = segments;
+    if (subsystems.some((s) => nameKey(s.id.split('::').pop()!) === nameKey(first) && memberOf(s.id) === undefined)) return null;
     const via = aliasOf(first);
-    return via !== undefined && rest.length === 1 && exportedBy(via, nameKey(rest[0]), 'type') !== undefined;
+    const publicName = via ? exportedBy(via, nameKey(name), 'type') : undefined;
+    return via && publicName ? `${via.alias}::${publicName}` : null;
   };
 
   /** A foreign reference against the bound root's own foreign snapshots, matched by provider. */
@@ -999,6 +1012,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isImplementationDraft,
     getComponentProfile,
     isTypeResolved,
+    aliasSpelling,
     targetLanguageFor,
     isSpecInScope,
     isInChainedSubproject,

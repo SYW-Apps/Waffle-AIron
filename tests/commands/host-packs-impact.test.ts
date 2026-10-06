@@ -149,7 +149,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const TSX_CLI = path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
 const WAIRON_CLI = path.join(REPO_ROOT, 'src', 'cli', 'index.ts');
 
-describe('wairon init in a subdirectory states the required packs it scaffolded (real CLI)', () => {
+describe('wairon init --yes in a subdirectory refuses with the member add command, which states the required packs it scaffolded (real CLI)', () => {
   let machine: GovernanceMachine | undefined;
 
   afterEach(() => {
@@ -167,8 +167,19 @@ describe('wairon init in a subdirectory states the required packs it scaffolded 
     const child = path.join(parent, 'svc');
     fs.mkdirSync(child);
 
-    const { stdout, stderr } = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], {
+    // `init --yes` inside a project that binds the folder never edits the parent's
+    // project.yaml unasked: it refuses, naming the exact `member add` command.
+    const parentConfigBefore = fs.readFileSync(path.join(parent, '.wai', 'project.yaml'), 'utf8');
+    const refused = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], {
       cwd: child, timeout: 180_000, env: { ...process.env },
+    }).then(() => null, (e: { stdout?: string; stderr?: string }) => `${e.stdout ?? ''}${e.stderr ?? ''}`);
+    expect(refused).toMatch(/wairon member add svc svc --project/);
+    expect(fs.existsSync(path.join(child, '.wai'))).toBe(false);
+    expect(fs.readFileSync(path.join(parent, '.wai', 'project.yaml'), 'utf8')).toBe(parentConfigBefore);
+
+    // The command it names states the packs it applied.
+    const { stdout, stderr } = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'member', 'add', 'svc', 'svc', '--project'], {
+      cwd: parent, timeout: 180_000, env: { ...process.env },
     });
 
     const printed = [stdout, stderr].join('\n');

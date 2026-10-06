@@ -54,8 +54,9 @@ methods:
       - stepNumber: 5
         description: >-
           Append the marked section to what is left, creating the directories if this is the first
-          write. Stripping before appending is what makes this idempotent — running it twice leaves
-          one section, not two
+          write, and keep the file's line endings (the shared file helper: CRLF stays CRLF, a new
+          file follows the convention around it). Stripping before appending is what makes this
+          idempotent — running it twice leaves one section, not two
         type: local
       - stepNumber: 6
         description: Done
@@ -91,7 +92,8 @@ methods:
       - stepNumber: 1
         description: >-
           Write the repository-root file as a pointer at the real guide inside the project, rather
-          than a second copy of it — one file to keep current instead of two that can disagree
+          than a second copy of it — one file to keep current instead of two that can disagree —
+          keeping the file's line endings as every wairon writer does
         type: local
       - stepNumber: 2
         description: Done
@@ -143,4 +145,4 @@ methods:
     symbol: guideBody
 status: complete
 createdAt: '2026-09-23T00:11:34.495Z'
-updatedAt: '2026-10-03T17:50:04.450Z'
+updatedAt: '2026-10-05T23:38:26.472Z'

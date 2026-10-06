@@ -481,12 +481,16 @@ methods:
       pin tree, computed by the validator at each project's own root so it agrees with the member's
       own status), and the lock's verdict underneath. It renders nothing itself — the tree is drawn
       once, in core, and this supplies only what colour each role should take.
-    signature: 'localStatus(options?: StatusOptions): async void'
+    signature: 'localStatus(options?: StatusOptions, listAll?: bool): async void'
     returns: async void
     params:
       - name: options
         type: StatusOptions
         description: How much of the tree to cover
+        optional: true
+      - name: listAll
+        type: bool
+        description: List every spec that moved since the approval (`--all`) rather than the first few
         optional: true
   - name: runSkillsList
     description: Handle `wairon skills list`, printing the built-in SDD skills.
@@ -752,6 +756,24 @@ methods:
         type: string
         description: The leftover to remove; omitted, the running packaged executable's `.old` sibling
         optional: true
+  - name: announceBinding
+    description: >-
+      Name the project a command is about to act on: `project <id> at <root>` on one line, on stderr
+      so a machine-readable stdout (`export`, `--json`) stays pure. Silent for a command that acts
+      on no project (init, the hosted and login commands, `mcp serve` and `dev`, which announce
+      their own) and where no project binds the folder — the command itself says that.
+    signature: 'announceBinding(commandPath: string): void'
+    returns: void
+    params:
+      - name: commandPath
+        type: string
+        description: The command as typed, its subcommands space-separated (`member promote`)
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The commander program's preAction hook in src/cli/index.ts (cli_portal), once before every
+        command's action runs — a hook the framework calls, not an action endpoint, so no portal
+        narrative steps into it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T18:15:22.008Z'
+updatedAt: '2026-10-05T23:54:33.275Z'

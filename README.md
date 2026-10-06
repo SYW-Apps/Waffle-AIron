@@ -176,8 +176,10 @@ wairon lock                 # records the approval in .wai/lock.json
 git add .wai && git commit -m "Approve the design"
 
 # 3. Gate: in CI, check that what merges is the approved design
-#    (or use the reusable workflow — see docs/cli.md#wairon-lock-check---strict).
-wairon lock-check
+#    (or use the reusable workflow with strict: true — see docs/cli.md).
+#    --strict also fails when .wai/lock.json is missing or a member project was
+#    never approved; plain lock-check only fails an approval that no longer matches.
+wairon lock-check --strict
 
 # 4. Implement: your AI tool delegates each component with the sdd-delegate
 #    skill, from its live brief (sdd_get_agent_brief).
@@ -217,7 +219,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon lock [-y]` | Validate the design as complete and record its approval in `.wai/lock.json`, code findings beside it; no spec file is rewritten |
-| `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](.github/workflows/lock-check.yml) |
+| `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](https://github.com/SYW-Apps/Waffle-AIron/blob/main/.github/workflows/lock-check.yml) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
 | `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
 | `wairon host unit \| project \| permission \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, keys, the state-scoped lock) |
@@ -235,13 +237,13 @@ See [docs/cli.md](docs/cli.md). Summary:
 - [Vision](docs/vision.md) — long-term direction
 - [CLI Reference](docs/cli.md) — all commands and MCP tools
 - [Design export](docs/design-export.md) — the `wairon export` JSON format for generators and translators
-- [Supervisor doctrine](docs/design/supervisor-doctrine.md) — how Supervisors and Actors may depend on data and effects
-- [Hosted server](docs/design/hosted-mcp-server.md) — self-host wairon over HTTP (Docker, auth, sizing)
-- [Pack scoping](docs/design/pack-scoping.md) — the pack store, per-project selection, and reproducibility (design)
-- [Connecting-agent entrypoint](docs/design/connecting-agent-entrypoint.md) — MCP `instructions`, prompts, and skill composition
-- [Execution budgets](docs/design/execution-budgets.md) — what each agent's work costs to do, derived alongside what it owns (design)
-- [Approval baselines](docs/design/approval-baseline.md) — what `lock` approves, and why it stopped rewriting your spec tree (design)
-- [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](examples/wrapper/))
+- [Supervisor doctrine](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/supervisor-doctrine.md) — how Supervisors and Actors may depend on data and effects
+- [Hosted server](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md) — self-host wairon over HTTP (Docker, auth, sizing)
+- [Pack scoping](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/pack-scoping.md) — the pack store, per-project selection, and reproducibility (design)
+- [Connecting-agent entrypoint](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/connecting-agent-entrypoint.md) — MCP `instructions`, prompts, and skill composition
+- [Execution budgets](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/execution-budgets.md) — what each agent's work costs to do, derived alongside what it owns (design)
+- [Approval baselines](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/approval-baseline.md) — what `lock` approves, and why it stopped rewriting your spec tree (design)
+- [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/wrapper/))
 - [Templates](docs/templates.md) — agent rendering templates
 - [Standards](docs/standards/INDEX.md) — the architecture standards the SDD model is built on
 
@@ -259,7 +261,7 @@ validation), js-yaml, the MCP SDK, and Vitest. Bundled with tsup.
 Actively developed. For bugs or questions, open an issue.
 
 Working on this repo (or delegating work in it) — see
-[CONTRIBUTING.md](CONTRIBUTING.md) for what this checkout does differently: line
+[CONTRIBUTING.md](https://github.com/SYW-Apps/Waffle-AIron/blob/main/CONTRIBUTING.md) for what this checkout does differently: line
 endings, the gate commands and their baselines, and the stale-MCP-server tell.
 The conventions that hold for *any* wairon project ship in the `sdd-implement`
 and `sdd-delegate` skills.

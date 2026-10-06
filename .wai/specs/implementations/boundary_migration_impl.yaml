@@ -124,10 +124,19 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
-          Plan the core's externalize, and the new member's external for the bound project pinned in
-          the member
-        type: local
+          As a project: under each family project that pins the bound project, read its externals'
+          status; a pin whose every use is unchanged is re-pinned after the move, one already broken
+          is left with a note
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: getExternalsStatus
       - stepNumber: 10
+        description: >-
+          Plan the core's externalize, the new member's external for the bound project pinned in the
+          member, and the re-pin of each family consumer read intact. The references the move
+          respells are listed when the plan is rehearsed, from what the core answers
+        type: local
+      - stepNumber: 11
         description: Answer the plan
         type: return
         outcome: the externalize plan
@@ -199,14 +208,17 @@ methods:
         label: externalize
         description: >-
           Bind the bound project's rehearsal root and externalize the subsystem — into a part, or
-          with `as: project` into a member project; a core refusal propagates
+          with `as: project` into a member project; a core refusal propagates. As a project, record
+          what the core answers — each respelled reference, export, import and dropped consumers
+          entry — as the plan's edits, so the plan lists exactly what the rehearsal wrote
         type: call
         targetComponent: migration_core_adapter
         targetMethod: externalizeSubsystem
       - stepNumber: 13
         description: >-
           For an externalize as project, bind the new member's rehearsal root and pin its external
-          for the bound project, then the bound project's pin of the new member; a part needs no pin
+          for the bound project, then re-pin each family consumer the plan read intact; a part needs
+          no pin
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
@@ -223,14 +235,17 @@ methods:
       - stepNumber: 16
         description: >-
           Bind the bound project's rehearsal root and promote the part in place; a core refusal
-          propagates
+          propagates. Record what the core answers — each respelled reference, export, import and
+          dropped consumers entry — as the plan's edits, so the plan lists exactly what the
+          rehearsal wrote
         type: call
         targetComponent: migration_core_adapter
         targetMethod: promoteMember
       - stepNumber: 17
         description: >-
           Pin LAST, on both sides: the new project's external for the bound project under its
-          binding, and the bound project's pin of the new member under its own
+          binding, the bound project's pin of the new member under its own, and each family consumer
+          the plan read intact re-pinned under its own
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
@@ -290,11 +305,23 @@ methods:
         outcome: refused plan
       - stepNumber: 6
         description: >-
-          Plan the core's promote with the id, then the pins on both sides; for a part in a sibling
-          checkout, note that files are all-or-nothing and commits one per repository; the bound
-          project to re-lock and the new project to lock for the first time
-        type: local
+          Under each family project that pins the bound project, read its externals' status: a pin
+          whose every use is unchanged is re-pinned after the promote (its names only moved
+          location, which re-pinning alone answers); one already broken is left as it is, with a
+          note, so a migration never launders a real incompatibility
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: getExternalsStatus
       - stepNumber: 7
+        description: >-
+          Plan the core's promote with the id, then the pins: the new project's external for the
+          bound project, the bound project's pin of the new member when it is stored outside, and
+          the re-pin of each family consumer read intact; for a part in a sibling checkout, note
+          that files are all-or-nothing and commits one per repository; the bound project to re-lock
+          and the new project to lock for the first time. The references the promote respells are
+          listed when the plan is rehearsed, from what the core answers
+        type: local
+      - stepNumber: 8
         description: Answer the plan
         type: return
         outcome: the promote plan
@@ -402,4 +429,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-03T00:00:17.170Z'
+updatedAt: '2026-10-05T23:35:32.390Z'

@@ -102,9 +102,11 @@ fields:
     description: >-
       The type names an instance FIELD is DECLARED with, by field name — read off class property
       declarations and constructor parameter properties, which is where a constructor-injected
-      collaborator says what it is; exact grade only. Same-named fields of different classes in one
-      file keep every declared type, since the file cannot say which class a call site's `this` was,
-      and a wider answer only ever widens what a call may have reached. A field with no annotation
+      collaborator says what it is; exact grade only. A declaration names a type when it is a plain
+      type reference, or a member-preserving utility (Pick, Omit, Partial, Required, Readonly)
+      around one, which names the type it wraps. Same-named fields of different classes in one file
+      keep every declared type, since the file cannot say which class a call site's `this` was, and
+      a wider answer only ever widens what a call may have reached. A field with no annotation
       records nothing: what an initializer INFERS is not what the code declares
     optional: true
   - name: typeOnlyBindings
@@ -126,7 +128,8 @@ fields:
       that calls it — a closure captures it. Same-named bindings therefore keep every declared type,
       and a wider answer only ever widens what a call may have reached. A binding the file annotates
       with nothing records nothing, and so does one annotated with anything but a plain type
-      reference: what an initializer INFERS is not what the code declares
+      reference or a member-preserving utility around one (read as fieldTypes reads it): what an
+      initializer INFERS is not what the code declares
     optional: true
   - name: typeShapes
     type: map<string, TypeShapeFact>
@@ -225,6 +228,27 @@ fields:
       unannotated, a body whose ONE return statement constructs a plainly named class (`return new
       C()`). Same-named functions that disagree, a generic, union or literal annotation, and several
       returns record nothing. EXACT grade only. What a `fn().method()` receiver is followed through
+    optional: true
+  - name: memberTypes
+    type: map<string, list<string>>
+    description: >-
+      The type names each PROPERTY of a named shape the file declares is DECLARED with, keyed
+      <shape>.<property> — an interface's or a type literal alias's property signatures, and a
+      class's property declarations and constructor parameter properties; exact grade only. What a
+      receiver CHAIN (call_site_fact.receiverPath) is followed through: a bag of collaborators
+      handed to a constructor names each one's type exactly here. Read the way fieldTypes is — a
+      plain type reference, or the type a member-preserving utility (Pick, Omit, Partial, Required,
+      Readonly) wraps — and a property annotated with anything else records nothing
+    optional: true
+  - name: aliasTargets
+    type: map<string, string>
+    description: >-
+      The one type each type alias NAMES outright, by alias name — `type HabitRepositoryContract =
+      Pick<HabitRepository, 'find'>` names HabitRepository, `type Store = SpecStore` names
+      SpecStore; exact grade only. Read the way fieldTypes is, so a union, an intersection, a
+      literal or any other generic names nothing. The ONE hop a declared type is followed through
+      when it is an alias of this file: a field typed with a narrowed alias of a collaborator is
+      still that collaborator
     optional: true
 methods:
   - name: resolveImport
@@ -328,6 +352,20 @@ methods:
       The type name a named function-like returns, where the code settles it (returnTypes), or none
       — the silence a fn(...).method() receiver keeps when the code does not say what fn returns. An
       own-property lookup, so a function named like an object built-in reads nothing
+  - name: memberTypesOf
+    signature: 'memberTypesOf(shape: string, property: string): string[]'
+    returns: list<string>
+    description: >-
+      The type names a property of a named shape this file declares is declared with, or EMPTY when
+      the file declares no such shape or property, annotates it with nothing, or was analyzed below
+      exact grade — the empty answer keeping an unresolvable link of a receiver chain from becoming
+      a guess
+  - name: aliasTargetOf
+    signature: 'aliasTargetOf(name: string): string | undefined'
+    returns: string?
+    description: >-
+      The type a type alias this file declares names outright, or undefined when the name is no such
+      alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-05T00:40:20.191Z'
+updatedAt: '2026-10-05T23:33:23.778Z'

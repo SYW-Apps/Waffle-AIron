@@ -302,3 +302,74 @@ describe('composeAgentBrief (live delegation briefs)', () => {
     } finally { proj.cleanup(); }
   });
 });
+
+describe('briefs carry a code write fence, and every component has a brief without agent files', () => {
+  let isolatedGlobalDir: string;
+  beforeEach(() => {
+    isolatedGlobalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-brief-global-'));
+    process.env.WAIRON_TEMPLATES_DIR = isolatedGlobalDir;
+    process.env.WAIRON_VARIANTS_DIR = isolatedGlobalDir;
+  });
+  afterEach(() => {
+    delete process.env.WAIRON_TEMPLATES_DIR;
+    delete process.env.WAIRON_VARIANTS_DIR;
+    try { fs.rmSync(isolatedGlobalDir, { recursive: true, force: true }); } catch { /* win */ }
+  });
+
+  function billingProject() {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'billing', 'id: billing\nname: Billing\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'ibilling', 'id: ibilling\nname: IBilling\ndescription: d\ncomponent: billing\nmethods: []');
+    proj.writeSpec('implementation', 'billing_impl', 'id: billing_impl\nname: Billing\ndescription: d\ncontract: ibilling\nsourcePath: src/alpha/billing.ts\nmethods: []');
+    proj.writeSpec('component', 'ledger', 'id: ledger\nname: Ledger\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator');
+    proj.writeSpec('interface', 'iledger', 'id: iledger\nname: ILedger\ndescription: d\ncomponent: ledger\nmethods: []');
+    proj.writeSpec('implementation', 'ledger_impl', 'id: ledger_impl\nname: Ledger\ndescription: d\ncontract: iledger\nsourcePath: src/alpha/ledger.ts\nmethods: []');
+    return proj;
+  }
+
+  it('the subsystem owner\'s brief fences its source files and the folder they share', () => {
+    const proj = billingProject();
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.codeFence).toEqual(['src/alpha/billing.ts', 'src/alpha/ledger.ts', 'src/alpha/**']);
+      expect(brief.instructions).toContain('## Code write fence');
+      expect(brief.instructions).toContain('- `src/alpha/**`');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a component id composes that component\'s implementer brief with generateComponentImplementers off', () => {
+    const proj = billingProject();
+    proj.activate();
+    try {
+      for (const id of ['billing', 'billing-implementer']) {
+        const brief = composeAgentBrief(id);
+        expect(brief.agentId).toBe('billing-implementer');
+        expect(brief.template).toBe('implementer');
+        expect(brief.codeFence).toEqual(['src/alpha/billing.ts', 'src/alpha/**']);
+      }
+    } finally { proj.cleanup(); }
+  });
+
+  it('with no source file named yet, the fence is empty and the brief says to name the planned files', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('alpha-owner');
+      expect(brief.codeFence).toEqual([]);
+      expect(brief.instructions).toContain('No implementation names a source file yet');
+      // The architect implements nothing: no fence at all.
+      expect(composeAgentBrief('system-architect').codeFence).toBeUndefined();
+    } finally { proj.cleanup(); }
+  });
+
+  it('an unknown id still refuses, saying a component id would compose a brief', () => {
+    const proj = createTempProject();
+    proj.activate();
+    try {
+      expect(() => composeAgentBrief('nope')).toThrow(/any component id of this project/);
+    } finally { proj.cleanup(); }
+  });
+});

@@ -2,8 +2,9 @@ kind: value-object
 id: status_command_options
 name: StatusCommandOptions
 description: >-
-  The flag surface of `wairon status`: an optional subsystem scope and whether to recurse into
-  chained subprojects.
+  The flag surface of `wairon status`: an optional subsystem scope, whether to recurse into chained
+  subprojects, and whether to list every spec that moved since the approval rather than the first
+  few.
 fields:
   - name: subsystem
     type: string
@@ -13,7 +14,11 @@ fields:
     type: bool
     description: Recurse into chained subprojects (default true)
     optional: true
+  - name: all
+    type: bool
+    description: List every spec that moved since the approval (`--all`), not the first few and a count
+    optional: true
 methods: []
 componentClass: cli_runner
 createdAt: '2026-08-12T18:49:18.857Z'
-updatedAt: '2026-10-04T10:21:11.325Z'
+updatedAt: '2026-10-05T23:52:54.608Z'

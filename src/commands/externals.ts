@@ -68,7 +68,8 @@ function printStatuses(statuses: ExternalStatus[]): void {
       s.sourceKind,
       s.pinned ? 'pinned' : chalk.yellow('not pinned'),
       s.reachable ? 'reachable' : chalk.yellow('unreachable'),
-      s.stale ? chalk.red('stale') : 'current',
+      // Never "current" beside "unreachable": nothing was compared.
+      s.stale ? chalk.red('stale') : s.reachable ? 'current' : chalk.yellow('not compared'),
       ...(s.drifted ? [chalk.yellow('drifted')] : []),
     ];
     logger.info(`${chalk.cyan(s.alias)} → ${s.project}: ${flags.join(', ')}${s.detail ? ` — ${s.detail}` : ''}`);
@@ -77,6 +78,14 @@ function printStatuses(statuses: ExternalStatus[]): void {
       logger.info(`    ${name}: ${u.state}${u.code ? ` ${u.code}` : ''}${u.detail ? ` — ${u.detail}` : ''}`);
     }
   }
+  // One legend for every word above, so "re-pin" and "change the design" are never guessed.
+  logger.info(chalk.gray(
+    'Words: stale — a name this project uses changed or was removed since the pin (adapt the design, then re-pin); '
+      + 'current — every used name matches the pin; not compared — the producer could not be read; '
+      + 'drifted — the producer moved since the pin (re-pin to record it; alone it means nothing used changed). '
+      + 'Per name: unchanged; changed (its signature moved); removed (gone from the producer\'s export table); '
+      + 'unlocked (used but not in the pin yet — re-pin); unavailable (not compared — never a pass).',
+  ));
 }
 
 /** The list table: alias, producer, source kind and relation, audience, pinned digest or the problem. */

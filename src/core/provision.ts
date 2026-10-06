@@ -40,6 +40,9 @@ import {
   // names another spec is written once so neither can go stale alone.
   specKind,
   rewriteSpecRefs,
+  // The ONE type-expression position table, and the token respelling inside a type string.
+  typeExpressionSlots,
+  respellTypeNames,
   type RefPosition,
   type SpecRefKind,
   type WritableSpecKind,
@@ -753,12 +756,12 @@ const INTO_MEMBER_POSITIONS: ReadonlySet<RefPosition> = new Set<RefPosition>([..
  * `as: project` it then promotes the new part — the pre-stage-8 externalize —
  * every promote refusal found before anything moves.
  */
-export function externalizeSubsystem(subsystemId: string, path: string, as?: string): void {
-  externalizeInto(subsystemId, path, as);
+export function externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult | undefined {
+  return externalizeInto(subsystemId, path, as);
 }
 
 /** externalizeSubsystem's body, with the path module in scope. */
-function externalizeInto(subsystemId: string, partPath: string, as: string | undefined): void {
+function externalizeInto(subsystemId: string, partPath: string, as: string | undefined): PromoteResult | undefined {
   if (subsystemId.includes('::')) {
     throw new WaironError('cannot externalize a nested/namespaced subsystem; run from its owning project.');
   }
@@ -807,8 +810,8 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   if (!joined) projectConfigRepository.declareMember(alias, { source: relPath });
   invalidateSpecCache();
   // Steps 7-8: as a project, the new part is promoted in place.
-  if (as === 'project') promoteMember(alias);
-  // Step 9.
+  // Step 9: answered with what the promote wrote across the new boundary.
+  return as === 'project' ? promoteMember(alias) : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -864,9 +867,15 @@ interface Crossing {
   position: RefPosition | 'bare-type';
 }
 
-/** The identifiers of a type expression. */
+/**
+ * The bare identifiers of a type expression: each name standing alone. A name
+ * qualified by `.` or `::` is not bare — the qualified pass (respellQualified)
+ * respells it whole, so none of its segments is imported by name.
+ */
 function typeTokens(expression: unknown): string[] {
-  return typeof expression === 'string' ? [...expression.matchAll(/[A-Za-z_][A-Za-z0-9_-]*/g)].map((m) => m[0]) : [];
+  if (typeof expression !== 'string') return [];
+  return [...expression.matchAll(/(?:::)?[A-Za-z_][A-Za-z0-9_-]*(?:(?:::|\.)[A-Za-z_][A-Za-z0-9_-]*)*/g)]
+    .map((m) => m[0]).filter((t) => !t.includes('.') && !t.includes('::'));
 }
 
 /** Every reference a spec's fields hold, with its position, and the bare type names its type expressions spell. */
@@ -876,26 +885,38 @@ function referencesOf(spec: RawSpec, wholeParams: boolean): { ref: string; posit
     out.push({ ref, position });
     return ref;
   });
-  // Into the new project a parameter's type written as one name is respelled
-  // whole (`wholeParams` false); every other type expression — a return, a
-  // field, a union, and any type back out — keeps its text and imports the name.
+  // Every type-expression slot (the one table, TYPE_EXPRESSION_PATHS). Into
+  // the new project an interface parameter's type written as one name is
+  // respelled whole (`wholeParams` false); every other type expression — a
+  // return, a field, a type method's signature, a union, and any type back
+  // out — keeps its text and imports the name. A prose signature is read only
+  // where no structured params state the method's types; a signatureFrom is
+  // the reference table's.
   const expressions: unknown[] = [];
-  if (spec.kind === 'interface') {
-    for (const m of spec.raw.methods ?? []) {
-      expressions.push(m?.returns);
-      for (const p of m?.params ?? []) if (wholeParams || !(typeof p?.type === 'string' && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(p.type))) expressions.push(p?.type);
-    }
+  for (const slot of typeExpressionSlots(spec.kind, spec.raw)) {
+    const value = slot.holder[slot.key];
+    if (slot.path === 'methods.signatureFrom') continue;
+    if (slot.path === 'methods.signature' && Array.isArray(slot.method?.params)) continue;
+    if (slot.path === 'methods.params.type' && spec.kind === 'interface' && !wholeParams && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(String(value))) continue;
+    // A prose signature's types only: its method name and its parameter labels name no type.
+    expressions.push(slot.path === 'methods.signature'
+      ? String(value).replace(/^\s*[A-Za-z_][\w-]*\s*(?:<[^>]*>)?\s*\(/, '(').replace(/(?<![:\w-])[A-Za-z_][\w-]*\s*\??\s*:(?!:)/g, '')
+      : value);
   }
-  if (spec.kind === 'type') for (const f of spec.raw.fields ?? []) expressions.push(f?.type);
   for (const token of expressions.flatMap(typeTokens)) out.push({ ref: token, position: 'bare-type' });
   return out;
 }
 
 /** What crosses between the `inside` specs and the `outside` ones, both ways, by the ids each side declares. */
-function crossingsOf(inside: RawSpec[], outside: RawSpec[]): { out: Crossing[]; in: Crossing[]; insideIds: Set<string>; outsideIds: Set<string> } {
+function crossingsOf(inside: RawSpec[], outside: RawSpec[]): { out: Crossing[]; in: Crossing[]; insideIds: Set<string>; outsideIds: Set<string>; insideTargets: Set<string>; outsideTargets: Set<string> } {
   const idsOf = (specs: RawSpec[]): Set<string> => new Set(specs.filter((s) => s.kind !== 'system').map((s) => s.id));
   const insideIds = idsOf(inside);
   const outsideIds = idsOf(outside);
+  // What a whole-value reference position can name: a component, a contract or a type — never a
+  // subsystem, whose id a `<subsystem>.<type>` head or a signatureFrom head would otherwise match.
+  const targetsOf = (specs: RawSpec[]): Set<string> => new Set(specs.filter((s) => s.kind === 'component' || s.kind === 'interface' || s.kind === 'type').map((s) => s.id));
+  const insideTargets = targetsOf(inside);
+  const outsideTargets = targetsOf(outside);
   const typeIds = (specs: RawSpec[]): Map<string, string> => new Map(specs.filter((s) => s.kind === 'type').map((s) => [nameKey(s.id), s.id]));
   const insideTypes = typeIds(inside);
   const outsideTypes = typeIds(outside);
@@ -913,7 +934,7 @@ function crossingsOf(inside: RawSpec[], outside: RawSpec[]): { out: Crossing[]; 
     }
     return found;
   };
-  return { out: collect(inside, outsideIds, outsideTypes, true), in: collect(outside, insideIds, insideTypes, false), insideIds, outsideIds };
+  return { out: collect(inside, outsideTargets, outsideTypes, true), in: collect(outside, insideTargets, insideTypes, false), insideIds, outsideIds, insideTargets, outsideTargets };
 }
 
 /**
@@ -929,6 +950,8 @@ function promoteRefusals(family: ProjectFamily, insideFiles: string[], outsideFi
   const inside = rawSpecs(insideFiles);
   const outside = rawSpecs(outsideFiles);
   const crossing = crossingsOf(inside, outside);
+  // A signatureFrom or an asserted invariant that would name the parent: no gate reads it across a boundary.
+  out.push(...unreachableUpward(inside, outside));
   // A trustedLink across the new boundary, either direction.
   const subsystemsIn = new Set(inside.filter((s) => s.kind === 'subsystem').map((s) => s.id));
   for (const s of [...inside, ...outside].filter((x) => x.kind === 'subsystem')) {
@@ -987,13 +1010,19 @@ function climbsOf(family: ProjectFamily, ids: ReadonlySet<string>, parentId: str
 const PROJECT_ID_RE_LOCAL = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
 /** Rewrite the references of each spec in `specs` through `remap`; answers the specs that changed. */
-function rewriteRefsIn(specs: RawSpec[], remap: (ref: string, position: RefPosition) => string): RewrittenSpec[] {
+function rewriteRefsIn(specs: RawSpec[], remap: (ref: string, position: RefPosition) => string, record?: { result: PromoteResult; member: boolean }): RewrittenSpec[] {
   const rewritten: RewrittenSpec[] = [];
   for (const spec of specs) {
     const raw = readYamlFile(spec.file) as any;
-    if (!rewriteSpecRefs(raw, (ref, position) => remap(ref, position))) continue;
+    const edits: ReferenceEdit[] = [];
+    if (!rewriteSpecRefs(raw, (ref, position) => {
+      const to = remap(ref, position);
+      if (to !== ref) edits.push({ kind: spec.kind as WritableSpecKind, specId: spec.id, position, from: ref, to });
+      return to;
+    })) continue;
     writeYamlFile(spec.file, raw);
     rewritten.push({ kind: spec.kind, id: spec.id });
+    if (record) for (const e of edits) recordRespelling(record.result, e, record.member);
   }
   return rewritten;
 }
@@ -1024,7 +1053,7 @@ function partToPromote(family: ProjectFamily, alias: string): { part: NonNullabl
  * `<parent id>::name` the other), the parent declared as its external and its
  * L0 re-exports re-pointed at the member. Locks nothing.
  */
-export function promoteMember(alias: string, id?: string): void {
+export function promoteMember(alias: string, id?: string): PromoteResult {
   // Step 1: the graph, and the part with its files on both sides of the boundary.
   const family = graph();
   const { dir } = partToPromote(family, alias);
@@ -1065,21 +1094,28 @@ export function promoteMember(alias: string, id?: string): void {
   }
   // Step 8: an asserted `as: part` would now contradict the content.
   if (declaration?.as === 'part') projectConfigRepository.updateMember(alias, { as: '' });
+  const result: PromoteResult = { respelled: [], memberRespelled: [], exported: [], imported: [], consumersDropped: [] };
   // Step 9: every reference across the new boundary respelled, targets unchanged.
   const parentSide = rewriteRefsIn(crossing.in.map((c) => c.spec).filter(unique), (ref, position) =>
-    (INTO_MEMBER_POSITIONS.has(position) && crossing.insideIds.has(ref) ? `${alias}::${ref}` : ref));
+    (INTO_MEMBER_POSITIONS.has(position) && crossing.insideTargets.has(ref) ? `${alias}::${ref}` : ref), { result, member: false });
   const climbs = climbsOf(family, crossing.insideIds, parentId).map;
   const climbing = inside.filter((s) => family.authoredReferences.some((r) => r.form === 'super' && r.specId === s.id));
   const memberSide = rewriteRefsIn([...crossing.out.map((c) => c.spec), ...climbing].filter(unique), (ref, position) =>
-    climbs.get(ref) ?? (MOVED_REF_POSITIONS.has(position) && crossing.outsideIds.has(ref) ? `${parentId}::${ref}` : ref));
+    climbs.get(ref) ?? (MOVED_REF_POSITIONS.has(position) && crossing.outsideTargets.has(ref) ? `${parentId}::${ref}` : ref), { result, member: true });
+  // ... and every qualified token of every type expression (`contracts.money`), which no whole-value position holds.
+  const qualified = respellQualified(inside, outside, { alias, parentId, newId }, result);
   invalidateSpecCache();
-  // Step 10: the new project declares the parent as its external when it references it.
-  if (crossing.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, {}));
+  // Step 10: a consumers entry naming a subsystem across the boundary is dropped.
+  dropCrossingConsumers(inside, outside, result);
+  // Step 10 (declare): the new project declares the parent as its external when it references it.
+  if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, {}));
   // Step 11: the parent's re-exports of the part's subsystems re-export the member.
   for (const s of inside.filter((x) => x.kind === 'subsystem')) restateReExports(s.id, alias);
-  // Steps 12-13: what crosses is exported on its own side, and a bare type name imported by name.
-  exportCrossings(crossing.out, dir, alias, parentId, 'out');
-  exportCrossings(crossing.in, dir, alias, parentId, 'in');
+  // Steps 12-13: what crosses is exported on its own side, and a bare type name imported by name;
+  // the new project also exports every name the parent's L0 re-exports from it.
+  exportCrossings([...crossing.out, ...qualified.out], dir, alias, parentId, 'out', result);
+  exportCrossings([...crossing.in, ...qualified.in], dir, alias, parentId, 'in', result);
+  exportReExported(inside, dir, alias, result);
   invalidateSpecCache();
   // Every re-saved spec spelled again from where it lives: a contained member
   // from this root, where the scan reads both sides; one stored outside it from
@@ -1102,7 +1138,246 @@ export function promoteMember(alias: string, id?: string): void {
     });
   }
   invalidateSpecCache();
-  // Step 14: promoted; nothing locked.
+  // Step 15: promoted; nothing locked — answered with what crossed.
+  return result;
+}
+
+/**
+ * promote_result — what a promote (or an externalize as project) wrote across
+ * the new boundary, each one named, so a plan lists exactly what its rehearsal
+ * wrote.
+ */
+export interface PromoteResult {
+  /** Every reference of the parent's specs respelled across the boundary, at its parsed position. */
+  respelled: ReferenceEdit[];
+  /** Every reference of the new project's specs respelled: back into the parent, or a self-prefix made bare. */
+  memberRespelled: ReferenceEdit[];
+  /** One line per export entry written, naming the side. */
+  exported: string[];
+  /** One line per bare type name imported by name. */
+  imported: string[];
+  /** One line per consumers entry dropped because it named a subsystem across the boundary. */
+  consumersDropped: string[];
+}
+
+/** Record one respelling once. */
+function recordRespelling(result: PromoteResult, edit: ReferenceEdit, member: boolean): void {
+  if (edit.from === edit.to) return;
+  const list = member ? result.memberRespelled : result.respelled;
+  if (list.some((e) => e.kind === edit.kind && e.specId === edit.specId && e.position === edit.position && e.from === edit.from)) return;
+  list.push(edit);
+}
+
+/** The two sides of a promote's new boundary, and the names each side calls the other. */
+interface BoundaryNames {
+  alias: string;
+  parentId: string;
+  newId: string;
+}
+
+/** The type reference of an asserted invariant (`<type-ref>.<invariant-id>`, split at its last dot); undefined when it has none. */
+function assertedTypeRef(ref: string): string | undefined {
+  const at = ref.lastIndexOf('.');
+  return at > 0 && at < ref.length - 1 ? ref.slice(0, at) : undefined;
+}
+
+/**
+ * Step 9 for the qualified type tokens: every `<subsystem>.<type>` (or
+ * `<subsystem>::<type>`) token of every type-expression slot of either side
+ * (TYPE_EXPRESSION_PATHS), and every asserted invariant's type reference,
+ * resolved against the types both sides hold BEFORE the boundary exists. A
+ * token naming a type across the new boundary is respelled `alias::<type>`
+ * into the new project and `<parent id>::<type>` back out; a token of the new
+ * project naming its own type by a prefix now equal to its id is respelled
+ * bare. Writes each changed file, records each respelling, and answers the
+ * crossings each side must export.
+ */
+/** A type of either side of a would-be boundary, with the side that holds it. */
+interface SidedType {
+  spec: RawSpec;
+  side: 'inside' | 'outside';
+}
+
+/**
+ * The types both sides hold BEFORE the boundary exists, read the way a
+ * reference names one: a qualified `<subsystem>.<type>` (or `::`) token by its
+ * subsystem and id, a bare id by its id — each answering the one type it names,
+ * or undefined for none or several.
+ */
+function sidedTypes(inside: RawSpec[], outside: RawSpec[]): { qualified: (token: string) => SidedType | undefined; bare: (token: string) => SidedType | undefined } {
+  const types: SidedType[] = [
+    ...inside.filter((s) => s.kind === 'type').map((s) => ({ spec: s, side: 'inside' as const })),
+    ...outside.filter((s) => s.kind === 'type').map((s) => ({ spec: s, side: 'outside' as const })),
+  ];
+  const subsystems = new Set([...inside, ...outside].filter((s) => s.kind === 'subsystem').map((s) => nameKey(s.id)));
+  return {
+    qualified: (token) => {
+      const segments = token.split(/::|\./);
+      if (segments.length !== 2 || segments.some((x) => x === '') || !subsystems.has(nameKey(segments[0]))) return undefined;
+      const found = types.filter((t) => typeof t.spec.raw.subsystem === 'string' && nameKey(t.spec.raw.subsystem) === nameKey(segments[0]) && nameKey(t.spec.id) === nameKey(segments[1]));
+      return found.length === 1 ? found[0] : undefined;
+    },
+    bare: (token) => {
+      const found = types.filter((t) => nameKey(t.spec.id) === nameKey(token));
+      return found.length === 1 ? found[0] : undefined;
+    },
+  };
+}
+
+/**
+ * The references of the would-be member that would name the PARENT at a
+ * position no gate resolves across a project boundary: a signatureFrom (a
+ * signature type, or a `component.method` source) and an asserted invariant's
+ * type. Neither is read through a project's pin, so respelled `<parent id>::x`
+ * it would dangle — the promote refuses instead of writing a tree that cannot
+ * validate.
+ */
+function unreachableUpward(inside: RawSpec[], outside: RawSpec[]): string[] {
+  const out: string[] = [];
+  const types = sidedTypes(inside, outside);
+  const outsideComponents = new Set(outside.filter((x) => x.kind === 'component').map((x) => x.id));
+  const target = (ref: string): SidedType | undefined => (ref.includes('.') || ref.includes('::') ? types.qualified(ref) : types.bare(ref));
+  for (const spec of inside) {
+    if (spec.kind === 'interface') {
+      for (const m of spec.raw.methods ?? []) {
+        const source = m?.signatureFrom;
+        if (typeof source !== 'string') continue;
+        const head = source.includes('.') ? source.slice(0, source.lastIndexOf('.')) : undefined;
+        if (target(source)?.side === 'outside' || (head !== undefined && outsideComponents.has(head))) {
+          out.push(`"${spec.id}" method "${m.name}" takes its signature from "${source}", which stays in this project: a signatureFrom is not read across a project boundary — state its params and returns first`);
+        }
+      }
+    }
+    if (spec.kind === 'implementation') {
+      for (const m of spec.raw.methods ?? []) {
+        for (const step of m?.narrative ?? []) {
+          for (const ref of step?.assertsInvariants ?? []) {
+            const typeRef = typeof ref === 'string' ? assertedTypeRef(ref) : undefined;
+            if (typeRef !== undefined && !typeRef.includes('::') && target(typeRef)?.side === 'outside') {
+              out.push(`"${spec.id}" asserts the invariant "${ref}" of an entity that stays in this project: an invariant is asserted by its own project's write paths — move the assertion first`);
+            }
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function respellQualified(inside: RawSpec[], outside: RawSpec[], names: BoundaryNames, result: PromoteResult): { out: Crossing[]; in: Crossing[] } {
+  const crossings: { out: Crossing[]; in: Crossing[] } = { out: [], in: [] };
+  const { qualified: qualifiedTarget, bare: bareTarget } = sidedTypes(inside, outside);
+  const respell = (spec: RawSpec, side: 'inside' | 'outside', token: string, target: SidedType | undefined, selfPrefix: boolean): string => {
+    if (!target) return token;
+    if (target.side !== side) {
+      const to = `${side === 'outside' ? names.alias : names.parentId}::${target.spec.id}`;
+      (side === 'inside' ? crossings.out : crossings.in).push({ spec, target: target.spec.id, position: 'type' });
+      return to;
+    }
+    return side === 'inside' && selfPrefix ? target.spec.id : token;
+  };
+  for (const [specs, side] of [[inside, 'inside'], [outside, 'outside']] as const) {
+    for (const spec of specs) {
+      if (!fs.existsSync(spec.file)) continue;
+      const raw = readYamlFile(spec.file) as any;
+      if (!raw || typeof raw !== 'object') continue;
+      const edits: ReferenceEdit[] = [];
+      const record = (from: string, to: string): void => {
+        if (from !== to) edits.push({ kind: spec.kind as WritableSpecKind, specId: spec.id, position: 'type', from, to });
+      };
+      const mapToken = (token: string): string => {
+        const target = qualifiedTarget(token);
+        const to = respell(spec, side, token, target, nameKey(token.split(/::|\./)[0]) === nameKey(names.newId));
+        record(token, to);
+        return to;
+      };
+      for (const slot of typeExpressionSlots(spec.kind, raw)) {
+        const value = slot.holder[slot.key] as string;
+        // A `component.method` source is the reference table's (a component position), never a type token.
+        if (slot.path === 'methods.signatureFrom' && !qualifiedTarget(value)) continue;
+        slot.holder[slot.key] = respellTypeNames(value, mapToken);
+      }
+      if (spec.kind === 'implementation') {
+        for (const m of raw.methods ?? []) {
+          for (const step of m?.narrative ?? []) {
+            if (!Array.isArray(step?.assertsInvariants)) continue;
+            step.assertsInvariants = step.assertsInvariants.map((ref: unknown) => {
+              const typeRef = typeof ref === 'string' ? assertedTypeRef(ref) : undefined;
+              if (typeRef === undefined || typeRef.includes('::') && !qualifiedTarget(typeRef)) return ref;
+              const target = typeRef.includes('.') || typeRef.includes('::') ? qualifiedTarget(typeRef) : bareTarget(typeRef);
+              const to = respell(spec, side, typeRef, target, typeRef.includes('.') && nameKey(typeRef.split('.')[0]) === nameKey(names.newId));
+              if (to === typeRef) return ref;
+              record(ref as string, `${to}${(ref as string).slice(typeRef.length)}`);
+              return `${to}${(ref as string).slice(typeRef.length)}`;
+            });
+          }
+        }
+      }
+      if (edits.length === 0) continue;
+      writeYamlFile(spec.file, raw);
+      for (const e of edits) recordRespelling(result, e, side === 'inside');
+    }
+  }
+  return crossings;
+}
+
+/**
+ * Step 10: each publicInterfaces consumers entry, on either side, naming a
+ * subsystem across the new boundary, dropped — a consumers list admits only
+ * subsystems of its own tree, and between projects the L0 export table governs
+ * who may use a name. A list left empty is removed (absent: anyone of its
+ * project may depend). Each drop recorded.
+ */
+function dropCrossingConsumers(inside: RawSpec[], outside: RawSpec[], result: PromoteResult): void {
+  const idsOf = (specs: RawSpec[]): Set<string> => new Set(specs.filter((s) => s.kind === 'subsystem').map((s) => s.id));
+  const sides: [RawSpec[], Set<string>][] = [[inside, idsOf(outside)], [outside, idsOf(inside)]];
+  for (const [specs, across] of sides) {
+    for (const spec of specs.filter((s) => s.kind === 'subsystem')) {
+      patchKeepingStamp(spec.file, (raw) => {
+        let changed = false;
+        for (const entry of raw.publicInterfaces ?? []) {
+          if (!Array.isArray(entry?.consumers)) continue;
+          const dropped = entry.consumers.filter((c: unknown) => typeof c === 'string' && across.has(c));
+          if (dropped.length === 0) continue;
+          const kept = entry.consumers.filter((c: unknown) => !dropped.includes(c));
+          if (kept.length > 0) entry.consumers = kept;
+          else delete entry.consumers;
+          changed = true;
+          const what = entry.component ?? entry.typeDef ?? entry.interface ?? entry.from ?? '(entry)';
+          result.consumersDropped.push(`${spec.id} ${what}: ${dropped.join(', ')}${kept.length === 0 ? ' (the list is gone: the L0 export table governs who outside may use it)' : ''}`);
+        }
+        return changed;
+      });
+    }
+  }
+}
+
+/**
+ * Step 13 (completeness): every name the parent's L0 now re-exports from the
+ * member — an entry `from: <alias>` naming a component or a type, or a whole
+ * re-export of it — exported by the new project too, so no re-export is left
+ * pointing at a name the member does not export.
+ */
+function exportReExported(inside: RawSpec[], memberDir: string, alias: string, result: PromoteResult): void {
+  invalidateSpecCache();
+  const entries = ((loadSystemSpec()?.publicInterfaces ?? []) as ExportEntry[]).filter((e) => e.from === alias);
+  if (entries.length === 0) return;
+  const targets = entries.map((e) => e.component ?? e.typeDef).filter((t): t is string => t !== undefined);
+  const whole = entries.some((e) => e.component === undefined && e.typeDef === undefined);
+  runWithProjectRoot(memberDir, () => {
+    for (const name of exportItems(targets)) result.exported.push(`${alias} L0: ${name} (re-exported by the parent)`);
+    if (!whole) return;
+    invalidateSpecCache();
+    const system = loadSystemSpec();
+    if (!system) return;
+    const own = (system.publicInterfaces ?? []) as ExportEntry[];
+    const added = inside.filter((s) => s.kind === 'subsystem' && !own.some((e) => e.from === s.id && e.component === undefined && e.typeDef === undefined))
+      .map((s) => ({ from: s.id, audience: 'project' }));
+    if (added.length === 0) return;
+    saveSystemSpec({ ...system, publicInterfaces: [...own, ...added] as typeof system.publicInterfaces });
+    for (const e of added) result.exported.push(`${alias} L0: everything ${e.from} exports (re-exported whole by the parent)`);
+  });
+  invalidateSpecCache();
 }
 
 /** A promoted part's L0 vision, recognised as saying nothing beyond its names (saysMoreThanItsName). */
@@ -1121,15 +1396,21 @@ function unique<T>(value: T, index: number, all: T[]): boolean {
  * the bound root, the member's (`in`) under its own — and each bare type name
  * imported by name through the alias that now supplies it.
  */
-function exportCrossings(crossings: Crossing[], memberDir: string, alias: string, parentId: string, direction: 'out' | 'in'): void {
+function exportCrossings(crossings: Crossing[], memberDir: string, alias: string, parentId: string, direction: 'out' | 'in', result: PromoteResult): void {
   const targets = [...new Set(crossings.map((c) => c.target))];
   const bare = [...new Set(crossings.filter((c) => c.position === 'bare-type').map((c) => c.target))];
   if (direction === 'out') {
-    exportItems(targets);
-    if (bare.length > 0) projectConfigRepositoryAt(memberDir).importNames(parentId, bare);
+    for (const name of exportItems(targets)) result.exported.push(`${parentId} L0: ${name}`);
+    if (bare.length > 0) {
+      projectConfigRepositoryAt(memberDir).importNames(parentId, bare);
+      result.imported.push(`${alias}: externals.${parentId}.use gains ${bare.join(', ')}`);
+    }
   } else {
-    runWithProjectRoot(memberDir, () => exportItems(targets));
-    if (bare.length > 0) projectConfigRepository.importNames(alias, bare);
+    for (const name of runWithProjectRoot(memberDir, () => exportItems(targets))) result.exported.push(`${alias} L0: ${name}`);
+    if (bare.length > 0) {
+      projectConfigRepository.importNames(alias, bare);
+      result.imported.push(`${parentId}: members.${alias}.use gains ${bare.join(', ')}`);
+    }
   }
 }
 
@@ -1144,29 +1425,38 @@ function localIn(key: string, project: string): string {
  * already exports through the L0. Each entry is added only when missing, at
  * the audience a family sees (`project`).
  */
-function exportItems(ids: string[]): void {
-  if (ids.length === 0) return;
+function exportItems(ids: string[]): string[] {
+  if (ids.length === 0) return [];
   invalidateSpecCache();
   const system = loadSystemSpec();
-  if (!system) return;
+  if (!system) return [];
   const entries = [...(system.publicInterfaces ?? [])] as { from?: string; component?: string; typeDef?: string; audience?: string }[];
   const types = loadTypeSpecs();
+  const added: string[] = [];
   for (const id of ids) {
     if (!PUBLIC_NAME_RE.test(id)) continue;
     const type = types.find((t) => t.id === id);
     if (type) {
       if (type.subsystem) exportTypeFromSubsystem(type.subsystem, id);
-      if (!entries.some((e) => e.typeDef === id && e.from === undefined)) entries.push({ typeDef: id, audience: 'project' });
+      // A type re-exported from the subsystem that owns it — the canonical form, never an implicit lookup.
+      if (!entries.some((e) => e.typeDef === id && (e.from === undefined || e.from === type.subsystem))) {
+        entries.push({ ...(type.subsystem ? { from: type.subsystem } : {}), typeDef: id, audience: 'project' });
+        added.push(type.subsystem ? `${id} (from ${type.subsystem})` : id);
+      }
       continue;
     }
     const component = loadComponentSpec(id);
     if (!component) continue;
     const exported = resolveSubsystemExports(component.subsystem).entries.some((e) => e.kind === 'component' && e.component === id);
-    if (exported && !entries.some((e) => e.component === id)) entries.push({ from: component.subsystem, component: id, audience: 'project' });
+    if (exported && !entries.some((e) => e.component === id)) {
+      entries.push({ from: component.subsystem, component: id, audience: 'project' });
+      added.push(`${id} (from ${component.subsystem})`);
+    }
   }
   if (entries.length !== (system.publicInterfaces ?? []).length) {
     saveSystemSpec({ ...system, publicInterfaces: entries as typeof system.publicInterfaces });
   }
+  return added;
 }
 
 /** A type exported as its own by the subsystem that owns it, when it is not already. */
@@ -1854,9 +2144,10 @@ function retireBoundaryExports(family: ProjectFamily, used: ReadonlySet<string>,
   const { publicInterfaces: _dropped, ...rest } = system;
   saveSystemSpec((kept.length > 0 ? { ...rest, publicInterfaces: kept } : rest) as SystemSpec);
   invalidateSpecCache();
-  for (const e of retired.filter((x) => x.typeDef !== undefined && x.from === undefined)) {
+  // An entry naming the type alone, or re-exporting it from the subsystem that owns it (the form promote writes).
+  for (const e of retired.filter((x) => x.typeDef !== undefined)) {
     const type = loadTypeSpecs().find((t) => t.id === e.typeDef);
-    if (!type?.subsystem) continue;
+    if (!type?.subsystem || (e.from !== undefined && e.from !== type.subsystem)) continue;
     patchKeepingStamp(getSubsystemPath(type.subsystem), (raw) => {
       const before = (raw.publicInterfaces ?? []).length;
       raw.publicInterfaces = (raw.publicInterfaces ?? []).filter((pi: any) => !(pi?.typeDef === e.typeDef && pi?.from === undefined && Object.keys(pi).length === 1));
@@ -2189,7 +2480,7 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
   // Steps 4–5: …and belong to the bound project itself.
   if (componentId.includes('::')) {
     throw new WaironError(
-      `chained-component: "${componentId}" lives in a chained subproject; rename it from that project's own root.`,
+      `chained-component: "${componentId}" lives in another project; rename it from that project's own root. ${memberRootWay(componentId, `sdd_rename_component ${componentId.slice(componentId.lastIndexOf('::') + 2)} <new id>`)}`,
     );
   }
   // Steps 6–7: the new id must be a plain lowercase identifier.
@@ -2518,7 +2809,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // Steps 4–5: …and belong to the bound project itself.
   if (componentId.includes('::')) {
     throw new WaironError(
-      `chained-component: "${componentId}" lives in a chained subproject; rename its method from that project's own root.`,
+      `chained-component: "${componentId}" lives in another project; rename its method from that project's own root. ${memberRootWay(componentId, `sdd_rename_method ${componentId.slice(componentId.lastIndexOf('::') + 2)} <method> <new name>`)}`,
     );
   }
   // Steps 6–7: the new name must be a camel-case identifier.
@@ -2802,6 +3093,22 @@ function respellLike(written: string, oldId: string, newId: string): string {
  * id grammar (invalid-id), and a new id another type of the same owner holds
  * or retired (id-taken, id-retired).
  */
+/**
+ * The exact way to change something a member project owns: the doctrine says a
+ * member project is written from its own root, never through its parent's
+ * tree, so a refusal names the member's folder and the call to make there.
+ */
+function memberRootWay(qualifiedId: string, call: string): string {
+  const alias = qualifiedId.slice(0, qualifiedId.indexOf('::'));
+  let folder: string | undefined;
+  try {
+    const node = graph().nodes.find((n) => n.namespace === alias || (n.parent === '' && n.mountAlias === alias));
+    if (node) folder = path.relative(getProjectRoot(), node.directory).split(path.sep).join('/') || '.';
+  } catch { /* a graph that cannot be read names no folder */ }
+  const where = folder ? `the member project "${alias}" at ${folder}` : `the member project "${alias}"`;
+  return `It belongs to ${where}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
+}
+
 export function renameType(typeId: string, newId: string): TypeRename {
   // Steps 1–3: the type must exist. A subsystem-qualified id names the type within its owner.
   const all = loadTypeSpecs();
@@ -2810,14 +3117,14 @@ export function renameType(typeId: string, newId: string): TypeRename {
   const ownSubsystem = qualifier !== undefined && loadSubsystemSpecs().some((s) => s.id === qualifier);
   // Steps 4–5: …and belong to the bound project itself — an alias:: prefix names another project.
   if (qualifier !== undefined && !ownSubsystem) {
-    throw new WaironError(`chained-type: "${typeId}" lives in another project; rename it from that project's own root.`);
+    throw new WaironError(`chained-type: "${typeId}" lives in another project; rename it from that project's own root. ${memberRootWay(typeId, `sdd_rename_type ${typeId.slice(cut + 2)} <new id>`)} An exported type keeps its public name through \`as\`, so this project's references do not break.`);
   }
   const type: TypeSpec | null = qualifier !== undefined
     ? all.find((t) => t.id === typeId.slice(cut + 2) && t.subsystem === qualifier) ?? null
     : loadTypeSpec(typeId);
   if (!type) throw new WaironError(`type-missing: no type has the id "${typeId}".`);
   if (type.id.includes('::')) {
-    throw new WaironError(`chained-type: "${type.id}" lives in another project; rename it from that project's own root.`);
+    throw new WaironError(`chained-type: "${type.id}" lives in another project; rename it from that project's own root. ${memberRootWay(type.id, `sdd_rename_type ${type.id.slice(type.id.lastIndexOf('::') + 2)} <new id>`)}`);
   }
   const oldId = type.id;
   // Steps 6–7: the new id must be a plain lowercase identifier.

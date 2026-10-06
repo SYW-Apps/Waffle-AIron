@@ -98,7 +98,7 @@ function withoutTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text.slice(0, -1) : text;
 }
 
-export async function runStatus(options: StatusOptions = {}): Promise<void> {
+export async function runStatus(options: StatusOptions = {}, listAll = false): Promise<void> {
   // Step 1: refuse outside a wairon project — a dashboard of nothing would read
   // like an empty tree rather than like the wrong directory.
   assertProjectInitialized();
@@ -142,16 +142,24 @@ export async function runStatus(options: StatusOptions = {}): Promise<void> {
   // fact beside the sentence.
   if (lock.text.trim()) {
     logger.blank();
-    if (lock.drifted) logger.warn(lock.text.trim());
-    else logger.info(lock.text.trim());
-    // The percentages above and the verdict here answer different questions,
-    // and an approved tree showing "50% Complete" read like a contradiction:
-    // the lock no longer rewrites spec statuses, so the two never converge.
-    logger.info(chalk.gray(
-      'The percentages measure authoring readiness (each spec\'s draft/design/complete status), not approval: '
-        + 'approval is the lock record above (.wai/lock.json), and `wairon lock` does not change any spec\'s status.',
-    ));
+    // With --all, every moved spec instead of the first few and a count.
+    const lines = lock.text.trim().split('\n');
+    const text = listAll && lock.moved && lock.moved.length > 0
+      ? [lines[0], ...lock.moved.map((p) => `  ${p}`), ...lines.slice(1).filter((l) => !l.startsWith('  '))].join('\n')
+      : lock.text.trim();
+    // On stdout like the report above it, so the two never interleave.
+    if (lock.drifted) console.log(chalk.yellow(`⚠  ${text}`));
+    else logger.info(text);
+    if (!listAll && lock.moved && lock.moved.length > 5) logger.info(chalk.gray('`wairon status --all` lists every spec that moved.'));
   }
+  // The percentages above and the approval answer different questions, and an
+  // approved tree at "80% Complete" read like a contradiction — so say what the
+  // percentage counts, always.
+  logger.info(chalk.gray(
+    'The percentages measure authoring progress, not approval: 80% once a component\'s component, contract and '
+      + 'implementation specs are written, 100% once its implementation names source files that exist (capped at 50% '
+      + 'while any of them is draft or design). Approval is the lock record (.wai/lock.json); `wairon lock` changes no spec.',
+  ));
 
   logger.blank();
   // Step 8: done.

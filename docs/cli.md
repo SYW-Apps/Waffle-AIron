@@ -14,20 +14,38 @@ Bootstrap `.wai/` in the current project: project config, the SDD spec tree
 skills installed into each selected target tool. No agent files are written:
 agents are served as live briefs (`sdd_get_agent_brief`, `wairon agent brief
 <id>`) unless the project opts into `rules.materializeAgentFiles: true`. `--yes`
-uses defaults without prompts (a shell with no terminal needs it);
+uses defaults without prompts (a shell with no terminal needs it): the project name from the folder, profile backend, target claude only — another tool is one interactive answer or one `targets` entry away;
 `--pack <source>` (repeatable) vendors + registers an extension pack right after
 init (see `wairon pack`). Re-running on an
-initialized project is a no-op that points you back to the SDD flow. Run inside
-a subdirectory of an existing project, it offers to make that directory a
-**member** of the parent (see `wairon member add`).
+initialized project is a no-op that points you back to the SDD flow. Run in a
+folder an existing project binds (see *Which project a command acts on* below),
+it asks on a terminal whether to make that folder a **member** of the parent —
+which edits the parent's `project.yaml` — and with `--yes` it refuses, writing
+nothing and printing the exact `wairon member add <alias> <path> --project` to
+run from the parent (or: make the folder its own repository with `git init` and
+re-run `wairon init` for an independent project).
 
-### `wairon status [--subsystem <id>] [--no-recursive]`
+#### Which project a command acts on
+Every command, the MCP server (`wairon mcp serve`) and `wairon dev` bind the same
+project: from the folder you are in, the nearest folder whose `.wai/specs` holds
+an L0 — but the walk **never climbs past the repository root** (the nearest folder
+holding `.git`) unless a project above it declares the crossing as a member
+(`members` naming the repository's folder, or a folder inside it). A stray `.wai`
+in a parent folder therefore binds nothing in a child repository. Outside any
+repository the walk is unbounded. Each command that acts on a project prints
+`project <id> at <root>` on stderr first, so `wairon export` and every `--json`
+output keep a pure stdout.
+
+### `wairon status [--subsystem <id>] [--no-recursive] [--all]`
 Print the SDD spec tree as a hierarchy. Its percentages measure **authoring
-readiness** — each spec's own `draft` / `design` / `complete` status — and are
+progress** — 80% once a component's component, contract and implementation specs
+are written, 100% once its implementation names source files that exist, capped
+at 50% while any of them is `draft` or `design` — and are
 separate from **approval**, which is the lock record in `.wai/lock.json` and is
 printed on its own line. `wairon lock` never rewrites a spec's status, so an
 approved tree can still show draft specs. `--subsystem <id>` shows one
-subsystem; `--no-recursive` shows this project without its members.
+subsystem; `--no-recursive` shows this project without its members; `--all` lists
+every spec that moved since the approval instead of the first few.
 Each member project prints as `[Project] alias (id)` holding its own subsystems,
 with its **approval state** computed at the member's own root (`approved`,
 `drifted`, `never`) and how this project's lock pinned it (`matches`, `moved`,
@@ -146,17 +164,36 @@ record counts too, so commit it before you rely on a local pass.
 | **`stale`** — the design moved past its approval | **fail (1)** | **fail (1)** |
 | **`unlocked`** — nothing was ever approved | pass, with a notice (0) | **fail (1)** |
 | no `.wai/specs` in this directory at all | pass, saying so (0) | **fail (1)** |
+| a member project has spec changes nobody approved at its own root | **fail (1)** | **fail (1)** |
+| a member project was never approved by anyone | pass, naming it as *not gated* (0) | **fail (1)** |
+| only a member's own approval moved (it re-locked) | **fail (1)**, naming the member: re-lock here to pin its new approval | **fail (1)** |
+
+**What plain `lock-check` guarantees:** that a *committed* approval still covers the
+design, and that no member project carries unapproved changes. Nothing more: a
+project with no `.wai/lock.json` — never locked, *or the record deleted in the
+pull request* — passes, because it reads exactly like one that never opted in.
+**In CI, run `wairon lock-check --strict`** (or the reusable workflow with
+`strict: true`) once the project has been locked: then a missing record, or a
+member nobody ever approved, fails.
+
+**Members.** The gate identity pins each direct member's *recorded* approval, so
+the root reads every member project's own approval at its own root too. A member
+whose specs moved past its own approval fails the root's check — run `wairon lock`
+in that member's folder. A member that re-locked is expected (its own approver
+signed it off), and the root is judged by whether its pin of the member is still
+the member's approved one: after a member re-locks it is not, and the verdict says
+exactly that — no own spec moved, run `wairon lock` here to pin the new approval.
 
 A lock taken by a wairon release before 6.0.0 reads `stale` once, because the
 gate identity gained inputs. The message says so — the approval *was taken under
 an earlier gate identity* — and whether any own spec file changed since; re-lock
-once and commit `.wai/lock.json`. It stays about this project's own approval: a member's
-state is `wairon status`'s to report.
+once and commit `.wai/lock.json`.
 
-**It is optional by construction.** Only `stale` refuses by default, and `stale`
-cannot happen in a project that never locked — so adding this to an existing
-repository's CI cannot make it start failing. `--strict` is what turns "never
-approved" into a failure, and a project has to ask for it.
+**It is optional by construction.** By default only a moved approval (or a
+member's unapproved changes) refuses, and neither can happen in a project that
+never locked — so adding this to an existing repository's CI cannot make it start
+failing. `--strict` is what turns "never approved" into a failure, and a project
+has to ask for it — which is why a project that has locked should run it strict.
 
 It is **not** `wairon validate`. Validate asks whether the design is *legal* and
 runs the whole rule set to answer; this asks whether it is *approved* and reads
@@ -191,6 +228,7 @@ jobs:
     uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
     with:
       wairon-version: '6.0.0'
+      strict: true      # a deleted .wai/lock.json fails instead of switching the gate off
 ```
 
 With inputs (all optional):
@@ -201,7 +239,7 @@ With inputs (all optional):
     with:
       working-directory: packages/api   # where the .wai/ tree lives (default: .)
       wairon-version: '6.0.0'           # version or npm dist-tag, 6.0.0 or later (default: latest)
-      strict: false                     # fail when nothing was approved (default: false)
+      strict: true                      # fail when nothing was approved — use it once you have locked (default: false)
       node-version: '20'                # (default: '20')
       runs-on: ubuntu-latest            # (default: ubuntu-latest)
 ```
@@ -537,8 +575,8 @@ are a read-only cache). `member demote` names every L0 export entry it removes.
 **Required packs.** A project may require packs of the members below it with
 `composition.requirePolicies` (see
 [Extending wairon](extending-wairon.md#governance--what-a-pack-changes-and-what-a-parent-requires)).
-`wairon member add --project` — and `wairon init` run in a subdirectory, which
-creates a project member the same way — writes those packs into the new member's selection once,
+`wairon member add --project` — and `wairon init` run in a subdirectory when you
+answer yes on a terminal, which creates a project member the same way — writes those packs into the new member's selection once,
 each pinned to the highest installed version its range admits, sets the
 `projectType` a requirement names, and prints what it applied and each
 requirement nothing installed satisfies. Scaffolding is an unattended pack write,

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ensureDir, fromProjectRoot } from '../utils/fs.js';
+import { ensureDir, fromProjectRoot, writeFileIfChanged } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { activeTargetTypes as configActiveTargetTypes } from '../models/project.js';
 import type { LoadedPackSkill } from './extensions.js';
@@ -172,7 +172,9 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
       const content = composeBuiltinSkill(name, packSkills.filter((s) => s.targets.includes(type)));
       const destPath = skillDestPath(type, destDir, name);
       ensureDir(path.dirname(destPath));
-      fs.writeFileSync(destPath, content, 'utf-8');
+      // Through the shared helper: the installed file keeps its line endings
+      // (CRLF stays CRLF) and an unchanged one is not rewritten.
+      writeFileIfChanged(destPath, content);
       fileCount++;
     }
 
@@ -187,7 +189,9 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
       const content = fs.readFileSync(skill.sourcePath, 'utf-8');
       const destPath = skillDestPath(type, destDir, id);
       ensureDir(path.dirname(destPath));
-      fs.writeFileSync(destPath, content, 'utf-8');
+      // Through the shared helper: the installed file keeps its line endings
+      // (CRLF stays CRLF) and an unchanged one is not rewritten.
+      writeFileIfChanged(destPath, content);
       fileCount++;
     }
   }
@@ -226,7 +230,8 @@ export function checkSkillFreshness(type: string): SkillFreshness {
     if (!fs.existsSync(destPath)) { result.missing.push(name); continue; }
     const want = composeBuiltinSkill(name, packSkills);
     const have = fs.readFileSync(destPath, 'utf-8');
-    if (have === want) result.ok.push(name);
+    // Line endings are the checkout's, not content: compare them normalised.
+    if (have.replace(/\r\n/g, '\n') === want.replace(/\r\n/g, '\n')) result.ok.push(name);
     else result.stale.push(name);
   }
   return result;

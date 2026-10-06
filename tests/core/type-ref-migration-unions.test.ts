@@ -245,7 +245,7 @@ describe('a migration leaves a union type reference exactly as written', () => {
     const parent = readYamlFile(path.join(root, '.wai', 'project.yaml')) as any;
     expect(parent.members.billing.use).toEqual(['invoice']);
     const memberL0 = readYamlFile(path.join(root, 'sub', 'billing', '.wai', 'specs', '.index.yaml')) as any;
-    expect(memberL0.publicInterfaces).toEqual([{ typeDef: 'invoice', audience: 'project' }]);
+    expect(memberL0.publicInterfaces).toEqual([{ from: 'billing', typeDef: 'invoice', audience: 'project' }]);
     // And the parent's owner's gate holds no error the move introduced.
     expect(findings(root).filter((f) => f.startsWith('error '))).toEqual([]);
   });

@@ -185,7 +185,7 @@ export {
   demoteMember,
   advanceMember,
 } from './provision.js';
-export type { InternalizeResult } from './provision.js';
+export type { InternalizeResult, PromoteResult } from './provision.js';
 export type { MemberCreation, MemberAdvance } from './provision.js';
 
 // The tree's content identity (approval_portal computeStateId — the snapshot

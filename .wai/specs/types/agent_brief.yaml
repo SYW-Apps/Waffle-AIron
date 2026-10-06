@@ -76,7 +76,18 @@ fields:
       or source files name), also folded into instructions. Absent when no dialect is shipped for
       that language or the agent implements nothing.
     optional: true
+  - name: codeFence
+    type: list<string>
+    description: >-
+      Where an implementing agent may write CODE: each source file the agent's implementations name
+      (sourcePath, per-method sourcePaths), and the folder those files share as `<folder>/**` when
+      they share one below the project root — the subsystem's code folder, so a first file beside
+      the existing ones is inside the fence. Also folded into instructions as a '## Code write
+      fence' section, which says plainly when nothing names a code location yet (the parent then
+      names the planned files). Absent for an agent that implements nothing (the architect, a
+      delegating member owner).
+    optional: true
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-10-04T10:19:50.160Z'
+updatedAt: '2026-10-05T23:38:35.548Z'

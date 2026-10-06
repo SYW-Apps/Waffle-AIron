@@ -559,6 +559,13 @@ export interface RuleContext {
    * importing it, and the `use` line that would. Null when none does.
    */
   importHint(name: string): string | null;
+  /**
+   * rule_context.aliasSpelling — for a dotted type reference `<first>.<name>`
+   * whose first segment is an alias the bound project declares (not one of its
+   * subsystems) and whose supplier exports the name: the `alias::publicName`
+   * it must be written as. Null otherwise.
+   */
+  aliasSpelling(ref: string): string | null;
   /** Every contract method across the component's interfaces (memoized — eight rules ask per binding or per step). */
   interfaceMethodsOf(compId: string): MethodSignature[];
   /** The run's source-code model keyed for lookup (memoized). */

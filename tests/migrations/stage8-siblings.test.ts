@@ -196,13 +196,13 @@ describe('stage 8 — a sibling checkout joins the family transaction', () => {
     const doc = yaml.load(fs.readFileSync(l0, 'utf8')) as { publicInterfaces: Record<string, unknown>[] };
     expect(doc.publicInterfaces).toEqual([
       { component: 'patient-portal', from: 'frontdesk', audience: 'project' },
-      { typeDef: 'patient', audience: 'project' },
+      { from: 'frontdesk', typeDef: 'patient', audience: 'project' },
     ]);
     const planned = plan(root, { verb: 'demote', alias: 'scheduling' });
     const named = planned.edits.filter((e) => e.kind === 'export').map((e) => e.detail);
     expect(named).toEqual([
       expect.stringMatching(/L0 export patient-portal \(from frontdesk\) removed/),
-      expect.stringMatching(/L0 export patient removed/),
+      expect.stringMatching(/L0 export patient \(from frontdesk\) removed/),
     ]);
     migrations.discard(planned);
   });

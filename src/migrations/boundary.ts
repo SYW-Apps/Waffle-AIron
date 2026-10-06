@@ -8,6 +8,7 @@ import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { memberLocationOf, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
+import type { PromoteResult } from '../core/index.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -337,6 +338,7 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   // Step 9: the core's externalize as a project, and the new member's pins.
   edit(plan, bound, 'move', `externalize ${id} as a project: its specs into a member at ${posix(path.relative(node.directory, dir!))}, declared as "${id}", then promoted`, { root: node.directory, call: 'externalizeSubsystem', args: [id, posix(path.relative(node.directory, dir!)), 'project'] });
   edit(plan, id, 'pin', `pin the new member's externals (its external for ${node.id ?? 'this project'}, when its specs reference it)`, { root: dir!, call: 'pinExternals', args: [[]] });
+  repinIntactConsumers(plan, family, bound, [dir!]);
   plan.notes.push('Source code is not moved: move the subsystem\'s code into the member yourself.');
   // Step 10.
   return plan;
@@ -500,6 +502,7 @@ export function planPromote(family: ProjectFamily, bound: string, request: Migra
     { root: node.directory, call: 'promoteMember', args: [alias, newId] });
   edit(plan, newId, 'pin', `pin the new project's external for ${node.id ?? 'this project'} (when its specs reference it)`, { root: part.directory!, call: 'pinExternals', args: [[]] });
   if (part.storage !== 'contained') edit(plan, bound, 'pin', `pin ${alias} (a project stored outside ${label(bound)} is judged against its pin)`, { root: node.directory, call: 'pinExternals', args: [[alias]] });
+  repinIntactConsumers(plan, family, bound, [part.directory!]);
   plan.notes.push(`"${newId}" has no lock yet: lock it at its own root (\`wairon lock\`) once it validates.`);
   // Step 7.
   return plan;
@@ -588,7 +591,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   // Step 11: externalize, or a composition verb?
   if (plan.request.verb === 'externalize') {
     // Step 12: the core's externalize — into a part, or as a project; a core refusal propagates.
-    for (const e of planned.filter((x) => x.write.call === 'externalizeSubsystem')) writeOne(rehearsal, e.write);
+    for (const e of planned.filter((x) => x.write.call === 'externalizeSubsystem')) recordCrossing(plan, e.project, e.write.args[0] as string, writeOne(rehearsal, e.write));
     // Step 13: the new project's pin (a part needs none).
     for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
     // Step 14.
@@ -597,7 +600,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   // Step 15: promote or demote?
   if (plan.request.verb === 'promote') {
     // Step 16: the core's promote — a core refusal propagates.
-    for (const e of planned.filter((x) => x.write.call === 'promoteMember')) writeOne(rehearsal, e.write);
+    for (const e of planned.filter((x) => x.write.call === 'promoteMember')) recordCrossing(plan, e.project, (e.write.args[1] as string | undefined) ?? (e.write.args[0] as string), writeOne(rehearsal, e.write));
     // Step 17: the pins LAST, on both sides.
     for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
     // Step 18.
@@ -620,10 +623,58 @@ function referencesBySpec(planned: (PlannedEdit & { write: PlannedWrite })[]): M
   return out;
 }
 
-/** One planned write under its owner's rehearsal root. */
-function writeOne(rehearsal: Rehearsal, w: PlannedWrite): void {
+/**
+ * Each family project OTHER than the bound one and the project the verb
+ * creates that pins the bound project: a pin whose every use is unchanged now
+ * is taken again after the verb (the names it uses only move location, which a
+ * re-pin alone answers — none changed at signature level); one already broken
+ * is left as it is, with a note, so a migration never launders a real
+ * incompatibility.
+ */
+function repinIntactConsumers(plan: MigrationPlan, family: ProjectFamily, bound: string, created: string[]): void {
+  const boundNode = familyNode(family, bound)!;
+  const skip = new Set([boundNode.directory, ...created].map((d) => path.resolve(d)));
+  for (const node of family.nodes) {
+    if (skip.has(path.resolve(node.directory))) continue;
+    let statuses: ReturnType<typeof surfaces.getExternalsStatus> = [];
+    try {
+      statuses = runWithProjectRoot(node.directory, () => surfaces.getExternalsStatus());
+    } catch {
+      continue;
+    }
+    for (const status of statuses) {
+      const producer = node.aliases.get(status.alias);
+      const pinsBound = producer !== undefined ? producer === bound : boundNode.id !== undefined && status.project === boundNode.id;
+      if (!status.pinned || status.outOfReach || !pinsBound) continue;
+      const broken = status.uses.filter((u) => u.state === 'changed' || u.state === 'removed');
+      if (broken.length > 0) {
+        plan.notes.push(`${label(node.namespace)}'s pin of "${status.alias}" is already incompatible (${broken.map((u) => u.publicName ?? u.member ?? '?').join(', ')}): not re-pinned — adapt its uses, then run \`wairon externals pin ${status.alias}\` there.`);
+        continue;
+      }
+      edit(plan, node.namespace, 'pin', `pin ${status.alias} taken again: the names it uses of ${label(bound)} only move with the boundary`, { root: node.directory, call: 'pinExternals', args: [[status.alias]] });
+    }
+  }
+}
+
+/** A promote's (or an externalize as project's) answer, recorded as the plan's edits: what the rehearsal wrote across the new boundary. */
+function recordCrossing(plan: MigrationPlan, bound: string, member: string, result: unknown): void {
+  const crossed = result as PromoteResult | undefined;
+  if (!crossed) return;
+  for (const r of crossed.respelled) {
+    plan.edits.push({ project: bound, kind: 'reference', detail: `${r.specId} (${r.position}): ${r.from} → ${r.to}`, reference: r });
+  }
+  for (const r of crossed.memberRespelled) {
+    plan.edits.push({ project: member, kind: 'reference', detail: `${r.specId} (${r.position}): ${r.from} → ${r.to}`, reference: r });
+  }
+  for (const line of crossed.exported) plan.edits.push({ project: bound, kind: 'export', detail: `export ${line}` });
+  for (const line of crossed.imported) plan.edits.push({ project: bound, kind: 'external', detail: `import: ${line}` });
+  for (const line of crossed.consumersDropped) plan.edits.push({ project: bound, kind: 'reference', detail: `consumers across the boundary to ${member} dropped: ${line}` });
+}
+
+/** One planned write under its owner's rehearsal root; answers what the core answered. */
+function writeOne(rehearsal: Rehearsal, w: PlannedWrite): unknown {
   const args = w.args as never[];
-  runWithProjectRoot(rehearsalRoot(rehearsal, w.root), () => {
+  return runWithProjectRoot(rehearsalRoot(rehearsal, w.root), (): unknown => {
     switch (w.call) {
       case 'internalizeMember': return core.internalizeMember(args[0], args[1]);
       case 'externalizeSubsystem': return core.externalizeSubsystem(args[0], args[1], args[2]);

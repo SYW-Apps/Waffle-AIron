@@ -420,16 +420,21 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Print the resolved version (marked when it came from latest-by-default), path, content
-          digest, and recorded origin; when nothing resolves, name the installed packs so a typo is
-          obvious.
+          Print where the pack resolves for THIS project, in the order a project resolves it: a
+          selection this project commits a bundle of resolves to that bundled copy (printed as
+          bundled, with the store copy noted when there is one), else the store's resolved version
+          (marked when it came from latest-by-default), path, content digest, and recorded origin;
+          when nothing resolves, name the installed packs so a typo is obvious.
         type: local
     detail: intent
     intent: >-
-      Splits the name@version spec and resolves it against the store via the core surface — the
-      exact version when pinned, otherwise the latest installed. Prints the resolved version (marked
-      when it came from latest-by-default), path, content digest, and recorded origin, flagging an
-      unrecorded origin; when nothing resolves it names the installed packs so a typo is obvious.
+      Splits the name@version spec. Inside a project that selects the pack and commits a bundle of
+      it, answers the bundled copy first — the copy validate, `pack list` and a fresh clone with an
+      empty store resolve — naming its path and noting whether the store also holds it. Otherwise
+      resolves against the store via the core surface — the exact version when pinned, otherwise the
+      latest installed — and prints the resolved version (marked when it came from
+      latest-by-default), path, content digest, and recorded origin, flagging an unrecorded origin;
+      when nothing resolves it names the installed packs so a typo is obvious.
   - name: usePack
     narrative:
       - stepNumber: 1
@@ -840,4 +845,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-10-05T00:46:06.827Z'
+updatedAt: '2026-10-05T23:51:48.494Z'

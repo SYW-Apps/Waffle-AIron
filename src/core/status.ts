@@ -24,6 +24,7 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
+  loadTypeSpecs,
   getLoaderIssues,
   scanAllSpecs,
 } from './specs.js';
@@ -80,9 +81,23 @@ export interface StatusOptions {
 /** One approval as a status tag: its state, an upgrade note, and its pin. */
 function approvalTag(entry: ProjectApproval | undefined): string {
   if (!entry) return '';
-  const state = entry.upgraded ? `${entry.state}, re-lock once` : entry.state;
-  return entry.pinned ? ` [${state} · pin ${entry.pinned}]` : ` [${state}]`;
+  const words = APPROVAL_WORDS[entry.state];
+  const state = entry.upgraded ? `${words}, re-lock once` : words;
+  return entry.pinned ? ` [${state} · ${PIN_WORDS[entry.pinned]}]` : ` [${state}]`;
 }
+
+/** An approval state in words: `never` alone read like a template with a word missing. */
+const APPROVAL_WORDS: Record<ProjectApproval['state'], string> = { approved: 'approved', drifted: 'drifted', never: 'never approved' };
+
+/** How a parent's lock pinned a member, in words. */
+const PIN_WORDS: Record<NonNullable<ProjectApproval['pinned']>, string> = { matches: 'pinned', moved: 'pin moved', unpinned: 'not pinned' };
+
+/** The root's own state as the report's closing sentence. */
+const OWN_APPROVAL_WORDS: Record<ProjectApproval['state'], string> = {
+  approved: 'approved',
+  drifted: 'drifted — its approval no longer covers this tree (`wairon lock` re-approves)',
+  never: 'never approved (`wairon lock` approves the design)',
+};
 
 /**
  * How a caller wants the report marked up, named by what each part MEANS
@@ -259,12 +274,18 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     componentScores.set(comp.id, score);
   }
 
+  const typeOwners = new Set(loadTypeSpecs().map((t) => t.subsystem).filter((id): id is string => typeof id === 'string'));
   const getSubsystemScore = (subId: string): number => {
     const sub = subsystems.find(s => s.id === subId);
     if (!sub) return 0;
 
     const subComps = components.filter(c => c.subsystem === subId);
-    if (subComps.length === 0) return 0;
+    // A subsystem of types alone (a shared contracts library) is as far along as
+    // its own status says, not 0%: it has no component to count.
+    if (subComps.length === 0) {
+      if (!typeOwners.has(subId)) return 0;
+      return sub.status === 'complete' ? 100 : 50;
+    }
 
     const totalScore = subComps.reduce((acc, c) => acc + (componentScores.get(c.id) ?? 0), 0);
     let avg = Math.round(totalScore / subComps.length);
@@ -414,11 +435,10 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && a.as !== 'part' && !referencedKeys.has(a.key) && !family.nodes.some((n) => n.namespace === a.key))) {
     output += `${mark.structure('    ')}${mark.missing(`[Project] ${absent.alias ?? absent.key} (no project on disk)`)}${approvalTag(absent)}\n`;
   }
-  // Silent for a lone project never approved: absence of an approval is the
-  // normal state of a tree still being designed, not news (the verdict agrees).
+  // Always said, a lone project never approved included: `status` promises the
+  // approval state, and leaving it out read as "nothing to say" rather than "never".
   const own = options.approvals?.find((a) => a.key === '');
-  const hasMembers = (options.approvals ?? []).some((a) => a.key !== '' && a.as !== 'part');
-  if (own && (own.state !== 'never' || hasMembers)) output += `${mark.layer('system', 'Approval:')} this project is ${own.state}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
+  if (own) output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP
   // client and a test all read the same account rather than three renderings

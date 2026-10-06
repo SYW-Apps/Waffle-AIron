@@ -426,56 +426,81 @@ methods:
     sourcePath: src/commands/init.ts
     narrative:
       - stepNumber: 1
-        description: Resolve the nearest ancestor wairon project root by walking up from cwd
+        description: >-
+          Resolve the project binding of cwd by the binding rule (WaiPaths): the nearest folder with
+          an L0 walking up, never past the repository root unless an ancestor declares the crossing
+          as a member
         type: local
       - stepNumber: 2
         description: Detect whether cwd is itself an already-initialized wairon project root
         type: branch
-        condition: the resolved root equals cwd (already initialized here)
+        condition: the bound root equals cwd (already initialized here)
+        onTrueStep: 3
         onFalseStep: 4
       - stepNumber: 3
         description: Report that the workspace is already initialized and stop
         type: return
         outcome: already initialized
       - stepNumber: 4
-        description: Detect whether cwd sits inside a parent wairon project (subdirectory case)
+        description: Would a parent project bind this folder (the binding resolved to a root above cwd)?
         type: branch
-        condition: a parent project root was found above cwd (root differs from cwd)
+        condition: a parent project binds cwd (bound root differs from cwd)
         onTrueStep: 5
-        onFalseStep: 13
+        onFalseStep: 15
       - stepNumber: 5
-        description: Prompt the user to create this subdirectory as a member of the detected parent project
-        type: local
-      - stepNumber: 6
-        description: Honor the user's choice
+        description: >-
+          Was the question answered in advance (--yes)? A folder a parent binds is never turned into
+          that parent's member unasked
         type: branch
-        condition: the user declined the prompt
-        onFalseStep: 8
+        condition: '--yes was given'
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse, writing nothing: name the project and root that bind this folder, and the exact
+          commands — `cd <parent root> && wairon member add <alias> <relative path> --project` to
+          make it a member project of that parent, or turn this folder into its own repository (`git
+          init`) and re-run `wairon init` for an independent project. A project.yaml outside this
+          folder is never edited without a question
+        type: throw
+        error: WaironError
       - stepNumber: 7
-        description: Print guidance and stop without changes
+        description: >-
+          Ask on the terminal whether to create this folder as a member project of the parent,
+          saying that yes edits the parent's .wai/project.yaml (outside this folder)
+        type: local
+      - stepNumber: 8
+        description: Honor the answer
+        type: branch
+        condition: the user declined
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Print the same two commands as the refusal and stop without changes
         type: return
         outcome: declined
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Read the parent project's system spec through the core adapter; a parent without one is
           refused
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 9
+      - stepNumber: 11
         description: >-
           Read the parent project's configuration through the core adapter, for the members it
           already declares
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
-          Compose the member: the alias (from --name or the directory name, slugified to
-          [a-z0-9-_]+) and the path (the relative path from the parent root to cwd); an alias the
-          parent already declares for another path is refused by the write below
+          Compose the member: the alias (asked, defaulting to the directory name, slugified to
+          [a-z0-9-_]+; the alias the parent already declares for this path wins) and the path (the
+          relative path from the parent root to cwd); an alias the parent already declares for
+          another path is refused by the write below
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Create the member from the parent's root: scaffold this directory's project (configuration
           declaring the alias as its id, L0) and declare it in the parent's project.yaml `members` —
@@ -483,7 +508,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createMember
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Report the member was created and stop; when its configuration was created, state the
           parent's required packs it applied (name and pinned version), the projectType it set, and
@@ -491,39 +516,40 @@ methods:
           scaffolding is an unattended pack write, so it shows no impact report
         type: return
         outcome: member created
-      - stepNumber: 13
+      - stepNumber: 15
         description: Bootstrap the standard .wai directory structure
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: Does this folder already hold a project configuration (a half-finished init)?
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Complete only what is missing: a folder that already holds a configuration keeps it as it
           is
         type: branch
         condition: the folder has no project configuration yet
-        onFalseStep: 18
-      - stepNumber: 16
+        onTrueStep: 18
+        onFalseStep: 20
+      - stepNumber: 18
         description: >-
           Read the store packs that apply by default, to seed as the new configuration's pack
           selections
         type: call
         targetComponent: cli_core_adapter
         targetMethod: defaultPackSelections
-      - stepNumber: 17
+      - stepNumber: 19
         description: >-
           Compose the new project's configuration — its id (the project name slugified; none when
-          the name yields no slug), the chosen targets and projectType, execution budgets off,
-          component-implementer and agent-file generation off, the store packs declaring
-          applyByDefault seeded as selections, and machine-wide packs recorded as off — and create
-          it through the core adapter.
+          the name yields no slug), the chosen targets (with --yes: claude only — a tool nobody
+          chose gets no files) and projectType, execution budgets off, component-implementer and
+          agent-file generation off, the store packs declaring applyByDefault seeded as selections,
+          and machine-wide packs recorded as off — and create it through the core adapter.
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
-      - stepNumber: 18
+      - stepNumber: 20
         label: bootstrap_l0
         description: >-
           Bootstrap the L0 system spec through core, completing only what is missing (the same
@@ -531,25 +557,27 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: ensureProjectInitialized
-      - stepNumber: 19
+      - stepNumber: 21
         label: export_skills
-        description: Export SDD skills templates
+        description: Export SDD skills templates for the configured targets only
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           For each tool the person chose to install machine-wide, find its global configuration file
           through the core adapter
         type: call
         targetComponent: cli_core_adapter
         targetMethod: globalGuideFilePath
-      - stepNumber: 21
-        description: Find each tool's in-project configuration file as well
+      - stepNumber: 23
+        description: >-
+          Find the in-project configuration file of each configured target as well — a target nobody
+          chose gets none
         type: call
         targetComponent: cli_core_adapter
         targetMethod: localGuideFilePath
-      - stepNumber: 22
+      - stepNumber: 24
         description: >-
           Write the guide into each one the plan asked for — the machine-wide guide into the global
           file, the in-project one into the local file. They say different things on purpose: the
@@ -557,7 +585,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: injectGuide
-      - stepNumber: 23
+      - stepNumber: 25
         description: >-
           Write the repository-root pointer for every target that got a local guide, and for the
           targets that want only a root file. A pointer rather than a copy, so there is one document
@@ -565,7 +593,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: writeRootGuideDelegator
-      - stepNumber: 24
+      - stepNumber: 26
         description: Report what was created and where, and name the next command to run
         type: return
         outcome: initialized
@@ -1954,8 +1982,9 @@ methods:
       - stepNumber: 66
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
-          frozen, warning when it predates per-spec approval; a stale one warns to re-lock; a
-          project never locked reports nothing. A failure here never breaks the report
+          approved, warning when it predates per-spec approval; a stale one warns that the approval
+          no longer covers the design and to re-lock; a project never locked reports nothing. A
+          failure here never breaks the report
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
@@ -2300,7 +2329,13 @@ methods:
       - stepNumber: 9
         description: >-
           Print the verdict, choosing severity from whether it reports drift rather than by matching
-          its wording — which is why the verdict answers a fact beside the sentence
+          its wording — which is why the verdict answers a fact beside the sentence; with --all,
+          every spec that moved since the approval (the verdict's full list) instead of the first
+          few. Then, always, one line saying what the percentages measure — authoring progress: 80%
+          once a component's component, contract and implementation specs are written, 100% once its
+          implementation names source files that exist, capped at 50% while any is draft or design —
+          and that approval is the lock record, not a percentage. A project never approved says so
+          in the report (Approval: never approved).
         type: local
       - stepNumber: 10
         description: Done
@@ -2831,24 +2866,30 @@ methods:
     sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
-        description: Is there a .wai/ in the working directory?
+        description: >-
+          Does a project bind the working directory? Resolved by the binding rule (WaiPaths) every
+          CLI command and the MCP server use — the nearest folder with an L0, never past the
+          repository root unless declared — so `wairon dev` serves exactly the project `wairon
+          status` would report
         type: branch
-        condition: no .wai/ in the working directory
+        condition: no project binds the working directory
         onTrueStep: 2
         onFalseStep: 3
       - stepNumber: 2
         label: no_project
-        description: 'Refuse: not a wairon project root'
+        description: 'Refuse: no wairon project binds this folder (name `wairon init`)'
         type: throw
         error: WaironError
       - stepNumber: 3
         label: config
         description: >-
-          Build the per-cwd ephemeral data dir and the loopback, auth-off, development-mode host
-          configuration
+          Build the ephemeral data dir (per bound root) and the loopback, auth-off, development-mode
+          host configuration
         type: local
       - stepNumber: 4
-        description: Register the working directory as the single dev project via the host adapter
+        description: >-
+          Register the bound project root as the single dev project via the host adapter, and
+          announce it as `project <id> at <root>`
         type: call
         targetComponent: cli_host_adapter
         targetMethod: registerLocalDevProject
@@ -3075,11 +3116,16 @@ methods:
         targetMethod: getExternalsStatus
       - stepNumber: 5
         description: >-
-          Print the status table — per alias: source, pinned, reachable, stale, drifted, then each
-          used member's state, with EXTERNAL_CHECK_UNAVAILABLE and its reason on what could not be
+          Print the status table — per alias: source, pinned, reachable, then current | stale (`not
+          compared` when the producer could not be read, never `current`), drifted, then each used
+          member's state, with EXTERNAL_CHECK_UNAVAILABLE and its reason on what could not be
           compared; a source.hosted external's reason reads "hosted-only producer `<id>`: available
-          only through the hosted server", never a bare unavailable — or the JSON answer; staleness
-          never fails the command
+          only through the hosted server", never a bare unavailable — then one legend defining every
+          word it used: stale (a name this project uses changed or was removed — adapt the design,
+          then re-pin), current (every used name matches the pin), drifted (the producer moved since
+          the pin; re-pin to record it — alone, nothing used changed), and per name unchanged,
+          changed, removed, unlocked (used but not in the pin yet — re-pin) and unavailable (not
+          compared, never a pass) — or the JSON answer; staleness never fails the command
         type: return
         outcome: status reported
       - stepNumber: 6
@@ -3157,10 +3203,44 @@ methods:
         targetComponent: cli_migration_adapter
         targetMethod: apply
       - stepNumber: 11
+        label: outcome
         description: >-
           Print the outcome: committed with each project to re-lock ("run `wairon lock` there");
           failed with what failed and that the family is unchanged; or failed with the files `wairon
-          doctor --fix` must restore, exiting non-zero on either failure
+          doctor --fix` must restore
+        type: local
+      - stepNumber: 12
+        label: made-projects
+        description: >-
+          Did the applied migration make a new project (a promote, or an externalize --as project)?
+          A project made for a team must be usable by that team's session in its own folder
+        type: branch
+        condition: the migration applied and made a new project
+        onTrueStep: 13
+        onFalseStep: 16
+      - stepNumber: 13
+        description: For each project the migration made
+        type: loop
+        loopKind: forEach
+        over: each project the migration made, at its own root
+        endStep: 15
+      - stepNumber: 14
+        description: >-
+          Bound at that project's root, give it what `wairon init` gives a project: its guide and
+          root pointer, its skills and its context, for its configured targets (generate's own layer
+          — no agent files unless it opts in)
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runGenerate
+      - stepNumber: 15
+        description: >-
+          Register its portable project MCP entry (.mcp.json) when claude is a configured target,
+          and print one line naming the folder a teammate opens a session in
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 16
+        description: Done, exiting non-zero when the migration failed
         type: return
         outcome: applied or failed
   - name: runMemberAttach
@@ -3410,6 +3490,50 @@ methods:
         description: Return; the cleanup never throws.
         type: return
         outcome: done
+  - name: announceBinding
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Does the command act on a project? init, the hosted and identity commands (host, remote,
+          login, logout, serve), `mcp serve` and `dev` (which announce their own binding), and
+          help/version do not
+        type: branch
+        condition: the command acts on no project
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Say nothing
+        type: return
+        outcome: silent
+      - stepNumber: 3
+        description: >-
+          Resolve the binding of the bound root (an explicit override, else the binding rule from
+          cwd — WaiPaths)
+        type: local
+      - stepNumber: 4
+        description: Is a project bound?
+        type: branch
+        condition: no project binds the folder
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: 'Say nothing: the command reports the missing project in its own words'
+        type: return
+        outcome: no project
+      - stepNumber: 6
+        description: >-
+          Read the bound project's configuration for its effective id (an unreadable configuration
+          names the folder instead)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: Write `project <id> at <root>` to stderr, the root as an absolute path
+        type: local
+      - stepNumber: 8
+        description: Done
+        type: return
+        outcome: announced
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -3425,4 +3549,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-05T17:30:57.373Z'
+updatedAt: '2026-10-05T23:53:39.835Z'

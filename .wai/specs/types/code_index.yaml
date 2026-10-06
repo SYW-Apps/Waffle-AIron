@@ -71,27 +71,37 @@ methods:
     returns: set<string>
     description: >-
       Every file the function a call site invokes CAN have been written in: the proven origins,
-      widened for the five receivers the code writes down. A this.<field>.<method>() site widens by
+      widened for the six receivers the code writes down. A this.<field>.<method>() site widens by
       the modules that declare the field's declared TYPE (its type-only or runtime import binding,
       else this file when it declares that name); a new Class(...).<method>() site widens by the
       module the CLASS NAME came from (its runtime import binding — a constructed class is a value,
       never a type-only one — else this file when it declares that class); a plain <name>.<method>()
       site widens by the modules that declare the type the file ANNOTATES that name with — a
       parameter's annotation or an annotated variable declaration's, resolved exactly as a field's
-      declared type is; a fn(...).<method>() site widens by the module that declares the type fn
-      RETURNS (source_file_facts.returnTypes, read in the file fn's own origin is, the type name
-      resolved there) — but only where that module holds a BODY under the invoked name, so an
-      interface's signature never counts; and a this.<method>() site inside a class's own method
-      widens by this file when the class holds a body under the invoked name. All are possibilities
-      and not facts: a declared type says what a collaborator is and never which class ships the
-      body, a constructed class says where the class was written and never where a method it
-      INHERITS from a base was, a subclass may override what this.<method>() reaches, and an
+      declared type is; a receiver CHAIN (this.<field>.<property>....<method>() or
+      <name>.<property>....<method>()) widens by following each link through what the code declares
+      it to be — the root's field or annotated type, then each property's declared type on the shape
+      that declares it (source_file_facts.memberTypesOf, read in the module the shape's name leads
+      to) — and then by the modules that declare the last link's type; a fn(...).<method>() site
+      widens by the module that declares the type fn RETURNS (source_file_facts.returnTypes, read in
+      the file fn's own origin is, the type name resolved there) — but only where that module holds
+      a BODY under the invoked name, so an interface's signature never counts; and a this.<method>()
+      site inside a class's own method widens by this file when the class holds a body under the
+      invoked name. A declared type is read as the NAME the code writes: a member-preserving utility
+      (Pick, Omit, Partial, Required, Readonly) is read as the type it wraps, since its members are
+      that type's members by the language's own definition, and a type alias declared in the file
+      that names one type outright (source_file_facts.aliasTargetOf) is followed that ONE hop,
+      landing on both the alias's module and the named type's. Anything further — a union, an
+      intersection, a mapped or conditional type, a second alias — is never expanded. All are
+      possibilities and not facts: a declared type says what a collaborator is and never which class
+      ships the body, a constructed class says where the class was written and never where a method
+      it INHERITS from a base was, a subclass may override what this.<method>() reaches, and an
       annotated name is read per FILE, so same-named bindings in different functions union their
-      declared types. What a type name LEADS TO is the question and what it expands to is not, so an
-      alias is never unwrapped. Empty for a field or a name the file annotates with nothing, for a
-      function whose return the code does not settle, and for a class name it cannot place, exactly
-      as the proven tier is. A widened answer may only ACCEPT a call as realized; naming a file a
-      call landed in stays the proven tier's word alone, since a possibility can never accuse
+      declared types. Empty for a field or a name the file annotates with nothing, for a chain link
+      nothing declares, for a function whose return the code does not settle, and for a class name
+      it cannot place, exactly as the proven tier is. A widened answer may only ACCEPT a call as
+      realized; naming a file a call landed in stays the proven tier's word alone, since a
+      possibility can never accuse
   - name: forwardsOf
     signature: 'forwardsOf(path: string, name: string, container?: string): list<ForwardedName>'
     params:
@@ -121,4 +131,4 @@ methods:
       PROVEN: every pair is written down in the code
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-10-05T00:38:28.046Z'
+updatedAt: '2026-10-05T23:33:19.734Z'

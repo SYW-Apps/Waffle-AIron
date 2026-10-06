@@ -329,10 +329,23 @@ function migrationTool(request: MigrationRequest, dryRun?: boolean): CallToolRes
 /** A family-migration report as a tool answers it: the plan without its private rehearsal, the edits without their write calls. */
 function migrationView(report: FamilyMigrationReport, dryRun: boolean): Record<string, unknown> {
   const plan = report.plan;
+  // A project the migration made (promote, externalize --as project): where it
+  // lives and what the human runs there so a team's own session can open it.
+  const request = plan.request;
+  const madeProject = request.verb === 'promote' || (request.verb === 'externalize' && request.as === 'project');
+  const madeAt = madeProject && report.applied
+    ? plan.changes.find((c) => c.action === 'create' && c.path.replace(/\\/g, '/') === '.wai/project.yaml')?.project
+    : undefined;
   return {
     dryRun,
     applied: report.applied,
     relock: report.applied ? report.relock : plan.relock,
+    ...(madeAt ? {
+      newProject: {
+        root: madeAt,
+        next: `The new project at ${madeAt} has no guide, skills or MCP registration of its own yet. The human runs, in that folder: \`wairon generate\` and \`wairon mcp install --backend claude\` (the CLI's \`wairon member promote\` / \`subsystem externalize --as project\` do this themselves). Its own session then designs it — its specs, L0 export table and project.yaml are written from its own root.`,
+      },
+    } : {}),
     ...(report.outcome ? { outcome: { committed: report.outcome.committed, restored: report.outcome.restored, unrestored: report.outcome.unrestored, ...(report.outcome.failure ? { failure: report.outcome.failure } : {}) } } : {}),
     plan: {
       verb: plan.request.verb,
@@ -2845,9 +2858,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ agentId: string }>(server,
     'sdd_get_agent_brief',
     {
-      description: 'Compose the LIVE delegation brief for one resolved agent: the fully rendered instruction body plus the ownedPaths/readPaths scope fence — the dynamic replacement for generated per-component agent files. Fetch a brief and spawn a generic subagent with it: always fresh after a re-lock, no session restart needed. List agent ids via listAgents or resources/list (the wairon-agent:// entries).',
+      description: 'Compose the LIVE delegation brief for one resolved agent: the fully rendered instruction body plus the ownedPaths/readPaths scope fence and the codeFence (where the agent may write CODE: its source files and their shared folder; empty when no file is named yet — then name the planned files when spawning) — the dynamic replacement for generated per-component agent files. A COMPONENT id (or `<component>-implementer`) composes that one component\'s implementer brief, with no agent files and no setting needed. Fetch a brief and spawn a generic subagent with it: always fresh after a re-lock, no session restart needed. List agent ids via listAgents or resources/list (the wairon-agent:// entries).',
       inputSchema: {
-        agentId: z.string().describe('The resolved agent id (list via listAgents or resources/list)'),
+        agentId: z.string().describe('The resolved agent id (list via listAgents or resources/list), or a component id for that component\'s implementer brief'),
       },
     },
     ({ agentId }) => {

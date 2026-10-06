@@ -140,7 +140,10 @@ methods:
       - stepNumber: 5
         description: >-
           Resolve the current agent topology (resolveAgentTopology over the live spec tree) and
-          locate the record whose id matches agentId
+          locate the record whose id matches agentId; when none does and the id names a component
+          (`<component>` or `<component>-implementer`), derive that component's implementer record
+          on demand — the same record rules.generateComponentImplementers would materialize — so a
+          per-component brief is always available without agent files
         type: local
       - stepNumber: 6
         description: Refuse unknown agents
@@ -149,7 +152,9 @@ methods:
         onTrueStep: 7
         onFalseStep: 8
       - stepNumber: 7
-        description: Unknown agent id — name the known ids in the error so a caller can self-correct
+        description: >-
+          Unknown agent id — name the known ids (and that a component id composes its implementer's
+          brief) in the error so a caller can self-correct
         type: throw
         error: UnknownAgentError
       - stepNumber: 8
@@ -186,18 +191,23 @@ methods:
         type: local
       - stepNumber: 13
         description: >-
-          Fold in the type mapping: find the language the record's implementations are written in
-          (their technologies' language, else the language their source files are analyzed as), take
-          the dialect shipped for it (type_dialect.forLanguage) and, when there is one, carry its
-          write table (type_dialect.mappingLines) as the brief's typeMapping and as a '## Types in
-          <language>' section of the instructions — so an implementer maps `list<T>`, `T?`, `async
-          T` and an enum by rule rather than by guess. No dialect, or no implementation to write,
-          adds nothing
+          Fold in the code write fence and the type mapping. The fence: every source file the
+          record's implementations name, plus the folder they share below the project root as
+          `<folder>/**` (the subsystem's code folder), carried as codeFence and as a '## Code write
+          fence' section placed ahead of the project guidance (which stays the last word) — a
+          section that, when no implementation names a file yet, says so and asks the spawning
+          session to name the planned files. The mapping: find the language the record's
+          implementations are written in (their technologies' language, else the language their
+          source files are analyzed as), take the dialect shipped for it (type_dialect.forLanguage)
+          and, when there is one, carry its write table (type_dialect.mappingLines) as the brief's
+          typeMapping and as a '## Types in <language>' section of the instructions — so an
+          implementer maps `list<T>`, `T?`, `async T` and an enum by rule rather than by guess. An
+          agent that implements nothing gets neither
         type: local
       - stepNumber: 14
         description: >-
           Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
-          readPaths, domainRoot, template)
+          readPaths, codeFence, domainRoot, template)
         type: return
         outcome: brief composed
   - name: loadRegistry
@@ -217,4 +227,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T22:09:32.965Z'
+updatedAt: '2026-10-06T00:08:17.482Z'

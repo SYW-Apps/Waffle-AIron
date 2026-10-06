@@ -117,22 +117,28 @@ methods:
       name with — a parameter's, or an annotated variable's, which is how a module that wires its
       collaborators as closures writes every one of its calls — a `fn(...).<method>()` receiver
       through the type fn RETURNS where the code settles it, and a `this.<method>()` receiver
-      through the class whose own method it sits in; a package specifier naming a package of this
-      repository resolves like a relative one, and an export alias (`export { a as b }`, an adapter
-      object property `{ b: a }`) forwards by identity like a re-export. A matching call whose
-      origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES
-      the shape it could not follow and asks for nothing — a coverage hole in the reader, reported
-      for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one.
-      A finding names a landing only from the PROVEN tier so that widening what a call reached can
-      accept a claim but never accuse one, and a target that names no file of its own falls back to
-      name membership. Converse: a call that resolves to a modelled method of ANOTHER component in
-      the SAME file crosses a component boundary while looking local, so the method must claim it —
-      in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a
-      same-file private helper is no modelled method and is never reported; a function forwarding by
-      identity to a modelled method written in another file IS that method, so what it calls is that
-      method's subject. A method that claims nothing at all is judged in neither direction: what it
-      leaves unsaid is UNUSED_*'s subject. Order, arguments and conditions stay unverified, dispatch
-      steps (runtime-table routed) are no claim about a call site, a malformed declared reference is
+      through the class whose own method it sits in, and a receiver CHAIN
+      (`this.<field>.<property>.<method>()`, `<name>.<property>.<method>()`) link by link through
+      each link's declared type — a declared type read through a member-preserving utility (Pick,
+      Omit, Partial, Required, Readonly) and one alias hop; a package specifier naming a package of
+      this repository resolves like a relative one, and an export alias (`export { a as b }`, an
+      adapter object property `{ b: a }`) forwards by identity like a re-export. A matching call
+      whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which
+      NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader,
+      reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a
+      degraded one. A finding names a landing only from the PROVEN tier so that widening what a call
+      reached can accept a claim but never accuse one, and a target that names no file of its own
+      falls back to name membership. N:1 identity — a caller that IS the target — is judged on the
+      body, the same anchor in the same file, never on a shared name: a Portal method forwarding to
+      a same-named Orchestrator method elsewhere must make that call. Converse: a call that resolves
+      to a modelled method of ANOTHER component in the SAME file crosses a component boundary while
+      looking local, so the method must claim it — in a step or in `calls`
+      (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper
+      is no modelled method and is never reported; a function forwarding by identity to a modelled
+      method written in another file IS that method, so what it calls is that method's subject. A
+      method that claims nothing at all is judged in neither direction: what it leaves unsaid is
+      UNUSED_*'s subject. Order, arguments and conditions stay unverified, dispatch steps
+      (runtime-table routed) are no claim about a call site, a malformed declared reference is
       MALFORMED_DECLARED_CALL's finding and names no target here, the conformance dial (off) skips,
       and weaker analysis grades never guess.
     signature: 'callConformance(ctx: RuleContext): void'
@@ -152,7 +158,15 @@ methods:
         summary: >-
           Narrative call step or declared call whose target name IS called, but only from call sites
           written in a shape this analysis cannot resolve to a file — the claim was not checked, and
-          is neither proven realized nor accused
+          is neither proven realized nor accused. What resolves is a name bound to a module of THIS
+          project: a bare or namespaced call through such an import binding, a this.<field> receiver
+          whose declared type names one, a receiver chain (this.<field>.<property>,
+          <name>.<property>) each of whose links the code declares a type for, a new Class(…)
+          receiver whose class does, a receiver name the file annotates with such a type, a fn(…)
+          receiver whose return the code settles, and this inside a class's own method — a declared
+          type read through Pick/Omit/Partial/Required/Readonly and one alias hop. What does not: a
+          third-party package import, a value the module assembled, and a receiver the file declares
+          nothing for
       - code: UNDECLARED_COLOCATED_CALL
         severity: warning
         summary: >-
@@ -191,8 +205,10 @@ methods:
       subsystem's published surface (UNDECLARED_DEPENDENCY). Conversely, a declared dependsOn/owns
       edge between components realized in different files should be visible as an import between any
       file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can
-      defeat this, hence warning). Only exact-grade analyzed files participate; type-only imports
-      are exempt; chained subprojects validate standalone.
+      defeat this, hence warning). A type-only import never accuses, but it does realize a declared
+      edge: a constructor-injected collaborator is reached through its type, and `import type` is
+      what dependency injection writes down. Only exact-grade analyzed files participate; chained
+      subprojects validate standalone.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -215,8 +231,9 @@ methods:
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
       declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem must
       declare one too: its unit suite proves contract shape against mocks, not that the wired
-      components run together. A leaf component's unit suite IS its sim, and a subsystem that has
-      adopted nothing is never flooded.
+      components run together. A leaf component's unit suite IS its sim, a subsystem that has
+      adopted nothing is never flooded, and an implementation with no code yet — no source file
+      named, or only files that are missing — has nothing to wire and is not asked for a harness.
     signature: 'integrationSimDeclaration(ctx: RuleContext): void'
     returns: void
     params:
@@ -402,7 +419,9 @@ methods:
       never become a free-text suppression. Both questions are asked only of a file read at exact
       grade, and a taker counts only when its own import specifier resolves to the file it is
       accused of taking from: below that nothing separates an export from a mention, or a shared
-      word from a shared module.
+      word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs
+      the blocks it owns, so the owner's file, or another member of the same pattern, importing a
+      member's class is the owns relation made real.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -625,4 +644,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-05T00:52:40.741Z'
+updatedAt: '2026-10-05T23:48:54.564Z'

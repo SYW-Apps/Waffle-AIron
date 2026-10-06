@@ -204,6 +204,25 @@ describe('an unresolvable selection fails LOUDLY, under a code that names the re
   });
 });
 
+describe('wairon pack which answers what the project resolves', () => {
+  it('names the committed bundle when the store is empty, instead of "not installed"', async () => {
+    store(); // deliberately empty
+    const dir = project([{ name: 'bundled', version: '2.0.0' }]);
+    bundle(dir, 'bundled', '2.0.0');
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { lines.push(args.map(String).join(' ')); });
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { lines.push(args.map(String).join(' ')); });
+    const before = process.exitCode;
+    const { whichPack } = await import('../../src/commands/packs.js');
+    whichPack('bundled');
+    const out = lines.join('\n');
+    expect(out).toContain('bundled in this project');
+    expect(out).toContain(path.join('.wai', 'packs', 'bundled', '2.0.0'));
+    expect(out).not.toContain('No pack "bundled" is installed');
+    expect(process.exitCode).toBe(before);
+  });
+});
+
 describe('a committed bundle resolves with an EMPTY store', () => {
   it('resolves from .wai/packs/<name>/<version>/ with nothing installed', () => {
     store(); // deliberately empty

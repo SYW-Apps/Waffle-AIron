@@ -57,21 +57,26 @@ methods:
           Count each component's progress through the layers — whether it has a contract, an
           implementation, and source files its implementation names — narrowing to one subsystem
           when the options asked for that, and marking each part through the role the caller
-          supplied: structure, layer, score, draft, present or missing. Each member prints as a
-          `[Project]` node (alias and project id, `mount form` noted for a legacy declaration)
-          holding its own subsystems, never as a `[Subsystem]`; a subsystem whose key repeats its
-          member's alias (`billing::billing`) is labelled by its local name under its project. Roles
-          rather than colours, so this renderer never learns what a terminal is
+          supplied: structure, layer, score, draft, present or missing. A subsystem that holds types
+          but no components (a shared contracts library) scores by its own status — complete is
+          100%, not 0%. Each member prints as a `[Project]` node (alias and project id, `mount form`
+          noted for a legacy declaration) holding its own subsystems, never as a `[Subsystem]`; a
+          subsystem whose key repeats its member's alias (`billing::billing`) is labelled by its
+          local name under its project. Roles rather than colours, so this renderer never learns
+          what a terminal is
         type: local
       - stepNumber: 9
         description: >-
           When the options carry the pin tree (options.approvals, computed by the validator at each
           project's own root and handed in — this component cannot compute a gate identity), mark
-          each `[Project]` line with that member's approval state (approved | drifted | never,
-          `re-lock once` for an upgrade-only drift) and how its parent's lock pinned it (matches |
-          moved | unpinned), and close the report with the root's own state. States are read, never
-          recomputed here, so the report from a parent and from the member agree by construction
-          (status-agrees). Without approvals the report shows no states
+          each `[Project]` line with that member's approval state in words (approved | drifted |
+          never approved, `re-lock once` for an upgrade-only drift) and how its parent's lock pinned
+          it (pinned | pin moved | not pinned), and close the report with the root's own state as a
+          sentence (`Approval: this project is approved | drifted since its approval | never
+          approved`) — a lone project never approved says so too, so the report never leaves the
+          question open. States are read, never recomputed here, so the report from a parent and
+          from the member agree by construction (status-agrees). Without approvals the report shows
+          no states
         type: local
       - stepNumber: 10
         description: >-
@@ -83,4 +88,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-09-30T05:56:09.243Z'
+updatedAt: '2026-10-05T23:53:20.212Z'

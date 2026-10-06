@@ -379,7 +379,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // the portal its subsystem already published, and the imported type.
     expect(stored(fam.root, '.index.yaml').publicInterfaces).toEqual([
       { component: 'shared_portal', from: 'shared', audience: 'project' },
-      { typeDef: 'money', audience: 'project' },
+      { from: 'shared', typeDef: 'money', audience: 'project' },
     ]);
     expect(stored(fam.root, 'shared/.index.yaml').publicInterfaces).toContainEqual({ typeDef: 'money' });
     // The parent's own gate holds no error after the move.

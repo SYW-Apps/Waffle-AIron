@@ -8,6 +8,22 @@ description: >-
   place the on-disk shape of a wairon project is written down; everything else asks.
 
 
+  WHICH root a command binds to is the binding rule, and it is written down here too because every
+  surface shares it — the CLI, the MCP server and `wairon dev` all resolve it the same way
+  (`resolveProjectBinding` in `src/utils/fs.ts`). From the starting folder, walk up to the nearest
+  folder whose specs hold an L0 (`.wai/specs/.index.yaml`, or the legacy `system.yaml`); a folder
+  holding only a part's specs is passed through. The walk NEVER climbs past the repository root —
+  the nearest folder holding `.git` (a directory, or the file a worktree or submodule carries) — on
+  its own: an ancestor project above that root binds only when it DECLARES the crossing, a `members`
+  entry whose path resolves to a folder that contains the starting folder and lies inside that
+  repository (the repository root itself, or a folder within it). A stray `.wai` in a parent folder
+  therefore binds nothing in a child repository, and a child repository declared as a member still
+  binds to its parent. With no repository above the starting folder the walk is unbounded, as it
+  always was. A folder no rule binds has no project: commands say so rather than borrowing one.
+  Every command that acts on a project names the one it bound — `project <id> at <root>` on one
+  line, on stderr so a machine-readable stdout stays pure.
+
+
   It deliberately names NO source file. The resolver that produces it lives in `src/config/paths.ts`
   and belongs to no component: nineteen modules use it, it holds no state and decides nothing, and
   claiming it would make nineteen components declare an edge that says only "this one resolves
@@ -104,4 +120,4 @@ lint:
         needed an edge to it. Deleting the type instead would leave the layout undesigned, which is
         the state Track D exists to end.
 createdAt: '2026-09-20T20:41:18.293Z'
-updatedAt: '2026-09-20T21:02:31.722Z'
+updatedAt: '2026-10-05T23:36:16.751Z'

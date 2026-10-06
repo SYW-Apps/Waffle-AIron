@@ -1,3 +1,4 @@
+import { implementationSourceFiles, pathKey } from '../../../models/index.js';
 import type { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -15,17 +16,28 @@ import type { RuleContext, SddRule } from '../types.js';
 // complete, non-leaf implementations — no global flood on trees that have not
 // adopted sims yet. Whether a DECLARED harness exists, wires and covers is
 // integration-sim-file's, -wiring's and -coverage's question.
+//
+// A harness wires CODE, so an implementation with none yet is not asked for
+// one: naming no source file, or naming only files the code model holds as
+// missing, it has nothing to construct — that it is unlinked is
+// MISSING_SOURCE_PATH's and MISSING_SOURCE_FILE's subject, and a sim finding
+// beside them would only be noise on a design that is still being built.
 // ---------------------------------------------------------------------------
 
 export const integrationSimDeclarationRule: SddRule = {
   name: 'integration-sim-declaration',
   judges: 'code',
   description:
-    'Once a subsystem has adopted integration sims (its first declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem must declare one too: its unit suite proves contract shape against mocks, not that the wired components run together. A leaf component\'s unit suite IS its sim, and a subsystem that has adopted nothing is never flooded.',
+    'Once a subsystem has adopted integration sims (its first declared L4 simPath), every OTHER complete, non-leaf implementation of that subsystem must declare one too: its unit suite proves contract shape against mocks, not that the wired components run together. A leaf component\'s unit suite IS its sim, a subsystem that has adopted nothing is never flooded, and an implementation with no code yet — no source file named, or only files that are missing — has nothing to wire and is not asked for a harness.',
   codes: [
     { code: 'MISSING_INTEGRATION_SIM', defaultSeverity: 'warning', summary: 'Complete non-leaf implementation in a sim-adopting subsystem declares no simPath' },
   ],
   check(ctx: RuleContext): void {
+    const code = ctx.codeIndex();
+    // Code exists once a named file is anything but missing: a file the run
+    // never analyzed (no code model at all) is not proof of absence.
+    const hasCode = (files: string[]): boolean =>
+      files.some(file => code.factsAt(pathKey(file))?.status !== 'missing');
     // Subsystems that have adopted sims: any implementation declaring one.
     // Chained subprojects are skipped throughout — their sourcePaths are
     // relative to the child's own root, and the child validates them in its
@@ -52,6 +64,8 @@ export const integrationSimDeclarationRule: SddRule = {
       if (ctx.isImplementationDraft(impl)) continue;
       const deps = [...new Set([...comp.dependsOn, ...comp.owns])].filter(d => ctx.componentMap.has(d));
       if (deps.length === 0) continue;
+      // No code yet: nothing to wire, so no harness to ask for.
+      if (!hasCode(implementationSourceFiles(impl))) continue;
       ctx.addIssue(
         'warning',
         'MISSING_INTEGRATION_SIM',

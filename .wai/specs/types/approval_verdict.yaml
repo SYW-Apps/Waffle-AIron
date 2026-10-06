@@ -22,7 +22,15 @@ fields:
       identity (stage-5 upgrade). A member that is merely drifted or never approved is named in the
       text but is not this project's drift.
     optional: false
+  - name: moved
+    type: list<string>
+    description: >-
+      Every own spec path that moved since the approval — changed, added or removed, each prefixed
+      `~`, `+` or `-` — in full. The text names the first few and counts the rest so it stays a
+      line, not a wall; this list is what `wairon status --all` prints when the whole account is
+      wanted. Absent when nothing moved or the project was never approved.
+    optional: true
 methods: []
 sourcePath: src/core/approval.ts
 createdAt: '2026-09-23T12:24:05.267Z'
-updatedAt: '2026-10-04T10:19:52.820Z'
+updatedAt: '2026-10-05T23:52:48.202Z'

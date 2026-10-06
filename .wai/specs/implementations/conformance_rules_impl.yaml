@@ -133,7 +133,11 @@ methods:
         label: compLoop
         description: >-
           Every declared edge should leave a trace. A trace is a runtime import or a re-export
-          (barrel forwarding), and for a mounting declarer the reverse import counts too
+          (barrel forwarding), for a mounting declarer the reverse import counts too, and a
+          TYPE-ONLY import counts as well: a collaborator injected through its constructor is
+          reached through its type, and `import type` is the whole of what dependency injection
+          writes down — so it realizes the declared edge, while it still never ACCUSES one
+          (UNDECLARED_DEPENDENCY reads runtime imports alone, type coupling being allowed)
         type: loop
         over: ctx.components
         endStep: 14
@@ -168,11 +172,15 @@ methods:
         description: >-
           An empty toFiles is Level 1 territory (an unmapped target, or a target subsystem whose
           every mapped file is shared with the source), a shared file is the N:1 same-file collapse,
-          and a trace realizes the edge: continue with the next target
+          and a trace realizes the edge — a runtime import, a re-export, the reverse import for a
+          mounting declarer, or a type-only import of a fromFile
+          (source_file_facts.typeOnlyBindings, each specifier resolved against mappedPaths) landing
+          in toFiles: continue with the next target
         type: branch
         condition: >-
-          toFiles is non-empty, fromFiles and toFiles share no file, and graph.connects(fromFiles,
-          toFiles, component is a Portal or Observer) is false
+          toFiles is non-empty, fromFiles and toFiles share no file, graph.connects(fromFiles,
+          toFiles, component is a Portal or Observer) is false, and no type-only import of a
+          fromFile resolves into toFiles
         onFalseStep: 10
       - stepNumber: 14
         label: unrealizedReport
@@ -432,13 +440,17 @@ methods:
         onFalseStep: 2
       - stepNumber: 6
         description: >-
-          Expected only once the subsystem has adopted sims, only for complete implementations, and
-          only for non-leaf components (a leaf's unit suite is its sim): otherwise continue with the
-          next implementation
+          Expected only once the subsystem has adopted sims, only for complete implementations, only
+          for non-leaf components (a leaf's unit suite is its sim), and only for an implementation
+          with CODE: one that names no source file, or whose every named file the code model holds
+          as missing, has nothing to wire yet — a harness for it is premature, and that it is
+          unlinked is MISSING_SOURCE_PATH's and MISSING_SOURCE_FILE's subject. Otherwise continue
+          with the next implementation
         type: branch
         condition: >-
-          adopted has comp.subsystem, !ctx.isImplementationDraft(impl), and deps — the distinct ids
-          of comp.dependsOn then comp.owns that ctx.componentMap resolves — is non-empty
+          adopted has comp.subsystem, !ctx.isImplementationDraft(impl), deps — the distinct ids of
+          comp.dependsOn then comp.owns that ctx.componentMap resolves — is non-empty, and
+          impl.sourceFiles() names a file that ctx.codeIndex() does not hold with status missing
         onFalseStep: 2
       - stepNumber: 7
         label: report
@@ -1034,36 +1046,46 @@ methods:
           target = the private resolveCallTarget over the implementations of each interface in
           ctx.interfacesByComponent.get(claim.component): accepted = claim.method plus the symbol
           each target-side implementation declares for it, files = each such implementation's method
-          sourcePath, else its own
+          sourcePath, else its own, and bodies = each such file paired with the anchor its method
+          names there (its symbol, qualified as <exportedVia>.<symbol> when it is reached through a
+          handle) — the ONE body that realizes the target in each file
         type: local
       - stepNumber: 10
         description: >-
-          N:1 identity forwarding — the caller's own realized symbol IS the target name, so facade
-          and target collapse onto one function and the claim is realized by identity, exactly as
-          Level 1's N:1 sharing blesses. The same identity written as a forwarding under another
-          name counts the same: when code.forwardsOf(file, fnSymbol, exportedVia) — the symbol
-          followed through this file's re-exports (`export { a as b } from 'm'` exactly as the
-          unaliased `export { a } from 'm'`), its export aliases (`export { a as b }`, or a property
-          `{ b: a }` of the exportedVia object) and the import binding such an alias names — reaches
-          one of the target's own files under a name the target is realized by, the adapter
-          forwarding its provider under the adapter's contract name IS the provider's function. A
-          declaration earns this on the same terms a step does: the reason is the shape of the CODE,
-          which does not know which way the claim was written. Continue with the next claim
+          N:1 identity forwarding — the caller's own realized function IS the target's: the same
+          body in the same file (target.bodies holds this file paired with the caller's own anchor),
+          so facade and target collapse onto one function and the claim is realized by identity,
+          exactly as Level 1's N:1 sharing blesses. A shared NAME is not identity: a Portal method
+          forwarding to a same-named Orchestrator method in another file is two functions, and
+          accepting the caller's own name as the target's realization was how removing the
+          forwarding call went unreported — so that call is judged like any other, and a target
+          naming no file of its own can prove no identity at all. The same identity written as a
+          forwarding under another name counts the same: when code.forwardsOf(file, fnSymbol,
+          exportedVia) — the symbol followed through this file's re-exports (`export { a as b } from
+          'm'` exactly as the unaliased `export { a } from 'm'`), its export aliases (`export { a as
+          b }`, or a property `{ b: a }` of the exportedVia object) and the import binding such an
+          alias names — reaches one of the target's own files under a name the target is realized
+          by, the adapter forwarding its provider under the adapter's contract name IS the
+          provider's function. A declaration earns this on the same terms a step does: the reason is
+          the shape of the CODE, which does not know which way the claim was written. Continue with
+          the next claim
         type: branch
-        condition: accepted lacks fnSymbol
+        condition: target.bodies lacks this file paired with the caller's own anchor
         onFalseStep: 7
       - stepNumber: 11
         description: >-
           matching = the sites whose name is in accepted. reached = the union of
           code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
           been written in, a this.<field>.<method>() receiver followed through the field's declared
-          type, a new Class(...).<method>() receiver through the module its class name came from, a
-          plain <name>.<method>() receiver through the type the file annotates that name with, a
-          fn(...).<method>() receiver through the type fn returns, and a this.<method>() receiver
-          through the class whose own method it sits in. landed = the union of code.originOf(site,
-          file) over the same sites — the files a call PROVABLY lands in, empty where a pure model
-          cannot say, and the only tier a finding may name a landing from: widening what a call
-          reached can accept a claim, it must never accuse one
+          type, a receiver CHAIN (this.<field>.<property>.<method>(), <name>.<property>.<method>())
+          followed link by link through each link's declared type, a new Class(...).<method>()
+          receiver through the module its class name came from, a plain <name>.<method>() receiver
+          through the type the file annotates that name with, a fn(...).<method>() receiver through
+          the type fn returns, and a this.<method>() receiver through the class whose own method it
+          sits in. landed = the union of code.originOf(site, file) over the same sites — the files a
+          call PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding
+          may name a landing from: widening what a call reached can accept a claim, it must never
+          accuse one
         type: local
       - stepNumber: 12
         description: >-
@@ -1106,11 +1128,11 @@ methods:
           When missed holds an unresolved entry, report CALL_ORIGIN_UNRESOLVED (warning; spec
           impl.id; draft context the entry's draftContext), one finding per method listing each such
           claim with the shape its call sites were written in: the target name IS called inside
-          fnSymbol, but from no site this analysis can resolve to a file. It names which forms
-          resolve and which do not, and asks for nothing — this is a coverage hole in the reader,
-          not a defect in the code or in what the method claims, so the claim is neither proven
-          realized nor accused of being missing and no working call is asked to be rewritten to suit
-          the analysis
+          fnSymbol, but from no site this analysis can resolve to a file — so the claim is neither
+          proven realized nor accused of being missing, and no working call is asked to be rewritten
+          to suit the analysis. The finding names its sites and says that much and no more; which
+          receiver forms resolve and which do not is the code's summary and the rule's description,
+          stated ONCE where `wairon rules list` reads it, never repeated per finding
         type: local
       - stepNumber: 16
         description: >-
@@ -1337,9 +1359,16 @@ methods:
           not one
         type: local
       - stepNumber: 7
-        description: Decide whether that consumer is a different component at all
+        description: >-
+          Decide whether that consumer is a different component at all. The owns relation draws the
+          fence wider than one component: a pattern constructs the blocks it owns, so the file of a
+          component that OWNS one of the exporting file's components (ctx.ownershipIndex().ownerOf),
+          or of another member of the same owner, reaching for that member's class is the owns
+          relation made real and no crossing
         type: branch
-        condition: the consumer realizes none of the components the exporting file realizes
+        condition: >-
+          the consumer realizes none of the components the exporting file realizes, none of their
+          owners, and no component sharing an owner with one of them
         onTrueStep: 8
         onFalseStep: 9
       - stepNumber: 8
@@ -1759,4 +1788,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-05T00:45:36.977Z'
+updatedAt: '2026-10-05T23:33:48.801Z'

@@ -159,8 +159,8 @@ methods:
       resolve strictly within the owning project root (absolute, ../-escaping and link-escaping
       paths are rejected), or if it holds a project, before anything moves. Source code is not
       moved.
-    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): void'
-    returns: void
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
+    returns: PromoteResult?
     params:
       - name: subsystemId
         type: string
@@ -1063,8 +1063,8 @@ methods:
       cache's: promote it from a checkout of its repository), a trustedLink joins the part's
       subsystems and the rest (it would cross a project boundary — remove or replace it first), a
       used component is unpublished, or the id collides with a family project's.
-    signature: 'promoteMember(alias: string, id?: string): void'
-    returns: void
+    signature: 'promoteMember(alias: string, id?: string): PromoteResult'
+    returns: PromoteResult
     params:
       - name: alias
         type: string
@@ -1220,4 +1220,4 @@ methods:
         description: Its new id, under the same owner
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-05T06:48:27.066Z'
+updatedAt: '2026-10-05T23:34:32.157Z'

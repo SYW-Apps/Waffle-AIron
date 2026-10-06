@@ -40,10 +40,11 @@ export const signatureTypeReferencesRule: SddRule = {
         for (const ref of refs) {
           if (!ctx.isTypeResolved(ref, allGenerics)) {
             const hint = ctx.importHint(ref);
+            const spelled = ctx.aliasSpelling(ref);
             ctx.addIssue(
               'error',
               'UNDEFINED_TYPE_REFERENCE',
-              `Method "${m.name}" on interface "${intf.id}" references undefined type "${ref}" in signature.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
+              `Method "${m.name}" on interface "${intf.id}" references undefined type "${ref}" in signature.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}${spelled ? ` \"${ref.split('.')[0]}\" is another project here, not a subsystem of this one — write \`${spelled}\`.` : ''}`,
               intf.id,
               isDraftCtx,
             );
@@ -67,10 +68,11 @@ export const signatureTypeReferencesRule: SddRule = {
       for (const { ref, by } of named) {
         if (ctx.isTypeResolved(ref, typeGenerics)) continue;
         const hint = ctx.importHint(ref);
+            const spelled = ctx.aliasSpelling(ref);
         ctx.addIssue(
           'error',
           'UNDEFINED_TYPE_REFERENCE',
-          `${by} references undefined type "${ref}" in signature.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
+          `${by} references undefined type "${ref}" in signature.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}${spelled ? ` \"${ref.split('.')[0]}\" is another project here, not a subsystem of this one — write \`${spelled}\`.` : ''}`,
           t.id,
           isDraftCtx,
         );

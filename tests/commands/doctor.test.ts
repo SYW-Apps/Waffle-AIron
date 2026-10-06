@@ -186,7 +186,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     expect(vi.mocked(subsystemAdapter.projectConfigExists)).toHaveBeenCalled();
   });
 
-  it('Lock section: silent unlocked, "locked" once frozen, "stale" once the spec tree drifts — against the validator adapter\'s gate identity', async () => {
+  it('Lock section: silent unlocked, "approved at" once locked, "stale" once the spec tree drifts — against the validator adapter\'s gate identity', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-lock-'));
     buildProject(rootDir);
     process.chdir(rootDir);
@@ -204,7 +204,9 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     await runDoctor({});
     let out = printed(logSpy);
     expect(out).toContain('Lock');
-    expect(out).toMatch(/frozen at/);
+    // Approved, never "frozen": the lock approves and rewrites nothing.
+    expect(out).toMatch(/approved at/);
+    expect(out).not.toMatch(/frozen/);
     logSpy.mockRestore();
 
     saveComponentSpec({ ...loadComponentSpec('leaf')!, description: 'edited after the freeze' });
