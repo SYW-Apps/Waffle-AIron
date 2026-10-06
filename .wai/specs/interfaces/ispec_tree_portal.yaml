@@ -344,6 +344,18 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: retiredReachFacts
+    description: >-
+      What the current scan met in the forms the reachability model retired
+      (spec_loader.retiredReachFacts): the stored portalType, listener mounts, retired invokedBy
+      kinds, authored export types and in-process Custom endpoints the loader read compatibly. A
+      passthrough read of the spec repository; the validator's entry-declarations rule reports the
+      retired kinds from it.
+    signature: 'retiredReachFacts(): list<RetiredReachFact>'
+    returns: list<RetiredReachFact>
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:13:08.747Z'
+updatedAt: '2026-10-06T18:01:23.861Z'

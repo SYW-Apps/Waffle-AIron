@@ -174,6 +174,8 @@ export interface ProjectNode {
   memberDescription?: string;
   /** Whether the project has an L0 of its own. */
   hasSystem: boolean;
+  /** The project's own L0 targetLanguage, as authored; absent when it has no L0 or declares none. */
+  targetLanguage?: string;
   /** The project's root directory, absolute. */
   directory: string;
   /** The keys of the projects this one declares as members, either form. */

@@ -611,7 +611,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       const res = validateProject();
       expect(res.valid).toBe(false);
-      expect(res.issues.some(i => i.code === 'MISSING_PORTAL_TYPE')).toBe(true);
+      expect(res.issues.some(i => i.code === 'MISSING_PORTAL_TRANSPORT')).toBe(true);
     } finally {
       proj.cleanup();
     }
@@ -1197,22 +1197,6 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
-  it('flags a MessageBus interface backed by an incompatible component (TYPE_MISMATCH)', () => {
-    const proj = createTempProject();
-    proj.writeSpec('system', 'system', SYS);
-    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: MessageBus\n    details: queue\n    component: orch-b\n'));
-    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
-    proj.activate();
-    try {
-      const res = validateProject();
-      expect(res.valid).toBe(false);
-      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_TYPE_MISMATCH')).toBe(true);
-    } finally {
-      proj.cleanup();
-    }
-  });
-
   it('accepts a MessageBus interface backed by an Observer', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);
@@ -1224,53 +1208,6 @@ updatedAt: '2026-06-10T22:00:00Z'
       const res = validateProject();
       expect(res.issues.some(i => i.code.startsWith('PUBLIC_INTERFACE_'))).toBe(false);
       expect(res.valid).toBe(true);
-    } finally {
-      proj.cleanup();
-    }
-  });
-
-  it('warns when a Custom interface describes eventing but is backed by a non-event component (EVENT_MISTYPED)', () => {
-    const proj = createTempProject();
-    proj.writeSpec('system', 'system', SYS);
-    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: Custom\n    details: Asynchronous dispatcher queue listening for limit warning events\n    component: orch-b\n'));
-    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
-    proj.activate();
-    try {
-      const res = validateProject();
-      const issue = res.issues.find(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED');
-      expect(issue).toBeDefined();
-      expect(issue!.severity).toBe('warning');
-    } finally {
-      proj.cleanup();
-    }
-  });
-
-  it('does NOT warn when a Custom event interface is genuinely backed by an Observer', () => {
-    const proj = createTempProject();
-    proj.writeSpec('system', 'system', SYS);
-    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: Custom\n    details: Asynchronous queue listening for events\n    component: obs-b\n'));
-    proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
-    proj.activate();
-    try {
-      const res = validateProject();
-      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
-    } finally {
-      proj.cleanup();
-    }
-  });
-
-  it('does NOT warn on a Custom interface with no event vocabulary', () => {
-    const proj = createTempProject();
-    proj.writeSpec('system', 'system', SYS);
-    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: Custom\n    details: Synchronous facade for account lookups\n    component: orch-b\n'));
-    proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
-    proj.activate();
-    try {
-      const res = validateProject();
-      expect(res.issues.some(i => i.code === 'PUBLIC_INTERFACE_EVENT_MISTYPED')).toBe(false);
     } finally {
       proj.cleanup();
     }
@@ -1881,6 +1818,9 @@ description: Entry portal
 subsystem: sub-a
 componentType: Portal
 portalType: HTTP_API
+invokedBy:
+  kind: entry
+  caller: Clients outside the design call it over HTTP
 dependsOn: [comp-called]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'

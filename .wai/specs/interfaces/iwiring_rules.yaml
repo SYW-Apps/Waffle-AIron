@@ -342,7 +342,7 @@ methods:
           runtime for one release
   - name: networkBoundaries
     description: >-
-      Rule network-boundaries, over what the bound project's own gate can see: its own network
+      Rule network-boundaries. It judges what the bound project's own gate can see: its own network
       declaration and the components of its own tree. When the project declares a network, it
       projects the project's own reach model (reach_model_projector) and reports the network
       arbiter's findings on it: GATEWAY_BYPASSED, MULTIPLE_GATEWAYS and EXPORT_BEYOND_NETWORK, whose
@@ -356,7 +356,22 @@ methods:
       - name: ctx
         type: RuleContext
         description: The validation run's shared read model and issue sink
-    findings: []
+    findings:
+      - code: GATEWAY_BYPASSED
+        severity: error
+        summary: >-
+          Inside a declared network, a non-gateway Portal takes an entry from outside it, or a
+          modelled call from outside the network lands on one
+      - code: MULTIPLE_GATEWAYS
+        severity: notice
+        summary: >-
+          A declared network has more than one gateway Portal taking entries from outside it:
+          allowed, not recommended
+      - code: EXPORT_BEYOND_NETWORK
+        severity: warning
+        summary: >-
+          An export at an audience wider than project on a network-transport verb that callers
+          beyond the network cannot reach
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-06T12:58:07.068Z'
+updatedAt: '2026-10-06T17:53:15.491Z'

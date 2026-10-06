@@ -1,9 +1,11 @@
 /**
- * Public-surface fixtures — the family's four rules under
+ * Public-surface fixtures — the family's three rules under
  * src/core/rules/integrity/: public-surface-binding.ts (UNBOUND,
- * INVALID_COMPONENT, FOREIGN_COMPONENT), public-surface-declared-type.ts
- * (TYPE_MISMATCH, EVENT_MISTYPED), public-surface-bound-contract.ts
+ * INVALID_COMPONENT, FOREIGN_COMPONENT), public-surface-bound-contract.ts
  * (INVALID_INTERFACE), and public-surface-consumers.ts (UNKNOWN_CONSUMER).
+ * The retired public-surface-declared-type rule (TYPE_MISMATCH,
+ * EVENT_MISTYPED) is gone with the reachability model: an entry's export kind
+ * is derived from its backing Portal's transport, never authored.
  *
  * Documented intents pinned here:
  *  - PUBLIC_INTERFACE_UNBOUND (error): every declared publicInterface names a
@@ -12,16 +14,9 @@
  *    exist.
  *  - PUBLIC_INTERFACE_FOREIGN_COMPONENT (error): a subsystem may only publish
  *    its own components.
- *  - PUBLIC_INTERFACE_TYPE_MISMATCH (error): the backing component's
- *    stereotype must be able to realize the declared type. Two documented
- *    behaviors exercised: REST demands a Portal/HTTP_API; MessageBus demands
- *    a Portal/MessageBus or an Observer.
  *  - PUBLIC_INTERFACE_INVALID_INTERFACE (error, two documented behaviors):
  *    the bound L3 interface must exist and must belong to the bound
  *    component.
- *  - PUBLIC_INTERFACE_EVENT_MISTYPED (warning): a Custom entry whose prose
- *    implies eventing must be backed by an event-capable component (Observer
- *    or Portal/MessageBus).
  *  - PUBLIC_INTERFACE_UNKNOWN_CONSUMER (error): every subsystem a published
  *    surface names as its consumer must exist in the tree.
  */
@@ -201,92 +196,6 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // PUBLIC_INTERFACE_TYPE_MISMATCH — REST behavior
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_TYPE_MISMATCH',
-    severity: 'error',
-    anchoredTo: 'billing',
-    expectFire: true,
-    scenario:
-      'The billing subsystem declares a REST public interface backed by the invoice drafting orchestrator, which cannot realize a REST surface.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-drafting-orchestrator' }],
-        },
-      ],
-      components: [INVOICE_ORCH],
-    },
-  }),
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_TYPE_MISMATCH',
-    expectFire: false,
-    reason: 'A REST public interface demands a Portal with portalType HTTP_API (documented), which is exactly what backs this entry.',
-    scenario:
-      'The billing subsystem\'s REST public interface is backed by the HTTP invoice API portal.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
-        },
-      ],
-      components: [INVOICE_PORTAL],
-      interfaces: [INVOICE_API_INTERFACE],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
-  // PUBLIC_INTERFACE_TYPE_MISMATCH — MessageBus behavior
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_TYPE_MISMATCH',
-    severity: 'error',
-    anchoredTo: 'billing',
-    expectFire: true,
-    scenario:
-      'The billing subsystem declares a MessageBus public interface backed by its HTTP invoice portal, which cannot realize a bus surface.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'MessageBus', details: 'Invoice settled events on the clinic bus.', component: 'invoice-api-portal' }],
-        },
-      ],
-      components: [INVOICE_PORTAL],
-      interfaces: [INVOICE_API_INTERFACE],
-    },
-  }),
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_TYPE_MISMATCH',
-    expectFire: false,
-    reason: 'A MessageBus public interface may be backed by an Observer (documented alternative to a Portal/MessageBus).',
-    scenario:
-      'The billing subsystem\'s MessageBus public interface is backed by the invoice event observer.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'MessageBus', details: 'Invoice settled events on the clinic bus.', component: 'invoice-event-observer' }],
-        },
-      ],
-      components: [
-        { id: 'invoice-event-observer', componentType: 'Observer', subsystem: 'billing', description: 'Subscribes to and republishes invoice events on the clinic bus.' },
-      ],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
   // PUBLIC_INTERFACE_INVALID_INTERFACE — missing interface behavior
   // -------------------------------------------------------------------------
   defineRuleFixture({
@@ -367,85 +276,6 @@ export default [
       ],
       components: [INVOICE_PORTAL],
       interfaces: [INVOICE_API_INTERFACE],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
-  // PUBLIC_INTERFACE_EVENT_MISTYPED
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_EVENT_MISTYPED',
-    severity: 'warning',
-    anchoredTo: 'billing',
-    expectFire: true,
-    scenario:
-      'The billing subsystem declares a Custom public interface whose prose promises invoice-settled events on the clinic message bus, but backs it with the synchronous invoice drafting orchestrator.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [
-            {
-              type: 'Custom',
-              details: 'Streams invoice-settled events to downstream consumers over the clinic message bus.',
-              component: 'invoice-drafting-orchestrator',
-            },
-          ],
-        },
-      ],
-      components: [INVOICE_ORCH],
-    },
-  }),
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_EVENT_MISTYPED',
-    expectFire: false,
-    reason: 'The event-flavored Custom entry is backed by an Observer, which CAN realize eventing (documented event-capable backing).',
-    scenario:
-      'The billing subsystem\'s Custom entry promising invoice-settled events is backed by the invoice event observer.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [
-            {
-              type: 'Custom',
-              details: 'Streams invoice-settled events to downstream consumers over the clinic message bus.',
-              component: 'invoice-event-observer',
-            },
-          ],
-        },
-      ],
-      components: [
-        { id: 'invoice-event-observer', componentType: 'Observer', subsystem: 'billing', description: 'Subscribes to and republishes invoice events on the clinic bus.' },
-      ],
-    },
-  }),
-  defineRuleFixture({
-    code: 'PUBLIC_INTERFACE_EVENT_MISTYPED',
-    expectFire: false,
-    reason: 'The prose describes a synchronous contract with no event/async vocabulary, so nothing contradicts the orchestrator backing.',
-    scenario:
-      'The billing subsystem\'s Custom entry describes synchronous invoice drafting calls and is backed by the invoice drafting orchestrator.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [
-        {
-          id: 'billing',
-          description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [
-            {
-              type: 'Custom',
-              details: 'Synchronous invoice drafting calls for internal back-office tools.',
-              component: 'invoice-drafting-orchestrator',
-            },
-          ],
-        },
-      ],
-      components: [INVOICE_ORCH],
     },
   }),
 

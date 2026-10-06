@@ -1166,6 +1166,8 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
     case 'interface':
     case 'type':
       typeSlotReferences(kind, spec).forEach((t) => add('type', t));
+      // The extension point a contract realizes: another project's export.
+      if (kind === 'interface') add('implements', (spec as InterfaceSpec).implements);
       break;
     case 'implementation':
       for (const m of (spec as ImplementationSpec).methods) {

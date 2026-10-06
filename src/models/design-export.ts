@@ -129,6 +129,10 @@ export const DesignExportEntrySchema = z.object({
   audience: z.string().optional(),
   version: z.string().optional(),
   stability: z.string().optional(),
+  /** The entry's export kind, derived from the backing Portal's transport; absent for a type export. */
+  type: z.string().optional(),
+  /** implement for an extension point; absent for call, the default. */
+  role: z.string().optional(),
 }).passthrough();
 export type DesignExportEntry = z.infer<typeof DesignExportEntrySchema>;
 

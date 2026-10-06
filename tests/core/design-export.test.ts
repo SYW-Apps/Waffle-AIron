@@ -304,7 +304,7 @@ describe('the design export projector', () => {
     });
 
     it('resolves the export tables to their targets', () => {
-      expect(design.project.exports).toEqual([{ publicName: 'billing-api', targetKind: 'component', target: 'billing-portal', audience: 'external' }]);
+      expect(design.project.exports).toEqual([{ publicName: 'billing-api', targetKind: 'component', target: 'billing-portal', audience: 'external', type: 'REST' }]);
       expect(design.subsystems.find((s) => s.key === 'billing')!.exports.map((e) => e.target)).toEqual(['billing-portal']);
     });
   });

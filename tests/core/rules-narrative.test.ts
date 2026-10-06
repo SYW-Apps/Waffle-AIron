@@ -435,7 +435,7 @@ methods:
 describe('narrative detail dial', () => {
   it('stereotype defaults: Store falls to intent — thin description trips the INTENT_FLOOR as a warning', () => {
     const proj = createTempProject();
-    proj.component('portal-d', 'Portal', 'portalType: HTTP_API\ndependsOn: [store-d]');
+    proj.component('portal-d', 'Portal', 'portalType: HTTP_API\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [store-d]');
     proj.component('store-d', 'Store');
     proj.writeSpec('interface', 'iportal-d', `schemaVersion: 1.0.0
 id: iportal-d
@@ -485,7 +485,7 @@ methods:
 
   it('a substantive L3 description satisfies the intent floor without any L4 prose', () => {
     const proj = createTempProject();
-    proj.component('portal-e', 'Portal', 'portalType: HTTP_API\ndependsOn: [store-e]');
+    proj.component('portal-e', 'Portal', 'portalType: HTTP_API\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [store-e]');
     proj.component('store-e', 'Store');
     proj.writeSpec('interface', 'iportal-e', `schemaVersion: 1.0.0
 id: iportal-e
@@ -578,7 +578,7 @@ methods:
   // -------------------------------------------------------------------------
   const declaredCallTree = (calls?: string) => {
     const proj = createTempProject();
-    proj.component('portal-g', 'Portal', 'portalType: HTTP_API\ndependsOn: [adapter-g]');
+    proj.component('portal-g', 'Portal', 'portalType: HTTP_API\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [adapter-g]');
     proj.component('adapter-g', 'Adapter', 'dependsOn: [orch-g]');
     proj.component('orch-g', 'Orchestrator');
     proj.writeSpec('interface', 'iportal-g', `schemaVersion: 1.0.0

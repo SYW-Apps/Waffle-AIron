@@ -271,6 +271,13 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: typeSpellingFacts
+  - name: retiredReachFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: retiredReachFacts
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:14:24.212Z'
+updatedAt: '2026-10-06T18:01:25.148Z'

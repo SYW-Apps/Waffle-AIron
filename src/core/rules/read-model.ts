@@ -631,6 +631,20 @@ export function buildDependencyEdges(ctx: RuleContext): DependencyEdges {
         all.push(offTreeEdge(ctx, from, ref, fromDraft));
         continue;
       }
+      // A library call: the target is an InProcess Portal of ANOTHER project
+      // (a contained member). Classified once, here, so no boundary or matrix
+      // rule needs its own exemption; library-calls judges it alone.
+      if (isLibraryTarget(to) && ctx.projectOf(to.id) !== ctx.projectOf(from.id)) {
+        const resolution = ctx.resolveCrossProject(from.id, 'dependsOn', ref);
+        all.push({
+          from, ref, to, reach: 'library',
+          ...(resolution ? { resolution } : {}),
+          retired: isRetired(from),
+          draftContext: fromDraft || ctx.isComponentDraft(to.id),
+          licensed: false,
+        });
+        continue;
+      }
       const edge = {
         from,
         ref,
@@ -719,6 +733,11 @@ export function buildImplementationMethods(ctx: RuleContext): ResolvedMethod[] {
 /** The two reaches a ref that resolved in this tree can have. */
 type EdgeReachResolved = 'internal' | 'cross-subsystem';
 
+/** Whether a component is a library surface: a Portal entered in-process. */
+function isLibraryTarget(to: ComponentSpec): boolean {
+  return to.componentType === 'Portal' && to.transport === 'InProcess';
+}
+
 /**
  * A ref that names no component in this tree. A ref that leaves the project
  * carries the owner's resolution (resolveCrossProject): resolved, it is judged
@@ -736,6 +755,11 @@ function offTreeEdge(ctx: RuleContext, from: ComponentSpec, ref: string, fromDra
   if (!resolution) return { ...base, reach: 'missing' };
   const surface = ctx.resolveSurfaceRef(ref, from.subsystem);
   if (surface.kind === 'ambiguous' && resolution.outcome === 'ambiguous') return { ...base, reach: 'ambiguous', surface, resolution };
-  if (surface.kind === 'resolved' && resolution.outcome === 'resolved') return { ...base, reach: 'surface', surface, resolution };
+  if (surface.kind === 'resolved' && resolution.outcome === 'resolved') {
+    // A contract entry backed by an InProcess Portal is a library: any
+    // component may call it directly, and library-calls judges it.
+    const reach = surface.entry.transport === 'InProcess' ? 'library' : 'surface';
+    return { ...base, reach, surface, resolution };
+  }
   return { ...base, reach: 'cross-project', resolution };
 }

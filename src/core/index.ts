@@ -115,6 +115,9 @@ export {
   // spec_tree_portal typeSpellingFacts: what the scan's type canonicalisation
   // recorded — a passthrough read of the spec repository (spec_loader).
   typeSpellingFacts,
+  // spec_tree_portal retiredReachFacts: the retired reachability forms the
+  // scan read compatibly — a passthrough read of the spec repository.
+  retiredReachFacts,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
 export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';

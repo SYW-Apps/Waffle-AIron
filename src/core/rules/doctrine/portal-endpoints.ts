@@ -17,10 +17,10 @@ export const portalsRule: SddRule = {
   name: 'portal-endpoints',
   judges: 'design',
   description:
-    'A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (every transport but InProcess and Custom).',
+    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form.",
   codes: [
-    { code: 'MISSING_ENDPOINT', defaultSeverity: 'error', summary: 'Portal method without a wire endpoint binding' },
-    { code: 'ENDPOINT_TRANSPORT_MISMATCH', defaultSeverity: 'error', summary: 'Endpoint transport does not match the Portal transport' },
+    { code: 'MISSING_ENDPOINT', defaultSeverity: 'error', summary: 'Portal method without a wire endpoint binding, on a transport that requires one' },
+    { code: 'ENDPOINT_TRANSPORT_MISMATCH', defaultSeverity: 'error', summary: "Endpoint transport does not match the Portal's transport" },
   ],
   check(ctx) {
     for (const comp of ctx.components) {

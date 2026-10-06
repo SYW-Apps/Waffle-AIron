@@ -14,9 +14,9 @@ export const unusedTypesRule: SddRule = {
   needsWholeTree: true,
   judges: 'design',
   description:
-    'Flags types no field of any type, no interface method signature, no contract method\'s signatureFrom and no other type\'s method signature references. References are matched through the type-reference grammar (generic arguments, collections, qualified ids), and the declaring type\'s own generic parameters are left out — a type parameter is not a reference to a type. A signature type is used when a method names it as its signatureFrom or a param is typed by it. A type named only by its OWN methods stays unused, the way a function that only calls itself is.',
+    "Flags types no field of any type, no interface method signature, no contract method's signatureFrom, no other type's method signature and no export table references. References are matched through the type-reference grammar (generic arguments, collections, qualified ids), and the declaring type's own generic parameters are left out: a type parameter is not a reference to a type. A signature type is used when a method names it as its signatureFrom or a param is typed by it. A type exported by an L1 or L0 export entry (typeDef) is used by definition: its consumers are outside this tree. A type named only by its OWN methods stays unused, the way a function that only calls itself is.",
   codes: [
-    { code: 'UNUSED_TYPE', defaultSeverity: 'warning', summary: 'Type never referenced by fields, signatures or type methods' },
+    { code: 'UNUSED_TYPE', defaultSeverity: 'warning', summary: 'Type never referenced by fields, signatures, type methods or an export table' },
   ],
   check(ctx) {
     const referencedTypes = new Set<string>();
@@ -82,6 +82,17 @@ export const unusedTypesRule: SddRule = {
       }
     }
 
+    // 5. The exported types: every L1 and L0 export entry's typeDef, and every
+    // type the resolved tables bind. Its consumers are outside this tree, so
+    // an exported type is used by definition.
+    for (const sub of ctx.subsystems) {
+      for (const pi of sub.publicInterfaces) if (pi.typeDef) markTypeReferenced(pi.typeDef);
+    }
+    for (const e of ctx.system.publicInterfaces ?? []) if (e.typeDef) markTypeReferenced(e.typeDef);
+    for (const table of ctx.exportTables ?? []) {
+      for (const e of table.entries) if (e.kind === 'type' && e.typeDef) referencedTypes.add(e.typeDef);
+    }
+
     for (const t of ctx.types) {
       if (!ctx.isSpecInScope(t.id)) continue;
       if (!referencedTypes.has(t.id)) {
@@ -90,7 +101,7 @@ export const unusedTypesRule: SddRule = {
         ctx.addIssue(
           'warning',
           'UNUSED_TYPE',
-          `Type "${t.id}" is defined but never referenced by any type field, interface method or other type's method.`,
+          `Type "${t.id}" is defined but never referenced by any type field, interface method, other type's method or export table.`,
           t.id,
           isDraftCtx,
         );

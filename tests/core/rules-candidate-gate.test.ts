@@ -83,7 +83,7 @@ describe('candidate gate — what it must NOT refuse', () => {
   it('lets a draft Portal be created before its transport is set — the authoring order is two calls', () => {
     const verdict = validateComponentCandidate(comp({ componentType: 'Portal' }));
     expect(verdict.errors).toEqual([]);
-    expect(codes(verdict.warnings)).toContain('MISSING_PORTAL_TYPE');
+    expect(codes(verdict.warnings)).toContain('MISSING_PORTAL_TRANSPORT');
   });
 
   it('reports a Store with no durability as a warning, never a refusal', () => {
@@ -129,7 +129,7 @@ describe('rule scope declarations', () => {
       'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR',
       'DURABILITY_ON_NON_STORE',
       'MISSING_DURABILITY',
-      'MISSING_PORTAL_TYPE',
+      'MISSING_PORTAL_TRANSPORT',
       'STEREOTYPE_RETIRED',
       'UNEXPECTED_PORTAL_FIELD',
     ]);

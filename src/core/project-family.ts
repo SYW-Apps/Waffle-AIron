@@ -71,6 +71,7 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       legacyMount: root.legacyMount,
       ...(root.memberDescription !== undefined ? { memberDescription: root.memberDescription } : {}),
       hasSystem: root.system !== null,
+      ...(root.system?.targetLanguage ? { targetLanguage: root.system.targetLanguage } : {}),
       directory: root.directory,
       members: roots.filter((r) => r.parent === root.namespace && r.namespace !== root.namespace).map((r) => r.namespace),
       aliases: root.aliases,
@@ -283,6 +284,7 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
   for (const ref of family.authoredReferences) {
     if (ref.position === 'type') addRaw(ref, 'type');
     else if (ref.position === 'auth') addRaw(ref, 'auth');
+    else if (ref.position === 'implements') addRaw(ref, 'implements');
     else if (ref.position === 'calls') addRaw(ref, 'calls', calledMethod.get(`${ref.specId}|${ref.authored}`));
   }
   return out;

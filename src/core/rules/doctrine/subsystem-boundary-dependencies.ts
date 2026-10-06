@@ -11,7 +11,7 @@ export const subsystemBoundaryDepsRule: SddRule = {
   name: 'subsystem-boundary-dependencies',
   judges: 'design',
   description:
-    "Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a component every one of whose entries names consumers may be depended on only from those subsystems. An edge into another project is judged on the contract entry it resolves to (resolveSurfaceRef — a contained member's live table, a declared external's pin, or a foreign snapshot): the same Adapter requirement applies to it, and foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by project-boundaries, with its resolution — never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.",
+    "Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a component every one of whose entries names consumers may be depended on only from those subsystems. An edge into another project is judged on the contract entry it resolves to (resolveSurfaceRef: a contained member's live table, a declared external's pin, or a foreign snapshot). When that entry is backed by an InProcess Portal the edge is a library call (reach library): any component may make it directly, no Adapter is asked for, and library-calls judges it instead. Any other entry asks for the same Adapter as a cross-subsystem hop, and foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by project-boundaries, with its resolution; never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.",
   codes: [
     { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: "dependsOn names a non-existent component" },
     { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: "Cross-tree dependsOn matched by surface snapshots of several providers with different contracts" },
@@ -43,6 +43,11 @@ export const subsystemBoundaryDepsRule: SddRule = {
           );
           continue;
         }
+
+        case 'library':
+          // A library call: an exported InProcess Portal of another project.
+          // Any component may make it directly; library-calls judges it.
+          continue;
 
         case 'cross-project':
           // The edge leaves the project and did not resolve (forbidden,

@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import type { CrossProjectReference } from './project-family.js';
+import type { ExportRole } from './specs.js';
 
 /** What an export binds a public name to: a component (with its contract), or a type. */
 export type ExportKind = 'component' | 'type';
@@ -32,7 +33,7 @@ export interface ResolvedExport {
   typeDef?: string;
   /** The exported component's stereotype. */
   componentType?: string;
-  /** Transport kind, from the entry or inherited from its target's entry. */
+  /** Export kind (REST, GraphQL, MessageBus, RPC, Custom), derived from the backing Portal's transport; an authored legacy kind only where none is derived. */
   type?: string;
   /** Consumer-facing description, from the entry or inherited. */
   details?: string;
@@ -46,6 +47,8 @@ export interface ResolvedExport {
   version?: string;
   /** The L0 entry's contract stability. */
   stability?: string;
+  /** What consumers do with the entry, from the entry or inherited: call it (the default, absent) or implement it (an extension point). */
+  role?: ExportRole;
   /** The levels the name passed through, from the table's owner to the declaring subsystem; empty for an own item. */
   via: string[];
 }

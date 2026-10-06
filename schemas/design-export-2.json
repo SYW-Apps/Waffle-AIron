@@ -94,6 +94,12 @@
                   },
                   "stability": {
                     "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
                   }
                 },
                 "required": [

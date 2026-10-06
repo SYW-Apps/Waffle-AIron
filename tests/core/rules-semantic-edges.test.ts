@@ -72,6 +72,7 @@ function dispatchFixture(proj: ReturnType<typeof createTempProject>, opts: {
   proj.subsystem('sub-a');
   proj.component('pkg-portal', 'Portal', [
     'portalType: Custom',
+    'invokedBy: {kind: entry, caller: Clients outside the design call it over its transport}',
     opts.portalDeps ?? 'dependsOn: [shadow-server]',
     ...(opts.table !== undefined ? [opts.table] : []),
   ].filter(Boolean).join('\n'));
@@ -392,7 +393,7 @@ describe('review-hardening regressions', () => {
     proj.component('state-store', 'Store', 'durability: durable');
     proj.component('boot-orch', 'Orchestrator', 'dependsOn: [cfg-portal]');
     proj.component('cfg-portal', 'Portal',
-      'portalType: Custom\ndependsOn: [state-store]\ndispatch:\n  - { capability: state.get, component: state-store, method: load }');
+      'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [state-store]\ndispatch:\n  - { capability: state.get, component: state-store, method: load }');
     proj.writeSpec('interface', 'istate-store', `schemaVersion: 1.0.0
 id: istate-store
 name: IStore
@@ -519,7 +520,7 @@ describe('untyped seams (UNTYPED_SEAM)', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a', 'publicInterfaces:\n  - { type: Custom, details: d, component: env-portal }');
     proj.component('env-portal', 'Portal',
-      'portalType: Custom\ndependsOn: [env-server]\ndispatch:\n  - { capability: env.get, component: env-server, method: getEnv }');
+      'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [env-server]\ndispatch:\n  - { capability: env.get, component: env-server, method: getEnv }');
     proj.component('env-server', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'ienv-portal', `schemaVersion: 1.0.0
 id: ienv-portal
@@ -554,7 +555,7 @@ methods:
   it('flags bare Json/any params and returns on a published component only', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a', 'publicInterfaces:\n  - { type: Custom, details: d, component: edge-portal }');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom\ndependsOn: [inner-orch]');
+    proj.component('edge-portal', 'Portal', 'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [inner-orch]');
     proj.component('inner-orch', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'iedge-portal', `schemaVersion: 1.0.0
 id: iedge-portal

@@ -235,6 +235,9 @@ function exportEntry(e: ResolvedExport, keys: KeyTable): DesignExportEntry {
     ...(e.audience !== undefined ? { audience: e.audience } : {}),
     ...(e.version !== undefined ? { version: e.version } : {}),
     ...(e.stability !== undefined ? { stability: e.stability } : {}),
+    // The derived export kind (transport.exportKind) and the role, call by default.
+    ...(e.kind === 'component' && e.type !== undefined ? { type: e.type } : {}),
+    ...(e.role !== undefined && e.role !== 'call' ? { role: e.role } : {}),
   };
 }
 
