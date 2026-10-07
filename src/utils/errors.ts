@@ -32,6 +32,24 @@ export class YamlSyntaxError extends WaironError {
 }
 
 /**
+ * Thrown when a lock record EXISTS but cannot be read as one: it does not
+ * parse, it is empty, it is JSON that is not a lock record, or it names a
+ * format this release does not read. An approval that cannot be read is
+ * never read as no approval — that turned a truncated merge into "nothing is
+ * gated" — so every reader fails closed on it, with one line naming the file,
+ * what is wrong, and the two ways out. A WaironError: every command prints it
+ * as one `✖` line and exits non-zero.
+ */
+export class LockRecordUnreadableError extends WaironError {
+  constructor(readonly file: string, readonly reason: string) {
+    super(`${file} cannot be read as an approval record: ${reason}. The approval cannot be judged, so nothing is passed on it. `
+      + `Restore it from version control (\`git checkout -- ${file}\`), or — to approve the design afresh — delete it and run \`wairon lock\`; `
+      + 'wairon never overwrites a record it cannot read.');
+    this.name = 'LockRecordUnreadableError';
+  }
+}
+
+/**
  * Thrown when the project has not been initialized (.wai/ directory missing).
  */
 export class ProjectNotInitializedError extends WaironError {

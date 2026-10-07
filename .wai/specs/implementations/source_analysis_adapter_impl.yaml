@@ -128,10 +128,24 @@ methods:
           a type shape, the project classes that realize it (the ones whose implements clause names
           it when any does, else every class declaring the member whose instance type the checker
           finds assignable to the shape); the innermost named function-like the call sits in and its
-          top-level container; and unresolved when no declaration answers because the receiver or
-          the callee is typed any, unknown or not at all. A call into a dependency or the language
-          library records no target and is not unresolved. A program the compiler cannot build
-          leaves every file without resolved calls, and the rules fall back to the shape facts
+          top-level container; and unresolved when the code made the call land nowhere this analysis
+          can name — no declaration answers because the receiver or the callee is typed any, unknown
+          or not at all, or no declaration of the project does because a computed key names no
+          single member (anything but a literal, or an expression the checker types as one literal)
+          or the receiver as written is cast to a type with an index signature — together with, for
+          an unresolved call, the project classes its receiver's ORIGINAL type lands on: the
+          receiver with every cast, assertion, non-null mark and parenthesis taken off, each class
+          that type is or that realizes the interface or shape it is, as receivers. A call into a
+          dependency or the language library records no target and is not unresolved. Beside the
+          calls, record each REFERENCE the code takes as a value — a property access, element access
+          or name in an argument, an initializer, an assigned, returned or spread value, an array
+          element, a concise arrow body, or the receiver of .bind (or of .call/.apply not invoked on
+          the spot) — whose symbol is a callable function or method of the project, as a
+          ResolvedCallFact marked reference with the same targets and enclosing body. Then resolve
+          the calls of every project source file those calls and references land in that is no root
+          of the run — a helper module no spec names — transitively, and keep them apart as reached
+          calls. A program the compiler cannot build leaves every file without resolved calls, and
+          the rules fall back to the shape facts
         type: local
       - stepNumber: 9
         description: >-
@@ -141,8 +155,9 @@ methods:
       - stepNumber: 10
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
-          root-file list the unclaimed-source rule judges, and the local-package map every import
-          resolution reads
+          root-file list the unclaimed-source rule judges, the local-package map every import
+          resolution reads, and — where the checker reached project files the run holds no facts for
+          — their resolved calls as reachedCalls, keyed by canonical path
         type: return
         outcome: CodeModel
   - name: findTestsReferencing
@@ -199,6 +214,20 @@ methods:
           because saying the name is too common IS the answer
         type: return
         outcome: found
+  - name: compilerIdentity
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the project's own compiler package (one with the JavaScript compiler API, below
+          the native release): when it loads, answer its version as the project's
+        type: local
+      - stepNumber: 2
+        description: >-
+          Otherwise resolve wairon's own copy: answer its version as wairon's, or none when that too
+          fails to load
+        type: return
+        outcome: compiler_identity?
+    symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-07T18:28:46.063Z'
+updatedAt: '2026-10-07T22:01:59.986Z'

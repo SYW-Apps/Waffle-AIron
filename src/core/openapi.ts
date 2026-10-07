@@ -40,50 +40,95 @@ function expressionOf(typeRef: string): TypeExpression | null {
   return parseTypeExpression(typeRef.trim(), 'returns').expression;
 }
 
-/** The closure type a named reference names, matched by local segment (billing.Invoice / billing::invoice → invoice). */
-function closureHit(name: string, closureIds: Set<string>): string | undefined {
+/** The type id a named reference names in one set of ids, matched by local segment (billing.Invoice / billing::invoice → invoice). */
+function idHit(name: string, ids: Iterable<string>): string | undefined {
   const local = name.split(/::|\./).pop()!.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-  return [...closureIds].find(id => id.toLowerCase() === local);
+  return [...ids].find(id => id.toLowerCase() === local);
+}
+
+/**
+ * Where a document's named type references resolve: the snapshot's own type
+ * closure, and the pinned snapshot of each external the project declares
+ * (`alias::name`), whose types are rendered under `<alias>.<id>`. A scope
+ * bound to an alias resolves bare names inside that producer's own closure —
+ * the names its types use for each other. Every external type a reference
+ * reaches is recorded, so the document renders it as a component.
+ */
+interface SchemaScope {
+  /** The component name a reference resolves to, or undefined. */
+  componentOf(name: string): string | undefined;
+  /** The scope inside one external's closure. */
+  within(alias: string): SchemaScope;
+}
+
+/** An external type a document reached: its alias and definition, rendered as `<alias>.<id>`. */
+interface ReachedExternal {
+  alias: string;
+  def: SurfaceTypeDef;
+}
+
+/** The scope of a document over its own closure and the pinned externals; `reached` collects the external types it names. */
+function schemaScope(ownIds: Set<string>, externals: ReadonlyMap<string, SurfaceSnapshot>, reached: Map<string, ReachedExternal>, alias?: string): SchemaScope {
+  const external = (from: string, name: string): string | undefined => {
+    const pinned = externals.get(from);
+    const id = pinned ? idHit(name, pinned.types.map(t => t.id)) : undefined;
+    if (!pinned || id === undefined) return undefined;
+    const key = `${from}.${id}`;
+    if (!reached.has(key)) reached.set(key, { alias: from, def: pinned.types.find(t => t.id === id)! });
+    return key;
+  };
+  return {
+    componentOf(name: string): string | undefined {
+      // `alias::name` names another project's export: its pinned snapshot, never an own type of the same last segment.
+      const sep = name.indexOf('::');
+      if (sep > 0 && externals.has(name.slice(0, sep))) return external(name.slice(0, sep), name.slice(sep + 2));
+      if (alias !== undefined) return external(alias, name);
+      return idHit(name, ownIds);
+    },
+    within(next: string): SchemaScope {
+      return schemaScope(ownIds, externals, reached, next);
+    },
+  };
 }
 
 /** The schema of one canonical expression. */
-function schemaOfExpression(expr: TypeExpression, closureIds: Set<string>): Record<string, unknown> {
+function schemaOfExpression(expr: TypeExpression, scope: SchemaScope): Record<string, unknown> {
   switch (expr.form) {
     case 'primitive':
       return { ...(PRIMITIVE_SCHEMAS[expr.name ?? ''] ?? {}) };
     case 'named':
     case 'applied': {
       // An applied generic (Page<T>) is documented as its head: JSON Schema has no type parameters.
-      const hit = closureHit(expr.name ?? '', closureIds);
+      const hit = scope.componentOf(expr.name ?? '');
       return hit ? { $ref: `#/components/schemas/${hit}` } : { description: `Unresolved type: ${expr.name}` };
     }
     case 'list':
-      return { type: 'array', items: schemaOfExpression(expr.args[0], closureIds) };
+      return { type: 'array', items: schemaOfExpression(expr.args[0], scope) };
     case 'set':
-      return { type: 'array', uniqueItems: true, items: schemaOfExpression(expr.args[0], closureIds) };
+      return { type: 'array', uniqueItems: true, items: schemaOfExpression(expr.args[0], scope) };
     case 'map': {
       const key = expr.args[0];
       // A key is string, int or an enum: an enum key names its component, an int key its digits.
-      const keyHit = key.form === 'named' ? closureHit(key.name ?? '', closureIds) : undefined;
+      const keyHit = key.form === 'named' ? scope.componentOf(key.name ?? '') : undefined;
       const propertyNames = keyHit
         ? { propertyNames: { $ref: `#/components/schemas/${keyHit}` } }
         : key.form === 'primitive' && key.name === 'int' ? { propertyNames: { pattern: '^-?[0-9]+$' } } : {};
-      return { type: 'object', ...propertyNames, additionalProperties: schemaOfExpression(expr.args[1], closureIds) };
+      return { type: 'object', ...propertyNames, additionalProperties: schemaOfExpression(expr.args[1], scope) };
     }
     case 'optional': {
-      const inner = schemaOfExpression(expr.args[0], closureIds);
+      const inner = schemaOfExpression(expr.args[0], scope);
       if (Object.keys(inner).length === 0) return inner;
       // A plain typed schema admits null beside its type; a $ref or a oneOf is wrapped.
       if (typeof inner.type === 'string') return { ...inner, type: [inner.type, 'null'] };
       return { anyOf: [inner, { type: 'null' }] };
     }
     case 'union':
-      return { oneOf: expr.args.map(member => schemaOfExpression(member, closureIds)) };
+      return { oneOf: expr.args.map(member => schemaOfExpression(member, scope)) };
     case 'async':
-      return schemaOfExpression(expr.args[0], closureIds);
+      return schemaOfExpression(expr.args[0], scope);
     case 'result':
       // The success body; a failure is the operation's error response, not part of it.
-      return schemaOfExpression(expr.args[0], closureIds);
+      return schemaOfExpression(expr.args[0], scope);
   }
 }
 
@@ -93,10 +138,10 @@ function schemaOfExpression(expr: TypeExpression, closureIds: Set<string>): Reco
  * is documented as unconstrained, with a description naming it; it never
  * becomes an invented object.
  */
-function schemaFor(typeRef: string, closureIds: Set<string>): Record<string, unknown> {
+function schemaFor(typeRef: string, scope: SchemaScope): Record<string, unknown> {
   const expr = expressionOf(typeRef);
   if (!expr) return { description: `Not a canonical type expression: ${typeRef.trim()}` };
-  return schemaOfExpression(expr, closureIds);
+  return schemaOfExpression(expr, scope);
 }
 
 /** Whether a returns completes with no value: `void`, `async void`, or a result whose success type is void. */
@@ -126,6 +171,62 @@ function enumValuesFrom(schema: Record<string, unknown>): EnumValue[] {
     .map(name => ({ name, ...(described.has(name) ? { description: described.get(name)! } : {}) }));
 }
 
+/**
+ * The OpenAPI path of one endpoint: the Portal's basePath joined before the
+ * method's path, and every placeholder in OpenAPI's `{name}` form. A design
+ * may write a placeholder as `{name}` or in the Express idiom `:name` (a
+ * segment `/:name`); both are the same placeholder, so `/routes/:id` and
+ * `/routes/{id}` document the same operation with `id` in the path.
+ */
+export function openApiPath(basePath: string | undefined, endpointPath: string): string {
+  const join = (a: string, b: string): string => `${a.replace(/\/+$/, '')}/${b.replace(/^\/+/, '')}`;
+  const base = basePath && basePath.trim() && basePath.trim() !== '/' ? basePath.trim() : '';
+  const rootedBase = base.startsWith('/') || !base ? base : `/${base}`;
+  // The Portal's root (`/` or nothing under a basePath) is the basePath itself.
+  const raw = base ? (endpointPath.replace(/\/+$/, '') === '' ? rootedBase : join(rootedBase, endpointPath)) : endpointPath;
+  const rooted = raw.startsWith('/') ? raw : `/${raw}`;
+  return rooted.replace(/\/:([A-Za-z_][A-Za-z0-9_]*)/g, '/{$1}');
+}
+
+/**
+ * The parameter names that carry a Portal's credential, by its auth scheme:
+ * the bearer token, the basic credentials, the API key (by the scheme's own
+ * key name too). The contract models the header as a parameter because a
+ * method has no other place for it; in an OpenAPI document the security
+ * scheme carries it, so documenting it again as a query or body parameter
+ * would demand the token twice.
+ */
+const CREDENTIAL_PARAM_NAMES: Record<string, readonly string[]> = {
+  bearer: ['token', 'bearer', 'bearertoken', 'accesstoken', 'authtoken', 'authorization', 'jwt', 'idtoken', 'sessiontoken'],
+  oauth2: ['token', 'bearer', 'bearertoken', 'accesstoken', 'authtoken', 'authorization', 'jwt', 'idtoken'],
+  openIdConnect: ['token', 'bearer', 'bearertoken', 'accesstoken', 'authtoken', 'authorization', 'jwt', 'idtoken'],
+  basic: ['credentials', 'basiccredentials', 'basicauth', 'authorization'],
+  apiKey: ['apikey', 'key', 'authorization'],
+  custom: ['authorization', 'token', 'credentials'],
+};
+
+/** A name compared as the credential names are: lower case, letters and digits only. */
+function credentialKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * The one string parameter of a method that IS the credential its Portal's
+ * auth scheme binds (the first such, by name), or undefined — what the
+ * document leaves out of the parameters and the body, naming it under
+ * `x-wairon-credential-param` instead so a wairon reader can put it back.
+ */
+export function credentialParam(method: MethodSignature, auth: PortalAuth | undefined): string | undefined {
+  if (!auth || auth.scheme === 'none') return undefined;
+  const names = new Set(CREDENTIAL_PARAM_NAMES[auth.scheme] ?? []);
+  const keyName = auth.name ? credentialKey(auth.name) : undefined;
+  const isCredential = (name: string): boolean => {
+    const key = credentialKey(name);
+    return names.has(key) || (keyName !== undefined && key.length >= 3 && (keyName === key || keyName.endsWith(key)));
+  };
+  return (method.params ?? []).find((p) => p.type.trim() === 'string' && isCredential(p.name))?.name;
+}
+
 /** The parameter names an OpenAPI path template declares: its `{code}` segments. */
 function pathTemplateNames(pathTemplate: string): string[] {
   const names: string[] = [];
@@ -133,11 +234,13 @@ function pathTemplateNames(pathTemplate: string): string[] {
   return names;
 }
 
-function operationFor(method: MethodSignature, closureIds: Set<string>): Record<string, unknown> {
+function operationFor(method: MethodSignature, scope: SchemaScope, entry?: SurfaceContractEntry): Record<string, unknown> {
   const endpoint = method.endpoint;
   const httpVerb = endpoint && endpoint.transport === 'HTTP' ? endpoint.method.toLowerCase() : 'post';
   const bodyVerbs = new Set(['post', 'put', 'patch']);
-  const params = method.params ?? [];
+  // The credential the security scheme carries is never a parameter as well.
+  const credential = credentialParam(method, entry?.auth);
+  const params = (method.params ?? []).filter((p) => p.name !== credential);
 
   const op: Record<string, unknown> = {
     operationId: method.name,
@@ -146,7 +249,7 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
       '200': {
         description: method.returns || 'Success',
         ...(method.returns && !returnsNothing(method.returns)
-          ? { content: { 'application/json': { schema: schemaFor(method.returns, closureIds) } } }
+          ? { content: { 'application/json': { schema: schemaFor(method.returns, scope) } } }
           : {}),
       },
     },
@@ -161,7 +264,8 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
   // always required, the path cannot be built without it — and OpenAPI calls a
   // templated path that declares none invalid. The rest go in the query (a verb
   // without a body) or the JSON body (POST, PUT, PATCH).
-  const templated = new Set(endpoint && endpoint.transport === 'HTTP' ? pathTemplateNames(endpoint.path) : []);
+  if (credential !== undefined) op['x-wairon-credential-param'] = credential;
+  const templated = new Set(endpoint && endpoint.transport === 'HTTP' ? pathTemplateNames(openApiPath(undefined, endpoint.path)) : []);
   const inPath = params.filter(p => templated.has(p.name));
   const rest = params.filter(p => !templated.has(p.name));
   const parameter = (p: (typeof params)[number], where: 'path' | 'query'): Record<string, unknown> => ({
@@ -169,7 +273,7 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
     in: where,
     required: where === 'path' ? true : !p.optional,
     ...(p.description ? { description: p.description } : {}),
-    schema: schemaFor(p.type, closureIds),
+    schema: schemaFor(p.type, scope),
   });
   const parameters = inPath.map(p => parameter(p, 'path'));
   if (rest.length) {
@@ -180,7 +284,7 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
           'application/json': {
             schema: {
               type: 'object',
-              properties: Object.fromEntries(rest.map(p => [p.name, schemaFor(p.type, closureIds)])),
+              properties: Object.fromEntries(rest.map(p => [p.name, schemaFor(p.type, scope)])),
               required: rest.filter(p => !p.optional).map(p => p.name),
             },
           },
@@ -194,6 +298,24 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
   return op;
 }
 
+/** One closure type as a component: an enum's values, a named scalar's primitive, a signature, or an object of its fields. */
+function typeComponent(t: SurfaceTypeDef, scope: SchemaScope): Record<string, unknown> {
+  if (t.kind === 'enum') {
+    // An enum is a value domain: a string component with its values as `enum`.
+    const values = t.values ?? [];
+    return { type: 'string', title: t.name, enum: values.map(v => v.name), description: enumDescription(values) };
+  }
+  // A named scalar is its primitive's schema under the type's name.
+  if (t.holds !== undefined) return { ...schemaFor(t.holds, scope), title: t.name };
+  if (t.kind === 'signature') return signatureComponent(t, scope);
+  return {
+    type: 'object',
+    title: t.name,
+    properties: Object.fromEntries(t.fields.map(f => [f.name, schemaFor(f.type, scope)])),
+    required: t.fields.filter(f => !f.optional).map(f => f.name),
+  };
+}
+
 /** The extension a signature type's component carries: its params and returns, for a wairon reader. */
 const SIGNATURE_EXTENSION = 'x-wairon-signature';
 
@@ -203,7 +325,7 @@ const SIGNATURE_EXTENSION = 'x-wairon-signature';
  * no `type` constraint, a description saying what it is, and its params and
  * returns under `x-wairon-signature`, which generic OpenAPI tools ignore.
  */
-function signatureComponent(t: SurfaceTypeDef, closureIds: Set<string>): Record<string, unknown> {
+function signatureComponent(t: SurfaceTypeDef, scope: SchemaScope): Record<string, unknown> {
   const params = t.params ?? [];
   const returns = t.returns ?? 'any';
   const text = `(${params.map(p => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${returns}`;
@@ -216,11 +338,11 @@ function signatureComponent(t: SurfaceTypeDef, closureIds: Set<string>): Record<
       params: params.map(p => ({
         name: p.name,
         type: p.type,
-        schema: schemaFor(p.type, closureIds),
+        schema: schemaFor(p.type, scope),
         ...(p.optional ? { optional: true } : {}),
         ...(p.description ? { description: p.description } : {}),
       })),
-      returns: { type: returns, schema: schemaFor(returns, closureIds) },
+      returns: { type: returns, schema: schemaFor(returns, scope) },
     },
   };
 }
@@ -315,15 +437,24 @@ function httpEntriesOf(snapshot: SurfaceSnapshot): SurfaceContractEntry[] {
     e.type === 'REST' || e.methods.some(m => m.endpoint?.transport === 'HTTP'));
 }
 
-/** Render ONE OpenAPI document from a chosen subset of entries: one portal's, for
- *  toOpenApiSet, which also asks for `servers`. */
+/** What a rendering knows beyond the snapshot: the pinned externals its types name, and the project's declared version. */
+export interface OpenApiRenderContext {
+  /** Each declared external's pinned snapshot, by alias: where `alias::name` in a schema resolves. */
+  externals?: ReadonlyMap<string, SurfaceSnapshot>;
+  /** The project's declared version (its package manifest), for `info.version`. */
+  version?: string;
+}
+
+/** Render ONE OpenAPI document from a chosen subset of entries: one portal's, for toOpenApiSet. */
 function renderDoc(
   snapshot: SurfaceSnapshot,
   entries: SurfaceContractEntry[],
-  closureIds: Set<string>,
-  opts: { title?: string; servers?: boolean } = {},
+  context: OpenApiRenderContext,
+  opts: { title?: string } = {},
 ): Record<string, unknown> {
   const { schemes, securityByEntry } = buildSecurity(entries);
+  const reached = new Map<string, ReachedExternal>();
+  const scope = schemaScope(new Set(snapshot.types.map(t => t.id)), context.externals ?? new Map(), reached);
 
   const paths: Record<string, Record<string, unknown>> = {};
   for (const entry of entries) {
@@ -331,57 +462,51 @@ function renderDoc(
     for (const method of entry.methods) {
       const endpoint = method.endpoint;
       if (!endpoint || endpoint.transport !== 'HTTP') continue;
-      const p = endpoint.path.startsWith('/') ? endpoint.path : `/${endpoint.path}`;
+      // The Portal's basePath is part of every path, and `:name` reads as `{name}`.
+      const p = openApiPath(entry.basePath, endpoint.path);
       paths[p] = paths[p] ?? {};
       paths[p][endpoint.method.toLowerCase()] = {
         tags: [entry.id],
-        ...operationFor(method, closureIds),
+        ...operationFor(method, scope, entry),
         ...(security ? { security: [security] } : {}),
       };
     }
   }
 
   const schemas: Record<string, unknown> = {};
-  for (const t of snapshot.types) {
-    if (t.kind === 'enum') {
-      // An enum is a value domain: a string component with its values as `enum`.
-      const values = t.values ?? [];
-      schemas[t.id] = { type: 'string', title: t.name, enum: values.map(v => v.name), description: enumDescription(values) };
-      continue;
+  for (const t of snapshot.types) schemas[t.id] = typeComponent(t, scope);
+  // Every pinned external type a schema named, and the ones those name in
+  // turn, each resolved inside its own producer's closure.
+  const rendered = new Set<string>();
+  for (let more = true; more;) {
+    more = false;
+    for (const [key, { alias, def }] of [...reached]) {
+      if (rendered.has(key)) continue;
+      rendered.add(key);
+      more = true;
+      schemas[key] = typeComponent(def, scope.within(alias));
     }
-    if (t.holds !== undefined) {
-      // A named scalar is its primitive's schema under the type's name.
-      schemas[t.id] = { ...schemaFor(t.holds, closureIds), title: t.name };
-      continue;
-    }
-    schemas[t.id] = t.kind === 'signature'
-      ? signatureComponent(t, closureIds)
-      : {
-        type: 'object',
-        title: t.name,
-        properties: Object.fromEntries(t.fields.map(f => [f.name, schemaFor(f.type, closureIds)])),
-        required: t.fields.filter(f => !f.optional).map(f => f.name),
-      };
   }
 
   const components: Record<string, unknown> = {};
   if (Object.keys(schemas).length) components.schemas = schemas;
   if (Object.keys(schemes).length) components.securitySchemes = schemes;
 
-  // Per-portal specs carry a single `servers` entry from the portal's basePath.
-  const basePaths = [...new Set(entries.map(e => e.basePath).filter((b): b is string => !!b))];
-  const servers = opts.servers && basePaths.length === 1 ? [{ url: basePaths[0] }] : undefined;
+  // The basePath is in every path; the document names it once more so a
+  // wairon reader can take it back off. `servers` is deployment, which the
+  // design does not model, so the document declares none.
+  const basePaths = [...new Set(entries.map(e => e.basePath).filter((b): b is string => !!b && b.trim() !== '/'))];
 
   return {
     openapi: '3.1.0',
     info: {
       title: opts.title ?? snapshot.projectName,
-      version: snapshot.version ?? '0.0.0',
+      version: context.version ?? snapshot.version ?? '0.0.0',
       ...(snapshot.stateId ? { 'x-wairon-state-id': snapshot.stateId } : {}),
       'x-wairon-origin': snapshot.origin,
       'x-wairon-generated-at': snapshot.generatedAt,
     },
-    ...(servers ? { servers } : {}),
+    ...(basePaths.length === 1 ? { 'x-wairon-base-path': basePaths[0] } : {}),
     paths,
     ...(Object.keys(components).length ? { components } : {}),
   };
@@ -390,11 +515,12 @@ function renderDoc(
 /**
  * One named OpenAPI document PER PUBLIC PORTAL, partitioned by the backing portal
  * component. A project that models a single gateway portal yields one spec; three
- * separate portals yield three — never merged. Each carries its own `servers`
- * (from the portal's basePath) and its own securitySchemes/security.
+ * separate portals yield three — never merged. Each carries its own paths (the
+ * portal's basePath joined in) and its own securitySchemes/security; a type of
+ * a pinned external resolves from its pinned snapshot, and `info.version` is the
+ * project's declared version when the context gives one.
  */
-export function toOpenApiSet(snapshot: SurfaceSnapshot): NamedOpenApiSpec[] {
-  const closureIds = new Set(snapshot.types.map(t => t.id));
+export function toOpenApiSet(snapshot: SurfaceSnapshot, context: OpenApiRenderContext = {}): NamedOpenApiSpec[] {
   const byPortal = new Map<string, SurfaceContractEntry[]>();
   const order: string[] = [];
   for (const entry of httpEntriesOf(snapshot)) {
@@ -404,7 +530,7 @@ export function toOpenApiSet(snapshot: SurfaceSnapshot): NamedOpenApiSpec[] {
   return order.map(portalId => {
     const entries = byPortal.get(portalId)!;
     const name = entries[0]?.name ?? portalId;
-    return { portalId, name, document: JSON.stringify(renderDoc(snapshot, entries, closureIds, { title: name, servers: true }), null, 2) };
+    return { portalId, name, document: JSON.stringify(renderDoc(snapshot, entries, context, { title: name }), null, 2) };
   });
 }
 
@@ -557,8 +683,14 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
   }
 
   const info = (parsed.info ?? {}) as Record<string, unknown>;
+  // A wairon document joins its Portal's basePath into every path and names
+  // it once: taken back off, so the contract reads as it was designed.
+  const basePath = typeof parsed['x-wairon-base-path'] === 'string' ? parsed['x-wairon-base-path'] : undefined;
   const methods: MethodSignature[] = [];
-  for (const [rawPath, ops] of Object.entries(parsed.paths as Record<string, Record<string, unknown>>)) {
+  for (const [documentPath, ops] of Object.entries(parsed.paths as Record<string, Record<string, unknown>>)) {
+    const rawPath = basePath && documentPath.startsWith(basePath) && documentPath.length > basePath.length
+      ? documentPath.slice(basePath.replace(/\/+$/, '').length) || '/'
+      : documentPath;
     for (const [verb, opRaw] of Object.entries(ops ?? {})) {
       if (!['get', 'post', 'put', 'delete', 'patch', 'options', 'head'].includes(verb)) continue;
       const op = (opRaw ?? {}) as Record<string, unknown>;
@@ -567,6 +699,8 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         : `${verb}_${rawPath.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')}`;
 
       const params: { name: string; type: string; optional?: boolean; description?: string }[] = [];
+      // The credential the security scheme carried, put back as the parameter the contract declared.
+      if (typeof op['x-wairon-credential-param'] === 'string') params.push({ name: op['x-wairon-credential-param'], type: 'string' });
       for (const p of (op.parameters as Record<string, unknown>[] | undefined) ?? []) {
         if (typeof p.name !== 'string') continue;
         const schema = p.schema as Record<string, unknown> | undefined;
@@ -677,6 +811,7 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
     details: typeof info.description === 'string' ? info.description : `Imported OpenAPI surface of ${projectName}.`,
     ...(typeof info.version === 'string' ? { version: info.version } : {}),
     ...(importedAuth ? { auth: importedAuth } : {}),
+    ...(basePath ? { basePath } : {}),
   };
 
   return SurfaceSnapshotSchema.parse({

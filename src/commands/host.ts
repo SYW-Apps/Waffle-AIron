@@ -12,13 +12,12 @@ import { WaironError } from '../utils/errors.js';
 // modules that realize the workflows.
 import * as localAdmin from './adapters/host.js';
 import { runWithProjectRoot, resolveProjectBinding } from '../utils/fs.js';
-import { loadProjectConfig } from './adapters/core.js';
+import { loadProjectConfig, seedDemoTree } from './adapters/core.js';
 import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
 import { buildCanvasDataModel } from './subsystem.js';
-import { seedDemoTree } from '../core/demo-seed.js';
 import type {
   AuditRetentionPolicy,
   Capability,

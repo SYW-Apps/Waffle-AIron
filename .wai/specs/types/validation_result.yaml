@@ -48,6 +48,15 @@ fields:
       (validator_portal.adviseExternals) is handed them, so they get no second word. Absent on the
       owner's gate, and when nothing was composed.
     optional: true
+  - name: codeReading
+    type: string
+    description: >-
+      One line, never a finding: how the owner's gate read the code — the weakest analysis grade any
+      file was read at (exact, pattern, generic) and, at exact grade, the compiler and its version,
+      the project's own or wairon's copy; or that no source file the design names exists yet.
+      `wairon validate` prints it, and sdd_validate_tree carries the same sentence in its hint.
+      Absent on a family run's members.
+    optional: true
 methods:
   - name: changesTo
     signature: 'changesTo(after: ValidationResult): FindingChanges'
@@ -72,4 +81,4 @@ methods:
     sourcePath: src/models/lock.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T11:12:21.556Z'
+updatedAt: '2026-10-07T21:50:25.334Z'

@@ -128,6 +128,7 @@ import type { WebGraphModel } from '../server/types.js';
 // The pure signature resolver the scan runs last, once every reference of the
 // family is bound: sourced methods filled, every params-bearing method's text derived.
 import { resolveTree, type SignatureFacts } from './signature-sources.js';
+import { dict, ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // Spec workspace
@@ -392,13 +393,14 @@ function emptyIndex(): SpecIndex {
     implementations: [],
     types: [],
     groups: [],
+    // No prototype: an id that is also a prototype name (constructor) is a key like any other.
     paths: {
-      subsystem: {},
-      component: {},
-      interface: {},
-      implementation: {},
-      type: {},
-      group: {},
+      subsystem: dict<string>(),
+      component: dict<string>(),
+      interface: dict<string>(),
+      implementation: dict<string>(),
+      type: dict<string>(),
+      group: dict<string>(),
     },
     signatures: { sources: [], staleTexts: [] },
     typeSpellings: emptyTypeSpellingFacts(),
@@ -755,7 +757,7 @@ function projectContentAt(dir: string): boolean {
 function pinnedAsMember(dir: string, alias: string): boolean {
   try {
     const lock = readYamlFile(path.join(aiPathsAt(dir).root(), 'externals.lock.yaml')) as { externals?: Record<string, { role?: string }> } | null;
-    return lock?.externals?.[alias]?.role === 'member';
+    return ownGet(lock?.externals, alias)?.role === 'member';
   } catch {
     return false;
   }
@@ -865,7 +867,7 @@ function memberDeclarationsOf(config: ProjectConfig | null, mounts: { spec: Subs
   }
   for (const mount of mounts) {
     if (!byAlias.has(mount.spec.id)) continue;
-    const conflict = config?.externals?.[mount.spec.id] !== undefined
+    const conflict = ownGet(config?.externals, mount.spec.id) !== undefined
       ? `the alias "${mount.spec.id}" is also declared under \`externals\` — one alias names one project`
       : undefined;
     out.push({
@@ -3825,7 +3827,7 @@ export class SpecWorkspace {
     index.groups = index.groups.map((g) => keyed('group', g));
     if (key) {
       for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) {
-        index.paths[kind] = Object.fromEntries(Object.entries(index.paths[kind]).map(([id, file]) => [keyIn(key, id), file]));
+        index.paths[kind] = dict(Object.entries(index.paths[kind]).map(([id, file]) => [keyIn(key, id), file] as const));
       }
     }
     raw.record.specIds = [
@@ -5556,6 +5558,24 @@ export class SpecWorkspace {
     return legacy;
   }
 
+  /**
+   * The spec files stored under the specs folder while it holds no L0 (no
+   * `.index.yaml` at its root, nor a legacy `system.yaml`), as paths from the
+   * project root with POSIX separators, sorted. Empty when the L0 is there or
+   * nothing is. A tree whose root was deleted is not an empty tree: these are
+   * the files every reader of it would silently stop judging.
+   */
+  findOrphanedSpecFiles(): string[] {
+    const specsDir = this.paths.specsDir();
+    if (!pathExists(specsDir)) return [];
+    if (pathExists(this.paths.specsSystem()) || pathExists(path.join(specsDir, 'system.yaml'))) return [];
+    const root = this.paths.root();
+    const projectRoot = path.dirname(root);
+    return listSpecFiles(specsDir)
+      .map((f) => path.relative(projectRoot, f).split(path.sep).join('/'))
+      .sort();
+  }
+
   // -------------------------------------------------------------------------
   // Granular delta updates (sdd_update_spec)
   // -------------------------------------------------------------------------
@@ -6332,6 +6352,14 @@ export class SpecWorkspace {
         // `unset` is the verb, never a field — at this level as at the top.
         if (key === 'unset') continue;
         if (value === undefined || value === null) {
+          continue;
+        }
+        // `[]` clears the list it names — every list, the keyed ones the
+        // branches below upsert into included; under upsert an empty list
+        // would otherwise mean "change nothing", and the delta's one honest way
+        // to say "none" (`publicInterfaces: []`) would be silently ignored.
+        if (Array.isArray(value) && value.length === 0) {
+          res[key] = [];
           continue;
         }
         if (key === 'methods' && Array.isArray(value) && Array.isArray(existing.methods)) {
@@ -8088,6 +8116,15 @@ export function restoreSpecFiles(snapshot: Map<string, string>): void {
 
 export function findLegacySpecFiles(): LegacySpecFile[] {
   return current().findLegacySpecFiles();
+}
+
+/**
+ * core_orchestrator.findOrphanedSpecFiles — the bound tree's spec files left
+ * standing while its specs folder holds no L0: what `validate` and
+ * `lock-check` report as an error instead of reading the tree as empty.
+ */
+export function findOrphanedSpecFiles(): string[] {
+  return current().findOrphanedSpecFiles();
 }
 
 /**

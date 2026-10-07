@@ -56,7 +56,7 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
     const file = path.join(f.top, '.wai', 'project.yaml');
     fs.writeFileSync(file, configText(f.top).replace('members:', '# who we contain\nmembers:'));
     const repo = projectConfigRepositoryAt(f.top);
-    expect(() => repo.renameAlias('ledger', 'Bad')).toThrow(/must fit/);
+    expect(() => repo.renameAlias('ledger', 'Bad')).toThrow(/breaks \[a-z0-9-_\]\+/);
     expect(() => repo.renameAlias('ledger', 'billing')).toThrow(/already declared/);
     expect(() => repo.renameAlias('ghost', 'spirit')).toThrow(/neither `members` nor `externals` declares it/);
     expect(repo.renameAlias('ledger', 'books')).toBe(true);

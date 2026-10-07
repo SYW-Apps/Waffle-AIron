@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { loadProjectExtensions, packEntryLabel, packEntryRef, diagnoseProjectPacks, pinInstalledPacksAsSelections } from '../../src/core/extensions.js';
+import { loadProjectExtensions, packEntryLabel, packEntryRef, diagnoseProjectPacks } from '../../src/core/extensions.js';
 import { installPackFromDirectory, uninstallPack, resolveInstalledPack } from '../../src/core/packstore.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { expandSource } from '../../src/commands/packs.js';
@@ -289,7 +289,7 @@ describe('the machine-wide default is OFF (A4) and the migration is loud (A7)', 
     expect(loadProjectExtensions().packNames).toEqual([]);
   });
 
-  it('doctor reports the unapplied pack as a migration risk, and --fix records it', () => {
+  it('doctor reports the unapplied pack as a migration risk — and nothing selects it into the project', () => {
     store();
     installPackFromDirectory(packSource('org-doctrine', '2.0.0'));
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-a7-'));
@@ -306,13 +306,11 @@ describe('the machine-wide default is OFF (A4) and the migration is loud (A7)', 
     expect(before.globalsUndeclared).toBe(true);           // never decided
     expect(before.notApplied.map((p) => p.name)).toEqual(['org-doctrine']);
 
-    // --fix converts the implicit past into an explicit, reproducible present.
-    expect(pinInstalledPacksAsSelections()).toEqual(['org-doctrine@2.0.0']);
-    expect(loadProjectExtensions().packNames).toEqual(['org-doctrine']);
-
-    const after = diagnoseProjectPacks();
-    expect(after.notApplied).toEqual([]);
-    expect(after.globalsUndeclared).toBe(false);           // the decision is recorded
+    // Round-5 trial (tinkerer M4): `doctor --fix` used to record the machine's
+    // installed packs as explicit selections — machine state written into an
+    // approved repository. The diagnosis is a report only; the pack applies
+    // to nobody until the project selects it.
+    expect(loadProjectExtensions().packNames).toEqual([]);
   });
 
   it('never invents selections for a project that DELIBERATELY applies nothing', () => {
@@ -321,7 +319,6 @@ describe('the machine-wide default is OFF (A4) and the migration is loud (A7)', 
     project([]); // writes useGlobalPacks: false explicitly
 
     expect(diagnoseProjectPacks().globalsUndeclared).toBe(false);
-    expect(pinInstalledPacksAsSelections()).toEqual([]);
     expect(loadProjectExtensions().packNames).toEqual([]);
   });
 

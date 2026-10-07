@@ -40,28 +40,30 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
   const BOX_W = 190, BOX_H = 52, GAP_X = 90, GAP_Y = 26, SUB_PAD = 30, SUB_HEAD = 44;
   const MEMBER_W = 168, MEMBER_H = 44, PAT_PAD = 16, PAT_HEAD = 34;
   const MAX_ROW = 2100;
+  // An own key only: an id that is also a prototype name (constructor) is collapsed only when set.
+  const isCollapsed = function (id: string): boolean { return Object.prototype.hasOwnProperty.call(collapsed, id) && !!collapsed[id]; };
   // A retired Gateway is no pattern: it lays out as a plain box.
   const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
 
-  const compById: Record<string, LayoutModel['components'][number]> = {};
+  const compById: Record<string, LayoutModel['components'][number]> = Object.create(null);
   model.components.forEach(function (c) { compById[c.id] = c; });
-  const subIds: Record<string, number> = {};
+  const subIds: Record<string, number> = Object.create(null);
   model.subsystems.forEach(function (s) { subIds[s.id] = 1; });
 
   // Subsystems ordered so callers sit left of the subsystems they depend on —
   // cross-boundary edges then flow consistently rightward. DFS post-order over
   // the subsystem dep graph, reversed; alphabetical tiebreak; cycle-guarded.
   function subsystemOrder(): string[] {
-    const deps: Record<string, Record<string, number>> = {};
+    const deps: Record<string, Record<string, number>> = Object.create(null);
     model.edges.forEach(function (e) {
       if (!e.cross) return;
       const from = compById[e.from], to = compById[e.to];
       if (!from || !to) return;
-      (deps[from.subsystem] = deps[from.subsystem] || {})[to.subsystem] = 1;
+      (deps[from.subsystem] = deps[from.subsystem] || Object.create(null))[to.subsystem] = 1;
     });
     const ids = model.subsystems.map(function (s) { return s.id; }).sort();
     const order: string[] = [];
-    const mark: Record<string, number> = {};
+    const mark: Record<string, number> = Object.create(null);
     function visit(id: string, stack: Record<string, number>): void {
       if (mark[id] || stack[id]) return;
       stack[id] = 1;
@@ -70,7 +72,7 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
       mark[id] = 1;
       order.push(id);
     }
-    ids.forEach(function (id) { visit(id, {}); });
+    ids.forEach(function (id) { visit(id, Object.create(null)); });
     order.reverse();
     return order;
   }
@@ -106,7 +108,7 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
   }
 
   function boxSizeFor(comp: LayoutModel['components'][number]): { w: number; h: number } {
-    if (PATTERN_TYPES[comp.componentType] && comp.owns.length && !collapsed[comp.id]) {
+    if (PATTERN_TYPES[comp.componentType] && comp.owns.length && !isCollapsed(comp.id)) {
       return { w: MEMBER_W + PAT_PAD * 2 + 24, h: PAT_HEAD + comp.owns.length * (MEMBER_H + 12) + PAT_PAD };
     }
     return { w: BOX_W, h: BOX_H };
@@ -129,7 +131,7 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
       colInfo.forEach(function (col, k) {
         const refK = forward ? k - 1 : k + 1;
         if (refK < 0 || refK >= colInfo.length) return;
-        const refIds: Record<string, number> = {};
+        const refIds: Record<string, number> = Object.create(null);
         colInfo[refK].comps.forEach(function (c, i) { refIds[c.id] = i; });
         const keyed = col.comps.map(function (c, i) { return { c: c, key: neighborsMean(c, refIds, i) }; });
         keyed.sort(function (a, b) { return a.key - b.key || (a.c.id < b.c.id ? -1 : 1); });
@@ -138,19 +140,19 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
     }
   }
 
-  const boxes: Record<string, LayoutBox> = {};
-  const subs: Record<string, LayoutBox & { collapsed: boolean }> = {};
+  const boxes: Record<string, LayoutBox> = Object.create(null);
+  const subs: Record<string, LayoutBox & { collapsed: boolean }> = Object.create(null);
   const order = subsystemOrder();
-  const sizes: Record<string, { w: number; h: number; cols: { comps: LayoutModel['components'][number][]; w: number; h: number }[] }> = {};
+  const sizes: Record<string, { w: number; h: number; cols: { comps: LayoutModel['components'][number][]; w: number; h: number }[] }> = Object.create(null);
 
   order.forEach(function (subId) {
-    if (collapsed[subId]) { sizes[subId] = { w: 240, h: 76, cols: [] }; return; }
+    if (isCollapsed(subId)) { sizes[subId] = { w: 240, h: 76, cols: [] }; return; }
     const comps = model.components.filter(function (c) { return c.subsystem === subId && !c.owner; });
-    const topIds: Record<string, boolean> = {};
+    const topIds: Record<string, boolean> = Object.create(null);
     comps.forEach(function (c) { topIds[c.id] = true; });
-    const memo: Record<string, number> = {};
-    comps.forEach(function (c) { layerOf(c, topIds, memo, {}); });
-    const cols: Record<number, LayoutModel['components'][number][]> = {};
+    const memo: Record<string, number> = Object.create(null);
+    comps.forEach(function (c) { layerOf(c, topIds, memo, Object.create(null)); });
+    const cols: Record<number, LayoutModel['components'][number][]> = Object.create(null);
     comps.forEach(function (c) { (cols[memo[c.id]] = cols[memo[c.id]] || []).push(c); });
     const colKeys = Object.keys(cols).map(Number).sort(function (a, b) { return a - b; });
     const colInfo: { comps: LayoutModel['components'][number][]; w: number; h: number }[] = [];
@@ -174,15 +176,15 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
   order.forEach(function (subId) {
     const s = sizes[subId];
     if (x + s.w > MAX_ROW && x > 40) { x = 40; y += rowH + 70; rowH = 0; }
-    subs[subId] = { x: x, y: y, w: s.w, h: s.h, collapsed: !!collapsed[subId] };
-    if (!collapsed[subId]) {
+    subs[subId] = { x: x, y: y, w: s.w, h: s.h, collapsed: isCollapsed(subId) };
+    if (!isCollapsed(subId)) {
       let cx = x + SUB_PAD;
       s.cols.forEach(function (col) {
         let cy0 = y + SUB_HEAD + Math.max(0, (s.h - SUB_HEAD - SUB_PAD - col.h + GAP_Y) / 2);
         col.comps.forEach(function (c) {
           const bs = boxSizeFor(c);
           boxes[c.id] = { x: cx, y: cy0, w: bs.w, h: bs.h };
-          if (PATTERN_TYPES[c.componentType] && c.owns.length && !collapsed[c.id]) {
+          if (PATTERN_TYPES[c.componentType] && c.owns.length && !isCollapsed(c.id)) {
             let my = cy0 + PAT_HEAD;
             c.owns.forEach(function (mid) {
               boxes[mid] = { x: cx + PAT_PAD + 12, y: my, w: MEMBER_W, h: MEMBER_H };

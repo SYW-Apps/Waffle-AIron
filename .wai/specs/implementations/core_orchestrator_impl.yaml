@@ -132,15 +132,25 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Guard the alias and the source: an alias of [a-z0-9-_]+, and a source string one of the
-          grammar's forms parses (a hosted source refused — hosted project creation makes records)
+          Guard the alias and the source: an alias the identifier grammar accepts
+          (identifier.problemAs alias — [a-z0-9-_]+, at most 64 characters, no leading "-", never a
+          Windows device name, super or __proto__), a non-empty source string one of the grammar's
+          forms parses (a hosted source refused — hosted project creation makes records), and a
+          contained path that is not the project's own .wai directory or inside it, which holds the
+          spec tree and its configuration and can never be a member
         type: branch
-        condition: the alias is outside [a-z0-9-_]+ or the path is empty
+        condition: >-
+          the alias breaks the identifier grammar, the path is empty, or the path names the .wai
+          directory or a folder inside it
         onFalseStep: 3
       - stepNumber: 2
-        description: 'Reject: a member needs an alias of [a-z0-9-_]+ and a path'
+        description: >-
+          Reject, naming the one thing that is wrong: the alias with identifier.problemAs's own
+          reason, an empty source, or a path inside .wai
         type: throw
-        error: an alias and a path are required to create a member
+        error: >-
+          member refused: the alias breaks the identifier grammar, the source is empty, or the path
+          is inside .wai
       - stepNumber: 3
         description: >-
           Resolve the member directory: the bound project root joined with a contained or `../`
@@ -1186,27 +1196,30 @@ methods:
         error: component-missing or chained-component
       - stepNumber: 4
         description: >-
-          Guard: the new name must be an identifier in the method casing of the tree's language:
+          Guard: the new name must be an identifier (identifier.problemAs method: at most 64
+          characters, no leading digit, never __proto__), never a word the subsystem's effective
+          targetLanguage reserves for a method (identifier.reservedIn — constructor in TypeScript,
+          fn or type in Rust), and in the method casing of the tree's language:
           naming_rule_config.methodCasingFor(the subsystem's effective targetLanguage), the casing
           the naming-conventions rule and the define tools judge by, so define and rename accept the
           same names (snake_case in a Rust tree, camelCase in a TypeScript one). A contract of the
           component that implements another project's extension point (`implements`) takes its
           method names from the producer, in the producer's language, so for such a component any
-          identifier is accepted — IMPLEMENTS_MISMATCH judges the name against the producer's, and
-          the casing rule exempts it
+          identifier the language allows is accepted — IMPLEMENTS_MISMATCH judges the name against
+          the producer's, and the casing rule exempts it
         type: branch
         condition: >-
-          newName is outside the identifier grammar: not an identifier at all, or carrying a
-          separator, or — when no contract of the component declares `implements` — not in that
-          casing
+          newName is outside the identifier grammar (identifier.problemAs), reserved in the target
+          language (identifier.reservedIn), or — when no contract of the component declares
+          `implements` — not in that casing
         onFalseStep: 6
       - stepNumber: 5
         label: invalid-name
         description: Refuse a new name outside the grammar
         type: throw
         error: >-
-          invalid-name: the new name must be an identifier in the tree's method casing (naming the
-          casing)
+          invalid-name: the new name must be an identifier in the tree's method casing that the
+          target language allows (naming the casing, or the language and an alternative)
       - stepNumber: 6
         description: >-
           Load every interface spec, for the component's own contracts and the names they already
@@ -2706,12 +2719,13 @@ methods:
       - stepNumber: 3
         description: >-
           The field must be declared on the type (field-missing), the new name must be an identifier
-          (invalid-name), and no other field of the type may hold it (name-taken) or list it in its
-          previousNames (name-retired): refuse before any write
+          (identifier.problemAs field) the type's target language allows as a field
+          (identifier.reservedIn) (invalid-name), and no other field of the type may hold it
+          (name-taken) or list it in its previousNames (name-retired): refuse before any write
         type: branch
         condition: >-
-          the field exists, the new name is an identifier, and it is neither taken nor retired on
-          the type
+          the field exists, the new name is an identifier the target language allows, and it is
+          neither taken nor retired on the type
         onFalseStep: 8
       - stepNumber: 4
         description: >-
@@ -2765,8 +2779,10 @@ methods:
       - stepNumber: 4
         description: >-
           Guard, before any write: the method must be declared (method-missing) and declare the
-          parameter on every moving contract (param-missing); the new name must be an identifier and
-          — when rules.naming.variables is set and no contract of the component implements another
+          parameter on every moving contract (param-missing); the new name must be an identifier
+          (identifier.problemAs param), never a word the target language reserves for a parameter
+          (identifier.reservedIn — a keyword in TypeScript, Rust or Python), and — when
+          rules.naming.variables is set and no contract of the component implements another
           project's extension point — in that casing (invalid-name); and no other parameter of the
           method may hold it (name-taken) or list it in its previousNames (name-retired)
         type: branch
@@ -2787,7 +2803,8 @@ methods:
         description: >-
           Rename the parameter in place, appending its old name to the parameter's previousNames,
           re-derive the method's signature text from its params, and respell an HTTP endpoint path
-          placeholder `{old}` on the method's own binding to `{new}`, recording it
+          placeholder on the method's own binding in the form it was written — `{old}` to `{new}`,
+          the Express idiom `/:old` to `/:new` — recording each
         type: local
       - stepNumber: 8
         description: Save the interface
@@ -2813,6 +2830,22 @@ methods:
           name; nothing was written
         type: throw
         error: WaironError
+  - name: findOrphanedSpecFiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer nothing when the specs folder is absent, or when it holds its L0 (.index.yaml at
+          its root, or a legacy system.yaml) — then the tree is read the ordinary way
+        type: local
+      - stepNumber: 2
+        description: >-
+          List every spec file under the specs folder, each as its path from the project root with
+          POSIX separators, sorted
+        type: local
+      - stepNumber: 3
+        description: Return the files a deleted L0 left standing
+        type: return
+        outcome: success
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:55:43.587Z'
+updatedAt: '2026-10-07T22:12:38.899Z'

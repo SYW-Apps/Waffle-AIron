@@ -36,7 +36,7 @@ methods:
     endpoint:
       transport: HTTP
       method: GET
-      path: /projects/{id}/policy/evaluation
+      path: /projects/{projectId}/policy/evaluation
   - name: reconcileProjectPolicy
     description: Apply allowed auto-reconciliation for one hosted project's pack/profile policy gaps.
     signature: 'reconcileProjectPolicy(credential: string, projectId: string): PolicyEvaluationResult'
@@ -49,7 +49,7 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /projects/{id}/policy/reconcile
+      path: /projects/{projectId}/policy/reconcile
   - name: getPackPolicy
     description: Return the active hosted instance pack/profile policy.
     signature: 'getPackPolicy(credential: string): InstancePackPolicy'
@@ -76,4 +76,4 @@ methods:
       path: /instance/pack-policy
 status: complete
 createdAt: '2026-07-08T21:59:56.662Z'
-updatedAt: '2026-09-29T16:16:04.680Z'
+updatedAt: '2026-10-07T22:29:31.834Z'

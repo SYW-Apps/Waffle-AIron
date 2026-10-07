@@ -334,13 +334,13 @@ describe('the approval', () => {
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
   });
 
-  it('reads a corrupt lock record as "never approved" rather than throwing', () => {
+  it('refuses a corrupt lock record by name — never reads it as "never approved" (round-5 tinkerer M1: that passed the gate)', () => {
     root = project();
     approve();
     fs.writeFileSync(path.join(root, '.wai', 'lock.json'), '{ not json');
 
-    expect(readLockRecord()).toBeNull();
-    expect(diffAgainstApproval()).toBeNull();
+    expect(() => readLockRecord()).toThrow(/cannot be read as an approval record: it is not valid JSON/);
+    expect(() => diffAgainstApproval()).toThrow(/cannot be read as an approval record/);
   });
 
   it('treats a lock with no per-spec record as unapproved, without losing the lock', () => {

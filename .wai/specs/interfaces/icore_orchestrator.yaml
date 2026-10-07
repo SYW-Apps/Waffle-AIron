@@ -1304,6 +1304,15 @@ methods:
       - name: newName
         type: string
         description: Its new name
+  - name: findOrphanedSpecFiles
+    description: >-
+      The bound tree's spec files left standing while its specs folder holds no L0 (no .index.yaml
+      at its root, nor a legacy system.yaml), as paths from the project root, sorted; empty when the
+      L0 is there or nothing is. A tree whose root was deleted is not an empty tree. Pure read.
+    signature: 'findOrphanedSpecFiles(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:41:10.854Z'
+updatedAt: '2026-10-07T21:48:21.566Z'

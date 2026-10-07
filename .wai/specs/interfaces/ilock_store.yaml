@@ -4,7 +4,10 @@ description: Contract for reading and writing a project's commit-scoped lock rec
 component: lock_store
 methods:
   - name: read
-    description: Read the current lock record for the bound project, or null when absent.
+    description: >-
+      Read the current lock record for the bound project: null when absent; a record that exists but
+      cannot be read as one (empty, not JSON, not a lock record, a newer format) fails closed with
+      LockRecordUnreadableError, never null.
     signature: 'read(): LockRecord | null'
     returns: LockRecord?
     effect: read
@@ -15,11 +18,12 @@ methods:
     effect: write
   - name: readAt
     description: >-
-      Read the lock record of a project at a given root, or null when it has none. Distinct from
-      `read` rather than a parameter on it because a contract method binds exactly one code symbol,
-      and the two reads are two functions — but the real reason it exists is the chained model: a
-      parent compares its approval against the records of the children it mounts, and none of those
-      is the bound project.
+      Read the lock record of a project at a given root: null when it has none, and
+      LockRecordUnreadableError when it holds one that cannot be read, exactly as `read`. Distinct
+      from `read` rather than a parameter on it because a contract method binds exactly one code
+      symbol, and the two reads are two functions — but the real reason it exists is the chained
+      model: a parent compares its approval against the records of the children it mounts, and none
+      of those is the bound project.
     signature: 'readAt(root: string): LockRecord?'
     returns: LockRecord?
     params:
@@ -31,4 +35,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-04T12:48:43.336Z'
-updatedAt: '2026-10-04T10:18:58.936Z'
+updatedAt: '2026-10-07T21:49:03.778Z'

@@ -64,11 +64,14 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
 
   switch (action) {
     case 'export': {
-      const audience = options.audience ?? 'instance';
+      const format = options.format ?? 'native';
+      // An OpenAPI document is the project's own service document by default:
+      // every HTTP Portal it has (the `project` audience). A wider --audience
+      // narrows it to what the export table shares at that audience.
+      const audience = options.audience ?? (format === 'openapi' ? 'project' : 'instance');
       if (!(SURFACE_AUDIENCES as readonly string[]).includes(audience)) {
         throw new WaironError(`Unknown audience "${audience}" (levels: ${SURFACE_AUDIENCES.join(' < ')}).`);
       }
-      const format = options.format ?? 'native';
       if (format !== 'native' && format !== 'openapi') {
         throw new WaironError(`Unknown format "${format}" (supported: native, openapi).`);
       }

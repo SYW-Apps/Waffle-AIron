@@ -1,4 +1,5 @@
 import { SddRule } from '../types.js';
+import { ownGet } from '../../../utils/own.js';
 import type { ImplementationSpec, MethodImplementation, NarrativeStep } from '../../../models/index.js';
 
 /**
@@ -82,8 +83,8 @@ export const narrativeLanguageConstructsRule: SddRule = {
     // languages (packs may add whole platforms, or extend a built-in
     // language's table).
     const gapsFor = (lang: string): Record<string, string> => ({
-      ...(UNSUPPORTED_FLOW[lang] ?? {}),
-      ...(ctx.ext.languages[lang]?.unsupportedFlow ?? {}),
+      ...(ownGet(UNSUPPORTED_FLOW, lang) ?? {}),
+      ...(ownGet(ctx.ext.languages, lang)?.unsupportedFlow ?? {}),
     });
 
     // Every narrative step a declared target language can actually judge — an

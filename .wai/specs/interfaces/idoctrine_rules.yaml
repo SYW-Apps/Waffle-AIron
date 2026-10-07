@@ -11,7 +11,10 @@ methods:
       Rule portal-endpoints. A Portal binds every interface method to a concrete endpoint of its own
       transport, when that transport requires one (transport.requiresEndpoint): every transport but
       InProcess, whose verbs are the contract methods themselves, and Custom, whose address is
-      free-form.
+      free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the
+      method's parameters, so each must be closed, appear once and name a parameter of the method or
+      a field of a parameter's type (a method that states no structured params is not judged on
+      names).
     signature: 'portalEndpoints(ctx: RuleContext): void'
     returns: void
     params:
@@ -25,6 +28,11 @@ methods:
       - code: ENDPOINT_TRANSPORT_MISMATCH
         severity: error
         summary: Endpoint transport does not match the Portal's transport
+      - code: ENDPOINT_PATH_PLACEHOLDER
+        severity: error
+        summary: >-
+          An HTTP endpoint path holds an unclosed placeholder, one placeholder twice, or a
+          placeholder that names no parameter of its method
   - name: nonPortalEndpoints
     description: >-
       Rule non-portal-endpoints. Only a Portal may carry endpoints: a method on a non-Portal
@@ -511,4 +519,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-06T13:02:21.592Z'
+updatedAt: '2026-10-07T22:57:04.786Z'

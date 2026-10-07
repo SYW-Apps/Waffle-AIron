@@ -43,6 +43,7 @@ import type { ReachFinding, ReachModel } from '../models/reach.js';
 // network verdicts — pure, over the models each project's own gate projected.
 import { compose as composeReach } from './rules/reach-model-projector.js';
 import { judge as judgeNetwork, familyCodes } from './rules/network-arbiter.js';
+import { ownGet, ownHas } from '../utils/own.js';
 
 /** A project's lock record, as the core adapter reads one. */
 type LockRecord = NonNullable<ReturnType<typeof approvalRecord>>;
@@ -418,7 +419,7 @@ function isBroken(use: ExternalStatus['uses'][number]): boolean {
 
 /** How a broken use moved, as a finding says it: changed at signature level, renamed to its new name, or gone. */
 function howMoved(use: ExternalStatus['uses'][number]): string {
-  if (use.state === 'changed') return 'changed at signature level since it was pinned';
+  if (use.state === 'changed') return use.detail ? `changed since it was pinned: ${use.detail}` : 'changed at signature level since it was pinned';
   if (use.state === 'renamed') {
     const changed = use.detail?.includes('signature changed') ? ' (and its signature changed)' : '';
     return `was renamed to "${use.renamedTo}"${changed}, per the producer's rename trace`;
@@ -440,7 +441,7 @@ function judgeExternal(status: ExternalStatus, project: string, config: ProjectC
   const who = `the external "${status.alias}" (project "${status.project}")`;
   const broken = status.uses.filter(isBroken);
   for (const use of broken) {
-    const fix = use.state === 'renamed' ? 'Follow the rename in the uses' : 'Adapt the uses';
+    const fix = use.state === 'renamed' || use.detail?.includes('follow the rename') ? 'Follow the rename in the uses' : 'Adapt the uses';
     out.push(finding(config, 'EXTERNAL_INCOMPATIBLE',
       `${named(project)} uses ${useName(use)} of ${who}, which ${howMoved(use)}. ${fix}, then re-pin (\`wairon externals pin ${status.alias}\`).`,
       project));
@@ -613,7 +614,7 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
       // Step 6: what moved, who uses it, the fix.
       const broken = status.uses.filter(isBroken);
       const users = [...new Set(broken.flatMap((u) => specsUsing(family, status.alias, u.publicName)))].sort();
-      const renamed = broken.some((u) => u.state === 'renamed');
+      const renamed = broken.some((u) => u.state === 'renamed' || u.detail?.includes('follow the rename'));
       return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
         `${who} moved in its live producer since it was pinned: ${broken.map(movedUse).join('; ')}. `
         + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
@@ -624,6 +625,18 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
       return advisory(config, 'EXTERNAL_DRIFTED',
         `The live producer of ${who} moved since it was pinned, but nothing this project uses changed.${staleTail(status)} Re-pin when convenient (${repin(status.alias)}).`);
     case 'unavailable': {
+      // Step 9b: a pinned external used beyond its pin, everything else
+      // compared: the live producer HAS the uses, but the pin records nothing
+      // to judge them against — named, with the gates that refuse it, so a
+      // validate log never stays silent on what lock-check fails.
+      const beyond = status.pinnedDigest !== undefined && status.reachable && !status.outOfReach
+        ? status.uses.filter((u) => u.state === 'unlocked')
+        : [];
+      if (beyond.length > 0 && status.uses.every((u) => u.state !== 'unavailable')) {
+        return advisory(config, 'EXTERNAL_LIVE_UNCOMPARED',
+          `${who} is used beyond its pin: ${beyond.map(useName).join(', ')} (used now, but not in the lock). The live producer exports ${beyond.length === 1 ? 'it' : 'them'}, but the pin records nothing ${beyond.length === 1 ? 'it is' : 'they are'} judged against, `
+          + `so \`wairon lock\` refuses and \`wairon lock-check\` fails until it is re-pinned: ${repin(status.alias)}, then lock.`);
+      }
       // Step 10: never a pass, never a failure of the owner's gate.
       const reason = uncomparedReason(status);
       const how = reason.includes('wairon externals status') ? '' : ' `wairon externals status` compares it live.';
@@ -914,8 +927,8 @@ function owedBy(record: LockRecord): string | undefined {
 function pinOf(parent: LockRecord | null, alias: string, subject: string | undefined): PinState {
   if (!parent) return 'unpinned';
   const recorded = parent.members
-    ? (alias in parent.members ? parent.members[alias].subject ?? 'never' : undefined)
-    : parent.children?.[alias];
+    ? (ownHas(parent.members, alias) ? ownGet(parent.members, alias)!.subject ?? 'never' : undefined)
+    : ownGet(parent.children, alias);
   if (recorded === undefined) return 'unpinned';
   return recorded === (subject ?? 'never') ? 'matches' : 'moved';
 }
@@ -1326,7 +1339,7 @@ export function policyDeviations(member: string, requirement: PackRequirement, s
   const out: ValidationIssue[] = [];
   // Step 7: rule severities the pack sets.
   for (const [code, severity] of Object.entries(rules?.sddRuleSeverity ?? {})) {
-    const packs = settings.severities[code];
+    const packs = ownGet(settings.severities, code);
     if (packs !== undefined && packs !== severity) out.push(deviation(`rules.sddRuleSeverity.${code}`, packs, severity));
   }
   // Step 8: design depth, the project's and each subsystem's.
@@ -1352,8 +1365,8 @@ export function policyDeviations(member: string, requirement: PackRequirement, s
   }
   // Step 11: each lint.allow over a code the pack sets.
   for (const allow of allows) {
-    if (settings.severities[allow.code] === undefined) continue;
-    out.push(deviation(`a lint.allow of ${allow.code}${allow.at ? ` at "${allow.at}"` : ''} on "${allow.specId}"`, settings.severities[allow.code], 'allowed', allow.specId));
+    if (ownGet(settings.severities, allow.code) === undefined) continue;
+    out.push(deviation(`a lint.allow of ${allow.code}${allow.at ? ` at "${allow.at}"` : ''} on "${allow.specId}"`, ownGet(settings.severities, allow.code), 'allowed', allow.specId));
   }
   // Step 12.
   return out;

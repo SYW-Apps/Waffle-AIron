@@ -53,7 +53,11 @@ methods:
       - stepNumber: 7
         description: >-
           Put the source's params and returns on the method — the source's are in force whatever the
-          method stated — and record a resolved fact naming the bound target
+          method stated — and, when the method declares no effect of its own and the source is a
+          contract method (this project's, or another project's export), the source's effect too: a
+          verb forwarding a pure method is itself pure, so a pure consumer may call it, and exports
+          and pins carry it. A signature type carries no effect. Record a resolved fact naming the
+          bound target
         type: local
       - stepNumber: 8
         description: Done with this method
@@ -95,4 +99,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-03T19:32:24.468Z'
-updatedAt: '2026-10-06T23:08:38.449Z'
+updatedAt: '2026-10-07T21:53:31.756Z'

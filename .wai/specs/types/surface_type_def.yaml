@@ -24,14 +24,16 @@ fields:
   - name: fields
     type: list<any>
     description: >-
-      Data fields (name, type, optional, description) — types reference each other within the
-      closure. Empty on a signature.
+      Data fields (name, type, optional, description, and `formerly`: the field's rename trace as
+      the producer recorded it, so a consumer pinned to a former field name reads a rename) — types
+      reference each other within the closure. Empty on a signature. The trace is provenance and
+      enters no digest.
     optional: false
   - name: params
     type: list<any>
     description: >-
-      A signature's parameters (name, type, optional, description), in declared order; types
-      reference the closure. Only on kind signature.
+      A signature's parameters (name, type, optional, description, and `formerly`: its rename
+      trace), in declared order; types reference the closure. Only on kind signature.
     optional: true
   - name: returns
     type: string
@@ -63,4 +65,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:32.022Z'
-updatedAt: '2026-10-07T06:38:18.872Z'
+updatedAt: '2026-10-07T22:00:36.572Z'

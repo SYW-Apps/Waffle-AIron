@@ -115,15 +115,51 @@ describe('lock on an all-draft tree says so', () => {
     project('draft');
     const out = capture();
     await lock();
-    expect(out.lines.join('\n')).toMatch(/Every component \(1\) is still draft or design: this approves the design as it stands/);
+    expect(out.lines.join('\n')).toMatch(/3 of 3 spec\(s\) are still draft or design \(1 subsystem, 1 component, 1 contract\): this approves the design as it stands/);
     expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(true);
   });
 
-  it('is silent about drafts once a component is complete', async () => {
+  it('is silent about drafts once every spec is complete', async () => {
     project('complete');
     const out = capture();
     await lock();
     expect(out.lines.join('\n')).not.toMatch(/still draft or design/);
+  });
+
+  it('counts every draft spec kind, not just components (tinkerer-r5: every L3/L4 draft was approved silently)', async () => {
+    project('complete');
+    // The contract is hand-set back to draft; the component stays complete.
+    const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true })
+      .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+    const file = walk(path.join(rootDir, '.wai', 'specs')).find((f) => /id: iworker/.test(fs.readFileSync(f, 'utf8')))!;
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/status: complete/, 'status: draft'));
+    const out = capture();
+    await lock();
+    expect(out.lines.join('\n')).toMatch(/1 of 3 spec\(s\) are still draft or design \(1 contract\)/);
+  });
+});
+
+describe('a re-run with nothing changed keeps the approval on record (tinkerer-r5: lockedAt rewritten)', () => {
+  it('leaves .wai/lock.json byte for byte, its lockedAt included', async () => {
+    project('complete');
+    await lock();
+    const lockPath = path.join(rootDir, '.wai', 'lock.json');
+    const first = fs.readFileSync(lockPath, 'utf8');
+    await new Promise((r) => setTimeout(r, 15));
+    await lock();
+    expect(fs.readFileSync(lockPath, 'utf8')).toBe(first);
+  });
+
+  it('writes a new record when something it records moved', async () => {
+    project('complete');
+    await lock();
+    const lockPath = path.join(rootDir, '.wai', 'lock.json');
+    const first = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as { lockedAt: string };
+    addComponent('second');
+    await new Promise((r) => setTimeout(r, 15));
+    await lock();
+    const second = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as { lockedAt: string };
+    expect(second.lockedAt).not.toBe(first.lockedAt);
   });
 });
 

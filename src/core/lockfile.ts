@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { aiDir, aiDirAt, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
+import { LockRecordUnreadableError } from '../utils/errors.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
 import type { ApproverIdentity, CodeAnalysis, LockReexpression, ProjectApprovalState, SpecDigestReading } from '../models/lock.js';
@@ -145,22 +146,79 @@ export function normalizeApprover(value: unknown): ApproverIdentity {
   return { id: typeof value === 'string' && value ? value : 'unknown', source: 'legacy' };
 }
 
-/** Read the current project's lock record, or null when absent/unreadable. */
+/**
+ * The newest lock record format this release reads. A record naming a later
+ * one was written by a newer wairon: its fields may mean things this release
+ * cannot judge, so it is refused rather than read as something it is not.
+ */
+const LOCK_FORMAT_CURRENT = 3;
+
+/** Read the current project's lock record: null when ABSENT, LockRecordUnreadableError when present but unreadable. */
 export function readLockRecord(): LockRecord | null {
-  try {
-    return normalizeRecord(JSON.parse(fs.readFileSync(lockPath(), 'utf8')));
-  } catch {
-    return null;
-  }
+  return readRecordFile(lockPath());
 }
 
-/** Read another project root's lock record — how a parent resolves a child pin. */
+/** Read another project root's lock record — how a parent resolves a child pin. Fails closed exactly as readLockRecord. */
 export function readLockRecordAt(root: string): LockRecord | null {
+  return readRecordFile(aiDirAt(root, 'lock.json'));
+}
+
+/**
+ * The record at `file`: null only when there is no file. An editor's BOM is
+ * tolerated (it changes no byte of the record); anything else that keeps the
+ * file from being a lock record this release reads is refused by name.
+ */
+function readRecordFile(file: string): LockRecord | null {
+  let text: string;
   try {
-    return normalizeRecord(JSON.parse(fs.readFileSync(aiDirAt(root, 'lock.json'), 'utf8')));
-  } catch {
-    return null;
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new LockRecordUnreadableError(displayPath(file), `the file cannot be read (${(e as Error).message})`);
   }
+  return parseLockRecord(text, displayPath(file));
+}
+
+/**
+ * lock_store.parse — a lock record's text read as a LockRecord, or the reason
+ * it is not one (LockRecordUnreadableError naming `file`). Pure.
+ */
+function parseLockRecord(text: string, file: string): LockRecord {
+  const body = text.replace(/^\uFEFF/, '');
+  if (body.trim() === '') throw new LockRecordUnreadableError(file, 'the file is empty');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body);
+  } catch (e) {
+    throw new LockRecordUnreadableError(file, `it is not valid JSON (${(e as Error).message})`);
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    const what = raw === null ? 'null' : Array.isArray(raw) ? 'an array' : `a ${typeof raw}`;
+    throw new LockRecordUnreadableError(file, `it holds ${what}, not a lock record object`);
+  }
+  const record = raw as Partial<LockRecord> & Record<string, unknown>;
+  if (record.format !== undefined && (typeof record.format !== 'number' || !Number.isInteger(record.format) || record.format < 1)) {
+    throw new LockRecordUnreadableError(file, `its "format" is ${JSON.stringify(record.format)}, not a lock record format`);
+  }
+  if (typeof record.format === 'number' && record.format > LOCK_FORMAT_CURRENT) {
+    throw new LockRecordUnreadableError(file, `it is lock record format ${record.format}, written by a newer wairon (this release reads formats 1-${LOCK_FORMAT_CURRENT}) — upgrade wairon to read it`);
+  }
+  const stateId = record.stateId as Partial<StateId> | undefined;
+  if (!stateId || typeof stateId !== 'object' || typeof stateId.algorithm !== 'string' || typeof stateId.digest !== 'string') {
+    throw new LockRecordUnreadableError(file, 'it records no gate identity ("stateId": {algorithm, digest}), so it is not a lock record');
+  }
+  if (record.specs !== undefined && (record.specs === null || typeof record.specs !== 'object' || Array.isArray(record.specs)
+    || Object.values(record.specs).some((d) => typeof d !== 'string'))) {
+    throw new LockRecordUnreadableError(file, 'its "specs" is not a map of spec path to digest');
+  }
+  return normalizeRecord(record);
+}
+
+/** The file as a reader names it: relative to the working directory when inside it, POSIX separators. */
+function displayPath(file: string): string {
+  const rel = path.relative(process.cwd(), file);
+  const shown = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : file;
+  return shown.split(path.sep).join('/');
 }
 
 function normalizeRecord(raw: unknown): LockRecord {

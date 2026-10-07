@@ -216,7 +216,7 @@ methods:
     endpoint:
       transport: HTTP
       method: GET
-      path: /admin/projects/{id}/packs
+      path: /admin/projects/{project}/packs
   - name: installProjectPack
     description: Install a declarative pack into a project (declarative-only; code packs are refused).
     signature: >-
@@ -235,7 +235,7 @@ methods:
     endpoint:
       transport: HTTP
       method: PUT
-      path: /admin/projects/{id}/packs/{name}
+      path: /admin/projects/{project}/packs/{name}
   - name: removeProjectPack
     description: Remove one of a project's registered packs.
     signature: 'removeProjectPack(credential: string, project: string, name: string): void'
@@ -250,7 +250,7 @@ methods:
     endpoint:
       transport: HTTP
       method: DELETE
-      path: /admin/projects/{id}/packs/{name}
+      path: /admin/projects/{project}/packs/{name}
   - name: listApprovals
     description: >-
       List approval requests for the human decision surface, optionally filtered by status and
@@ -292,7 +292,7 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/approvals/{id}/decision
+      path: /admin/approvals/{requestId}/decision
   - name: executeApproval
     description: >-
       Execute an approved request's privileged action. Human decision surface for the
@@ -307,7 +307,7 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/approvals/{id}/execute
+      path: /admin/approvals/{requestId}/execute
   - name: exportProjectTree
     description: >-
       Return a project's whole spec tree as a .waitree archive download — the operator's migration
@@ -322,7 +322,7 @@ methods:
     endpoint:
       transport: HTTP
       method: GET
-      path: /admin/projects/{id}/tree
+      path: /admin/projects/{project}/tree
   - name: importProjectTree
     description: >-
       Replace a project's spec tree from a .waitree archive carried as base64 in the JSON body,
@@ -345,7 +345,7 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/projects/{id}/tree
+      path: /admin/projects/{project}/tree
   - name: previewProjectPack
     description: >-
       Measure, writing nothing, what installing a declarative pack (the YAML in the body) or
@@ -369,7 +369,7 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/projects/{id}/packs/{name}/impact
+      path: /admin/projects/{project}/packs/{name}/impact
     guarantees:
       - idempotent
   - name: previewProjectPackRemoval
@@ -388,9 +388,9 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/projects/{id}/packs/{name}/removal-impact
+      path: /admin/projects/{project}/packs/{name}/removal-impact
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-10-04T10:18:28.473Z'
+updatedAt: '2026-10-07T22:29:21.448Z'

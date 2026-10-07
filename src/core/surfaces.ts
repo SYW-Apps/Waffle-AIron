@@ -25,6 +25,7 @@ import {
   contentDigest,
   memberDigest,
   carriedFactChanges,
+  fieldRenamesSince,
   surfaceChanges,
   type SurfaceChange,
   declaredExternals,
@@ -65,9 +66,10 @@ import {
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
 import { externalsRepository } from './externals.js';
-import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
+import { fromOpenApi, isOpenApiDocument, toOpenApiSet, type OpenApiRenderContext } from './openapi.js';
 // design_exporter: the design export's projector, beside the snapshot's.
 import { exportDesign as projectDesign } from './design-export.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // Public Surface Exchange (sdd_surfaces)
@@ -160,11 +162,14 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
   return [...included.entries()].map(([qualified, t]) => {
     const id = usedIds.has(t.id) ? qualified : t.id;
     usedIds.add(id);
-    const describe = <V extends { name: string; type: string; description?: string; optional?: boolean }>(v: V) => ({
+    const describe = <V extends { name: string; type: string; description?: string; optional?: boolean; previousNames?: string[] }>(v: V) => ({
       name: v.name,
       type: v.type,
       ...(v.description ? { description: v.description } : {}),
       ...(v.optional ? { optional: true } : {}),
+      // A renamed field (or signature param) travels with its rename trace —
+      // provenance, outside every digest — so a consumer reads the rename.
+      ...formerlyOf(v.previousNames, v.name),
     });
     return {
       id,
@@ -277,7 +282,7 @@ function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: I
  * export index, so each entry carries its target's contract under its public
  * name, and a consumer never walks the producer's chain.
  */
-export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
+export function projectOwnSurface(maxAudience: string, ownHttpPortals = false): SurfaceSnapshot {
   // Step 1: the L0 (its name keys the snapshot).
   const system = loadSystemSpec();
   if (!system) {
@@ -299,6 +304,20 @@ export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
     if (entry.kind !== 'component') continue;
     const comp = components.find(c => c.id === entry.component);
     if (comp) entries.push(contractEntry(entry, comp, interfaces));
+  }
+  // Step 8b (a service document only): every HTTP Portal of the project's own,
+  // exported or not. The L0 export table says what OTHER wairon projects may
+  // consume; a project's own API document describes what its HTTP callers —
+  // browsers, other services — send, which no export governs. An unexported
+  // Portal is the project's alone, so it is in only at the `project` ceiling:
+  // a document shared at a wider audience carries what the table shares there.
+  if (ownHttpPortals && floor <= audienceRank('project')) {
+    for (const comp of components) {
+      // The bound project's own Portals only: a member's (a qualified id) is that project's API.
+      if (comp.componentType !== 'Portal' || comp.transport !== 'HTTP' || comp.id.includes('::') || entries.some((e) => e.component === comp.id)) continue;
+      const own: ResolvedExport = { publicName: comp.id, kind: 'component', source: comp.subsystem, component: comp.id, componentType: comp.componentType, type: 'REST', audience: 'project', via: [] };
+      entries.push(contractEntry(own, comp, interfaces));
+    }
   }
 
   // Step 9: exported types listed apart, and the closure over both.
@@ -583,7 +602,7 @@ export function listPinnedExternals(): PinnedExternal[] {
   // Steps 3-5: each declared alias, with its entry and snapshot — or the problem.
   return declared.map(({ alias, project }): PinnedExternal => {
     if (lockProblem) return { alias, project, problem: lockProblem };
-    const entry = lock?.externals[alias];
+    const entry = ownGet(lock?.externals, alias);
     if (!entry) return { alias, project, problem: `the external "${alias}" was never pinned (run \`wairon externals pin\`)` };
     const snapshot = externalsRepository.readSnapshot(alias);
     if (!snapshot) return { alias, project: entry.project, entry, problem: `the pinned snapshot ${entry.snapshot} is missing or unreadable (re-pin with \`wairon externals pin\`)` };
@@ -731,16 +750,73 @@ export class OpenApiNotApplicableError extends Error {
     const kinds = [...new Set(snapshot.interfaces.map((e) => e.type))].sort();
     super(snapshot.interfaces.length
       ? `OpenAPI does not apply to "${snapshot.projectName}": it exposes no HTTP Portal at audience ≥ ${maxAudience} — its ${snapshot.interfaces.length} exported interface(s) are ${kinds.join(', ')}${kinds.includes('InProcess') ? ' (an in-process library is called, not requested over HTTP)' : ''}, which no OpenAPI document describes. Nothing was written; export the native snapshot (\`--format native\`) instead.`
-      : `OpenAPI does not apply to "${snapshot.projectName}": it exports no interface at audience ≥ ${maxAudience}. Nothing was written.`);
+      : `OpenAPI does not apply to "${snapshot.projectName}": it has no HTTP Portal (a Portal with transport HTTP) to describe, and exports no interface at audience ≥ ${maxAudience}. Nothing was written.`);
     this.name = 'OpenApiNotApplicableError';
   }
 }
 
+/**
+ * What an OpenAPI rendering reads beyond the snapshot: each declared
+ * external's pinned snapshot (where `alias::name` in a schema resolves), and
+ * the version the project declares in its package manifest.
+ */
+function openApiContext(): OpenApiRenderContext {
+  const externals = new Map<string, SurfaceSnapshot>();
+  try {
+    for (const p of listPinnedExternals()) if (p.snapshot) externals.set(p.alias, p.snapshot);
+  } catch {
+    // An unreadable pin resolves nothing: its types read as unresolved, as before.
+  }
+  const version = declaredVersion(getProjectRoot());
+  return { externals, ...(version ? { version } : {}) };
+}
+
+/**
+ * The version a project declares in its package manifest — package.json's
+ * `version`, else Cargo.toml's or pyproject.toml's `version` — or undefined
+ * when none declares one. Read, never written.
+ */
+function declaredVersion(root: string): string | undefined {
+  const read = (file: string): string | null => {
+    try {
+      return fs.readFileSync(path.join(root, file), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const pkg = read('package.json');
+  if (pkg !== null) {
+    try {
+      const version = (JSON.parse(pkg) as { version?: unknown }).version;
+      if (typeof version === 'string' && version.trim()) return version.trim();
+    } catch {
+      // Not JSON: no version from it.
+    }
+  }
+  for (const file of ['Cargo.toml', 'pyproject.toml']) {
+    const text = read(file);
+    const m = text ? /^\s*version\s*=\s*"([^"]+)"/m.exec(text) : null;
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
 export function exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string): SurfaceExportResult {
-  const snapshot = projectOwnSurface(maxAudience);
-  let renderedSet = format === 'openapi' ? toOpenApiSet(snapshot) : undefined;
+  // An OpenAPI document describes the project's own HTTP API: every HTTP
+  // Portal, exported to other wairon projects or not.
+  const snapshot = projectOwnSurface(maxAudience, format === 'openapi');
+  let renderedSet = format === 'openapi' ? toOpenApiSet(snapshot, openApiContext()) : undefined;
   // No HTTP Portal: OpenAPI does not apply — a file asked for is refused, never written as the native snapshot.
   if (renderedSet && renderedSet.length === 0 && outPath) throw new OpenApiNotApplicableError(snapshot, maxAudience);
+  if (renderedSet && portalId && !renderedSet.some((s) => s.portalId === portalId)) {
+    // A Portal of this project that the ceiling left out is not "unknown": say why, and how to get it.
+    const own = loadComponentSpecs().find((c) => c.id === portalId && c.componentType === 'Portal');
+    if (own) {
+      throw new Error(own.transport !== 'HTTP'
+        ? `Portal "${portalId}" is a ${own.transport ?? 'transport-less'} Portal: no OpenAPI document describes it (an OpenAPI document describes an HTTP Portal).`
+        : `Portal "${portalId}" is not shared at audience ≥ ${maxAudience}: its export table entry is narrower or missing. Its own service document renders at the project audience — drop --audience (the default for --format openapi is project), or export it in the L0 publicInterfaces at the audience you want.`);
+    }
+  }
   if (renderedSet && portalId) renderedSet = selectPortalSpec(renderedSet, portalId);
   const writtenPaths = outPath ? writeSurfaceFile(outPath, snapshot, renderedSet) : [];
   return exportResult(snapshot, renderedSet, writtenPaths);
@@ -1015,7 +1091,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
     ...(external.commit !== undefined ? { commit: external.commit } : {}),
     ...(external.role === 'member' ? { role: 'member' } : {}),
   };
-  const entryChanged = canonicalize(lock.externals[external.alias] ?? null) !== canonicalize(entry);
+  const entryChanged = canonicalize(ownGet(lock.externals, external.alias) ?? null) !== canonicalize(entry);
   lock.externals[external.alias] = entry;
   return {
     pin: {
@@ -1245,8 +1321,21 @@ function goneUse(live: SurfaceSnapshot, publicName: string, member: string | und
   return { ...at, state: 'renamed', renamedTo, detail: `renamed to "${renamedTo}"${signature} — follow the rename` };
 }
 
+/**
+ * What a changed use's detail says when the pinned snapshot is at hand: the
+ * fields renamed inside its closure, with their new names, per the producer's
+ * rename trace — and whether the renames are the whole change. Nothing when
+ * no field was renamed (the change is then said as a signature change).
+ */
+function changedDetail(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string, digest: string): { detail?: string } {
+  if (!pinned) return {};
+  const { renames, renameOnly } = fieldRenamesSince(pinned, live, publicName, member, digest);
+  if (renames.length === 0) return {};
+  return { detail: `${renames.join('; ')}${renameOnly ? ' (its shape is otherwise unchanged) — follow the rename' : ' (and its shape changed beyond that)'}` };
+}
+
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
-function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot): ExternalUseStatus[] {
+function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
   const locked = entry?.used ?? {};
   const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
@@ -1257,7 +1346,9 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
     }
     for (const [member, digest] of Object.entries(members)) {
       const now = memberDigest(live, publicName, member);
-      uses.push(now === null ? goneUse(live, publicName, member, digest) : { publicName, member, state: now === digest ? 'unchanged' : 'changed' });
+      if (now === null) uses.push(goneUse(live, publicName, member, digest));
+      else if (now === digest) uses.push({ publicName, member, state: 'unchanged' });
+      else uses.push({ publicName, member, state: 'changed', ...changedDetail(pinned, live, publicName, member, digest) });
     }
   }
   // A use the lock does not hold is still compared with the live producer: one
@@ -1269,8 +1360,12 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   };
   for (const use of usage?.used ?? []) {
     if (!(use.publicName in locked)) {
-      const gone = use.members.map((m) => unlocked(use.publicName, m)).filter((u) => u.state !== 'unlocked');
-      uses.push(...(gone.length ? gone : [unlocked(use.publicName)]));
+      const each = use.members.map((m) => unlocked(use.publicName, m));
+      const gone = each.filter((u) => u.state !== 'unlocked');
+      // Named member by member, as `wairon lock` names what it refuses; a bare
+      // dependency (or a type's use) by its public name.
+      const named = each.filter((u) => u.member !== 'type');
+      uses.push(...(gone.length ? gone : named.length ? named : [unlocked(use.publicName)]));
       continue;
     }
     for (const member of use.members) {
@@ -1310,7 +1405,7 @@ function unavailableUses(entry: ExternalLockEntry | undefined, reason: string): 
 /** The status of one declared external against its live producer. */
 function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): ExternalStatus {
   const { external } = binding;
-  const entry = lock?.externals[external.alias];
+  const entry = ownGet(lock?.externals, external.alias);
   // Step 4: its pinned snapshot, if any — and the lock entry's digest and
   // commit carried as provenance for a reader; neither is compared here.
   const pinned = entry !== undefined && externalsRepository.readSnapshot(external.alias) !== null;
@@ -1345,12 +1440,14 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   }
   // Step 8: every used member compared at signature level, for every producer
   // alike — family, path, git, hosted, a referenced project (stage 8).
-  const drifted = entry !== undefined ? contentDigest(live) !== entry.digest : undefined;
-  const uses = compareUses(entry, binding.usage, live);
+  const snapshot = entry !== undefined ? externalsRepository.readSnapshot(external.alias) : null;
+  const uses = compareUses(entry, binding.usage, live, snapshot);
   // A pinned snapshot that no longer carries what the producer says (an abi,
   // a transport, a role) is stale even when its digest is not: never ok.
-  const snapshot = entry !== undefined ? externalsRepository.readSnapshot(external.alias) : null;
   const staleFacts = snapshot ? carriedFactChanges(snapshot, live) : [];
+  // Drifted is "the producer moved since the pin": its contract digest, or a
+  // fact the pin carries beside it — one answer with the health it reports.
+  const drifted = entry !== undefined ? contentDigest(live) !== entry.digest || staleFacts.length > 0 : undefined;
   return {
     ...base,
     reachable: true,
@@ -1399,7 +1496,7 @@ export function listExternals(): ExternalListing[] {
   const lock = externalsRepository.readLock();
   // Step 3: one row per declared external, in declaration order.
   const declared = bindings.map(({ external }): ExternalListing => {
-    const entry = lock?.externals[external.alias];
+    const entry = ownGet(lock?.externals, external.alias);
     return {
       alias: external.alias,
       project: external.project,

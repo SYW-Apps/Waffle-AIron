@@ -452,10 +452,11 @@ The dangerous direction is a gate going *quiet*. Every step below is loud.
 3. **`useGlobalPacks` default flips to `false`.** The field is still honoured, so
    a project that explicitly sets `true` is unaffected.
 4. **`wairon doctor` reports the delta** — store packs that no project selected,
-   selections that do not resolve, and bundle/store drift. `doctor --fix`
-   converts what was being loaded implicitly into an explicit selection list, so
-   upgrading is a visible diff in `project.yaml` rather than a silent change of
-   enforced rules.
+   selections that do not resolve, and bundle/store drift. It lists the store
+   packs a project does not select and names `wairon pack use <name>` for each;
+   `doctor --fix` never selects them for you, because what happens to be
+   installed on one machine is no decision of the project's (a member's approval
+   drifted the day a `--fix` recorded a pack nobody chose).
 5. **A project with no `extensions` block and a non-empty store** gets an
    informational notice on `validate`/`status` naming exactly what stopped
    applying and how to re-select it.
@@ -537,11 +538,10 @@ with or before A4, so migration reporting lands before behaviour changes.
    replaced. Resolution stays in the loader and the rule only surfaces what it
    found, so the two can never disagree about whether a pack applies.
 4. ~~**A7**~~ **DONE** — `wairon doctor` reports unresolvable selections,
-   installed-but-unapplied packs, and opted-in machine-wide packs;
-   `doctor --fix` records the unapplied set as explicit name+version selections
-   and turns machine-wide loading off. It refuses to invent selections for a
-   project that deliberately applies nothing, distinguishing "never decided"
-   (absent field in the raw file) from "chose deliberately".
+   installed-but-unapplied packs, and opted-in machine-wide packs, naming
+   `wairon pack use <name>` for each pack to select. `doctor --fix` no longer
+   records installed packs as selections: the machine's store is never the
+   project's choice.
 5. ~~**A4**~~ **DONE** — `useGlobalPacks` defaults to `false`, behind the single
    `GLOBAL_PACKS_DEFAULT` constant that every reader and config writer shares.
 6. ~~**A5**~~ **DONE** — a store pack declaring `applyByDefault: true` is seeded

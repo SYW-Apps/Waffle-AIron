@@ -46,11 +46,16 @@ methods:
           is not canonical is refused (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
           TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL, naming the replacement — `number` asks "int or
           float?"); a stored position the delta leaves alone is not judged, so a spec holding one
-          from before the grammar can still be edited and repaired. For a component or a type it
-          also refuses an owning subsystem the delta CHANGED to one the tree does not have, read
-          through the core adapter's loadSpec — as every create refuses an unknown parent; an owner
-          the delta leaves alone is not judged, so a spec already pointing at a missing subsystem
-          can still be repaired
+          from before the grammar can still be edited and repaired. For an interface or a type it
+          refuses, the same way writeSpec does, a method, parameter or field name the delta
+          introduces that breaks identifier.problemAs, is reserved in the target language
+          (identifier.reservedIn), repeats one in its place, or — a new contract method on a
+          contract that implements nothing — breaks the method casing (invalid-name); a name the
+          stored spec already held is not judged. For a component or a type it also refuses an
+          owning subsystem the delta CHANGED to one the tree does not have, read through the core
+          adapter's loadSpec — as every create refuses an unknown parent; an owner the delta leaves
+          alone is not judged, so a spec already pointing at a missing subsystem can still be
+          repaired
         type: local
       - stepNumber: 4
         description: >-
@@ -228,15 +233,40 @@ methods:
         type: throw
         error: restatement refused
       - stepNumber: 13
+        label: name-check
+        description: >-
+          Decide whether an interface or a type candidate introduces a name the tree cannot hold,
+          reading the L0 and the owning subsystem it names (an interface through its component)
+          through the core client adapter's loadSpec for the effective targetLanguage: a method,
+          parameter or field name the stored spec does not already hold — so a spec carrying an
+          older name can still be edited — that breaks the identifier grammar (identifier.problemAs:
+          empty, over 64 characters, a leading digit, __proto__), is a word the target language
+          reserves for that kind (identifier.reservedIn), is a second member of the same name in one
+          place, or — a contract method on a contract that implements no other project's extension
+          point — is outside the tree's method casing (naming_rule_config.methodCasingFor): exactly
+          what sdd_rename_method refuses, so define and rename accept the same names
+        type: branch
+        condition: >-
+          the candidate is an interface or a type, and an introduced method, parameter or field name
+          breaks the grammar, is reserved, repeats one in its place, or breaks the method casing
+        onFalseStep: 15
+      - stepNumber: 14
+        label: invalid-name
+        description: >-
+          Refuse before anything reaches disk (invalid-name), naming every such name and why — the
+          language and an alternative for a reserved word
+        type: throw
+        error: invalid-name
+      - stepNumber: 15
         label: judge
         description: >-
           Decide whether the candidate is a component, the one kind the intrinsic rules judge at the
           write boundary
         type: branch
         condition: the restatement's kind is component
-        onTrueStep: 14
-        onFalseStep: 17
-      - stepNumber: 14
+        onTrueStep: 16
+        onFalseStep: 19
+      - stepNumber: 16
         description: >-
           Judge the candidate — the spec that will actually be written, carried fields included, so
           retyping a Portal carries its auth into the judgement instead of letting it vanish unseen
@@ -244,35 +274,35 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: validateComponentCandidate
-      - stepNumber: 15
+      - stepNumber: 17
         description: Decide on the verdict
         type: branch
         condition: the verdict holds at least one error
-        onTrueStep: 16
-        onFalseStep: 17
-      - stepNumber: 16
+        onTrueStep: 18
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Refuse the write with the formatted refusal, naming every rule code the candidate broke —
           nothing has reached disk, so the remedy is to fix the arguments and call again
         type: throw
         error: intrinsic rule violation
-      - stepNumber: 17
+      - stepNumber: 19
         label: persist
         description: >-
           Refuse the legacy mount form: a subsystem that names a projectPath is a member
           declaration, not a subsystem
         type: branch
         condition: the candidate is a subsystem that names a projectPath
-        onTrueStep: 18
-        onFalseStep: 19
-      - stepNumber: 18
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
         description: >-
           Refuse before anything reaches disk, naming the subsystem and the replacement: a member is
           declared in project.yaml `members` (sdd_add_member / `wairon member add`), which scaffolds
           its project; wairon never writes the L1 mount form
         type: throw
         error: mount form refused
-      - stepNumber: 19
+      - stepNumber: 21
         label: save
         description: >-
           Persist the candidate through the core client adapter, collecting the store's placement
@@ -280,14 +310,14 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: saveSpec
-      - stepNumber: 20
+      - stepNumber: 22
         label: tests
         description: Decide whether this write invalidated any test
         type: branch
         condition: the application names a changed or removed method and the project declares test roots
-        onTrueStep: 21
-        onFalseStep: 23
-      - stepNumber: 21
+        onTrueStep: 23
+        onFalseStep: 25
+      - stepNumber: 23
         description: >-
           Place each changed method in the file realizing it (the private searchedMethods): for a
           contract, read every implementation realizing it and take each one's symbol and file for
@@ -298,7 +328,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 22
+      - stepNumber: 24
         description: >-
           Find the tests that encode those methods, so the restatement that drops or rewrites a
           method reports the collision exactly as a delta that does the same does, each method
@@ -306,7 +336,7 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 23
+      - stepNumber: 25
         label: receipt
         description: >-
           Return the write receipt: the kind, id and name written, whether a spec already held the
@@ -365,4 +395,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-07T18:51:04.713Z'
+updatedAt: '2026-10-07T22:28:34.539Z'

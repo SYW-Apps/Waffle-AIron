@@ -86,7 +86,10 @@ methods:
           against exactly those files. The closed set is part of the graph's identity, so a
           specifier can never resolve to a file outside the mapped set. filesOf(compId) =
           realization.filesOf narrowed to code.exactPaths, kept per component; mappedImplsOf(compId)
-          = the component's implementations that named at least one such file
+          = the component's implementations that named at least one such file. reach = the private
+          unownedReach(ctx) — a call's own answer plus the calls of every unowned function it lands
+          on, transitively, with the hops — and candidatesOf = the private writeCandidates(ctx),
+          both shared with call-conformance
         type: local
       - stepNumber: 3
         description: >-
@@ -175,15 +178,19 @@ methods:
           an Adapter's edge to a Portal reached over an out-of-process transport is the link the
           design models — realized by the Adapter's transport client, never by an import, so no
           import across that boundary is ever asked for — and a trace realizes the edge — a runtime
-          import, a re-export, the reverse import for a mounting declarer, or a type-only import of
-          a fromFile (source_file_facts.typeOnlyBindings, each specifier resolved against
-          mappedPaths) landing in toFiles: continue with the next target
+          import, a re-export, the reverse import for a mounting declarer, a type-only import of a
+          fromFile (source_file_facts.typeOnlyBindings, each specifier resolved against mappedPaths)
+          landing in toFiles, or a call or reference of a fromFile the type checker lands in toFiles
+          (reach over its resolvedCalls, so through every barrel, `export *`, port declared in a
+          shared module, dependency bag typed inline and unowned helper): continue with the next
+          target
         type: branch
         condition: >-
           the edge is not a remote link (component is an Adapter and target a Portal whose transport
           is set and not InProcess), toFiles is non-empty, fromFiles and toFiles share no file,
-          graph.connects(fromFiles, toFiles, component is a Portal or Observer) is false, and no
-          type-only import of a fromFile resolves into toFiles
+          graph.connects(fromFiles, toFiles, component is a Portal or Observer) is false, no
+          type-only import of a fromFile resolves into toFiles, and no call or reference reach
+          answers for a fromFile lands in toFiles
         onFalseStep: 10
       - stepNumber: 14
         label: unrealizedReport
@@ -209,8 +216,10 @@ methods:
           enclosing function is a body the Portal's own methods reach: their symbols and the helpers
           closedCallSites follows from them, leaving out a Portal method realized by the same body
           as another component's modelled method in that file (N:1 identity makes that body the
-          other component's code) and stopping at such methods' anchors), else the shape facts' call
-          sites closed over the Portal's methods; and, for every mapped file, each call site of its
+          other component's code) and stopping at such methods' anchors), references to a function
+          or method taken as a value among them, each expanded by reach into the calls of the
+          unowned code it lands on, carrying the hops — else the shape facts' call sites closed over
+          the Portal's methods; and, for every mapped file, each call site of its
           source_file_facts.functionCallSites
         endStep: 19
       - stepNumber: 16
@@ -223,7 +232,11 @@ methods:
           read a receiver written through a non-null assertion, a cast or parentheses, and a local
           alias or destructuring of a field, as that field. Each toPath counts where it realizes a
           component with a contract method the call's name is (its name or a per-method symbol): a
-          call into anything else is no modelled collaboration
+          call into anything else is no modelled collaboration. A resolved landing on a MODULE
+          function (a target with no container) never counts for a component that reaches that
+          contract method through an exportedVia handle: that method is a member of the published
+          object, so in a file several components share, the same-named module function beside it is
+          another body
         type: local
       - stepNumber: 17
         description: >-
@@ -255,13 +268,17 @@ methods:
           module that declares it, past the forwarding module (an Adapter re-exporting its provider)
           the file imports on purpose. A call of the Portal's own code that resolves to nothing — a
           resolved call marked unresolved (its receiver or callee typed any, unknown or nothing, a
-          cast to either included; the checker's own error type, a name from a package with no
-          typings in reach, is not such a receiver), or, without a type checker, a site whose
-          receiver nothing declares, binds or aliases — under the name of a write- or
-          lifecycle-effect method of a data component in the Portal's own subsystem or a subsystem
-          it depends into, which no implementation of the Portal claims, is PORTAL_CALL_UNRESOLVED
-          (warning; site `<fromPath> -> <name>`): the analysis could not follow it, and fails closed
-          rather than passing it
+          cast to either or to an index signature included, or its member picked by a computed key;
+          the checker's own error type, a name from a package with no typings in reach, is not such
+          a receiver), or, without a type checker, a site whose receiver nothing declares, binds or
+          aliases — under the name of a write- or lifecycle-effect method of a data component —
+          candidatesOf narrowed to data components: where the checker recorded the receiver's
+          original type, before any cast, a write of the data component it lands on, every one of
+          its writes when a computed key names none; else one of that name in the Portal's own
+          subsystem or a subsystem it depends into — which no implementation of the Portal claims,
+          is PORTAL_CALL_UNRESOLVED (warning; site `<fromPath> -> <name>`, or the candidates when no
+          name was written): the analysis could not follow it, and fails closed rather than passing
+          it
         type: local
       - stepNumber: 20
         description: >-
@@ -1137,7 +1154,23 @@ methods:
           key, keyed two ways: by the body identity its anchor names (implMethod.symbol ??
           implMethod.name, qualified as <exportedVia>.<symbol> when it is reached through a handle),
           and by that bare symbol — the converse direction's whole subject, read off the same
-          descent so a component and its colocated neighbour come from one walk
+          descent so a component and its colocated neighbour come from one walk. sharedBodies = the
+          body identities (file and anchor) every modelled method of a component that is NOT a
+          Portal is anchored to. reach = the private unownedReach(ctx), which reads UNOWNED code as
+          part of whoever calls it: given resolved calls and the file they were written in, it
+          answers them and, for each target that is unowned — in a file no component realizes, or a
+          function that is none of its file's components' modelled methods (a contract method name
+          or a per-method symbol) — the resolved calls and references of that function's body
+          (ctx.codeModel's resolvedCalls of the file, else its reachedCalls, those whose enclosing
+          function and container are the target's), transitively with a visited set and a depth
+          bound of eight, each carrying the hops it was reached through; a modelled method stops the
+          walk, its calls being its own narrative's, and a target in the calling file itself is left
+          to the caller's own body walk. candidatesOf = the private writeCandidates(ctx): the writes
+          an unresolved call may be — where it recorded receivers, the write- or lifecycle-effect
+          contract methods (by name or per-method symbol) of the components those classes' files
+          realize, the one its name names or every one when a computed key names none; otherwise, by
+          name, those of the components in the caller's own subsystem or one its component depends
+          into
         type: local
       - stepNumber: 2
         label: methodLoop
@@ -1174,14 +1207,20 @@ methods:
           calls, each hop read as the body its call reaches (bodySitesOf with the site's receiver),
           each site carrying the file its names resolve in. The forward direction closes over
           EVERYTHING the function reaches — a wider callee set can only accept more, never accuse.
-          claims = the private claimsOf(implMethod): every narrative call step carrying its
-          stepNumber, then every declared `calls` entry parsed into the component and method it
-          names and carrying no stepNumber at all. One subject, because the two assert the same call
-          and only a step also says where in the flow it happens — which this check never reads. A
-          dispatch step names a capability rather than a method and asserts nothing about a call
-          site, and a declared reference that is not <component>.<method> names no target
-          (MALFORMED_DECLARED_CALL reports exactly that): neither becomes a claim. Start an empty
-          missed list
+          forwardReach = where the type checker read the file (facts.resolvedCalls is present),
+          reach over the resolved calls and references written in the ONE body the anchor means —
+          told apart from a same-named neighbour by its enclosing container exactly as bodySitesOf
+          tells the bodies apart: the module function when the anchor means the module-scope body,
+          the member of the exportedVia object or class it names otherwise, every body of the name
+          where the code does not settle it — and in the same-file helpers among sites (a bare call,
+          or a this.<method>() inside a class), read by name; empty otherwise. claims = the private
+          claimsOf(implMethod): every narrative call step carrying its stepNumber, then every
+          declared `calls` entry parsed into the component and method it names and carrying no
+          stepNumber at all. One subject, because the two assert the same call and only a step also
+          says where in the flow it happens — which this check never reads. A dispatch step names a
+          capability rather than a method and asserts nothing about a call site, and a declared
+          reference that is not <component>.<method> names no target (MALFORMED_DECLARED_CALL
+          reports exactly that): neither becomes a claim. Start an empty missed list
         type: local
       - stepNumber: 6
         description: >-
@@ -1263,12 +1302,19 @@ methods:
           Otherwise a call spelled with a REPUBLISHED name realizes the claim on the proven tier:
           the private invokedAs follows a bare call's import binding, or a namespace member call's
           module, to the module and name it imports and then through code.forwardsOf, so `b()`
-          imported from a module republishing m's `a` as `b` lands where m.a lives. And a call
-          landing in one of the target's own files realizes it: continue with the next claim
+          imported from a module republishing m's `a` as `b` lands where m.a lives. A call or
+          reference of forwardReach that the type checker lands on the target realizes it — one of
+          target.files under a name in target.accepted (the declaration, or a class realizing the
+          port the call was typed by), or a (file, name) in targetForwards(target), since the
+          checker resolves past a re-export to the module that wrote the function — whatever the
+          receiver's spelling: a type-only or `export *` barrel, a port declared in a shared module,
+          a dependency bag typed inline. And a call landing in one of the target's own files
+          realizes it: continue with the next claim
         type: branch
         condition: >-
           the claim is unrealized: target.files is empty and matching is empty, or target.files is
-          non-empty and reached meets none of it
+          non-empty, no call of forwardReach lands on the target, and reached meets none of
+          target.files
         onFalseStep: 7
       - stepNumber: 13
         label: appendMissed
@@ -1276,7 +1322,10 @@ methods:
           Append to missed: the claim's stepNumber when it has one, its target (component.method),
           the accepted names and the miss — absent when matching is empty, unresolved when landed is
           empty, carrying the distinct SHAPES the matching sites were written in, which is what an
-          unresolved answer is about, else elsewhere carrying the files it did land in
+          unresolved answer is about, else elsewhere carrying the files it did land in. A claim the
+          type checker did not land on its target keeps this answer: the checker's landing on a
+          declaration says what a receiver is TYPED as (a type literal, an interface no class
+          realizes), never where the call went instead, so it accuses nothing
         type: local
       - stepNumber: 14
         label: unrealizedReport
@@ -1339,31 +1388,44 @@ methods:
       - stepNumber: 19
         label: writeCalls
         description: >-
-          writes = the calls of the file's source_file_facts.resolvedCalls (none where no type
-          checker read it) whose enclosing function is a body the method's function reaches in its
-          own file — fnSymbol and the helpers the stopping walk (the one the colocated direction
-          takes) follows from it, never past a colocated modelled method, whose calls are its own
-          narrative's — and that land, through a target in ANOTHER file, on a contract method (its
-          name or a per-method symbol) of a component other than this one whose effect is write or
-          lifecycle, which is claimed nowhere. Claimed are: what declared names, what every modelled
-          method sharing this very body (the same file and anchor, N:1 identity) claims, and every
-          landing a claimed target IS or forwards to by identity — its own files under its accepted
-          names and targetForwards of it, since an Adapter re-exporting its provider's function is
-          called under the Adapter's claim while the checker resolves the call past it. Left out: a
-          call from a Portal into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE judges it), an
-          Adapter's call on a Portal reached over an out-of-process transport (the link the design
-          models), and, as for crossings, every call of a function that forwards by identity to a
-          modelled method written in another file. A same-file target is the colocated direction's
-          subject and never counted twice
+          writes = the calls and references reach answers for the file's
+          source_file_facts.resolvedCalls (none where no type checker read it) whose enclosing
+          function is a body the method's function reaches in its own file — fnSymbol and the
+          helpers the stopping walk (the one the colocated direction takes) follows from it, never
+          past a colocated modelled method, whose calls are its own narrative's — together with the
+          unowned code those reach, that land, through a target in ANOTHER file, on a contract
+          method (its name or a per-method symbol) of a component other than this one whose effect
+          is write or lifecycle — or, when this component is a Portal and its function is not a body
+          a non-Portal component's modelled method is anchored to (sharedBodies), on a verb of an
+          Orchestrator, Supervisor or Actor whose effect is not declared read or none, since a
+          Portal changes state only by dispatching to such a verb — which is claimed nowhere. A
+          landing on a MODULE function (no container) is never a method the callee reaches through
+          an exportedVia handle, the same-named object member in a shared file being another body.
+          Claimed are: what declared names, what every modelled method sharing this very body (the
+          same file and anchor, N:1 identity) claims, and every landing a claimed target IS or
+          forwards to by identity — its own files under its accepted names and targetForwards of it,
+          since an Adapter re-exporting its provider's function is called under the Adapter's claim
+          while the checker resolves the call past it. unresolvedWrites = the same calls marked
+          unresolved, each with candidatesOf(call, component) left unclaimed. Left out of both: a
+          call from a Portal into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE and
+          PORTAL_CALL_UNRESOLVED judge it), an Adapter's call on a Portal reached over an
+          out-of-process transport (the link the design models), and, as for crossings, every call
+          of a function that forwards by identity to a modelled method written in another file. A
+          same-file target is the colocated direction's subject and never counted twice
         type: local
       - stepNumber: 20
         label: writeReport
         description: >-
           When writes is non-empty, report UNDECLARED_WRITE_CALL (warning; spec impl.id; draft
           context the entry's draftContext), one finding per method naming each component method
-          written to and the call as written: the code changes state the design says this method
-          never touches. Narrate the call, declare it in `calls`, or remove it. Carried like its
-          siblings, one unit per component.method
+          changing state and the call as written — a reference quoted as taken as a value, a call
+          reached through unowned code with the hops it was reached through: the code changes state
+          the design says this method never touches. Narrate the call, declare it in `calls`, or
+          remove it. When unresolvedWrites is non-empty, report CALL_ORIGIN_UNRESOLVED (warning;
+          same spec and draft context), one finding per method naming each candidate write and the
+          call as written: the call goes through a receiver the analysis cannot follow, so it is
+          neither proven an unnarrated write nor cleared, and fails closed until the receiver
+          carries its declared type. Each carried like its siblings, one unit per component.method
         type: local
     symbol: check
     exportedVia: callConformanceRule
@@ -1745,12 +1807,17 @@ methods:
           Match what remains against the declared parameters FROM THE FRONT, position by position.
           Position, not name, is the correspondence a signature has: a caller passes arguments in
           order, so the first remaining parameter IS the first declared one, whatever either side
-          calls it. A leading parameter no injection accounts for therefore shows up as a shift and
-          is reported by the count, never blamed on one name — aligning from the back instead would
-          accuse the wrong argument and rename-report every position after it. Where a name has
-          several candidate signatures, judge each and report only what they ALL agree on: a wider
-          answer can only narrow what this rule accuses, which is the stance the field-type facts
-          already take when one name has several declarations
+          calls it — with ONE exception the names prove: when the code takes more than the contract
+          declares and its TRAILING parameters carry the declared names one for one while its
+          leading ones do not, the leading surplus is what was inserted, and it is set aside as
+          undeclared before matching (`fulfillOrder(requester, orderId)` for a contract
+          `fulfillOrder(orderId)` names requester, never orderId). A leading parameter the names do
+          not prove therefore shows up as a shift and is reported by the count, never blamed on a
+          guess — aligning from the back instead would accuse the wrong argument and rename-report
+          every position after it. Where a name has several candidate signatures, judge each and
+          report only what they ALL agree on: a wider answer can only narrow what this rule accuses,
+          which is the stance the field-type facts already take when one name has several
+          declarations
         type: local
       - stepNumber: 5
         description: Decide which side has more
@@ -1986,4 +2053,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-07T19:22:23.098Z'
+updatedAt: '2026-10-07T22:20:11.009Z'

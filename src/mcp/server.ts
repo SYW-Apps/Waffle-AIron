@@ -16,7 +16,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { getProjectRoot, setProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { ProjectNotInitializedError } from '../utils/errors.js';
+import { LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { ValidationIssue, TestsToRevisit } from '../core/validation.js';
 import * as crypto from 'crypto';
@@ -88,7 +88,7 @@ import { validateProject, validateRegistry, validateFamily, measurePackImpact, f
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
-import { consumerReaches } from '../models/project-family.js';
+import { consumerReaches, narrowedToMember } from '../models/project-family.js';
 import { selectsFamily } from '../models/validation-options.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
@@ -419,6 +419,7 @@ const externalPinsOutput = {
 const externalAdditionOutput = {
   alias: z.string(),
   written: z.boolean().describe('Whether .wai/project.yaml now carries the declaration (false on a refusal and on a dry run).'),
+  dryRun: z.boolean().optional().describe('Present, true, on a dry run: nothing was written.'),
   declaration: z.record(z.unknown()).nullable().describe('The declaration as written, in object form; null on a refusal.'),
   project: z.string().optional().describe('The producer\'s project id as the producer answered to it.'),
   pin: z.record(z.unknown()).nullable().optional().describe('The pin taken right after, when asked.'),
@@ -430,8 +431,10 @@ const externalAdditionOutput = {
 /** sdd_remove_external's structured answer: what removing the external took out — or the refusal. */
 const externalRemovalOutput = {
   alias: z.string(),
-  removed: z.boolean().describe('Whether .wai/project.yaml no longer carries the declaration because this call took it out.'),
-  unpinned: z.boolean().describe('Whether the alias\'s lock entry and pinned snapshot were removed (or would be, on a dry run).'),
+  removed: z.boolean().describe('Whether .wai/project.yaml no longer carries the declaration because this call took it out (false on a dry run).'),
+  unpinned: z.boolean().describe('Whether the alias\'s lock entry and pinned snapshot were removed by this call (false on a dry run).'),
+  dryRun: z.boolean().optional().describe('Present, true, on a dry run: nothing was written.'),
+  wouldRemove: z.object({ declaration: z.boolean(), pin: z.boolean() }).optional().describe('On a dry run: what the real run would take out.'),
   refusal: z.string().optional().describe('Why nothing was removed, in one sentence.'),
   ...staleServerOutput,
 };
@@ -475,6 +478,7 @@ const surfaceDiffOutput = {
 const externalUseChangeOutput = {
   alias: z.string(),
   written: z.boolean().describe('Whether .wai/project.yaml now carries the changed `use` (false on a refusal, a dry run and when nothing changed).'),
+  dryRun: z.boolean().optional().describe('Present, true, on a dry run: nothing was written.'),
   use: z.array(z.string()).describe('The `use` list after the change, in order.'),
   added: z.array(z.string()).describe('The names this change imports that were not imported before.'),
   removed: z.array(z.string()).describe('The names this change stops importing.'),
@@ -498,7 +502,7 @@ function additionAnswer(request: ExternalRequest, addition: ExternalAddition): C
       + (addition.pin ? `; pin ${addition.pin.outcome}${addition.pin.detail ? ` — ${addition.pin.detail}` : ''}` : '')
       + (addition.unreachable ? `. Declared but not pinned: ${addition.unreachable}` : '')
       + '.';
-  return structured(summary, { ...addition });
+  return structured(summary, { ...addition, ...(request.dryRun ? { dryRun: true } : {}) });
 }
 
 /** One end of a flow, as sdd_get_network_flows and sdd_explain_flow answer it. */
@@ -2193,7 +2197,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const root = getProjectRoot();
         const consumers = externalConsumers(search?.map((d) => path.resolve(root, d)));
         const report = renameMethod(qualifiedComponentId(id), method, newName, pinSymbol, dryRun);
-        const breaks = report.publishedIn.length > 0 ? consumers.filter((c) => consumerReaches(c, report.publishedIn, method)) : [];
+        // Narrowed to the one method, as the CLI's dry run says it: the
+        // public names publishing it, each with that member alone.
+        const breaks = report.publishedIn.length > 0
+          ? consumers.filter((c) => consumerReaches(c, report.publishedIn, method)).map((c) => narrowedToMember(c, report.publishedIn, method))
+          : [];
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
         return errText(String(e));
@@ -2653,7 +2661,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     sourcePath: z.string().optional().describe('Optional: target source code file path relative to project root — for a chained subproject\'s implementation (qualified id), relative to that subproject\'s root; a path given relative to this root that lands inside the subproject is re-expressed for you'),
     simPath: z.string().optional().describe('Optional: the committed integration-sim harness file (project-relative; N:1 sharing allowed). The validator proves it exists and its import graph wires the REAL modules (this component + each direct dependency; technology adapters may stay faked) — running it is CI\'s job. Declaring the first simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf implementations'),
     router: z.string().min(1).optional().describe('Portal-only code linkage: the router entry this Portal\'s own file exports, through which whatever process serves the Portal hands it its requests (replaces the retired listener mount\'s `via`). Route coverage reads the routes out of it and export conformance holds the file to it. Outside the approval, like sourcePath'),
-    technologies: z.array(z.union([z.string(), z.object({ name: z.string(), matches: z.array(z.string()).min(1).describe('The tokens the leakage and contract checks match INSTEAD of the name — for a technology whose name is also an ordinary word of the tree (the yaml package, the YAML format)') }).strict()])).optional().describe('External technologies this implementation binds to (e.g. ["mysql"], or [{ "name": "yaml", "matches": ["yaml package", "parseDocument"] }] when the bare name would match a common word) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components.'),
+    technologies: z.array(z.union([z.string(), z.object({ name: z.string(), matches: z.array(z.string()).min(1).describe('The tokens the leakage and contract checks match INSTEAD of the name — for a technology whose name is also an ordinary word of the tree (the yaml package, the YAML format)') }).strict()])).optional().describe('External technologies this implementation binds to (e.g. ["mysql"], or [{ "name": "yaml", "matches": ["yaml package", "parseDocument"] }] when the bare name would match a common word) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components, and an Observer bound to a messaging technology.'),
     injectedParams: z.array(z.string()).optional().describe('The parameter names this realization takes BEFORE the ones its contract declares — a config object, a data root, the transport handles a portal is handed. Supplied by whatever wires the component up, never by the caller the contract describes, which is why they belong here and not to the contract: another realization may hold them as fields instead. Declared rather than guessed, because a leading parameter the contract does not name cannot be told from one it named under a different name (`seed(config)` realized as `bootstrapInstance(cfg)`); a leading parameter this list does not name is reported (UNDECLARED_PARAM). Only a LEADING run is dropped — one of these names appearing after the contract\'s own parameters is an argument in the middle of the caller\'s list, not wiring'),
     detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
     conformance: conformanceEnum.optional().describe('Spec-level conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
@@ -2856,7 +2864,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const memberLine = parent
           ? `Member "${parent.alias}" of ${parent.parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there${familyRun ? ' (this family run took them from the enclosing family, narrowed to this member)' : '; here its network entries count as declared, not proven'}.`
           : undefined;
-        const hint = [result.hint, memberLine].filter((h): h is string => !!h).join(' ');
+        const hint = [result.hint, memberLine, (result as { codeReading?: string }).codeReading].filter((h): h is string => !!h).join(' ');
         // The text block is the same JSON it has always been; the structured
         // twin is that very object, so the two can never disagree.
         return jsonStructured({
@@ -3069,7 +3077,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         let approvals;
         try {
           approvals = familyApprovals(memberDepth);
-        } catch {
+        } catch (e) {
+          // An approval record that cannot be read is never answered as no
+          // approval: the tool fails closed on it, naming the record.
+          if (e instanceof LockRecordUnreadableError) throw e;
           approvals = undefined; // a tree that will not load: the report says why
         }
         const report = getStatusReport({
@@ -3183,7 +3194,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       try {
         const removal = dropExternal(alias, dryRun);
         if (removal.refusal) return { ...structured(removal.refusal, { ...removal }), isError: true };
-        const what = [removal.removed || dryRun ? 'its declaration' : '', removal.unpinned ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
+        const declaration = removal.wouldRemove?.declaration ?? removal.removed;
+        const pin = removal.wouldRemove?.pin ?? removal.unpinned;
+        const what = [declaration || dryRun ? 'its declaration' : '', pin ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
         return structured(dryRun ? `Dry run: would remove "${alias}" — ${what}. Nothing was written.` : `Removed "${alias}": ${what}.`, { ...removal });
       } catch (e) {
         return errMessage(e);
@@ -3214,7 +3227,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         if (change.refusal) return { ...structured(change.refusal, { ...change }), isError: true };
         const moved = [change.added.length ? `+ ${change.added.join(', ')}` : '', change.removed.length ? `- ${change.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'no change';
         const list = change.use.length ? change.use.join(', ') : '(none)';
-        return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved}).`, { ...change });
+        return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved}).`, { ...change, ...(dryRun ? { dryRun: true } : {}) });
       } catch (e) {
         return errMessage(e);
       }

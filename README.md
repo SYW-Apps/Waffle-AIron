@@ -272,6 +272,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon member …` / `wairon subsystem externalize` / `wairon project rename` | Members (parts and projects) and the family migrations |
 | `wairon externals add \| pin \| status \| list \| remove \| use \| consumers [--search <dirs>]` | Declare, pin and check the externals a project consumes (`status` is the opt-in live gate); from a producer, `consumers --search ..` finds who consumes it, sibling checkouts included |
 | `wairon surface export \| import \| list \| diff [--against <ref\|file>]` | Exchange a public surface (native snapshot or OpenAPI, one document per portal); `diff` is the public-surface changelog since the last committed approval |
+| `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dirs...>] [--no-pin-symbol]` | Rename a contract method and retarget every reference; `--dry-run` names every consumer it breaks (`--search` scans sibling checkouts too), `--no-pin-symbol` lets the implementation follow the new name |
 | `wairon method rename-param` / `wairon type rename-field` | Rename a contract parameter or a type field and respell every reference; the old name joins the rename trace |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |

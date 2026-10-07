@@ -287,13 +287,6 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: diagnoseProjectPacks
-  - name: pinInstalledPacksAsSelections
-    narrative:
-      - stepNumber: 1
-        description: Forward to the extension portal
-        type: call
-        targetComponent: extension_portal
-        targetMethod: pinInstalledPacksAsSelections
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
@@ -385,6 +378,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: renameMethod
+  - name: seedDemoTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the seeding to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: seedDemoTree
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:41:55.180Z'
+updatedAt: '2026-10-07T22:40:43.121Z'

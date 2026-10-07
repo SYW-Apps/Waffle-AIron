@@ -62,7 +62,7 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
   }
 
   const cells: string[] = [];
-  const compById: Record<string, ExportModel['components'][number]> = {};
+  const compById: Record<string, ExportModel['components'][number]> = Object.create(null);
   model.components.forEach(function (c) { compById[c.id] = c; });
 
   function vertex(id: string, parent: string, value: string, style: string, box: { x: number; y: number; w: number; h: number }, parentBox?: { x: number; y: number }): void {
@@ -185,7 +185,7 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
   }
 
   const elements: any[] = [];
-  const rectById: Record<string, any> = {};
+  const rectById: Record<string, any> = Object.create(null);
 
   model.subsystems.forEach(function (sub) {
     const box = L.subs[sub.id];

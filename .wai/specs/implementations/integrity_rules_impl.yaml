@@ -1391,18 +1391,19 @@ methods:
         endStep: 6
       - stepNumber: 4
         description: >-
-          Does a live element of the same kind hold the entry, or has another element of that kind
-          already claimed it?
+          Does the entry name the element's own current key, a live element of the same kind, or one
+          another element of that kind already claimed?
         type: branch
         condition: >-
-          the entry is a live key of the element's kind (a type within its owner), or it was already
-          claimed by another element's trace
+          the entry is the element's own key, a live key of the element's kind (a type within its
+          owner), or it was already claimed by another element's trace
         onFalseStep: 6
       - stepNumber: 5
         description: >-
-          Report RENAME_TRACE_CONFLICT on the element, naming the entry, the other holder, and the
-          way out: rename the newcomer, or unset the entry and accept that a consumer reads a delete
-          plus an add
+          Report RENAME_TRACE_CONFLICT on the element, naming the entry and the other holder (or,
+          for its own current name, that a trace holds former names only and the entry is to be
+          unset), and the way out: rename the newcomer, or unset the entry and accept that a
+          consumer reads a delete plus an add
         type: local
       - stepNumber: 6
         description: Record the entry as claimed by this element
@@ -1459,6 +1460,44 @@ methods:
         type: local
     symbol: check
     exportedVia: implementsContractsRule
+  - name: memberNames
+    sourcePath: src/core/rules/integrity/member-names.ts
+    narrative:
+      - stepNumber: 1
+        label: holders
+        description: >-
+          For each interface and each type in scope, with the effective target language of its
+          subsystem (ctx.targetLanguageFor) and that subsystem's method casing
+        type: loop
+        loopKind: forEach
+        over: the interfaces and types in scope
+        endStep: 5
+      - stepNumber: 2
+        description: >-
+          Gather its named members by where they live: the methods of the contract or type, each
+          method's parameters, and the type's fields
+        type: local
+      - stepNumber: 3
+        description: >-
+          Report DUPLICATE_MEMBER_NAME (error) once for every name two members of one place share,
+          naming the place and the name: a lookup by name would bind one of them at random
+        type: local
+      - stepNumber: 4
+        description: >-
+          Ask identifier.reservedIn for every method, parameter and field name against the target
+          language, by its kind
+        type: local
+      - stepNumber: 5
+        label: reserved
+        description: >-
+          Report RESERVED_IDENTIFIER (error) for each name the language reserves, carrying
+          identifier.reservedIn's sentence: the language and an alternative that fits the casing
+        type: local
+      - stepNumber: 6
+        description: 'Done: every duplicate and every reserved word reported'
+        type: return
+    symbol: check
+    exportedVia: memberNamesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-07T18:51:21.233Z'
+updatedAt: '2026-10-07T21:44:28.802Z'

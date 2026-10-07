@@ -247,6 +247,12 @@ export function carriedFactChanges(pinned: SurfaceSnapshot, live: SurfaceSnapsho
       if (!nowMethod) continue;
       differs(`effect of ${entry.id}.${method.name}`, method.effect, nowMethod.effect);
       differs(`rename trace of ${entry.id}.${method.name}`, method.formerly, nowMethod.formerly);
+      // A parameter's name is no part of a signature digest, so a rename never
+      // breaks a caller — but the pin still spells the old name: named with
+      // the new one, as a renamed method is.
+      for (const r of paramRenames(method, nowMethod)) {
+        changes.push(`parameter "${r.from}" of ${entry.id}.${method.name} (renamed to "${r.to}")`);
+      }
     }
   }
   const liveTypes = new Map(live.types.map((t) => [t.id, t] as const));
@@ -254,6 +260,7 @@ export function carriedFactChanges(pinned: SurfaceSnapshot, live: SurfaceSnapsho
     const now = liveTypes.get(def.id);
     if (!now) continue;
     differs(`rename trace of ${def.id}`, def.formerly, now.formerly);
+    for (const r of fieldRenames(def, now)) changes.push(`field "${r.from}" of ${def.id} (renamed to "${r.to}")`);
     // A type's own methods are carried for bindings, never digested: a change is a stale pin.
     const methods = (d: SurfaceTypeDef): unknown => (d.methods ?? []).map((m) => ({ name: m.name, params: (m.params ?? []).map((p) => ({ type: p.type, optional: p.optional === true })), returns: m.returns }));
     differs(`methods of ${def.id}`, def.methods?.length ? methods(def) : undefined, now.methods?.length ? methods(now) : undefined);
@@ -335,9 +342,93 @@ function entryFacts(before: SurfaceContractEntry, after: SurfaceContractEntry): 
   ];
 }
 
+/** One name a rename trace carries forward: the former name and the current one. */
+export interface TracedRename {
+  from: string;
+  to: string;
+}
+
+/**
+ * surface_snapshot.fieldRenames — the fields of one type renamed between an
+ * older and a newer definition of it, per the newer one's rename trace
+ * (`formerly`): a field the older definition had that the newer lacks, which a
+ * newer field's trace names. Pure.
+ */
+export function fieldRenames(was: SurfaceTypeDef, now: SurfaceTypeDef): TracedRename[] {
+  return tracedRenames(was.fields, now.fields, (f) => f.formerly);
+}
+
+/**
+ * The parameters of one contract method renamed between two snapshots of it,
+ * per the newer method's parameter rename trace (`previousNames`). Pure.
+ */
+function paramRenames(was: MethodSignature, now: MethodSignature): TracedRename[] {
+  return tracedRenames(was.params ?? [], now.params ?? [], (p) => p.previousNames);
+}
+
+/** The names `now` carries forward from `was` by its trace: each old name gone from `now` that a new name's trace holds. */
+function tracedRenames<T extends { name: string }>(was: readonly T[], now: readonly T[], trace: (t: T) => readonly string[] | undefined): TracedRename[] {
+  const before = new Set(was.map((x) => x.name));
+  const after = new Set(now.map((x) => x.name));
+  const out: TracedRename[] = [];
+  for (const x of now) {
+    if (before.has(x.name)) continue;
+    const from = (trace(x) ?? []).find((n) => before.has(n) && !after.has(n));
+    if (from !== undefined) out.push({ from, to: x.name });
+  }
+  return out;
+}
+
+/** A type definition with the given field renames undone: what a rename-only change reads back as. */
+function withFieldsRenamedBack(def: SurfaceTypeDef, renames: readonly TracedRename[]): SurfaceTypeDef {
+  const back = new Map(renames.map((r) => [r.to, r.from] as const));
+  return { ...def, fields: def.fields.map((f) => (back.has(f.name) ? { ...f, name: back.get(f.name)! } : f)) };
+}
+
+/** field_rename_reading — the field renames inside a used member's closure, and whether they are its whole change. */
+export interface FieldRenameReading {
+  /** Each rename, read `field "<type>.<old>" renamed to "<new>"`. */
+  renames: string[];
+  /** Whether undoing the renames gives back the pinned member digest exactly. */
+  renameOnly: boolean;
+}
+
+/**
+ * surface_snapshot.fieldRenamesSince — every field rename inside the closure
+ * of one used member between a pinned snapshot and the live one, as
+ * `<type>.<old> → <new>` readings, and whether undoing them leaves the
+ * member's digest exactly as pinned (a rename and nothing else). Empty
+ * when no field of its closure was renamed. Pure.
+ */
+export function fieldRenamesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot, publicName: string, member: string, pinnedDigest: string): FieldRenameReading {
+  const pinnedDefs = new Map(pinned.types.map((d) => [d.id, d] as const));
+  const renames: string[] = [];
+  const undone = new Map<string, SurfaceTypeDef>();
+  for (const def of live.types) {
+    const was = pinnedDefs.get(def.id);
+    if (!was) continue;
+    const moved = fieldRenames(was, def);
+    if (moved.length === 0) continue;
+    for (const r of moved) renames.push(`field "${def.id}.${r.from}" renamed to "${r.to}"`);
+    undone.set(def.id, withFieldsRenamedBack(def, moved));
+  }
+  if (renames.length === 0) return { renames, renameOnly: false };
+  const back: SurfaceSnapshot = { ...live, types: live.types.map((d) => undone.get(d.id) ?? d) };
+  return { renames, renameOnly: memberDigest(back, publicName, member) === pinnedDigest };
+}
+
 /** A carried fact as a changelog shows it: its value, or none. */
 function shownFact(value: unknown): string {
   return value === undefined || value === null || value === '' ? 'none' : typeof value === 'string' ? value : canonicalize(value);
+}
+
+/**
+ * An effect as a changelog shows it: its value, or `undeclared` — never
+ * `none`, which is a declared effect of its own (pure), so a newly declared
+ * `effect: none` reads `undeclared → none`, not as a no-op.
+ */
+function shownEffect(value: unknown): string {
+  return value === undefined || value === null || value === '' ? 'undeclared' : shownFact(value);
 }
 
 /** A type's own methods as a pin compares them: names, param types and optionality, returns. */
@@ -437,8 +528,11 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
         const changed = signatureChange(older, newer, was, method);
         if (changed !== null) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: changed });
       }
+      for (const r of paramRenames(was, method)) {
+        out.push({ kind: 'renamed', name: entry.id, member: method.name, from: r.from, detail: `parameter "${r.from}" renamed to "${r.to}"` });
+      }
       if (factValue(was.effect) !== factValue(method.effect)) {
-        out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `effect ${shownFact(was.effect)} → ${shownFact(method.effect)}` });
+        out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `effect ${shownEffect(was.effect)} → ${shownEffect(method.effect)}` });
       }
     }
     for (const m of before.methods) {
@@ -462,10 +556,19 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     if (before.audience !== t.audience) out.push({ kind: 'changed', name: t.id, detail: `audience ${before.audience} → ${t.audience}` });
     const a = memberDigest(older, before.id, 'type');
     const b = memberDigest(newer, t.id, 'type');
-    if (a !== b && before.id === t.id) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
-    // A type's own methods are carried for bindings, never digested: a change drifts a pin.
     const oldDef = older.types.find((d) => d.id === before!.type);
     const newDef = newer.types.find((d) => d.id === t.type);
+    if (a !== b && before.id === t.id) {
+      // A field renamed with a trace reads as the rename, with its new name;
+      // the anonymous shape row stays only for what the renames do not explain.
+      const renames = oldDef && newDef ? fieldRenames(oldDef, newDef) : [];
+      for (const r of renames) out.push({ kind: 'renamed', name: t.id, member: r.to, from: r.from, detail: `field "${r.from}" renamed to "${r.to}"` });
+      const back: SurfaceSnapshot | null = renames.length && newDef
+        ? { ...newer, types: newer.types.map((d) => (d === newDef ? withFieldsRenamedBack(d, renames) : d)) }
+        : null;
+      if (!back || memberDigest(back, t.id, 'type') !== a) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
+    }
+    // A type's own methods are carried for bindings, never digested: a change drifts a pin.
     if (oldDef && newDef && factValue(typeMethods(oldDef)) !== factValue(typeMethods(newDef))) out.push({ kind: 'changed', name: t.id, detail: 'type methods changed (a method added, removed, or its params or returns)' });
   }
   // The producer's targetLanguage: what a consumer in another language bridges to.

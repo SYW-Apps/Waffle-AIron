@@ -611,11 +611,12 @@ methods:
       names keys that no longer exist, and is what lets a consumer of the design export tell a
       rename from a delete plus an add; it must therefore be unambiguous. Reported: a trace entry
       equal to a live key of the same kind (a component, interface or implementation id; a type id
-      within the same owner; `<interface>.<method>` of a declared method), and one former key
-      claimed by two elements of the same kind. The rename tools and the gated write refuse both
-      (id-retired, name-retired), so a finding means a hand edit; the message names both holders and
-      the way out — rename the newcomer, or unset the trace entry and accept the delete plus an add
-      a consumer will read.
+      within the same owner; `<interface>.<method>` of a declared method) — its holder's own current
+      key included, which a trace of former names can never hold — and one former key claimed by two
+      elements of the same kind. The rename tools and the gated write refuse both (id-retired,
+      name-retired), so a finding means a hand edit; the message names both holders and the way out
+      — rename the newcomer, or unset the trace entry and accept the delete plus an add a consumer
+      will read.
     signature: 'renameTraces(ctx: RuleContext): void'
     returns: void
     params:
@@ -650,6 +651,34 @@ methods:
         summary: >-
           An interface implementing an extension point lacks one of its methods, or declares one
           with different params or returns
+  - name: memberNames
+    description: >-
+      Rule member-names. The names inside a spec — a contract's methods and each method's
+      parameters, a type's fields and methods and each type method's parameters — must be unique
+      where they live (DUPLICATE_MEMBER_NAME: two methods of one contract, two parameters of one
+      method, two fields of one type; a loaded spec otherwise binds one of them at random wherever a
+      name is looked up), and never a word the spec's effective target language reserves for that
+      kind of identifier (RESERVED_IDENTIFIER, identifier.reservedIn: TypeScript and JavaScript
+      forbid a keyword as a parameter and constructor as a method, Rust its keywords everywhere, and
+      so on per language), because the implementation the brief asks for could not be written. The
+      message names the language and offers an alternative.
+    signature: 'memberNames(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DUPLICATE_MEMBER_NAME
+        severity: error
+        summary: >-
+          Two methods of one contract or type, two parameters of one method, or two fields of one
+          type share a name
+      - code: RESERVED_IDENTIFIER
+        severity: error
+        summary: >-
+          A method, parameter or field name is a word the target language reserves for that kind of
+          identifier
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-06T23:08:09.342Z'
+updatedAt: '2026-10-07T21:44:18.517Z'

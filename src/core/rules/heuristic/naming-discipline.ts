@@ -1,6 +1,7 @@
 import { conceptNoun, headNoun } from '../../../models/index.js';
 import type { ComponentSpec, InterfaceSpec, MethodSignature } from '../../../models/index.js';
 import { SddRule } from '../types.js';
+import { ownGet } from '../../../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // A name says what a thing is, once. Four ways it stops doing that:
@@ -86,11 +87,11 @@ export const namingDisciplineRule: SddRule = {
 
       // 1a. A head noun that claims another block: the id promises a Store and
       //     the spec declares an Orchestrator, so every reader is misled.
-      if (BLOCK_WORDS[head] && BLOCK_WORDS[head] !== comp.componentType) {
+      if (ownGet(BLOCK_WORDS, head) !== undefined && ownGet(BLOCK_WORDS, head) !== comp.componentType) {
         ctx.addIssue(
           'warning',
           'MISLEADING_BLOCK_WORD',
-          `Component "${comp.id}" ends in "${head}", which names a ${BLOCK_WORDS[head]}, but it is declared a ${comp.componentType}. Rename it for what it is, or change its componentType.`,
+          `Component "${comp.id}" ends in "${head}", which names a ${ownGet(BLOCK_WORDS, head)}, but it is declared a ${comp.componentType}. Rename it for what it is, or change its componentType.`,
           comp.id,
           isDraft,
         );

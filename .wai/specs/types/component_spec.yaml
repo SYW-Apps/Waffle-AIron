@@ -4,17 +4,20 @@ name: ComponentSpec
 description: L2 Component specification
 fields:
   - name: id
-    type: string
+    type: identifier
     description: >-
-      Stable component identifier: the spec-id grammar — [a-z0-9-_]+, at most 64 characters (it
-      becomes a folder and file name, which must stay under Windows' path limits), and never a name
-      Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9), which no checkout on
-      Windows could hold — refused on every platform so the tree stays portable
+      Stable component identifier: the spec-id grammar (identifier.problemAs spec-id) — [a-z0-9-_]+,
+      at most 64 characters (it becomes a folder and file name, which must stay under Windows' path
+      limits), never starting with "-" (no command line could name it), never "__proto__", and never
+      a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9), which no checkout
+      on Windows could hold — refused on every platform so the tree stays portable
     optional: false
     key: primary
   - name: name
-    type: string
-    description: Human-readable component name
+    type: display_name
+    description: >-
+      Human-readable component name: a display_name — never empty, and no control, NUL or zero-width
+      character
     optional: false
   - name: description
     type: string
@@ -238,4 +241,4 @@ methods:
     symbol: componentEntryFor
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-07T18:29:32.481Z'
+updatedAt: '2026-10-07T22:28:04.027Z'

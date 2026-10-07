@@ -40,9 +40,10 @@ methods:
         targetMethod: readLockRecord
       - stepNumber: 4
         description: >-
-          Read the components, to say plainly when every one is still draft or design: status is
-          readiness, not approval, so the lock approves a draft design as it stands — and says that
-          is what it is doing
+          Read the specs of every kind — this component read and its siblings for subsystems,
+          contracts, implementations and types — to say plainly how many of each are still draft or
+          design: status is readiness, not approval, so the lock approves a draft design as it
+          stands — and says that is what it is doing
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
@@ -54,14 +55,15 @@ methods:
           never as a change; past a dozen paths per kind the list is summarized (the first few, then
           a count of the rest and `--all`, which lists every one); when no own spec moved, either
           "nothing has changed" or — when the identity or the project id moved — "no spec changed,
-          but what the design is approved under did", naming it; when every component is still draft
-          or design, that the approval covers a draft design; the code results of the gate on a line
-          of their own ("code: N errors, M warnings recorded beside the claim — CI enforces them,
-          not the lock"); then each direct project member with its state (approved | drifted |
-          never) and, where its pin moved, the subject this approval recorded and the one it carries
-          now — a project member's own edits never appear in this project's spec diff; what the
-          parent reviews is the member's approval moving; then each part stored outside the project
-          with the commit being approved
+          but what the design is approved under did", naming it; when any spec of any kind is still
+          draft or design, how many of how many, counted per kind (subsystems, components,
+          contracts, implementations, types), and that the approval covers them as they stand; the
+          code results of the gate on a line of their own ("code: N errors, M warnings recorded
+          beside the claim — CI enforces them, not the lock"); then each direct project member with
+          its state (approved | drifted | never) and, where its pin moved, the subject this approval
+          recorded and the one it carries now — a project member's own edits never appear in this
+          project's spec diff; what the parent reviews is the member's approval moving; then each
+          part stored outside the project with the commit being approved
         type: local
       - stepNumber: 6
         description: >-
@@ -94,52 +96,43 @@ methods:
         targetComponent: validator_portal
         targetMethod: unpinnedExternals
       - stepNumber: 10
-        description: An unpinned external is never a pass, so it is never approved either
-        type: branch
-        condition: a declared external was never pinned
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
-        description: >-
-          Refuse, writing nothing, naming each unpinned alias: nothing records what this design is
-          judged against, so a producer that broke it could not be told — pin first, then lock
-        type: throw
-        error: declared external(s) never pinned
-      - stepNumber: 12
         description: >-
           Read the uses of the pinned externals that their pins do not record — a name or method the
           design uses now that the pin was taken without ("used now, but not in the lock")
         type: call
         targetComponent: validator_portal
         targetMethod: unrecordedExternalUses
-      - stepNumber: 13
+      - stepNumber: 11
         description: >-
-          A use its pin does not record is judged against nothing, exactly as a never-pinned
-          external is
+          An external declared but never pinned is never a pass, and a use its pin does not record
+          is judged against nothing exactly as such an external is: neither is approved
         type: branch
-        condition: a pinned external is used beyond what its pin records
-        onTrueStep: 14
-        onFalseStep: 15
-      - stepNumber: 14
+        condition: >-
+          a declared external was never pinned (step 9), or a pinned external is used beyond what
+          its pin records
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
-          Refuse, writing nothing, naming each alias with the uses its pin does not record: a
-          producer that broke one could not be told — re-pin first (`wairon externals pin <alias>`),
-          then lock
+          Refuse, writing nothing, naming each unpinned alias (pin first, then lock), or each alias
+          with the uses its pin does not record (re-pin first with `wairon externals pin <alias>`,
+          then lock): nothing records what the design is judged against, so a producer that broke it
+          could not be told
         type: throw
-        error: external(s) used beyond their pin
-      - stepNumber: 15
+        error: declared external(s) never pinned, or used beyond their pin
+      - stepNumber: 13
         description: >-
           Confirm with the human (skipped under --yes; a non-interactive shell without --yes
           refuses)
         type: branch
         condition: the human declined the confirmation
-        onTrueStep: 16
-        onFalseStep: 17
-      - stepNumber: 16
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
         description: 'Declined: nothing was written'
         type: return
         outcome: null (declined)
-      - stepNumber: 17
+      - stepNumber: 15
         description: >-
           Capture the approval: one digest per OWN spec file — the project's own and its parts'
           (stage 8), a part's keyed `members/<alias>/<path inside the part>` so moving its storage
@@ -148,40 +141,40 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: captureApprovedSpecs
-      - stepNumber: 18
+      - stepNumber: 16
         description: 'Resolve who is approving: the git author identity, else user@hostname'
         type: call
         targetComponent: approval_portal
         targetMethod: localApprover
-      - stepNumber: 19
+      - stepNumber: 17
         label: confirm
         description: Recompute the gate identity immediately before writing
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
-      - stepNumber: 20
+      - stepNumber: 18
         description: >-
           Did any input move while the lock ran — between the capture before validation and now, the
           confirmation prompt included?
         type: branch
         condition: the recomputed identity differs from the captured one
-        onTrueStep: 21
-        onFalseStep: 22
-      - stepNumber: 21
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
         description: >-
           Refuse, writing nothing: a spec, the doctrine, an input, the composition block or a
           member's approval changed while the lock ran, so the validation the human saw does not
           describe what would be recorded. Run the lock again
         type: throw
         error: the lock's inputs changed while it ran
-      - stepNumber: 22
+      - stepNumber: 20
         description: >-
           A scoped lock (--subsystem) covers only its subsystem: read the spec paths in that scope
           through the core portal, so every spec outside it keeps the approval it already had
         type: call
         targetComponent: spec_tree_portal
         targetMethod: specPathsInScope
-      - stepNumber: 23
+      - stepNumber: 21
         description: >-
           Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
           lockedAt, lockedBy, validatorVersion, validationResult = the design half's counts
@@ -191,6 +184,21 @@ methods:
           part, contentDigest, commit when known, state approved}, and `code` = gate.analysis
           without its codes list. No `children`, no `reexpressed` (a human approved this one)
         type: local
+      - stepNumber: 22
+        description: >-
+          Is the assembled record the record already on file in every field but lockedAt — the same
+          identity, specs, members, project id, approver, counts and code? Then nothing was approved
+          anew, and rewriting the timestamp would only leave .wai/lock.json modified with no change
+          in it
+        type: branch
+        condition: a record is on file and equals the assembled one but for lockedAt
+        onFalseStep: 24
+      - stepNumber: 23
+        description: >-
+          Keep the record on file — its lockedAt included — write nothing, and return it, so the
+          generated outputs are still refreshed
+        type: return
+        outcome: LockRecord
       - stepNumber: 24
         description: Persist the commit-scoped lock record — the only file this lock writes
         type: call
@@ -204,28 +212,27 @@ methods:
   - name: checkApproval
     narrative:
       - stepNumber: 1
-        label: load-system
+        label: tree-verdict
         description: >-
-          Ask the core portal for the L0 system spec. A repository with no .wai/specs tree holds no
-          design to approve, and must be told so — judged as "unapproved" it would start failing
-          every strict consumer that merely has no tree yet.
+          Ask this adapter's tree verdict first: no L0 means no tree to approve (said so, approved
+          unless strict) — or, when spec files remain below a deleted L0, a tree whose root is gone,
+          refused at every strictness. A repository with no tree must be TOLD so rather than judged
+          "unapproved", and a deleted L0 must never read as no tree
         type: call
-        targetComponent: spec_tree_portal
-        targetMethod: loadSystemSpec
+        targetComponent: cli_lock_adapter
+        targetMethod: treeVerdict
       - stepNumber: 2
         label: tree-present
-        description: Is there a spec tree at all?
+        description: Did the tree's presence decide the verdict?
         type: branch
-        condition: the system spec loaded
-        onTrueStep: 4
-        onFalseStep: 3
+        condition: treeVerdict answered a verdict
+        onTrueStep: 3
+        onFalseStep: 4
       - stepNumber: 3
-        label: verdict-no-tree
-        description: >-
-          No tree: report that this repository carries no spec tree, approved unless strict was
-          asked for.
+        label: verdict-tree
+        description: Return the tree verdict as it was answered
         type: return
-        outcome: no-tree
+        outcome: no-tree or root missing
       - stepNumber: 4
         label: gate-identity
         description: >-
@@ -514,6 +521,55 @@ methods:
           "nothing to check yet"
         type: return
         outcome: whether there is nothing to approve
+  - name: treeVerdict
+    narrative:
+      - stepNumber: 1
+        label: load-system
+        description: Ask the core portal for the L0 system spec
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Is the L0 there?
+        type: branch
+        condition: the system spec loaded
+        onTrueStep: 7
+        onFalseStep: 3
+      - stepNumber: 3
+        label: orphaned-files
+        description: >-
+          No L0: ask the spec maintenance portal which spec files are left standing below the specs
+          folder. A tree whose root was deleted still holds a design
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findOrphanedSpecFiles
+      - stepNumber: 4
+        description: Do spec files remain below the missing L0?
+        type: branch
+        condition: spec files remain
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        label: verdict-root-missing
+        description: >-
+          Refuse at every strictness: the L0 System spec (.wai/specs/.index.yaml) is missing while
+          spec files remain below it (the count and the first few named), so the design is still
+          there, cannot be judged and is not approved — with the fix: restore it from version
+          control
+        type: return
+        outcome: unlocked (root missing)
+      - stepNumber: 6
+        label: verdict-no-tree
+        description: >-
+          No tree: report that this repository carries no spec tree, approved unless strict was
+          asked for
+        type: return
+        outcome: no-tree
+      - stepNumber: 7
+        label: has-tree
+        description: 'The L0 is there: no verdict from the tree''s presence'
+        type: return
+        outcome: none
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-07T18:55:52.663Z'
+updatedAt: '2026-10-07T22:28:48.940Z'

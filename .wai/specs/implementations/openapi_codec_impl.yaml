@@ -21,9 +21,11 @@ methods:
       - stepNumber: 4
         description: >-
           Map operations to contract methods: parameters/requestBody to structured params, responses
-          to returns, method+path to endpoints — each schema read back into its canonical type
-          expression's text (an inline anonymous enum as string, its values listed in the
-          description)
+          to returns, method+path to endpoints — a document's x-wairon-base-path taken back off each
+          path and set as the entry's basePath, and the parameter an operation's
+          x-wairon-credential-param names put back first among its params — each schema read back
+          into its canonical type expression's text (an inline anonymous enum as string, its values
+          listed in the description)
         type: local
       - stepNumber: 5
         description: >-
@@ -66,32 +68,46 @@ methods:
         type: loop
         loopKind: forEach
         over: portal partitions
-        endStep: 5
+        endStep: 7
       - stepNumber: 4
         description: >-
-          Render this partition as a standalone OpenAPI 3.1 document over only its own entries: map
-          each contract method to an operation (endpoint method+path; each param named by a `{name}`
-          segment of the path a parameter in: path, required, and the rest parameters in: query on a
-          verb without a body or requestBody properties on POST/PUT/PATCH; returns to responses,
-          guarantees and effect noted as extensions), each param and return type parsed
-          (type_expression.parse) and rendered from its canonical expression — `async T` as T, `T?`
-          admitting null, collections, primitives and formats as the contract lists them; render the
-          embedded type closure as JSON-Schema components (an enum a string component with its
-          values as `enum`; a named scalar the schema of the primitive it holds, titled with its
-          name; a signature type a component with no type constraint, a description saying it is a
-          function type with no JSON form, and an x-wairon-signature extension holding its params
-          and returns); derive components.securitySchemes from the entries' projected auth
-          (deduplicating structurally identical schemes, attaching each matching requirement — with
-          oauth2 scopes — to its operations; no auth or scheme 'none' emits neither); set `servers`
-          from the partition's basePath, and the info block from the portal's name, the project's
-          version or StateId and generatedAt.
-        type: local
+          For each HTTP operation of the partition, its document path: the Portal's basePath joined
+          in, every `:name` placeholder respelled `{name}`
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: openApiPath
       - stepNumber: 5
+        description: >-
+          For each operation, the parameter that is the credential the Portal's auth scheme binds —
+          left out of the parameters and the body
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: credentialParam
+      - stepNumber: 6
+        description: >-
+          Render this partition as a standalone OpenAPI 3.1 document over only its own entries: map
+          each contract method to an operation at openApiPath(the Portal's basePath, the endpoint
+          path) — basePath joined in, `:name` placeholders as `{name}`; leave out the parameter
+          credentialParam names (the security scheme carries the credential) and name it under
+          x-wairon-credential-param; each param named by a path placeholder a parameter in: path,
+          required, and the rest parameters in: query on a verb without a body or requestBody
+          properties on POST/PUT/PATCH; returns to responses, guarantees and effect noted as
+          extensions; each param and return type parsed (type_expression.parse) and rendered from
+          its canonical expression; render the embedded type closure as JSON-Schema components, then
+          every pinned external type a schema reached (`alias::name`, from the context's pinned
+          snapshot, as `<alias>.<id>`, resolving the names it uses inside that producer's own
+          closure) until none is left unrendered; derive components.securitySchemes from the
+          entries' projected auth (deduplicating identical schemes, attaching each requirement —
+          with oauth2 scopes — to its operations); name the basePath once as x-wairon-base-path and
+          declare no servers; and set the info block from the portal's name, the context's declared
+          version (else the snapshot's, else 0.0.0), the StateId and generatedAt.
+        type: local
+      - stepNumber: 7
         description: >-
           Wrap the rendered document as a NamedOpenApiSpec { portalId = the backing Portal id, name
           = the portal's surface name, document }.
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Return the named set — one spec per portal; distinct portals are never merged into a
           combined document.
@@ -107,6 +123,50 @@ methods:
         type: return
         outcome: whether the body is an OpenAPI document
     symbol: isOpenApiDocument
+  - name: openApiPath
+    narrative:
+      - stepNumber: 1
+        description: Take the basePath as nothing when it is absent, empty or `/`
+        type: local
+      - stepNumber: 2
+        description: >-
+          Join it before the endpoint path with exactly one `/` between them, and root the result at
+          `/`
+        type: local
+      - stepNumber: 3
+        description: >-
+          Answer the path with every `/:name` segment placeholder respelled `/{name}` — the Express
+          idiom and OpenAPI's form are one placeholder
+        type: return
+        outcome: the OpenAPI path
+    detail: full
+  - name: credentialParam
+    narrative:
+      - stepNumber: 1
+        description: Does the Portal authenticate at all?
+        type: branch
+        condition: auth is absent or its scheme is none
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        label: none
+        description: 'No auth binds a credential: no parameter is one'
+        type: return
+        outcome: none
+      - stepNumber: 3
+        label: names
+        description: >-
+          The credential names of the scheme — a token for bearer, oauth2 and openIdConnect; the
+          credentials for basic; the key for apiKey and custom, and the scheme's own key name — each
+          compared lower-cased with everything but letters and digits removed
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer the first parameter typed string whose name is one of them, or equals or ends the
+          scheme's key name of at least three characters; none when no parameter is
+        type: return
+        outcome: the credential parameter, or none
+    detail: full
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-07T18:28:35.229Z'
+updatedAt: '2026-10-07T22:16:15.001Z'

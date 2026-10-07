@@ -115,6 +115,7 @@ function boundProjectIdentity(): ProjectIdentity | undefined {
 }
 import {
   buildCodeModel,
+  compilerIdentity,
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
@@ -232,6 +233,13 @@ export interface ValidationResult {
    * and on a family run.
    */
   analysis?: CodeAnalysis;
+  /**
+   * One line, never a finding: how the owner's gate read the code — the
+   * weakest grade any file was read at and, at exact grade, the compiler and
+   * whose copy it is; or that no source file the design names exists yet.
+   * `wairon validate` prints it; sdd_validate_tree carries it in its hint.
+   */
+  codeReading?: string;
   /**
    * A family run only: the aliases of the bound project's externals the run
    * composed as part of its gate (their producers in reach) — the advisory
@@ -465,7 +473,25 @@ export function validateProject(
   rulesOrOptions?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {
-  return runOwnersGate(rulesOrOptions, projectType).result;
+  const run = runOwnersGate(rulesOrOptions, projectType);
+  // Step 53: how the code was read, one line beside the hint.
+  return { ...run.result, codeReading: codeReadingOf(run.codeModel) };
+}
+
+/**
+ * The one-line code reading of a run: the weakest analysis grade any analyzed
+ * file was read at and, when a file was read at exact grade, the compiler that
+ * read it — its version, and whether it is the project's own or wairon's copy.
+ */
+export function codeReadingOf(codeModel: CodeModel): string {
+  const grade = weakestGrade(codeModel);
+  if (grade === 'none') return 'Code: none read yet — no source file the design names exists (analysis grade none).';
+  const exact = codeModel.files.some((f) => f.status === 'analyzed' && f.analysisGrade === 'exact');
+  const compiler = exact ? compilerIdentity(codeModel.projectRoot) : null;
+  const by = compiler ? ` with TypeScript ${compiler.version} (${compiler.source === 'project' ? 'the project\'s own' : 'wairon\'s own copy'})` : '';
+  return grade === 'exact'
+    ? `Code read at grade exact${by}.`
+    : `Code read at grade ${grade} (the weakest file's)${exact ? `; its exact-grade files${by}` : ': no type checker reads this language'}.`;
 }
 
 /** One run of the owner's gate: the verdict, and the code model it judged the code with. */

@@ -44,7 +44,7 @@ function projectYaml(identity: { id?: string; name: string; previousIds?: string
 /** A lock record that approved the tree under `projectId` (none: a lock from before project ids). */
 function lockJson(projectId?: string): string {
   return JSON.stringify({
-    stateId: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+    stateId: { algorithm: 'sha256', digest: '0000000000000000000000000000000000000000000000000000000000000000' },
     lockedAt: TS,
     lockedBy: { id: 'finance-architect', source: 'git' },
     validatorVersion: '0.0.0-test',

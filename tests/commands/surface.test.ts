@@ -125,8 +125,10 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
     expect(stdout).toHaveLength(1);
     const doc = JSON.parse(stdout[0]);
     expect(doc.info.title).toBe('Admin API');
-    expect(Object.keys(doc.paths)).toEqual(['/cache/purge']);
-    expect(doc.servers).toEqual([{ url: '/admin' }]);
+    // The Portal's basePath is part of every path (round 5: it sat in a relative `servers` url).
+    expect(Object.keys(doc.paths)).toEqual(['/admin/cache/purge']);
+    expect(doc.servers).toBeUndefined();
+    expect(doc['x-wairon-base-path']).toBe('/admin');
     // The OTHER portal's API is absent — a selection is a selection.
     expect(stdout[0]).not.toContain('/records/{id}');
   });

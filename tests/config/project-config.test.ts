@@ -312,19 +312,6 @@ describe('project config registry', () => {
     ]);
   });
 
-  it('pinGlobalPacksAsSelections appends after existing entries and turns global packs off, in one write', () => {
-    const root = tempRoot();
-    writeDoc(root, minimal('extensions:', '  useGlobalPacks: true', '  packs:', '    - .wai/packs/legacy.yaml'));
-    const { repo, writes } = counted(root);
-
-    repo.pinGlobalPacksAsSelections([{ name: 'org', version: '1.0.0' }, { name: 'team', version: '0.1.0' }]);
-
-    expect(writes()).toBe(1);
-    const doc = readDoc(root);
-    expect(doc.extensions.packs).toEqual(['.wai/packs/legacy.yaml', { name: 'org', version: '1.0.0' }, { name: 'team', version: '0.1.0' }]);
-    expect(doc.extensions.useGlobalPacks).toBe(false);
-  });
-
   it('a pack write keeps an explicit useGlobalPacks at its value', () => {
     const root = tempRoot();
     writeDoc(root, minimal('extensions:', '  useGlobalPacks: true', '  packs: []'));
@@ -389,7 +376,6 @@ describe('project config registry', () => {
     ['registerPackRef', (r) => r.registerPackRef('.wai/packs/alpha.yaml')],
     ['deregisterPackRef', (r) => r.deregisterPackRef('.wai/packs/alpha.yaml')],
     ['markSelectionsBundled', (r) => r.markSelectionsBundled([{ name: 'alpha', version: '1.0.0' }])],
-    ['pinGlobalPacksAsSelections', (r) => r.pinGlobalPacksAsSelections([{ name: 'alpha', version: '1.0.0' }])],
   ];
 
   it.each(everyOtherWrite)('%s refuses a project with no configuration', (_name, write) => {

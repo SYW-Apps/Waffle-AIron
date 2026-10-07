@@ -9,7 +9,13 @@ methods:
   - name: export
     narrative:
       - stepNumber: 1
-        description: Project the own gateway surface at the requested audience ceiling
+        description: >-
+          Project the own surface at the requested audience ceiling — for an OpenAPI rendering, with
+          every HTTP Portal of the bound project's own besides when the ceiling is `project` (a
+          service document: the L0 export table says what other wairon projects may consume, not
+          what the project's own API document describes; an unexported Portal is the project's
+          alone, so a document at a wider ceiling carries only what the table shares there, and a
+          member's Portal is that member's API)
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
@@ -21,7 +27,9 @@ methods:
       - stepNumber: 3
         description: >-
           Render the snapshot's HTTP entries as one OpenAPI 3.1 document per backing portal into
-          renderedSet
+          renderedSet, handing the codec the render context: each declared external's pinned
+          snapshot (where a schema's `alias::name` resolves) and the version the project declares in
+          its package manifest (package.json, else Cargo.toml or pyproject.toml), read here
         type: call
         targetComponent: openapi_codec
         targetMethod: toOpenApiSet
@@ -30,10 +38,13 @@ methods:
           Populate the result's renderedSet with the per-portal documents; set `rendered` to that
           single document only when there is exactly one portal (one entry in the set), leaving
           `rendered` unset when multiple portals produced multiple documents. When portalId names a
-          portal, narrow the set to that one document; a portalId naming no portal is rejected
-          rather than silently ignored. An OpenAPI export with no HTTP Portal at all (an in-process
-          library, or nothing exported at the audience) asked to write a file is refused naming why
-          — OpenAPI does not apply — and the native snapshot is never written in its place.
+          portal, narrow the set to that one document; a portalId naming no rendered document is
+          rejected rather than silently ignored — and when it names a Portal of this project the
+          ceiling left out, the refusal says why (a non-HTTP Portal no OpenAPI document describes;
+          an HTTP Portal not shared at that audience, with the fix: drop --audience, or export it at
+          the audience wanted) instead of calling it unknown. An OpenAPI export with no HTTP Portal
+          at all (an in-process library) asked to write a file is refused naming why — OpenAPI does
+          not apply — and the native snapshot is never written in its place.
         type: local
       - stepNumber: 5
         description: An output path was given
@@ -341,20 +352,25 @@ methods:
           Restore the consumer's binding. Compare every used member — the lock's and the one the
           references use now — at signature level, for every producer alike (family, path, git,
           hosted, a referenced project): a live SurfaceSnapshot.memberDigest equal to the locked one
-          is unchanged, a different one changed; one absent under its name is RENAMED when a live
-          entry's `formerly` (the producer's rename trace) names it — renamedTo is that entry's
-          public name (and member), and its signature is still compared so the detail says whether
-          it also changed — and removed otherwise, the detail naming the source's rename when the
-          live snapshot lists the name among its unresolved re-exports; a name or member used now
-          but not in the lock is compared live too: gone from the live table it is renamed or
-          removed (a break the live producer already proves, pinned or not), present it is unlocked
-          (not in the lock — re-pin); an unexported reference of a family producer is unavailable —
-          and a name already answered as renamed or removed (under any member, a type's `type`
-          included) is answered once, never a second time for its unexported references. Stale when
-          a used member changed, was renamed or went away; drifted when the live content digest
-          differs from the pinned one, or when the pinned snapshot carries facts the live one no
-          longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
-          against the live one) — a stale snapshot is never ok
+          is unchanged, a different one changed — and a changed one whose closure holds a field the
+          producer renamed with a trace says so in its detail, naming each field with its new name
+          (SurfaceSnapshot.fieldRenamesSince against the pinned snapshot) and whether the renames
+          are the whole change, so the consumer reads "follow the rename" rather than an anonymous
+          signature change; one absent under its name is RENAMED when a live entry's `formerly` (the
+          producer's rename trace) names it — renamedTo is that entry's public name (and member),
+          and its signature is still compared so the detail says whether it also changed — and
+          removed otherwise, the detail naming the source's rename when the live snapshot lists the
+          name among its unresolved re-exports; a name or member used now but not in the lock is
+          compared live too: gone from the live table it is renamed or removed (a break the live
+          producer already proves, pinned or not), present it is unlocked (not in the lock —
+          re-pin), named member by member as `wairon lock` names what it refuses; an unexported
+          reference of a family producer is unavailable — and a name already answered as renamed or
+          removed (under any member, a type's `type` included) is answered once, never a second time
+          for its unexported references. Stale when a used member changed, was renamed or went away;
+          drifted when the live content digest differs from the pinned one, or when the pinned
+          snapshot carries facts the live one no longer says (staleFacts =
+          SurfaceSnapshot.carriedFactChanges of the pinned snapshot against the live one) — so
+          `drifted` and the health agree on every surface — and a stale snapshot is never ok
         type: local
       - stepNumber: 10
         description: Next external
@@ -774,4 +790,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-07T18:51:44.896Z'
+updatedAt: '2026-10-07T22:36:58.699Z'

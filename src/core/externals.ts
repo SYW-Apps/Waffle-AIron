@@ -11,6 +11,7 @@ import {
   type ParentExcerpt,
   type SurfaceSnapshot,
 } from '../models/index.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // The project's pinned externals (sdd_surfaces): the lock at
@@ -47,7 +48,7 @@ function writeAtomically(file: string, text: string): void {
 /** The lock with its aliases sorted, so a re-pin of the same set writes the same bytes; a part's parent entry kept. */
 function sortedLock(lock: ExternalsLock): ExternalsLock {
   const externals: ExternalsLock['externals'] = {};
-  for (const alias of Object.keys(lock.externals).sort()) externals[alias] = lock.externals[alias];
+  for (const alias of Object.keys(lock.externals).sort()) externals[alias] = ownGet(lock.externals, alias)!;
   return { externals, ...(lock.parent !== undefined ? { parent: lock.parent } : {}) };
 }
 
@@ -218,7 +219,7 @@ export const externalsRepository: ExternalsRepository = {
 export function renamePin(alias: string, newAlias: string, project: string): boolean {
   // Step 1: the current lock (none yet reads as empty).
   const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
-  const entry = lock.externals[alias];
+  const entry = ownGet(lock.externals, alias);
   // Steps 2-3: nothing to carry.
   if (entry === undefined || (alias === newAlias && entry.project === project)) return false;
   // Step 4: the pinned snapshot.
@@ -241,7 +242,7 @@ export function unpin(alias: string): boolean {
   // Step 1.
   const lock = externalsRepository.readLock();
   // Steps 2-3: nothing pinned.
-  if (!lock || lock.externals[alias] === undefined) return false;
+  if (!lock || ownGet(lock.externals, alias) === undefined) return false;
   // Step 4: the entry dropped and the lock saved.
   const externals = Object.fromEntries(Object.entries(lock.externals).filter(([key]) => key !== alias));
   externalsRepository.saveLock({ ...lock, externals });

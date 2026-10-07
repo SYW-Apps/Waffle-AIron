@@ -1,0 +1,20 @@
+kind: value-object
+id: display_name
+name: DisplayName
+description: >-
+  A spec's human-readable `name`: free text, but never empty and never holding a control, NUL or
+  zero-width character — such a character is invisible in every view, cuts the text short in some
+  tools and makes a diagram a binary file. The spec schemas refine every display name with problem.
+fields: []
+methods:
+  - name: problem
+    signature: 'problem(): string?'
+    returns: string?
+    description: >-
+      Why the text is no display name — empty or blank, or holding a control, NUL or zero-width
+      character named by its code point — or none. Pure
+    symbol: displayNameProblem
+sourcePath: src/models/identifiers.ts
+holds: string
+createdAt: '2026-10-07T21:43:29.317Z'
+updatedAt: '2026-10-07T22:27:59.817Z'

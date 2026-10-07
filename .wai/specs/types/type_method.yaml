@@ -10,7 +10,10 @@ description: >-
 fields:
   - name: name
     type: string
-    description: Method name, unique within the type
+    description: >-
+      Method name, unique within the type (DUPLICATE_MEMBER_NAME): an identifier
+      (identifier.problemAs method), never reserved for a method in the target language
+      (identifier.reservedIn)
     optional: false
     key: primary
   - name: signature
@@ -61,4 +64,4 @@ methods:
     symbol: methodTypeRefs
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-03T19:31:10.963Z'
-updatedAt: '2026-10-04T10:21:22.203Z'
+updatedAt: '2026-10-07T21:43:44.229Z'

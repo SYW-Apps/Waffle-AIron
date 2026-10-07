@@ -7,8 +7,10 @@ import {
   pathKey,
   resolveImport,
   type CallSiteFact,
+  type CallTargetFact,
   type ComponentSpec,
   type MethodImplementation,
+  type ResolvedCallFact,
 } from '../../../models/index.js';
 import { CodeIndex, ForwardedName, RuleContext, SddRule } from '../types.js';
 
@@ -114,6 +116,137 @@ export function closedCallSites(
   }
   return out;
 }
+
+/** One resolved call or reference a component's code makes, with the unowned functions it was reached through, outermost first. */
+export interface ReachedCall {
+  call: ResolvedCallFact;
+  /** Each unowned function the call sits in, as `name (path)`; empty for a call written in the component's own body. */
+  through: string[];
+}
+
+/** How deep a chain of unowned helpers is followed: far past any honest factoring, and a hard stop for a cycle the visited set misses. */
+const UNOWNED_DEPTH = 8;
+
+/**
+ * Reads UNOWNED code as part of whoever calls it. Code is unowned when it sits
+ * in a file no component realizes, or is a function of a realized file that is
+ * none of its components' modelled methods — a persistence helper module, a
+ * utility exported beside a class. A call resolving to such a function is
+ * expanded into the calls that function's body makes, transitively (visited
+ * set, depth bound), each kept with the path it was reached through, so a
+ * finding reports at the original call site naming the hops. A call landing
+ * on a modelled method stops there: what that method calls is its own
+ * narrative's. A landing in `origin` itself is left to the caller, whose own
+ * body walk already covers its file.
+ */
+export function unownedReach(ctx: RuleContext): (calls: readonly ResolvedCallFact[], origin: string) => ReachedCall[] {
+  const realization = ctx.realizationIndex();
+  const model = ctx.codeModel;
+  const callsAt = new Map<string, ResolvedCallFact[]>();
+  for (const facts of model.files) if (facts.resolvedCalls) callsAt.set(pathKey(facts.path), facts.resolvedCalls);
+  for (const [key, calls] of Object.entries(model.reachedCalls ?? {})) if (!callsAt.has(key)) callsAt.set(key, calls);
+  const modelledAt = new Map<string, Set<string>>();
+  const modelled = (file: string): Set<string> => {
+    let names = modelledAt.get(file);
+    if (names) return names;
+    names = new Set<string>();
+    for (const component of realization.componentsAt(file)) {
+      for (const m of ctx.interfaceMethodsOf(component.id)) names.add(m.name);
+      for (const impl of realization.implementationsOf(component.id)) {
+        for (const m of impl.methods) if (m.symbol) names.add(m.symbol);
+      }
+    }
+    modelledAt.set(file, names);
+    return names;
+  };
+  const owned = (target: CallTargetFact): boolean => modelled(target.path).has(target.member);
+  return (calls, origin) => {
+    const out: ReachedCall[] = [];
+    const visited = new Set<string>();
+    const queue: ReachedCall[] = calls.map(call => ({ call, through: [] }));
+    while (queue.length) {
+      const reached = queue.shift()!;
+      out.push(reached);
+      if (reached.through.length >= UNOWNED_DEPTH) continue;
+      for (const target of reached.call.targets) {
+        if (target.path === origin || owned(target)) continue;
+        const id = `${target.path}|${target.container ?? ''}|${target.member}`;
+        if (visited.has(id)) continue;
+        visited.add(id);
+        const body = (callsAt.get(target.path) ?? []).filter(c => c.enclosing === target.member
+          && (target.container === undefined ? c.enclosingContainer === undefined : c.enclosingContainer === target.container));
+        const hop = `${target.container ? `${target.container}.` : ''}${target.member} (${target.path})`;
+        for (const call of body) queue.push({ call, through: [...reached.through, hop] });
+      }
+    }
+    return out;
+  };
+}
+
+/** A write- or lifecycle-effect contract method of a component, as a fail-closed finding names it. */
+export interface WriteCandidate {
+  component: string;
+  method: string;
+}
+
+/**
+ * The writes an UNRESOLVED call may be: where the call recorded its
+ * receiver's original (pre-cast) type, the write- or lifecycle-effect methods
+ * of the components realized by the classes it lands on — the one its name
+ * names, or every one when a computed key names none; otherwise, by name, the
+ * writes of components in the caller's own subsystem or a subsystem it
+ * depends into. `keep` narrows by the callee component (a Portal's data
+ * writes are PORTAL_CALL_UNRESOLVED's, everything else the converse
+ * direction's).
+ */
+export function writeCandidates(ctx: RuleContext): (call: ResolvedCallFact, caller: ComponentSpec, keep: (callee: ComponentSpec) => boolean) => WriteCandidate[] {
+  const realization = ctx.realizationIndex();
+  const writesOf = new Map<string, Array<{ method: string; names: Set<string> }>>();
+  const writes = (componentId: string): Array<{ method: string; names: Set<string> }> => {
+    let list = writesOf.get(componentId);
+    if (list) return list;
+    list = [];
+    for (const m of ctx.interfaceMethodsOf(componentId)) {
+      if (m.effect !== 'write' && m.effect !== 'lifecycle') continue;
+      const names = new Set([m.name]);
+      for (const impl of realization.implementationsOf(componentId)) {
+        const bound = impl.methods.find(x => x.name === m.name)?.symbol;
+        if (bound) names.add(bound);
+      }
+      list.push({ method: m.name, names });
+    }
+    writesOf.set(componentId, list);
+    return list;
+  };
+  return (call, caller, keep) => {
+    const out: WriteCandidate[] = [];
+    const seen = new Set<string>();
+    const take = (callee: ComponentSpec): void => {
+      if (callee.id === caller.id || !keep(callee)) return;
+      for (const w of writes(callee.id)) {
+        if (call.name !== '' && !w.names.has(call.name)) continue;
+        const ref = `${callee.id}.${w.method}`;
+        if (!seen.has(ref)) { seen.add(ref); out.push({ component: callee.id, method: w.method }); }
+      }
+    };
+    // Receivers that are components settle it; receivers that are none (a
+    // wrapper class no spec names) leave it to the name, as a receiver with
+    // no recorded type does.
+    const receiving = (call.receivers ?? []).flatMap(r => realization.componentsAt(r.path));
+    if (receiving.length > 0) {
+      for (const callee of receiving) take(callee);
+      return out;
+    }
+    if (call.name === '') return out;
+    const near = new Set([caller.subsystem, ...caller.dependsOn.map(d => ctx.componentMap.get(d)?.subsystem)]);
+    for (const callee of ctx.components) if (near.has(callee.subsystem)) take(callee);
+    return out;
+  };
+}
+
+/** How a finding names the unowned hops a call was reached through. */
+export const throughText = (through: readonly string[]): string =>
+  (through.length ? `, reached through ${through.join(' → ')}` : '');
 
 /**
  * Whether a claim is a link over a transport rather than an in-process call:
@@ -326,12 +459,12 @@ export const callConformanceRule: SddRule = {
   name: 'call-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. A method claims a call two ways and they face one check: a narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches its collaborators through. They assert the same thing, and the step number is no part of the claim — this check never reads order, so it is only how a finding points at one. Forward: every claim must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from, a plain `<name>.<method>()` receiver through the type the file ANNOTATES that name with — a parameter\'s, or an annotated variable\'s, which is how a module that wires its collaborators as closures writes every one of its calls — a `fn(...).<method>()` receiver through the type fn RETURNS where the code settles it, and a `this.<method>()` receiver through the class whose own method it sits in, and a receiver CHAIN (`this.<field>.<property>.<method>()`, `<name>.<property>.<method>()`) link by link through each link\'s declared type — a declared type read through a member-preserving utility (Pick, Omit, Partial, Required, Readonly) and one alias hop; a package specifier naming a package of this repository resolves like a relative one, and an export alias (`export { a as b }`, an adapter object property `{ b: a }`) forwards by identity like a re-export. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and a target that names no file of its own falls back to name membership. N:1 identity — a caller that IS the target — is judged on the body, the same anchor in the same file, never on a shared name: a Portal method forwarding to a same-named Orchestrator method elsewhere must make that call. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported; a function forwarding by identity to a modelled method written in another file IS that method, so what it calls is that method\'s subject. And a call the TypeScript type checker resolves into ANOTHER file, onto a write- or lifecycle-effect contract method of another component, that the method claims nowhere is a mutation the design says the method never makes (UNDECLARED_WRITE_CALL): narrate it, declare it in `calls`, or remove it — judged in the bodies the method\'s function reaches, never for a Portal\'s call into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE\'s subject), and only where a type checker was loaded. A method that claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*\'s subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL\'s finding and names no target here, the conformance dial (off) skips, and weaker analysis grades never guess.',
+    'Code↔spec Level 3: the CLAIMED call ↔ realized call relation, judged both ways against the method\'s own source file (its sourcePath, else the implementation\'s), at exact analysis grade only. A method claims a call two ways and they face one check: a narrative `call` step, and an entry of the declared `calls` a narrative-less method reaches its collaborators through. They assert the same thing, and the step number is no part of the claim — this check never reads order, so it is only how a finding points at one. Forward: every claim must be realized by a call whose callee RESOLVES TO one of the target method\'s own source files — the target\'s contract name or a per-method `symbol` override, closed transitively over the named helpers the realized function calls, and resolved against every file the call CAN have reached: a `this.<field>.<method>()` receiver followed through the field\'s DECLARED TYPE, a `new Class(...).<method>()` receiver through the module its CLASS NAME came from, a plain `<name>.<method>()` receiver through the type the file ANNOTATES that name with — a parameter\'s, or an annotated variable\'s, which is how a module that wires its collaborators as closures writes every one of its calls — a `fn(...).<method>()` receiver through the type fn RETURNS where the code settles it, and a `this.<method>()` receiver through the class whose own method it sits in, and a receiver CHAIN (`this.<field>.<property>.<method>()`, `<name>.<property>.<method>()`) link by link through each link\'s declared type — a declared type read through a member-preserving utility (Pick, Omit, Partial, Required, Readonly) and one alias hop; a package specifier naming a package of this repository resolves like a relative one, and an export alias (`export { a as b }`, an adapter object property `{ b: a }`) forwards by identity like a re-export. A matching call whose origin a pure model cannot resolve is reported apart as CALL_ORIGIN_UNRESOLVED, which NAMES the shape it could not follow and asks for nothing — a coverage hole in the reader, reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a degraded one. A finding names a landing only from the PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and a target that names no file of its own falls back to name membership. Where a type checker read the file, a claim is also realized by any call or reference in the bodies the function reaches — and in the unowned code they call — that the checker lands on the target: its file under a name it is realized by, a class realizing the port the call was typed by, or what the target forwards to by identity — whatever the receiver\'s spelling (a type-only or `export *` barrel, a port declared in a shared module, a dependency bag typed inline); a claim it does not land keeps the shape tier\'s answer, since the checker\'s landing on a declaration says what a receiver is TYPED as, never where the call went instead. N:1 identity — a caller that IS the target — is judged on the body, the same anchor in the same file, never on a shared name: a Portal method forwarding to a same-named Orchestrator method elsewhere must make that call. Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file crosses a component boundary while looking local, so the method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper is no modelled method and is never reported; a function forwarding by identity to a modelled method written in another file IS that method, so what it calls is that method\'s subject. And a call — or a reference the code takes as a value — that the TypeScript type checker resolves into ANOTHER file, onto a write- or lifecycle-effect contract method of another component, or, from a Portal method whose body is its own, onto a verb of an Orchestrator, Supervisor or Actor whose effect is not declared read or none (a Portal changes state only by dispatching to such a verb, so its narrative is the list of those it may reach), that the method claims nowhere is a mutation the design says the method never makes (UNDECLARED_WRITE_CALL): narrate it, declare it in `calls`, or remove it — judged in the bodies the method\'s function reaches and in the UNOWNED code they call (a function in a file no component realizes, or one that is none of its file\'s components\' modelled methods, read as if inlined at the call site, transitively to a bounded depth, the finding naming the hops), never for a Portal\'s call into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE\'s subject), and only where a type checker was loaded. A call there the checker cannot follow — its receiver typed any or unknown, cast to either or to an index signature, or its member picked by a computed key — under the name of such a write the method claims nowhere (where the checker recorded the receiver\'s original type, a write of the component that type lands on, any of its writes when a computed key names none; else a write of that name in the method\'s own subsystem or one its component depends into) fails closed as CALL_ORIGIN_UNRESOLVED: neither proven an unnarrated write nor cleared. A method that claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*\'s subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL\'s finding and names no target here, the conformance dial (off) skips, and weaker analysis grades never guess.',
   codes: [
     { code: 'CALL_STEP_UNREALIZED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call realized by no call that resolves to the target method\'s own source file — the call is absent, or it lands in another module', carryable: true },
-    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the claim was not checked, and is neither proven realized nor accused. What resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding, a this.<field> receiver whose declared type names one, a receiver chain (this.<field>.<property>, <name>.<property>) each of whose links the code declares a type for, a new Class(…) receiver whose class does, a receiver name the file annotates with such a type, a fn(…) receiver whose return the code settles, and this inside a class\'s own method — a declared type read through Pick/Omit/Partial/Required/Readonly and one alias hop. What does not: a third-party package import, a value the module assembled, and a receiver the file declares nothing for', carryable: true },
+    { code: 'CALL_ORIGIN_UNRESOLVED', defaultSeverity: 'warning', summary: 'Narrative call step or declared call whose target name IS called, but only from call sites written in a shape this analysis cannot resolve to a file — the claim was not checked, and is neither proven realized nor accused; or, the fail-closed half of UNDECLARED_WRITE_CALL, a call through a receiver the analysis cannot follow (typed any or unknown, cast to either or to an index signature, a computed key) under the name of a write the method claims nowhere. Where a type checker read the file, whatever the checker resolves; without one, what resolves is a name bound to a module of THIS project: a bare or namespaced call through such an import binding, a this.<field> receiver whose declared type names one, a receiver chain (this.<field>.<property>, <name>.<property>) each of whose links the code declares a type for, a new Class(…) receiver whose class does, a receiver name the file annotates with such a type, a fn(…) receiver whose return the code settles, and this inside a class\'s own method — a declared type read through Pick/Omit/Partial/Required/Readonly and one alias hop. What does not: a third-party package import, a value the module assembled, and a receiver the file declares nothing for', carryable: true },
     { code: 'UNDECLARED_COLOCATED_CALL', defaultSeverity: 'warning', summary: 'The realized function calls a modelled method of another component living in the same source file, and neither a narrative step nor a declared call names it', carryable: true },
-    { code: 'UNDECLARED_WRITE_CALL', defaultSeverity: 'warning', summary: 'The realized function calls a write- or lifecycle-effect method of another component in another file, as the type checker resolves it, and neither a narrative step nor a declared call names it — an unnarrated mutation', carryable: true },
+    { code: 'UNDECLARED_WRITE_CALL', defaultSeverity: 'warning', summary: 'The realized function, or unowned code it calls, calls or takes as a value a write- or lifecycle-effect method of another component in another file — or, from a Portal, a workflow verb not declared read or none — as the type checker resolves it, and neither a narrative step nor a declared call names it — an unnarrated mutation', carryable: true },
   ],
   check(ctx: RuleContext) {
     const code = ctx.codeIndex();
@@ -343,7 +476,27 @@ export const callConformanceRule: SddRule = {
     // honesty stance, and belong where its accusation is read.
     const methods = ctx.implementationMethods();
     const realization = ctx.realizationIndex();
+    const reach = unownedReach(ctx);
+    const candidatesOf = writeCandidates(ctx);
     const DATA_COMPONENTS = new Set(['Repository', 'Index', 'Store', 'Registry']);
+    const WORKFLOW_COMPONENTS = new Set(['Orchestrator', 'Supervisor', 'Actor']);
+    /** The contract method a code name is, per component: its name, or a per-method symbol. */
+    const contractMethodOf = (componentId: string, name: string): { name: string; effect?: string } | undefined => {
+      const contract = ctx.interfaceMethodsOf(componentId);
+      const direct = contract.find(m => m.name === name);
+      if (direct) return direct;
+      for (const impl of realization.implementationsOf(componentId)) {
+        const bound = impl.methods.find(m => m.symbol === name);
+        const signature = bound && contract.find(m => m.name === bound.name);
+        if (signature) return signature;
+      }
+      return undefined;
+    };
+    /** The fail-closed converse: the writes an unresolved call may be, a Portal's data writes left to PORTAL_CALL_UNRESOLVED. */
+    const unresolvedCandidates = (call: ResolvedCallFact, caller: ComponentSpec): string[] =>
+      candidatesOf(call, caller, callee => !(caller.componentType === 'Portal' && DATA_COMPONENTS.has(callee.componentType))
+        && !isRemoteLink(caller, callee))
+        .map(w => `${w.component}.${w.method}`);
     /** The write- or lifecycle-effect contract method a code name is, per component: its name, or a per-method symbol. */
     const writeMethodOf = (componentId: string, name: string): string | undefined => {
       const contract = ctx.interfaceMethodsOf(componentId);
@@ -380,8 +533,13 @@ export const callConformanceRule: SddRule = {
     // identity (file and anchor). N:1 identity makes a facade and its target
     // one function, so a call the target claims is claimed for the facade too.
     const claimsByBody = new Map<string, Set<string>>();
+    /** The bodies a modelled method of a component other than a Portal is anchored to. */
+    const sharedBodies = new Set<string>();
     for (const entry of methods) {
       if (!entry.sourceFile) continue;
+      if (entry.component.componentType !== 'Portal') {
+        sharedBodies.add(bodyKey(pathKey(entry.sourceFile), entry.method.symbol ?? entry.method.name, entry.method.exportedVia));
+      }
       const key = bodyKey(pathKey(entry.sourceFile), entry.method.symbol ?? entry.method.name, entry.method.exportedVia);
       const refs = claimsByBody.get(key) ?? new Set<string>();
       for (const claim of claimsOf(entry.method)) refs.add(`${claim.component}.${claim.method}`);
@@ -429,6 +587,32 @@ export const callConformanceRule: SddRule = {
       // the name is absent altogether, METHOD_BODY_NOT_FOUND's when it is a
       // bodyless declaration. Either way, not ours.
       if (!sites) continue;
+
+      // What the type checker says the function's bodies reach: its own
+      // symbol and the same-file helpers the shape walk follows, every call
+      // and reference written in them, and what unowned code they call goes
+      // on to call. Where the checker read the file, a claim it lands on is
+      // realized whatever the receiver's spelling — a barrel, a port declared
+      // in a shared module, a dependency bag typed inline — and the shape
+      // tier is left only to accept what it can on its own.
+      const resolvedCalls = facts.resolvedCalls;
+      const forwardBodies = new Set<string>([fnSymbol]);
+      for (const site of sites) {
+        if (pathKey(site.from ?? here) === here && (!site.member || site.enclosingClass)) forwardBodies.add(site.name);
+      }
+      // The function's own body is the ONE its anchor means, told apart from
+      // a same-named neighbour (a class member beside the module function)
+      // exactly as bodySitesOf tells them apart; a helper is read by name.
+      const ownKey = bodySitesOf(facts, fnSymbol, implMethod.exportedVia)?.key;
+      const inOwnBody = (c: ResolvedCallFact): boolean => {
+        if (ownKey === undefined || ownKey.startsWith('*')) return true;
+        if (ownKey === fnSymbol) return c.enclosingContainer === undefined;
+        return c.enclosingContainer === ownKey.slice(0, ownKey.length - fnSymbol.length - 1);
+      };
+      const forwardReach = resolvedCalls
+        ? reach(resolvedCalls.filter(c => c.enclosing !== undefined
+          && (c.enclosing === fnSymbol ? inOwnBody(c) : forwardBodies.has(c.enclosing))), here)
+        : [];
 
       // ---- forward: every claimed call realized by a resolving call -------
       const missed: MissedClaim[] = [];
@@ -504,6 +688,15 @@ export const callConformanceRule: SddRule = {
         // re-exports the code writes down.
         if (sites.some(s => !target.accepted.has(s.name) && isTarget(invokedAs(code, s, file), target))) continue;
 
+        // The type checker's landing: the target's own (file, name), an
+        // implementor of the port the call was typed by, or what the target
+        // forwards to by identity — the checker resolves past a re-export to
+        // the module that wrote the function.
+        const forwards = targetForwards(code, target);
+        const lands = (t: CallTargetFact): boolean =>
+          (target.files.has(t.path) && target.accepted.has(t.member)) || forwards.has(`${t.path}#${t.member}`);
+        if (forwardReach.some(r => r.call.targets.some(lands))) continue;
+
         const landed = new Set<string>();
         let realized = false;
         for (const site of matching) {
@@ -513,6 +706,10 @@ export const callConformanceRule: SddRule = {
           }
         }
         if (realized) continue;
+        // A claim the checker did not land on its target keeps the shape
+        // tier's answer: the checker's landing on a declaration says what a
+        // receiver is TYPED as (a type literal, an interface no class
+        // realizes), never where the call went instead, so it accuses nothing.
         const miss: Miss = matching.length === 0
           ? { kind: 'absent' }
           : landed.size === 0
@@ -615,7 +812,6 @@ export const callConformanceRule: SddRule = {
       // declared edge, which says nothing about WHICH methods change state.
       // Only the type checker's answer is read here: an accusation needs the
       // call's landing proven, not a receiver followed by its spelling.
-      const resolvedCalls = facts.resolvedCalls;
       if (resolvedCalls && !forwardsToModelled) {
         // The bodies this method's function reaches in its own file, stopping
         // AT a colocated modelled method exactly as the colocated direction
@@ -638,9 +834,31 @@ export const callConformanceRule: SddRule = {
           for (const file of target.files) for (const name of target.accepted) claimed.add(`${file}#${name}`);
           for (const forwarded of targetForwards(code, target)) claimed.add(forwarded);
         }
+        const unclaimed = (ref: string): boolean => !declared.has(ref) && !sameBody.has(ref);
+        // A Portal method realized by the SAME body as another component's
+        // modelled method (N:1 identity) is that component's code: what it
+        // dispatches to answers to that component's narrative.
+        const portalOwnBody = component.componentType === 'Portal'
+          && !sharedBodies.has(bodyKey(here, fnSymbol, implMethod.exportedVia));
+        /**
+         * What a call into a component settles state through: a write- or
+         * lifecycle-effect contract method of any component; and, from a
+         * Portal, a verb of a workflow component (Orchestrator, Supervisor,
+         * Actor) whose effect is not declared read or none — a Portal changes
+         * state only by dispatching to such a verb, so its narrative is the
+         * list of the ones it may reach.
+         */
+        const mutatorOf = (callee: ComponentSpec, member: string): string | undefined => {
+          const written = writeMethodOf(callee.id, member);
+          if (written) return written;
+          if (!portalOwnBody || !WORKFLOW_COMPONENTS.has(callee.componentType)) return undefined;
+          const verb = contractMethodOf(callee.id, member);
+          return verb && verb.effect !== 'read' && verb.effect !== 'none' ? verb.name : undefined;
+        };
         const writes = new Map<string, string>();
-        for (const call of resolvedCalls) {
-          if (call.enclosing === undefined || !bodies.has(call.enclosing)) continue;
+        const unresolvedWrites = new Map<string, string>();
+        const own = resolvedCalls.filter(call => call.enclosing !== undefined && bodies.has(call.enclosing));
+        for (const { call, through } of reach(own, here)) {
           if (call.targets.some(t => claimed.has(`${t.path}#${t.member}`))) continue;
           for (const target of call.targets) {
             // A same-file target is the colocated direction's subject.
@@ -649,24 +867,50 @@ export const callConformanceRule: SddRule = {
               if (callee.id === component.id) continue;
               if (component.componentType === 'Portal' && DATA_COMPONENTS.has(callee.componentType)) continue;
               if (isRemoteLink(component, callee)) continue;
-              const written = writeMethodOf(callee.id, target.member);
+              const written = mutatorOf(callee, target.member);
               if (!written) continue;
+              // A MODULE function (no container) is never a method the callee
+              // reaches through an exportedVia handle: in a shared file the
+              // same-named object member is another body.
+              if (target.container === undefined && realization.implementationsOf(callee.id)
+                .some(impl => impl.methods.find(m => m.name === written)?.exportedVia !== undefined)) continue;
               const ref = `${callee.id}.${written}`;
-              if (declared.has(ref) || sameBody.has(ref) || writes.has(ref)) continue;
-              writes.set(ref, call.written);
+              if (!unclaimed(ref) || writes.has(ref)) continue;
+              writes.set(ref, `${call.reference ? `\`${call.written}\` (taken as a value)` : `\`${call.written}(…)\``}${throughText(through)}`);
+            }
+          }
+          // The fail-closed half: a call the checker could not follow, under
+          // the name of a write another component's contract carries, that
+          // this method claims nowhere. Neither proven nor cleared.
+          if (call.unresolved) {
+            for (const ref of unresolvedCandidates(call, component)) {
+              if (!unclaimed(ref) || unresolvedWrites.has(ref)) continue;
+              unresolvedWrites.set(ref, `\`${call.written}(…)\`${throughText(through)}`);
             }
           }
         }
         if (writes.size) {
-          const detail = [...writes].map(([ref, written]) => `${ref} (\`${written}(…)\`)`).join('; ');
+          const detail = [...writes].map(([ref, written]) => `${ref} (${written})`).join('; ');
           ctx.addIssue(
             'warning',
             'UNDECLARED_WRITE_CALL',
-            `Method "${implMethod.name}" in implementation "${impl.id}": the function "${fnSymbol}" in "${file}" calls ${writes.size} write- or lifecycle-effect method(s) of other components that neither a narrative step nor a declared call names — ${detail}. The code changes state the design says this method never touches. Narrate the call, declare it in \`calls\`, or remove it.`,
+            `Method "${implMethod.name}" in implementation "${impl.id}": the function "${fnSymbol}" in "${file}" calls ${writes.size} method(s) of other components that change state — a write- or lifecycle-effect method, or from a Portal a workflow verb not declared read or none — and neither a narrative step nor a declared call names it — ${detail}. The code changes state the design says this method never touches. Narrate the call, declare it in \`calls\`, or remove it.`,
             impl.id,
             entry.draftContext,
             undefined,
             { at: implMethod.name, covers: [...writes.keys()] },
+          );
+        }
+        if (unresolvedWrites.size) {
+          const detail = [...unresolvedWrites].map(([ref, written]) => `${ref} (${written})`).join('; ');
+          ctx.addIssue(
+            'warning',
+            'CALL_ORIGIN_UNRESOLVED',
+            `Method "${implMethod.name}" in implementation "${impl.id}": the function "${fnSymbol}" in "${file}" makes ${unresolvedWrites.size} call(s) through a receiver this analysis cannot follow (typed any or unknown, cast to either or to an index signature, or a computed key), under the name of a write no narrative step or declared call of the method names — ${detail}. Neither proven an unnarrated write nor cleared, so it fails closed: give the receiver its declared type so the call can be judged.`,
+            impl.id,
+            entry.draftContext,
+            undefined,
+            { at: implMethod.name, covers: [...unresolvedWrites.keys()] },
           );
         }
       }

@@ -783,6 +783,17 @@ methods:
           composes nothing more for it
         type: local
       - stepNumber: 53
+        label: code-reading
+        description: >-
+          Ask which compiler an exact-grade analysis read the code with, through the source analysis
+          adapter, for the one-line code reading the result carries beside the hint: the weakest
+          grade any analyzed file was read at and, at exact grade, that compiler's version and
+          whether it is the project's own or wairon's copy — or that no source file the design names
+          exists yet. Never a finding: it changes no verdict
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: compilerIdentity
+      - stepNumber: 54
         label: done
         description: Return the project's verdict — the same from every root
         type: return
@@ -824,4 +835,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T18:46:57.223Z'
+updatedAt: '2026-10-07T21:50:22.985Z'

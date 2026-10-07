@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { CustomTargetSchema } from './agent.js';
 import { ExecutionConfigSchema } from './execution.js';
 import { isNewerVersion } from '../utils/version.js';
+import { ownGet } from '../utils/own.js';
+import { identifierProblem, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 
 // ---------------------------------------------------------------------------
 // Project configuration — lives at .wai/project.yaml
@@ -88,7 +90,32 @@ const LANGUAGE_METHOD_CASING: Readonly<Record<string, string>> = {
 export function methodCasingFor(naming: Pick<NamingRuleConfig, 'methods'> | undefined, targetLanguage?: string): string {
   if (naming?.methods) return naming.methods;
   const language = targetLanguage?.trim().toLowerCase();
-  return (language && LANGUAGE_METHOD_CASING[language]) || 'camelCase';
+  return (language && ownGet(LANGUAGE_METHOD_CASING, language)) || 'camelCase';
+}
+
+/** The casing styles a naming setting may name, as the naming-conventions rule reads them. */
+const CASING_STYLES: Readonly<Record<string, RegExp>> = {
+  camelCase: /^[a-z][a-zA-Z0-9]*$/,
+  PascalCase: /^[A-Z][a-zA-Z0-9]*$/,
+  snake_case: /^[a-z0-9]+(_[a-z0-9]+)*$/,
+  'kebab-case': /^[a-z0-9]+(-[a-z0-9]+)*$/,
+  UPPER_CASE: /^[A-Z0-9]+(_[A-Z0-9]+)*$/,
+};
+
+/**
+ * Whether a method name fits a casing (methodCasingFor's answer): a known
+ * style, or a configured regular expression on top of the identifier grammar.
+ * An unreadable expression refuses nothing here (the naming rule reports it as
+ * INVALID_NAMING_PATTERN). Pure.
+ */
+export function fitsMethodCasing(name: string, casing: string): boolean {
+  const known = ownGet(CASING_STYLES, casing);
+  if (known) return known.test(name);
+  try {
+    return new RegExp(casing).test(name);
+  } catch {
+    return true;
+  }
 }
 
 export const DocumentationRuleConfigSchema = z.object({
@@ -1053,7 +1080,9 @@ export function admits(requirement: Pick<PackRequirement, 'version'>, version?: 
  * starting and ending with a letter or a digit. Dots are allowed (a dotted id
  * needs an explicit alias once references name projects); nothing else is.
  */
-export const PROJECT_ID_RE = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
+// The whole identifier grammar for a project id (identifier.problemAs project-id), so every
+// `.test` agrees with it: at most 64 characters, never a Windows device name or super.
+export const PROJECT_ID_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$))(?!super$)(?=.{1,64}$)[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
 /**
  * A display name slugified into the project-id grammar: lower-cased, every run
@@ -1068,7 +1097,10 @@ function slugifyProjectName(name: string): string | null {
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^[^a-z0-9]+/, '')
     .replace(/[^a-z0-9]+$/, '');
-  return slug === '' ? null : slug;
+  // Cut to the cap and re-trimmed; a slug the grammar still refuses (a device
+  // name, super) is no id — reported as missing, never papered over.
+  const cut = slug.slice(0, MAX_IDENTIFIER_LENGTH).replace(/[^a-z0-9]+$/, '');
+  return cut === '' || identifierProblem(cut, 'project-id') !== null ? null : cut;
 }
 
 /**
@@ -1120,8 +1152,8 @@ export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name' | 'pre
     problems.push({ kind: 'defaulted', detail: `no id is declared; the name "${config.name}" yields "${id}"` });
   } else if (source === 'none') {
     problems.push({ kind: 'ambiguous', detail: `no id is declared, and the name "${config.name}" yields no id` });
-  } else if (!PROJECT_ID_RE.test(config.id!)) {
-    problems.push({ kind: 'ambiguous', detail: `the declared id "${config.id}" breaks the project-id grammar` });
+  } else if (identifierProblem(config.id!, 'project-id') !== null) {
+    problems.push({ kind: 'ambiguous', detail: `the declared id "${config.id}" breaks the project-id grammar: ${identifierProblem(config.id!, 'project-id')}` });
   }
   if (lockedProjectId !== undefined && id !== lockedProjectId && id !== null && (config.previousIds ?? []).includes(lockedProjectId)) {
     problems.push({ kind: 'renamed', detail: `the lock approved "${lockedProjectId}", and the project was renamed to "${id}"` });
@@ -1148,13 +1180,14 @@ export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name' | 'pre
  * (`con`, `aux`, `com1`, …) — the alias names its pin file
  * (`.wai/externals/<alias>.yaml`), which no Windows checkout could hold.
  */
-export const EXTERNAL_ALIAS_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)[a-z0-9_-]+$/;
+// The whole identifier grammar for an alias (identifier.problemAs alias), so every `.test`
+// agrees with it: at most 64 characters, no leading "-", never super or __proto__.
+export const EXTERNAL_ALIAS_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9]|super|__proto__)$)(?!-)[a-z0-9_-]{1,64}$/;
 
-/** Why an alias breaks EXTERNAL_ALIAS_RE, in words: the grammar, or a Windows device name. */
+/** Why an alias breaks EXTERNAL_ALIAS_RE, in words (identifier.problemAs alias): the grammar, a device name, the length, ... */
 export function aliasGrammarProblem(alias: string): string {
-  return /^[a-z0-9_-]+$/.test(alias)
-    ? `the alias "${alias}" is a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9), and it names a file — choose another`
-    : `the alias "${alias}" breaks [a-z0-9-_]+`;
+  const problem = identifierProblem(alias, 'alias') ?? `"${alias}" breaks [a-z0-9-_]+`;
+  return `the alias ${problem}${/Windows reserves for a device/.test(problem) ? ' (an alias names a file)' : ''}`;
 }
 
 /**
@@ -1272,7 +1305,7 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
       ? (PROJECT_ID_RE.test(alias) && alias.includes('.')
         ? `the alias "${alias}" is not a reference name ([a-z0-9-_]+) — a dotted producer id needs an explicit alias, e.g. \`${alias.replace(/\./g, '-')}: { project: ${alias} }\``
         : aliasGrammarProblem(alias))
-      : config.members?.[alias] !== undefined
+      : ownGet(config.members, alias) !== undefined
         ? `the alias "${alias}" is also declared under \`members\` — one alias names one project`
         : !PROJECT_ID_RE.test(project)
           ? `the producer id "${project}" breaks the project-id grammar`
@@ -1461,7 +1494,7 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
                 ? `the member "${alias}" is a hosted record asserted \`as: part\` — a part is part of its parent's record, so a hosted source is a project`
                 : (declaration.ref !== undefined || declaration.dir !== undefined) && parsed.storage !== 'git'
                   ? `the member "${alias}" names \`${declaration.ref !== undefined ? 'ref' : 'dir'}\`, which only a git source carries`
-                  : config.externals?.[alias] !== undefined
+                  : ownGet(config.externals, alias) !== undefined
                     ? `the alias "${alias}" is also declared under \`externals\` — one alias names one project`
                     : imports.problem;
     const location = source ?? deprecated ?? '';

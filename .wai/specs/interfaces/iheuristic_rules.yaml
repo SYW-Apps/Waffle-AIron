@@ -54,10 +54,11 @@ methods:
         summary: Narrative flow step uses a construct the target language does not have
   - name: technologyBinding
     description: >-
-      Rule technology-binding. Only data-layer stereotypes (Adapter/Store/Registry/Index) should
-      bind a technology directly: an L4 that declares `technologies` on logic has no swap seam. No
-      hardcoded vendor lists — only declared tokens are policed, so the rule never fires on a tree
-      that doesn't opt in.
+      Rule technology-binding. Only the stereotypes that sit at a technology seam
+      (Adapter/Store/Registry/Index, and Observer — the edge block that subscribes to a messaging
+      technology) should bind a technology directly: an L4 that declares `technologies` on logic has
+      no swap seam. No hardcoded vendor lists — only declared tokens are policed, so the rule never
+      fires on a tree that doesn't opt in.
     signature: 'technologyBinding(ctx: RuleContext): void'
     returns: void
     params:
@@ -74,17 +75,18 @@ methods:
       `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home.
       References outside that tree are leakage, and L3 contract identifiers must stay
       intent-language — the contract is the swap seam, so the vendor name is wrong even on the
-      owning component's own interface. A word in prose is not a binding: the PROSE of a data-layer
-      seam (an Adapter, Store, Registry or Index — the stereotypes that may bind a technology at
-      all) — its component description, its contract's descriptions and its implementations'
-      descriptions, intents and step prose — names the technology about its own realization ("in
-      memory now, Redis later"), so it is not leakage; its identifiers (id, name, dependsOn, owns,
-      basePath, a step's call target, a source file) still are, and every surface of any other
-      stereotype still is. A technology is matched by its name, or — when it declares `matches`
-      because its name is also an ordinary word of the tree (a package named after the file format
-      it reads) — by those tokens alone. Two declarations of one technology are one home whichever
-      notation each is written in: a component binding it as a bare name and one binding it as
-      `{name, matches}` are both inside it, even when one form's tokens police nothing.
+      owning component's own interface. A word in prose is not a binding: the PROSE of a technology
+      seam (an Adapter, Store, Registry or Index, or an Observer subscribing to a messaging
+      technology — the stereotypes that may bind a technology at all) — its component description,
+      its contract's descriptions and its implementations' descriptions, intents and step prose —
+      names the technology about its own realization ("in memory now, Redis later"), so it is not
+      leakage; its identifiers (id, name, dependsOn, owns, basePath, a step's call target, a source
+      file) still are, and every surface of any other stereotype still is. A technology is matched
+      by its name, or — when it declares `matches` because its name is also an ordinary word of the
+      tree (a package named after the file format it reads) — by those tokens alone. Two
+      declarations of one technology are one home whichever notation each is written in: a component
+      binding it as a bare name and one binding it as `{name, matches}` are both inside it, even
+      when one form's tokens police nothing.
     signature: 'technologyBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -263,4 +265,4 @@ methods:
           could name them as their signatureFrom
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-07T18:28:12.875Z'
+updatedAt: '2026-10-07T21:45:01.146Z'

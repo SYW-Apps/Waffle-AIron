@@ -91,7 +91,6 @@ rules:
       # Constants — the supported aliases, the version, the default target list.
       # 16 importers and nothing to call.
       - src/config/defaults.ts
-      - src/core/demo-seed.ts
       # Stereotype predicates shared by three doctrine rules that are themselves
       # modelled. Rule-family vocabulary.
       - src/core/rules/doctrine/stereotype-terms.ts

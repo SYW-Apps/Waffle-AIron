@@ -73,7 +73,7 @@ function contractIdentifiers(m: MethodSignature): string {
  * realization — "in memory now, Redis later" — which is no binding and no
  * leak; their identifiers still are.
  */
-const SEAMS = new Set(['Adapter', 'Store', 'Registry', 'Index']);
+const SEAMS = new Set(['Adapter', 'Store', 'Registry', 'Index', 'Observer']);
 
 /** One technology an implementation declares — its name and the tokens it is matched by — with the declaring component. */
 interface TechDeclaration {
@@ -95,7 +95,7 @@ export const technologyRule: SddRule = {
   name: 'technology-boundaries',
   judges: 'design',
   description:
-    "Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component's own interface. A word in prose is not a binding: the PROSE of a data-layer seam (an Adapter, Store, Registry or Index — the stereotypes that may bind a technology at all) — its component description, its contract's descriptions and its implementations' descriptions, intents and step prose — names the technology about its own realization (\"in memory now, Redis later\"), so it is not leakage; its identifiers (id, name, dependsOn, owns, basePath, a step's call target, a source file) still are, and every surface of any other stereotype still is. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone. Two declarations of one technology are one home whichever notation each is written in: a component binding it as a bare name and one binding it as `{name, matches}` are both inside it, even when one form's tokens police nothing.",
+    "Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component's own interface. A word in prose is not a binding: the PROSE of a technology seam (an Adapter, Store, Registry or Index, or an Observer subscribing to a messaging technology — the stereotypes that may bind a technology at all) — its component description, its contract's descriptions and its implementations' descriptions, intents and step prose — names the technology about its own realization (\"in memory now, Redis later\"), so it is not leakage; its identifiers (id, name, dependsOn, owns, basePath, a step's call target, a source file) still are, and every surface of any other stereotype still is. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone. Two declarations of one technology are one home whichever notation each is written in: a component binding it as a bare name and one binding it as `{name, matches}` are both inside it, even when one form's tokens police nothing.",
   codes: [
     { code: 'TECH_LEAKAGE', defaultSeverity: 'warning', summary: 'Technology referenced outside its owning boundary' },
     { code: 'VENDOR_NAME_IN_CONTRACT', defaultSeverity: 'warning', summary: 'Technology name in L3 contract identifiers' },

@@ -196,6 +196,20 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: renameParam
+  - name: findOrphanedSpecFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: findOrphanedSpecFiles
+  - name: seedDemoTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the demo orchestrator (an identity re-export)
+        type: call
+        targetComponent: demo_orchestrator
+        targetMethod: seedTree
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-07T06:25:14.371Z'
+updatedAt: '2026-10-07T22:40:36.173Z'

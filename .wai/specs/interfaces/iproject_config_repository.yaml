@@ -82,11 +82,6 @@ methods:
     signatureFrom: project_config_registry.markSelectionsBundled
     guarantees:
       - idempotent
-  - name: pinGlobalPacksAsSelections
-    description: >-
-      Append implicitly applied global packs as selections and turn global packs off, in one write
-      (forwarded to the registry).
-    signatureFrom: project_config_registry.pinGlobalPacksAsSelections
   - name: rekeyCarried
     description: >-
       Rekey the debt register for an identity move — a component rename, a method rename, a method
@@ -200,4 +195,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-06T23:05:23.977Z'
+updatedAt: '2026-10-07T21:50:06.869Z'

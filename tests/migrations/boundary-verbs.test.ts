@@ -78,7 +78,7 @@ function metaFamily(): MetaFamily {
   write(svc, '.wai/specs/pay/.index.yaml', { id: 'pay', name: 'pay', description: 'Takes payments.', parentSystem: 'Svc', publicInterfaces: [{ type: 'Custom', details: 'Payments', component: 'pay-portal' }], trustedLinks: [] });
   write(svc, '.wai/specs/pay/pay-portal/.index.yaml', { id: 'pay-portal', name: 'pay-portal', description: 'Takes payments.', subsystem: 'pay', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [] });
   write(svc, '.wai/specs/settle/.index.yaml', { id: 'settle', name: 'settle', description: 'Settles.', parentSystem: 'Svc', publicInterfaces: [], trustedLinks: [] });
-  write(svc, '.wai/lock.json', JSON.stringify({ stateId: 'sha256:0', lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
+  write(svc, '.wai/lock.json', JSON.stringify({ stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
   write(svc, '.wai/context/wairon-guide.md', '# derived\n');
 
   config(sub, { id: 'sub', name: 'Sub' });

@@ -146,8 +146,8 @@ describe('createMember', () => {
 
   it('refuses a malformed alias or an empty path before anything is written', () => {
     rootDir = makeRoot();
-    expect(() => createMember('Billing!', 'packages/billing', undefined, 'project')).toThrow(/an alias and a path are required/);
-    expect(() => createMember('billing', '  ', undefined, 'project')).toThrow(/an alias and a path are required/);
+    expect(() => createMember('Billing!', 'packages/billing', undefined, 'project')).toThrow(/the alias "Billing!" breaks \[a-z0-9-_\]\+/);
+    expect(() => createMember('billing', '  ', undefined, 'project')).toThrow(/needs a source/);
     expect(fs.existsSync(path.join(rootDir, 'packages'))).toBe(false);
     expect(membersOf(rootDir)).toBeUndefined();
   });

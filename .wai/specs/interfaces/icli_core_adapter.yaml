@@ -467,13 +467,6 @@ methods:
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
     params: []
-  - name: pinInstalledPacksAsSelections
-    description: >-
-      Forward to extension_portal.pinInstalledPacksAsSelections: the `wairon doctor --fix` pack
-      migration
-    signature: 'pinInstalledPacksAsSelections(): list<string>'
-    returns: list<string>
-    params: []
   - name: resolveChainingParent
     description: >-
       Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (parent
@@ -658,6 +651,14 @@ methods:
         type: bool
         description: Answer what the rename would do and write nothing
         optional: true
+  - name: seedDemoTree
+    description: >-
+      Seed the example spec tree into the currently bound project root, for `wairon host demo`.
+      Forwarded to the core portal.
+    signature: 'seedDemoTree(): void'
+    returns: void
+    params: []
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:41:20.021Z'
+updatedAt: '2026-10-07T22:40:40.566Z'

@@ -100,7 +100,8 @@ describe('demo-project seeder', () => {
       { name: 'items', type: 'list<OrderLine>' },
     ]);
     expect(place.returns).toBe('Order');
-    expect(place.endpoint).toMatchObject({ transport: 'HTTP', method: 'POST', path: '/orders' });
+    // Paths are relative to the Portal's basePath (`/orders`), as the reach model and OpenAPI join them.
+    expect(place.endpoint).toMatchObject({ transport: 'HTTP', method: 'POST', path: '/' });
   });
 
   it('fills the ERD: typed tables, primary/unique keys, and FK reference edges with cardinality', () => {

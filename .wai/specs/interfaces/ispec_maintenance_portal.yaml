@@ -349,6 +349,22 @@ methods:
       Forward to core_orchestrator.renameParam: rename a parameter of a contract method, keeping its
       old name in the parameter's rename trace
     signatureFrom: core_orchestrator.renameParam
+  - name: findOrphanedSpecFiles
+    description: >-
+      Published read: the bound tree's spec files left standing while its specs folder holds no L0 —
+      what `validate` reports as an error and `lock-check` refuses, instead of reading the tree as
+      empty.
+    signature: 'findOrphanedSpecFiles(): list<string>'
+    returns: list<string>
+    params: []
+  - name: seedDemoTree
+    description: >-
+      Writes the ShopFlow example spec tree into the currently bound project root — the content
+      `wairon host demo` creates a demo project with
+    signature: 'seedDemoTree(): void'
+    returns: void
+    params: []
+    effect: write
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-07T18:41:12.753Z'
+updatedAt: '2026-10-07T22:40:33.531Z'

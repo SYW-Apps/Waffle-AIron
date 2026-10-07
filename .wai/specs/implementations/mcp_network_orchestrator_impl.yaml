@@ -14,9 +14,39 @@ methods:
         targetComponent: mcp_network_adapter
         targetMethod: flows
       - stepNumber: 2
-        description: Parse the document's flows and keep only those into `to` when it is given
+        description: >-
+          Read `to` as a party the way the network commands read one: the bound project's own id
+          written as a prefix (`<project>::<component>`, `<project>::<portal>.<verb>`) names its own
+          party, read bare; then parse the document's flows and keep only those whose called end the
+          name denotes (flow_party.isNamed: its project, subsystem, component, workload or
+          portal.verb) when it is given
         type: local
       - stepNumber: 3
+        description: Is the answer empty for a name it was filtered by?
+        type: branch
+        condition: '`to` is given and no flow lands in it'
+        onFalseStep: 7
+      - stepNumber: 4
+        description: >-
+          Ask the network portal to explain a flow from outside to `to`, which names every party the
+          design does not know
+        type: call
+        targetComponent: mcp_network_adapter
+        targetMethod: why
+      - stepNumber: 5
+        description: Does the explanation name `to` as a party the design does not know?
+        type: branch
+        condition: the explanation lists `to` among its unknown parties
+        onFalseStep: 7
+      - stepNumber: 6
+        label: unknown-party
+        description: >-
+          Refuse, naming the party and how a party is named, so an empty answer always means no flow
+          lands there and never a name that resolved to nothing
+        type: throw
+        error: 'unknown party: nothing in the design is named so'
+      - stepNumber: 7
+        label: answer
         description: Answer them, as text and structured content
         type: return
         outcome: list<NetworkFlow>
@@ -56,4 +86,4 @@ methods:
         outcome: bool
 status: complete
 createdAt: '2026-10-06T13:15:29.445Z'
-updatedAt: '2026-10-07T06:21:34.655Z'
+updatedAt: '2026-10-07T21:47:59.655Z'

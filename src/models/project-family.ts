@@ -294,6 +294,19 @@ export function consumerReaches(consumer: ExternalConsumer, publicNames: readonl
   return (consumer.uses ?? []).some((u) => publicNames.includes(u.publicName) && u.members.includes(member));
 }
 
+/**
+ * external_consumer.narrowedTo — a consumer as a rename of `member` on one of
+ * `publicNames` breaks it: only those public names, each with that one member,
+ * so a dry run names what breaks rather than the consumer's whole use of the
+ * producer. Its specs stay those that reach the public name. Pure.
+ */
+export function narrowedToMember(consumer: ExternalConsumer, publicNames: readonly string[], member: string): ExternalConsumer {
+  const uses = (consumer.uses ?? [])
+    .filter((u) => publicNames.includes(u.publicName) && u.members.includes(member))
+    .map((u) => ({ ...u, members: [member] }));
+  return { ...consumer, names: consumer.names.filter((n) => uses.some((u) => u.publicName === n)), uses };
+}
+
 /** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */
 function directoryKey(dir: string): string {
   const resolved = path.resolve(dir);

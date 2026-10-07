@@ -143,12 +143,15 @@ methods:
     description: >-
       The carried facts this pinned snapshot holds differently from the live one, each named where
       it sits: per public entry its export kind, transport, abi, role, stereotype, basePath, auth
-      scheme and rename trace, per contract method its effect and rename trace, per type its rename
-      trace, the producer's id and targetLanguage, and the names the producer declares but no longer
-      resolves. These are what the rules judge from a pin beside the signatures
-      (LANGUAGE_BRIDGE_MISSING reads the abi), so a pin whose content digest is unchanged can still
-      be stale; prose (descriptions, display names) and provenance (stateId, generatedAt) are never
-      a fact here. Empty when the snapshot says what the producer says now. Pure.
+      scheme and rename trace, per contract method its effect and rename trace and each parameter
+      the producer renamed with a trace (named with its new name — a parameter name enters no
+      digest, so the rename never breaks a caller, but the pin still spells the old one), per type
+      its rename trace and each field it renamed with a trace (with its new name), the producer's id
+      and targetLanguage, and the names the producer declares but no longer resolves. These are what
+      the rules judge from a pin beside the signatures (LANGUAGE_BRIDGE_MISSING reads the abi), so a
+      pin whose content digest is unchanged can still be stale; prose (descriptions, display names)
+      and provenance (stateId, generatedAt) are never a fact here. Empty when the snapshot says what
+      the producer says now. Pure.
     sourcePath: src/models/surface-references.ts
   - name: changesSince
     signature: 'changesSince(older: surface_snapshot): list<surface_change>'
@@ -162,15 +165,61 @@ methods:
       (contract entry or exported type) added, removed, renamed per this snapshot's rename trace
       (`formerly`), or changed — its audience, a type's shape, or any other fact a consumer's pin
       carries and is drifted by: a contract entry's export kind, transport, abi, role, stereotype,
-      basePath or auth scheme, a method's effect, an exported type's own methods, and the surface's
-      targetLanguage — and inside each contract kept, each method added, removed, renamed per its
-      trace, or changed in signature (memberDigest). A signature row is written only when the
-      signature reads differently; a method whose signature reads the same but whose digest moved
-      because a type it names changed shape says exactly that, naming the type, and is left out when
-      every such type is an exported name whose own shape change is already listed. Prose, rename
-      traces and provenance are never a change. Sorted by name, then member. Pure.
+      basePath or auth scheme, a method's effect (an undeclared effect reads `undeclared`, never
+      `none`, which is a declared effect of its own), an exported type's own methods, and the
+      surface's targetLanguage — and inside each contract kept, each method added, removed, renamed
+      per its trace, or changed in signature (memberDigest), and each parameter renamed per its
+      trace (`parameter "old" renamed to "new"`). An exported type's field renamed per its trace is
+      a rename row naming the field with its new name; the anonymous shape row is kept only for a
+      shape change the renames do not explain. A signature row is written only when the signature
+      reads differently; a method whose signature reads the same but whose digest moved because a
+      type it names changed shape says exactly that, naming the type, and is left out when every
+      such type is an exported name whose own shape change is already listed. Prose and provenance
+      are never a change. Sorted by name, then member. Pure.
     sourcePath: src/models/surface-references.ts
     symbol: surfaceChanges
+  - name: fieldRenames
+    signature: 'fieldRenames(was: SurfaceTypeDef, now: SurfaceTypeDef): list<TracedRename>'
+    params:
+      - name: was
+        type: SurfaceTypeDef
+        description: The older definition of the type
+      - name: now
+        type: SurfaceTypeDef
+        description: The newer definition of the same type
+    returns: list<TracedRename>
+    description: >-
+      The fields of one type renamed between an older and a newer definition of it, per the newer
+      one's rename trace (`formerly`): each field the older had that the newer lacks and a newer
+      field's trace names, as {from, to}. Pure.
+    sourcePath: src/models/surface-references.ts
+  - name: fieldRenamesSince
+    signature: >-
+      fieldRenamesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot, publicName: string, member:
+      string, pinnedDigest: string): FieldRenameReading
+    params:
+      - name: pinned
+        type: SurfaceSnapshot
+        description: The consumer's pinned snapshot
+      - name: live
+        type: SurfaceSnapshot
+        description: The producer's live projection
+      - name: publicName
+        type: string
+        description: The used public name
+      - name: member
+        type: string
+        description: The used member
+      - name: pinnedDigest
+        type: string
+        description: The member digest the lock records
+    returns: FieldRenameReading
+    description: >-
+      Every field rename inside the live closure between the pinned snapshot and the live one, each
+      read `field "<type>.<old>" renamed to "<new>"`, and whether undoing them gives back the pinned
+      member digest exactly (the renames are the whole change). Empty when no field was renamed.
+      What a changed use's detail says so the consumer follows the rename. Pure.
+    sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-07T18:38:17.590Z'
+updatedAt: '2026-10-07T22:00:37.495Z'

@@ -37,6 +37,14 @@ fields:
       What lets a package import resolve like a relative one; a third-party specifier is in no entry
       and resolves to nothing, as before
     optional: true
+  - name: reachedCalls
+    type: map<string, list<ResolvedCallFact>>
+    description: >-
+      The resolved calls of the project's own source files that no facts entry holds but a resolved
+      call or reference of the run reaches — a helper module no spec names and no source-root walk
+      found — keyed by canonical path. What lets a rule read unowned code as part of whoever calls
+      it. Absent where no type checker was loaded
+    optional: true
 methods:
   - name: pathKey
     signature: 'pathKey(path: string): string'
@@ -52,4 +60,4 @@ methods:
       analyzed no such path
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-10-05T00:38:18.238Z'
+updatedAt: '2026-10-07T21:58:56.151Z'
