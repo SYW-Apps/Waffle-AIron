@@ -335,6 +335,9 @@ const READ_TOOL_NAMES = new Set<string>([
   'getProjectConfig',
   // The flow explanation: a read of the derived networking (sdd_get_network_flows reads by prefix).
   'sdd_explain_flow',
+  // Who consumes this project, and its public-surface changelog: reads of the bound tree (a hosted request may not search folders).
+  'sdd_list_consumers',
+  'sdd_surface_diff',
 ]);
 
 /**

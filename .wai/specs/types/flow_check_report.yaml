@@ -37,7 +37,13 @@ fields:
       The gate findings over the reach model the check was judged against, each as `CODE (severity):
       message`; a flow an error sits on allowed nothing
     optional: false
+  - name: notes
+    type: list<string>
+    description: >-
+      One line per observed or bindings name that resolved only through a project's former name
+      (previousIds): the flow was matched, and the name should be renamed
+    optional: true
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:49.170Z'
-updatedAt: '2026-10-06T23:02:43.454Z'
+updatedAt: '2026-10-07T06:19:26.250Z'

@@ -610,6 +610,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   for (const e of planned.filter((x) => x.write.call === 'demoteMember')) {
     const demoted = writeOne(rehearsal, e.write) as InternalizeResult | undefined;
     for (const line of demoted?.consumersRestored ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `consumers across the old boundary restored: ${line}` });
+    for (const line of demoted?.signaturesRederived ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `signature text re-derived — ${line}` });
   }
   // Step 20: the bound project's pin of the member removed.
   for (const e of planned.filter((x) => x.write.call === 'unpin')) writeOne(rehearsal, e.write);
@@ -672,6 +673,10 @@ function recordCrossing(plan: MigrationPlan, bound: string, member: string, resu
   for (const line of crossed.exported) plan.edits.push({ project: bound, kind: 'export', detail: `export ${line}` });
   for (const line of crossed.imported) plan.edits.push({ project: bound, kind: 'external', detail: `import: ${line}` });
   for (const line of crossed.consumersDropped) plan.edits.push({ project: bound, kind: 'reference', detail: `consumers across the boundary to ${member} dropped: ${line}` });
+  // The new project's file paths that escaped its root, re-expressed member-relative (the code is not moved).
+  for (const line of crossed.pathsRebased ?? []) plan.edits.push({ project: member, kind: 'reference', detail: `path re-expressed under the new root — ${line}` });
+  // The signature texts the respelling left stale, re-derived from their params.
+  for (const line of crossed.signaturesRederived ?? []) plan.edits.push({ project: bound, kind: 'reference', detail: `signature text re-derived — ${line}` });
   // The entries the new boundary made necessary: its callers stayed in the parent.
   for (const line of crossed.entriesDeclared ?? []) plan.edits.push({ project: member, kind: 'reference', detail: `entry declared for the callers left across the boundary — ${line}` });
   // The topics it now separates from their pair: the family run pairs them, the new project's own gate alone does not.

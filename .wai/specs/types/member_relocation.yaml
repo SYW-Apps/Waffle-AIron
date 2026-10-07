@@ -37,5 +37,6 @@ fields:
       member's own directory
     optional: true
 methods: []
+sourcePath: src/migrations/types.ts
 createdAt: '2026-10-01T17:03:04.052Z'
-updatedAt: '2026-10-04T10:20:29.062Z'
+updatedAt: '2026-10-07T06:28:26.796Z'

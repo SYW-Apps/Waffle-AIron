@@ -21,5 +21,12 @@ fields:
     description: Why it must never be re-authored from, named in full.
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the marker is the inline zod object of getSpecOutput.partialResult
+        (the sdd_get_spec output schema) in src/mcp/server.ts, so there is no symbol a sourcePath
+        could bind.
 createdAt: '2026-09-19T23:05:27.992Z'
-updatedAt: '2026-10-04T10:29:10.965Z'
+updatedAt: '2026-10-07T06:30:24.011Z'

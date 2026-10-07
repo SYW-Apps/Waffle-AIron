@@ -57,6 +57,13 @@ export interface ApprovalDiff {
   removed: string[];
   /** Specs that still match the approved copy exactly. */
   unchangedPaths: string[];
+  /**
+   * Specs whose storage moved with their content unchanged — a part's folder
+   * relocating them — each `<approved path> -> <path now>`. No design change:
+   * in none of the three change lists, the new path among unchangedPaths, and
+   * left out of diffSize, so `lock` and `lock-check` agree on a storage move.
+   */
+  moved: string[];
 }
 
 /**
@@ -331,11 +338,27 @@ export function diffAgainstApproval(root: string = getProjectRoot()): ApprovalDi
     if (current[rel] === undefined) removed.push(rel);
   }
 
+  // A spec whose storage moved and whose content did not is one spec, not an
+  // addition and a removal: pair each added path with a removed one carrying
+  // the same digest, in path order, each used once.
+  const moved: string[] = [];
+  const unpaired = [...removed].sort();
+  for (const rel of [...added].sort()) {
+    const at = unpaired.findIndex((old) => approved[old] === current[rel]);
+    if (at < 0) continue;
+    const [old] = unpaired.splice(at, 1);
+    moved.push(`${old} -> ${rel}`);
+    added.splice(added.indexOf(rel), 1);
+    removed.splice(removed.indexOf(old), 1);
+    unchangedPaths.push(rel);
+  }
+
   return {
     added: added.sort(),
     changed: changed.sort(),
     removed: removed.sort(),
     unchangedPaths: unchangedPaths.sort(),
+    moved,
   };
 }
 

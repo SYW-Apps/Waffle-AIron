@@ -2,10 +2,11 @@ kind: value-object
 id: approval_diff
 name: ApprovalDiff
 description: >-
-  What changed in a spec tree since it was approved, as four lists of paths rather than a count. The
+  What changed in a spec tree since it was approved, as lists of paths rather than a count. The
   lists are the answer: a caller deciding whether to re-lock needs to say WHICH specs moved, and a
-  number cannot. `unchangedPaths` is carried alongside the three change lists so a reader can see
-  the whole approval, not only its edges.
+  number cannot. `unchangedPaths` is carried alongside the change lists so a reader can see the
+  whole approval, not only its edges, and `moved` names the specs whose storage moved while their
+  content did not.
 fields:
   - name: added
     type: list<string>
@@ -23,6 +24,14 @@ fields:
     type: list<string>
     description: Spec paths whose digest still matches what was approved.
     optional: false
+  - name: moved
+    type: list<string>
+    description: >-
+      Specs whose storage moved with their content unchanged — a part's folder relocating them —
+      each written `<approved path> -> <path now>`. A move is no design change: it is in none of the
+      three change lists, its new path counts among unchangedPaths, and diffSize leaves it out, so
+      `wairon lock` and `wairon lock-check` agree that a storage move changed nothing.
+    optional: false
 methods:
   - name: diffSize
     signature: 'diffSize(): number'
@@ -33,4 +42,4 @@ methods:
       builds it — a caller holding a diff should not have to reach for a service to count it.
 sourcePath: src/core/approval.ts
 createdAt: '2026-09-20T15:19:14.692Z'
-updatedAt: '2026-10-04T10:28:44.725Z'
+updatedAt: '2026-10-07T06:23:03.441Z'

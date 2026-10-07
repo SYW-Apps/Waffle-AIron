@@ -255,6 +255,11 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
         const target = aliasTargetOf(decl.facts, decl.name);
         if (target !== undefined) widenThroughAt(decl.path, target, typeBindingOf(decl.facts, target));
       }
+      // An interface declared apart from the classes that realize it — the
+      // shared contracts file, which no spec need name — leads on to every
+      // class implementing it, wherever that class lives.
+      const declared = declaringModule(at, atFacts, typeName);
+      if (declared) for (const implementor of implementorsOf(declared.path, declared.name)) out.add(implementor);
     };
     if (site.field) for (const typeName of fieldTypesOf(f, site.field)) widenThroughType(typeName);
     // A receiver CHAIN — `this.deps.tracker.save()`, `deps.tracker.save()` —
@@ -361,6 +366,60 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     return found;
   };
 
+  /**
+   * A module's identity whether or not the run analyzed it: its path with
+   * the source extension and a trailing `/index` dropped, so `./contracts.js`
+   * written in one file and `../x/contracts` in another meet.
+   */
+  const moduleKey = (p: string): string =>
+    pathKey(p).replace(/\.(d\.)?(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/, '').replace(/\/index$/, '');
+  /**
+   * The module a type name written in a file is DECLARED in, and the name that
+   * module publishes it under: the module its import binding (type-only or
+   * runtime) names, resolved by path — a shared contracts file no spec names is
+   * never analyzed, and must still be met — else the file itself.
+   */
+  const declaringModule = (at: string, atFacts: SourceFileFacts, typeName: string): { path: string; name: string } | undefined => {
+    const specifier = typeBindingOf(atFacts, typeName);
+    if (specifier === undefined) return { path: at, name: typeName };
+    const name = importBindingOf(atFacts, typeName)?.imported ?? typeName;
+    const resolved = resolveImport(at, specifier, paths, packages);
+    if (resolved) return { path: resolved, name };
+    if (!specifier.startsWith('.')) return undefined;
+    const dir = pathKey(at).split('/').slice(0, -1);
+    for (const part of specifier.split('/')) {
+      if (part === '..') dir.pop();
+      else if (part !== '.' && part !== '') dir.push(part);
+    }
+    return { path: dir.join('/'), name };
+  };
+  /**
+   * The files declaring a named class whose `implements` clause names the
+   * type `typeName` declared in `path` (analyzed or not), each clause name
+   * resolved where the class's own file writes it. Built once, on first ask,
+   * over every exact file that records an implements clause.
+   */
+  let implementors: Map<string, Set<string>> | undefined;
+  const implementorsOf = (path: string, typeName: string): ReadonlySet<string> => {
+    if (!implementors) {
+      implementors = new Map();
+      for (const [file, f] of facts) {
+        if (f.status !== 'analyzed' || f.analysisGrade !== 'exact' || !f.implementsClauses) continue;
+        for (const names of Object.values(f.implementsClauses)) {
+          for (const name of names) {
+            const declared = declaringModule(file, f, name);
+            if (!declared) continue;
+            const key = `${moduleKey(declared.path)}#${declared.name}`;
+            const set = implementors.get(key) ?? new Set<string>();
+            set.add(file);
+            implementors.set(key, set);
+          }
+        }
+      }
+    }
+    return implementors.get(`${moduleKey(path)}#${typeName}`) ?? NO_NAMES;
+  };
+
   /** Whether a file holds a body of `name` bound as a member of `container` — a class's own method, or an object's property. */
   const holdsMemberBody = (f: SourceFileFacts, name: string, container: string): boolean =>
     f.status === 'analyzed' && f.analysisGrade === 'exact'
@@ -429,6 +488,7 @@ export function buildCodeIndex(model: CodeModel): CodeIndex {
     findingAnchorsAt: (path) => namesAt(findingAnchors, pathKey(path), f => new Set(f.anchoredNames)),
     originOf,
     possibleOriginsOf,
+    implementorsOf,
     forwardsOf,
     // Realization has begun once any named file is one the run analyzed or
     // could read: missing and escaped are the only statuses that hold nothing.

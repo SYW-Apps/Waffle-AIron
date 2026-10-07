@@ -439,6 +439,14 @@ export interface SourceFileFacts {
    */
   aliasTargets?: Record<string, string>;
   /**
+   * The interface names each named class's `implements` clause writes, by
+   * class name; exact grade only. What lets a receiver whose declared type is
+   * an interface written in a shared contracts file be followed to the class
+   * that implements it, wherever that class lives — a possible origin, never
+   * a proven one, like every declared type.
+   */
+  implementsClauses?: Record<string, string[]>;
+  /**
    * The members of each named shape the file declares, by declaration name
    * (see TypeShapeFact). EXACT grade only — below it a member list cannot be
    * told from a mention, and a guess about somebody's data model is worse

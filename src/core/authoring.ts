@@ -39,6 +39,7 @@ import { qualifiedTypeId } from '../models/type-references.js';
 // peer reaches another subsystem through what that subsystem publishes.
 import {
   deleteSpec as coreDeleteSpec,
+  loadComponentSpecs,
   loadImplementationSpecs,
   loadProjectConfig,
   loadSpec,
@@ -627,6 +628,18 @@ function carryInto(restatement: SpecRestatement, existing: Spec | null, candidat
       method.previousNames = prev.previousNames;
       carried.push(`previousNames (${String(method.name)})`);
     }
+    // And each parameter's, on a method stated again under its name: a
+    // parameter stated under its current name keeps the names it retired.
+    for (const method of candidate.methods as Record<string, unknown>[]) {
+      const prev = stored.find((p) => p.name === method.name);
+      const prevParams = Array.isArray(prev?.params) ? (prev!.params as Record<string, unknown>[]) : [];
+      for (const param of Array.isArray(method.params) ? (method.params as Record<string, unknown>[]) : []) {
+        const before = prevParams.find((p) => p.name === param.name);
+        if (before?.previousNames === undefined || param.previousNames !== undefined) continue;
+        param.previousNames = before.previousNames;
+        carried.push(`previousNames (param ${String(method.name)}.${String(param.name)})`);
+      }
+    }
   }
   // A field's rename trace likewise: re-defining a type states its fields
   // again, and a field stated under its current name keeps the names it retired.
@@ -1053,7 +1066,13 @@ export function updateSpecGated(
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);
 
-  // Step 5: did this write invalidate any test?
+  // Step 5: a Portal's transport change names its impact on the Adapters that
+  // call it — in a dry run too, before anything is written.
+  if (kind === 'component' && typeof delta?.transport === 'string' && report.changes.some((c) => c.path === 'transport')) {
+    report.notices.push(...adapterTransportImpact(id, delta.transport));
+  }
+
+  // Step 6: did this write invalidate any test?
   const changed = changedMethods(report);
   if (changed.length > 0 && testRoots.length > 0) {
     // Steps 6-7: search them by the code name and the file realizing each.
@@ -1063,6 +1082,29 @@ export function updateSpecGated(
 
   // Step 8.
   return report;
+}
+
+/**
+ * Step 5 of updateSpecGated: each Adapter that states a transport other than
+ * the Portal's new one and calls it (dependsOn, or a call, register or
+ * dispatch step of its implementation) — the ADAPTER_TRANSPORT_MISMATCH the
+ * change raises there, with the way out.
+ */
+function adapterTransportImpact(portal: string, transport: string): string[] {
+  const components = loadComponentSpecs();
+  if (components.find((c) => c.id === portal)?.componentType !== 'Portal') return [];
+  const names = (ref: string | undefined): boolean => ref === portal || (ref !== undefined && ref.endsWith(`::${portal}`));
+  const calledByStep = new Set<string>();
+  for (const impl of loadImplementationSpecs()) {
+    const owner = (loadSpec('interface', impl.contract) as { component?: string } | null)?.component;
+    if (owner === undefined) continue;
+    const steps = impl.methods.flatMap((m) => m.narrative ?? []);
+    if (steps.some((s) => (s.type === 'call' || s.type === 'register' || s.type === 'dispatch') && names(s.targetComponent))) calledByStep.add(owner);
+  }
+  return components
+    .filter((c) => c.componentType === 'Adapter' && c.transport !== undefined && c.transport !== transport)
+    .filter((c) => (c.dependsOn ?? []).some(names) || calledByStep.has(c.id))
+    .map((c) => `ADAPTER_TRANSPORT_MISMATCH would follow: Adapter "${c.id}" states transport "${c.transport}" and calls "${portal}", whose transport becomes "${transport}" — state "${transport}" on "${c.id}", or unset its transport so it follows the Portal.`);
 }
 
 /**

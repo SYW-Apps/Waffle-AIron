@@ -59,5 +59,6 @@ fields:
       already-exported), printed beside the import in the plan
     optional: false
 methods: []
+sourcePath: src/migrations/position-migration.ts
 createdAt: '2026-09-28T16:08:56.957Z'
-updatedAt: '2026-10-04T10:20:44.161Z'
+updatedAt: '2026-10-07T06:28:29.912Z'

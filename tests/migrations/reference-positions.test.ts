@@ -131,7 +131,7 @@ const NOT_A_REFERENCE: Record<string, string> = {
   'component.subscribesTo.topic': 'a bus topic', 'component.subscribesTo.event': 'an event name', 'component.subscribesTo.description': 'prose',
   'component.patterns.id': 'a pack pattern id, not a spec', 'component.patterns.version': 'a version', 'component.variant': 'a variant name',
   'component.externalLinks.url': 'a URL wairon never resolves', 'component.externalLinks.label': 'prose',
-  'interface.methods.params.name': 'a parameter name', 'interface.methods.params.description': 'prose',
+  'interface.methods.params.name': 'a parameter name', 'interface.methods.params.description': 'prose', 'interface.methods.params.previousNames': 'a parameter rename trace, carried verbatim',
   'interface.methods.endpoint.path': 'a wire path', 'interface.methods.endpoint.service': 'a wire service name', 'interface.methods.endpoint.method': 'a wire method',
   'interface.methods.endpoint.field': 'a wire field', 'interface.methods.endpoint.topic': 'a bus topic', 'interface.methods.endpoint.event': 'an event name',
   'interface.methods.endpoint.queue': 'a queue name', 'interface.methods.endpoint.pipe': 'a pipe name', 'interface.methods.endpoint.channel': 'a channel name',
@@ -149,11 +149,11 @@ const NOT_A_REFERENCE: Record<string, string> = {
   'implementation.methods.intent': 'prose', 'implementation.methods.exportedVia': 'a code-level export name',
   'type.fields.name': 'a field name', 'type.fields.description': 'prose', 'type.fields.previousNames': 'a field rename trace, carried verbatim',
   'type.fields.references': 'an ERD foreign-key hint (`table.field`), never bound by the loader',
-  'type.methods.params.name': 'a parameter name', 'type.methods.params.description': 'prose',
+  'type.methods.params.name': 'a parameter name', 'type.methods.params.description': 'prose', 'type.methods.params.previousNames': 'a parameter rename trace, carried verbatim',
   'type.componentClass': 'matched by name within its own project and never qualified: it cannot name across a boundary',
   'type.invariants.id': 'the invariant\'s own id', 'type.invariants.description': 'prose',
   'type.database': 'a database id of its own L0', 'type.table': 'a table name', 'type.linkedEntity': 'an ERD hint, never bound by the loader',
-  'type.params.name': 'a parameter name', 'type.params.description': 'prose', 'type.values.name': 'an enum value', 'type.values.description': 'prose',
+  'type.params.name': 'a parameter name', 'type.params.description': 'prose', 'type.params.previousNames': 'a parameter rename trace, carried verbatim', 'type.values.name': 'an enum value', 'type.values.description': 'prose',
   'type.holds': 'a primitive',
 };
 

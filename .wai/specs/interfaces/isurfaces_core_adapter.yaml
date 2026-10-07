@@ -153,11 +153,16 @@ methods:
         description: The normalized declaration
   - name: listExternalConsumers
     description: >-
-      Forward to the core portal: the family projects in reach that consume the bound project, with
-      the names each uses. The surfaces plane never walks the family itself.
-    signature: 'listExternalConsumers(): list<ExternalConsumer>'
+      Forward to the core portal: the projects that consume the bound project — the family in reach,
+      and every project root in the searched folders declaring it by path or git — with the names
+      each uses. The surfaces plane never walks the family itself.
+    signature: 'listExternalConsumers(search?: list<string>): list<ExternalConsumer>'
     returns: list<ExternalConsumer>
-    params: []
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
   - name: importNames
     description: >-
       Forward to project_config_portal.importNames: add public names to one external's `use`,
@@ -171,6 +176,26 @@ methods:
       - name: names
         type: list<string>
         description: The public names to import
+  - name: getLoaderIssues
+    description: >-
+      Forward to the core portal: the loader's diagnostics for the bound tree — read with a
+      producer's root bound, a spec file that failed to parse makes the producer unreadable, never a
+      producer that removed names.
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params: []
+  - name: approvedRevision
+    description: >-
+      Forward to the core portal: the bound project's tree at its last committed approval, or at a
+      named git revision, materialized read-only — the baseline of `wairon surface diff`.
+    signature: 'approvedRevision(against?: string): approved_revision'
+    returns: approved_revision
+    params:
+      - name: against
+        type: string
+        description: A git revision; the last committed approval when omitted
+        optional: true
+    effect: io
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-06T23:04:51.832Z'
+updatedAt: '2026-10-07T10:55:01.004Z'

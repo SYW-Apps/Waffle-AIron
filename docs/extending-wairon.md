@@ -9,7 +9,7 @@ rules) that wairon reads and imports. A product built this way (a
 wairon installation: no fork, no build step, and wairon core never learns
 the platform exists.
 
-A working wrapper lives at [`examples/wrapper/`](../examples/wrapper/) and
+A working wrapper lives at [`examples/wrapper/`](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/wrapper/) and
 is guarded by `tests/examples/wrapper-example.test.ts`, so it cannot
 silently rot.
 
@@ -17,7 +17,7 @@ silently rot.
 
 > **New model (preferred).** Installing a pack makes it *available*; a project
 > then *selects* it. Installing no longer grants a pack authority over every
-> project on the machine — see [pack scoping](design/pack-scoping.md).
+> project on the machine — see [pack scoping](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/pack-scoping.md).
 
 ```sh
 wairon pack install ./appenser-1.2.0.wpack   # into this wairon install's store
@@ -101,6 +101,7 @@ project's doctrine anywhere:
 - uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v5
   with:
     packs: sync          # sync (default) | none (bundled repos) | explicit sources
+- run: npm ci            # a TS/JS project with code: its own dependencies first (see docs/cli.md)
 - run: wairon validate --ci
 ```
 
@@ -267,7 +268,7 @@ wairon pack add ./my-product-pack --global   # machine-wide
 
 The installer injects once and leaves — from then on plain `wairon
 validate` enforces the doctrine, and `wairon pack remove` undoes it. See
-[`examples/wrapper/install.js`](../examples/wrapper/install.js) for the
+[`examples/wrapper/install.js`](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/wrapper/install.js) for the
 template. A spec-only product (implementation lives on a cloud platform)
 needs nothing more: the wrapped repository holds specs + docs, wairon holds
 the gate.
@@ -595,7 +596,7 @@ project's externals against their live producers, and the family checks),
 `globalPacksDir`, `discoverPacks`, `setProjectRoot`, the `SddRule` /
 `RuleContext` / `LoadedExtensions` / `DeclarativePack` types, `SDD_RULES`,
 `composeRuleSequence`, and the spec loaders/savers. See
-[`examples/wrapper/wrapper.js`](../examples/wrapper/wrapper.js).
+[`examples/wrapper/wrapper.js`](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/wrapper/wrapper.js).
 
 ## Spec-only wrappers
 

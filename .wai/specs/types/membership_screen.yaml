@@ -31,5 +31,6 @@ fields:
       not carried (can only narrow)
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T16:55:21.624Z'
-updatedAt: '2026-10-04T10:20:26.699Z'
+updatedAt: '2026-10-07T06:28:41.540Z'

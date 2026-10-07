@@ -8,8 +8,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Gather the gate findings on the flows (refusedBy and flaggedBy) for the document, and
-          whether any flow is refused
+          Gather the gate findings on the flows for the document, each at its own severity
+          (refusedBy errors, flaggedBy warnings, notedBy notices), and whether any flow is refused
         type: local
       - stepNumber: 2
         description: Which format?
@@ -24,7 +24,8 @@ methods:
       - stepNumber: 3
         description: >-
           JSON: the flows as a list, keys sorted, every fact kept — a refused flow carries its
-          refusedBy
+          refusedBy — with the root's empty project key and network id written as rootProject when
+          it is given
         type: return
         outcome: json document
       - stepNumber: 4
@@ -63,8 +64,10 @@ methods:
         endStep: 5
       - stepNumber: 4
         description: >-
-          Resolve each party to its binding; a name with no binding gets the placeholder label
-          wairon.dev/workload: <name> and joins the unbound list
+          Resolve each party to its binding: its own keys first, then a key naming a renamed
+          project's former name (formerNames), which binds it and adds a note naming the key to
+          rename; a name with no binding gets the placeholder label wairon.dev/workload: <name> and
+          joins the unbound list
         type: local
       - stepNumber: 5
         label: workloadsEnd
@@ -73,16 +76,20 @@ methods:
           from the callee's binding, namespace when bound, and one ingress rule per source (a
           podSelector, with a namespaceSelector when the source runs in another namespace; the
           bindings' outside blocks as ipBlock entries for a flow from outside), with the port when
-          the binding names one
+          the binding names one. When the workload's verbs differ in their sources (an outside verb
+          beside one only modelled callers reach), add a note: a policy admits per pod and port, so
+          every source reaches every verb; a Portal-level binding (its own selector and port) splits
+          a Portal off into its own policy, and verbs of one Portal split only at L7
         type: local
       - stepNumber: 6
         description: >-
-          Answer the YAML documents, separated and in name order, headed by the unbound names and by
-          one comment line per refused flow with its findings (REFUSED BY THE GATE, not admitted),
-          with the unbound names, the gate findings and whether a flow was refused
+          Answer the YAML documents, separated and in name order, headed by the unbound names, the
+          notes, and one comment line per refused flow with its findings (REFUSED BY THE GATE, not
+          admitted), with the unbound names, the notes, the gate findings and whether a flow was
+          refused
         type: return
         outcome: kubernetes-network-policy document
     detail: full
 status: complete
 createdAt: '2026-10-06T13:12:03.794Z'
-updatedAt: '2026-10-06T23:04:44.268Z'
+updatedAt: '2026-10-07T06:19:45.634Z'

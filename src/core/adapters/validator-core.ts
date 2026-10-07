@@ -6,7 +6,8 @@
 // here and resolves to the portal's function, not to a wrapper in the
 // validator's own file.
 //
-// The owner's gate never walks up to a parent, so nothing here climbs.
+// The owner's gate never walks up to a parent; only the derived networking's
+// member view reads one (resolveChainingParent), to compose its family.
 // ---------------------------------------------------------------------------
 export {
   loadSystemSpec,
@@ -43,6 +44,10 @@ export {
   resolveProjectExports,
   // The project graph and the export usages the family rules judge.
   projectFamily,
+  // The bound root's chaining parent: read by the derived networking alone,
+  // to compose a member's view from its enclosing family (the owner's gate
+  // itself never climbs).
+  resolveChainingParent,
   exportUsage,
   // What the scan's signature resolution recorded, and the resolution itself
   // for specs read outside the scan (a part's pinned parent excerpt).

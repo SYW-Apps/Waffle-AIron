@@ -163,13 +163,40 @@ describe('event-topology — every topic needs both ends', () => {
     } finally { proj.cleanup(); }
   });
 
-  it('is silenceable per spec via lint.allow (external consumer)', () => {
+  it('is silenceable per topic via lint.allow at the topic (external consumer)', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('flow-orch', 'sub-a', 'Orchestrator', `${EMITTER}\nlint:\n  allow:\n    - code: UNCONSUMED_TOPIC\n      reason: consumed by the external billing platform, not by this tree`);
+    proj.component('flow-orch', 'sub-a', 'Orchestrator', `${EMITTER}\nlint:\n  allow:\n    - code: UNCONSUMED_TOPIC\n      at: orders.events\n      reason: consumed by the external billing platform, not by this tree`);
     proj.activate();
     try {
-      expect(byCode(validateProject(), 'UNCONSUMED_TOPIC')).toHaveLength(0);
+      const res = validateProject();
+      expect(byCode(res, 'UNCONSUMED_TOPIC')).toHaveLength(0);
+      expect(byCode(res, 'UNUSED_LINT_ALLOW')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('an allow at one topic covers that topic only: a second (later) topic still fires (platform-r3)', () => {
+    const proj = createTempProject();
+    proj.subsystem('sub-a');
+    proj.component('flow-orch', 'sub-a', 'Orchestrator', [
+      'emits:',
+      '  - topic: payments.captured',
+      '    event: captured',
+      '  - topic: payments.refunded',
+      '    event: refunded',
+      'lint:',
+      '  allow:',
+      '    - code: UNCONSUMED_TOPIC',
+      '      at: payments.captured',
+      '      reason: consumed by the orders service of the platform family, paired by the family run',
+    ].join('\n'));
+    proj.activate();
+    try {
+      const res = validateProject();
+      const found = byCode(res, 'UNCONSUMED_TOPIC');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('payments.refunded');
+      expect(byCode(res, 'UNUSED_LINT_ALLOW')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

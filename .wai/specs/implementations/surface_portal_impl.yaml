@@ -111,6 +111,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: listConsumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: diff
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-06T23:06:20.595Z'
+updatedAt: '2026-10-07T10:55:52.834Z'

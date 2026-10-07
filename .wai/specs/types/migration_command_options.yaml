@@ -61,5 +61,6 @@ fields:
     description: 'member promote --id <id> (stage 8): the new project''s id; the alias when absent.'
     optional: true
 methods: []
+sourcePath: src/commands/subsystem.ts
 createdAt: '2026-09-30T20:37:46.672Z'
-updatedAt: '2026-10-04T10:20:32.207Z'
+updatedAt: '2026-10-07T06:28:29.109Z'

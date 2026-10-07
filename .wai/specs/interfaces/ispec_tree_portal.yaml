@@ -373,13 +373,30 @@ methods:
         description: The normalized declaration
   - name: listExternalConsumers
     description: >-
-      The family projects in reach that consume the bound project, each with the alias and section
-      it declares it under and the public names its specs use (see
-      external_producers.listConsumers). Read-only; the caller's binding is restored before it
-      answers.
-    signature: 'listExternalConsumers(): list<ExternalConsumer>'
+      The projects that consume the bound project: the family in reach, and — with search folders —
+      every project root in them declaring it as an external by path or git (`wairon externals
+      consumers [--search <dir>…]`, sdd_list_consumers). Dispatched to the external-producers
+      workflow. Read-only.
+    signature: 'listExternalConsumers(search?: list<string>): list<ExternalConsumer>'
     returns: list<ExternalConsumer>
-    params: []
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: approvedRevision
+    description: >-
+      The bound project's tree at its last committed approval, or at a named git revision,
+      materialized read-only in the fetch cache — the baseline of a public-surface changelog
+      (`wairon surface diff`). Dispatched to the external-producers workflow.
+    signature: 'approvedRevision(against?: string): approved_revision'
+    returns: approved_revision
+    params:
+      - name: against
+        type: string
+        description: A git revision; the last committed approval when omitted
+        optional: true
+    effect: io
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:04:45.835Z'
+updatedAt: '2026-10-07T10:53:59.057Z'

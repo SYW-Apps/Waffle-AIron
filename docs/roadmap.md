@@ -4,7 +4,7 @@
 
 wairon is an AIDD support tool built around Spec-Driven Development. This roadmap
 reflects what is actually shipped in `src/` and what is planned. The
-[CHANGELOG](../CHANGELOG.md) has the per-release detail.
+[CHANGELOG](https://github.com/SYW-Apps/Waffle-AIron/blob/main/CHANGELOG.md) has the per-release detail.
 
 ---
 
@@ -79,7 +79,7 @@ reflects what is actually shipped in `src/` and what is planned. The
   and SSO; a state-scoped `lock` with approval requests; hosted members as
   records of their own; git-backed projects; Notion / Miro producers; a web UI
   (canvas, specs, admin). Self-host via Docker. See the
-  [hosted server guide](design/hosted-mcp-server.md).
+  [hosted server guide](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md).
 
 ---
 

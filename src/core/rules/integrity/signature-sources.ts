@@ -1,5 +1,6 @@
 import { RuleContext, SddRule } from '../types.js';
 import { typeMatchesRef } from '../../../models/index.js';
+import { renamedExportMethod } from './implements-contracts.js';
 
 // ---------------------------------------------------------------------------
 // signature-sources — every `signatureFrom` the loader met, judged from the
@@ -42,17 +43,20 @@ export const signatureSourcesRule: SddRule = {
       const at = { at: fact.method };
       // Step 2: dispatch on what resolving the source found.
       switch (fact.outcome) {
-        case 'unresolved':
-          // Step 3.
+        case 'unresolved': {
+          // Step 3: an exported contract's method the producer renamed is named by its new name.
+          const renamed = renamedExportMethod(ctx, fact.source);
+          const rename = renamed ? ` It was renamed to "${renamed}" (the producer's rename trace) — follow the rename: take it from "${fact.source.slice(0, fact.source.lastIndexOf('.'))}.${renamed}".` : '';
           ctx.addIssue(
             'error',
             'SIGNATURE_SOURCE_UNRESOLVED',
             `${where} takes its signature from "${fact.source}", which names ${fact.detail
               ? `no contract method, and ${fact.detail}`
-              : 'no contract method and no signature type'}. A source is a \`component.method\` the component reaches, or a type of kind signature.`,
+              : 'no contract method and no signature type'}.${rename} A source is a \`component.method\` the component reaches, an exported contract's method (\`alias::name.method\`), or a type of kind signature.`,
             fact.interfaceId, isDraft, undefined, at,
           );
           continue;
+        }
         case 'ambiguous':
           // Step 5.
           ctx.addIssue(

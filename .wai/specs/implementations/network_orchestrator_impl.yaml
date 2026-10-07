@@ -18,12 +18,15 @@ methods:
         targetComponent: flow_matrix_projector
         targetMethod: project
       - stepNumber: 3
-        description: Encode it in the asked format
+        description: Encode it in the asked format, the root's parties named by the model's rootProject
         type: call
         targetComponent: network_codec
         targetMethod: encodeFlows
       - stepNumber: 4
-        description: Answer the document
+        description: >-
+          Answer the document; for a model focused on a member (read at its own root), with a note
+          that it is the enclosing family's matrix judged at that family's root (judgedAt), narrowed
+          to the member
         type: return
         outcome: NetworkDocument
   - name: policy
@@ -44,12 +47,16 @@ methods:
         targetComponent: flow_matrix_projector
         targetMethod: project
       - stepNumber: 4
-        description: Generate the policy in the target format, listing every unbound name
+        description: >-
+          Generate the policy in the target format, a renamed project's former names still binding
+          it (the model's formerNames), listing every unbound name and every note
         type: call
         targetComponent: network_codec
         targetMethod: encodePolicy
       - stepNumber: 5
-        description: Answer the document
+        description: >-
+          Answer the document; for a model focused on a member, with a note that it is the enclosing
+          family's, judged at its root
         type: return
         outcome: NetworkDocument
   - name: diagram
@@ -122,14 +129,17 @@ methods:
         targetComponent: network_validator_adapter
         targetMethod: reachModel
       - stepNumber: 5
-        description: Derive the matrix
+        description: >-
+          Derive the matrix, the whole family's even at a member's root (the model unfocused): an
+          observed export spans every workload, so a flow outside the member is judged, never called
+          unexpected
         type: call
         targetComponent: flow_matrix_projector
         targetMethod: project
       - stepNumber: 6
         description: >-
           Judge the observed flows against it and the model (the verbs each destination declares,
-          and what the gate refused)
+          what the gate refused, and the former names a renamed project still answers to)
         type: call
         targetComponent: flow_check_arbiter
         targetMethod: check
@@ -145,7 +155,9 @@ methods:
         targetComponent: network_validator_adapter
         targetMethod: reachModel
       - stepNumber: 2
-        description: Derive the matrix
+        description: >-
+          Derive the matrix, the whole family's even at a member's root (the model unfocused), so
+          any two parties of the family can be asked about
         type: call
         targetComponent: flow_matrix_projector
         targetMethod: project
@@ -162,4 +174,4 @@ methods:
         outcome: FlowExplanation
 status: complete
 createdAt: '2026-10-06T13:11:35.270Z'
-updatedAt: '2026-10-06T23:04:53.899Z'
+updatedAt: '2026-10-07T06:35:28.292Z'

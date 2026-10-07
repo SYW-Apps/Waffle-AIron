@@ -8,6 +8,7 @@ description: >-
 subsystem: sdd_core
 fields: []
 methods: []
+sourcePath: src/models/lock.ts
 values:
   - name: content
     description: >-
@@ -19,4 +20,4 @@ values:
       form: a sourcePath, symbol or simPath added, moved or removed, a whitespace edit or a no-op
       re-save never moves it.
 createdAt: '2026-10-06T10:07:07.114Z'
-updatedAt: '2026-10-06T10:07:07.725Z'
+updatedAt: '2026-10-07T06:28:26.006Z'

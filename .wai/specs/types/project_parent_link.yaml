@@ -16,5 +16,6 @@ fields:
     description: The record that declares it (its next rung up)
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T16:54:59.156Z'
-updatedAt: '2026-10-01T16:54:59.158Z'
+updatedAt: '2026-10-07T06:28:47.320Z'

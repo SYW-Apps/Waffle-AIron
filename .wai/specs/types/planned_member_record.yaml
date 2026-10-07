@@ -49,5 +49,6 @@ fields:
       schema, or no valid project id
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T16:26:56.046Z'
-updatedAt: '2026-10-02T20:36:04.986Z'
+updatedAt: '2026-10-07T06:28:43.955Z'

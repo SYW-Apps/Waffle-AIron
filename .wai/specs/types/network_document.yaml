@@ -33,7 +33,14 @@ fields:
       out of a policy. A policy written while it is true is a design that fails the gate, and its
       caller exits non-zero
     optional: false
+  - name: notes
+    type: list<string>
+    description: >-
+      What a reader must act on before applying the output, one line each: a bindings key that
+      resolved only through a project's former name (rename the key), a workload whose verbs differ
+      in reach on one port, which a policy cannot separate (bind the Portal on its own port)
+    optional: true
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:55.363Z'
-updatedAt: '2026-10-06T23:03:46.749Z'
+updatedAt: '2026-10-07T06:19:25.187Z'

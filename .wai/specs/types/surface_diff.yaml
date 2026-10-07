@@ -1,0 +1,26 @@
+kind: value-object
+id: surface_diff
+name: SurfaceDiff
+description: >-
+  What `wairon surface diff` and sdd_surface_diff answer: the project whose public surface was
+  compared, what it was compared with, and every change since.
+subsystem: sdd_surfaces
+fields:
+  - name: project
+    type: string
+    description: The compared project's id, else its system name.
+    optional: false
+  - name: against
+    type: string
+    description: >-
+      What the surface was compared with: the last committed approval, a named git revision, or a
+      saved snapshot file.
+    optional: false
+  - name: changes
+    type: list<surface_change>
+    description: Every change, sorted by name then member.
+    optional: false
+methods: []
+sourcePath: src/core/surfaces.ts
+createdAt: '2026-10-07T06:38:32.030Z'
+updatedAt: '2026-10-07T06:38:32.833Z'

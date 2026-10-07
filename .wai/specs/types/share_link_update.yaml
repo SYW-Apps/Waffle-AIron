@@ -22,5 +22,7 @@ fields:
     type: list<string>
     optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareLinkUpdate
 createdAt: '2026-07-17T22:32:43.004Z'
-updatedAt: '2026-10-04T10:21:04.086Z'
+updatedAt: '2026-10-07T06:28:59.637Z'

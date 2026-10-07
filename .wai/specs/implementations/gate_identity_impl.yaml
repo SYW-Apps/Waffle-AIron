@@ -60,8 +60,10 @@ methods:
       - stepNumber: 6
         description: >-
           Leave out of the identity the skills and instructions (agent-facing prose that cannot
-          change a verdict), the load errors (transient, and a failed pack load already blocks the
-          lock through EXTENSION_LOAD_ERROR) and the pack names (redundant with the packs).
+          change a verdict), the technology packages (they feed only TECH_LEAKAGE_IN_CODE, a code
+          finding, which never gates an approval), the load errors (transient, and a failed pack
+          load already blocks the lock through EXTENSION_LOAD_ERROR) and the pack names (redundant
+          with the packs).
         type: local
       - stepNumber: 7
         description: >-
@@ -122,4 +124,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-15T17:55:53.605Z'
-updatedAt: '2026-10-06T13:05:38.245Z'
+updatedAt: '2026-10-07T06:30:12.169Z'

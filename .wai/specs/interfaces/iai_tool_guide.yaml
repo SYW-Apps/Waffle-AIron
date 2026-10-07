@@ -102,6 +102,20 @@ methods:
       - name: scope
         type: GuideScope
         description: global for a user-level guide file, local for a project's own
+  - name: registerServer
+    description: >-
+      Register the wairon MCP server in the project's own portable Claude configuration (.mcp.json
+      at the project root) when it registers none: the `wairon mcp serve` entry, every other key
+      kept. A file that already registers wairon is left exactly as it is. Answers the path written,
+      or none when nothing was written. The session scaffold a project made by a family migration
+      gets from the MCP route, as `wairon mcp install --backend claude` gives it on the CLI.
+    signature: 'registerServer(projectRoot: string): string?'
+    returns: string?
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose .mcp.json to write
+    effect: io
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-10-04T10:27:01.201Z'
+updatedAt: '2026-10-07T06:21:26.008Z'

@@ -186,9 +186,9 @@ describe("a technology's package imported outside its home", () => {
     expect(leaks[0].message).toContain('postgres');
   });
 
-  it('never guesses: a package the technology does not declare is not its package', () => {
+  it('never guesses: a package neither the technology nor the built-in table names is not its package', () => {
     proj = createTempProject();
-    storeShape(proj, "import pgx from 'pg-promise';\nvoid pgx;");
+    storeShape(proj, "import { Kysely } from 'kysely';\nvoid Kysely;");
     proj.activate();
     expect(byCode(validateProject(), 'TECH_LEAKAGE_IN_CODE')).toHaveLength(0);
   });

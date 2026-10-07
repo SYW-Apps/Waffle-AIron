@@ -193,6 +193,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: updateMember
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
 status: complete
 createdAt: '2026-09-30T20:31:36.988Z'
-updatedAt: '2026-10-02T20:50:34.752Z'
+updatedAt: '2026-10-07T10:54:47.093Z'

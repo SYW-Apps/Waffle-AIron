@@ -22,7 +22,13 @@ fields:
       dispatched through the entry, `type` for a type export. Empty when the consumer only depends
       on the entry (a dependsOn with no call through it).
     optional: false
+  - name: specs
+    type: list<string>
+    description: >-
+      The consumer's specs whose references reach the name, sorted — so a pin can name who uses a
+      member the snapshot no longer carries.
+    optional: true
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T17:40:30.206Z'
-updatedAt: '2026-10-04T23:39:34.984Z'
+updatedAt: '2026-10-07T06:38:10.923Z'

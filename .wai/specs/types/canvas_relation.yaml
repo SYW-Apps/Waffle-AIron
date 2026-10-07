@@ -57,5 +57,6 @@ fields:
     description: Why the relation is unavailable, when it is.
     optional: true
 methods: []
+sourcePath: src/core/canvas.ts
 createdAt: '2026-10-03T12:14:20.817Z'
-updatedAt: '2026-10-04T23:38:53.148Z'
+updatedAt: '2026-10-07T06:28:22.696Z'

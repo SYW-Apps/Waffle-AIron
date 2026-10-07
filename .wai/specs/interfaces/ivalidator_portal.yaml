@@ -217,6 +217,17 @@ methods:
     guarantees:
       - idempotent
     effect: read
+  - name: unpinnedExternals
+    description: >-
+      The bound project's declared externals (and referenced project members) that were never pinned
+      — no entry in its externals lock, so nothing records what its design is judged against; a part
+      is no producer and is left out. What `wairon lock` refuses to approve over: an unpinned
+      external is never a pass, so never an approval either. Reads the bound root's own files;
+      writes nothing.
+    signature: 'unpinnedExternals(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T13:00:43.535Z'
+updatedAt: '2026-10-07T10:57:39.689Z'

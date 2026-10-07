@@ -28,5 +28,8 @@ fields:
       to the front when one was written.
     optional: false
 methods: []
+sourcePath: src/server/policy.ts
+lint:
+  allow: []
 createdAt: '2026-09-18T17:55:20.633Z'
-updatedAt: '2026-10-04T10:20:48.308Z'
+updatedAt: '2026-10-07T06:31:30.675Z'

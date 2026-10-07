@@ -32,8 +32,13 @@ fields:
   - name: field
     type: string
     description: >-
-      The instance FIELD the receiver is — set only when the call was written this.<field>.name(...)
-      (this.store.save() gives "store"), and never together with via. A receiver a pure model can
+      The instance FIELD the receiver is — set when the call was written this.<field>.name(...)
+      (this.store.save() gives "store"), and never together with via. A receiver is read through
+      what only the type checker cares about — a non-null assertion, parentheses, `satisfies`, a
+      cast to a NAMED type — so this.store!.save() is the same shape, while a cast to any or unknown
+      (or an inline shape) says nothing about the value and is not see-through; and a local name the
+      function binds to a field (const s = this.store, const { store } = this, const { store: s } =
+      this) is that field, so s.save() is recorded as this.store.save(). A receiver a pure model can
       follow past the value it holds, because the class DECLARES the field's type; what that type
       resolves to is a possible origin, never a proven one
     optional: true
@@ -89,4 +94,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-10-05T23:33:01.757Z'
+updatedAt: '2026-10-07T10:53:33.460Z'

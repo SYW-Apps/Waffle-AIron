@@ -1,4 +1,4 @@
-import { pathKey, typeSourceFiles, type TypeSpec } from '../../../models/index.js';
+import { implementationSourceFiles, pathKey, typeSourceFiles, type TypeSpec } from '../../../models/index.js';
 import { plannedCode } from './source-file-linkage.js';
 import { RuleContext, SddRule } from '../types.js';
 
@@ -45,8 +45,9 @@ import { RuleContext, SddRule } from '../types.js';
 // all, and the dishonest one (point the type at a file it half-lives in) is
 // what the rule exists to stop.
 //
-// A type that names no sourcePath claims nothing and is never reported: the
-// model layer is opt-in, one type at a time. Until a claim has BEGUN
+// A type that names no sourcePath claims no code, so nothing ever compares its
+// shape with the code — and that is said (MISSING_TYPE_SOURCE_PATH): a notice
+// while its subsystem has no code, a warning once it has. Until a claim has BEGUN
 // (code_index.holdsAny over the type's own file and its methods' files) a
 // named file not on disk is PLANNED — a notice — and nothing else is judged.
 // ---------------------------------------------------------------------------
@@ -82,7 +83,7 @@ export const typeRealizationRule: SddRule = {
   name: 'type-realization',
   judges: 'code',
   description:
-    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode). Once it has begun, every file it names must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath claims nothing and is never reported. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
+    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode). Once it has begun, every file it names must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath of its own claims no code, so nothing ever compares its shape with the code — and that is said, never left silent: before the code of the type\'s subsystem has begun (no file an implementation of that subsystem names exists; for a type no subsystem owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice — plan the type\'s sourcePath with the implementations\'), and once that code exists it is a type no check reads (a warning). rules.conformance.requireCode reports the notice at error, naming the setting. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [
     { code: 'UNREALIZED_TYPE', defaultSeverity: 'warning', summary: 'A type names a sourcePath but its declaration is nowhere in that file — the claim points at code that does not hold it' },
     { code: 'UNREALIZED_TYPE_METHOD', defaultSeverity: 'warning', summary: 'A pure method of a claimed type is nowhere in its own source file (the method\'s sourcePath, else the type\'s)' },
@@ -90,16 +91,53 @@ export const typeRealizationRule: SddRule = {
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file a type or one of its methods names could not be analyzed (binary/unreadable) — what it would have realized was not checked' },
     { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file a type names is not on disk and none of its named files is — planned, not written yet; an error under rules.conformance.requireCode' },
+    { code: 'MISSING_TYPE_SOURCE_PATH', defaultSeverity: 'notice', summary: "A type names no sourcePath of its own, so its shape is never compared with code — a notice while its subsystem has no code yet (plan the path with the implementations'), a warning once it has; an error under rules.conformance.requireCode" },
   ],
 
   check(ctx: RuleContext): void {
     const code = ctx.codeIndex();
 
+    // Whether the code of a subsystem has begun: some file an implementation of
+    // a component in it names exists. A type no subsystem owns asks of the
+    // whole project. Asked once per subsystem.
+    const begunIn = new Map<string, boolean>();
+    const codeBegunFor = (subsystem: string | undefined): boolean => {
+      const key = subsystem ?? '';
+      let begun = begunIn.get(key);
+      if (begun === undefined) {
+        begun = ctx.implementations.some((impl) => {
+          if (subsystem !== undefined) {
+            const owner = ctx.componentMap.get(ctx.interfaceMap.get(impl.contract)?.component ?? '');
+            if (owner?.subsystem !== subsystem) return false;
+          }
+          return code.holdsAny(implementationSourceFiles(impl));
+        });
+        begunIn.set(key, begun);
+      }
+      return begun;
+    };
+
     for (const type of ctx.types) {
-      // A type that claims no file claims nothing; a chained child's
-      // sourcePaths are relative to its own root, so the child judges them.
-      if (!type.sourcePath) continue;
+      // A chained child's sourcePaths are relative to its own root, so the
+      // child judges them.
       if (type.subsystem && ctx.isInChainedSubproject(type.subsystem)) continue;
+      // A type that claims no file of its own claims no code, so nothing ever
+      // compares its shape with the code — said, never left silent. Unlinked
+      // design before its subsystem's code begins; a type no check reads after.
+      if (!type.sourcePath) {
+        const begunHere = codeBegunFor(type.subsystem);
+        const planned = plannedCode(ctx);
+        const methods = typeSourceFiles(type).length > 0 ? ' (only its methods name files)' : '';
+        ctx.addIssue(
+          begunHere ? 'warning' : planned.severity,
+          'MISSING_TYPE_SOURCE_PATH',
+          begunHere
+            ? `Type "${type.id}" names no sourcePath of its own${methods}, and the code of ${type.subsystem ? `subsystem "${type.subsystem}"` : 'this project'} exists — so nothing compares its fields with the code: it is data no check reads. Name the file that declares it (sourcePath, and symbol when the code name differs).`
+            : `Type "${type.id}" names no sourcePath of its own${methods} — designed, not linked to code yet, so its shape will never be compared with the code. Plan its sourcePath now, with the implementations': code linkage is not part of the approval, so it costs no re-lock${planned.note}.`,
+          type.id,
+        );
+        continue;
+      }
 
       // File status first, once per distinct file. A file reported here blocks
       // only what it would have realized, so a broken path costs one finding

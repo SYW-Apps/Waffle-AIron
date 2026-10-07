@@ -150,6 +150,8 @@ export { resolveDeclared as resolveExternals } from './external-producers.js';
 // projects in reach that consume the bound project — dispatches to the
 // external-producers workflow.
 export { resolveCandidate as resolveExternalCandidate, listConsumers as listExternalConsumers } from './external-producers.js';
+// spec_tree_portal approvedRevision: the bound project's tree at its last committed approval (or a named revision), for a surface changelog.
+export { approvedRevision, type ApprovedRevision } from './external-producers.js';
 
 // spec_tree_portal excerptParent (stage 8): with a part's root bound, the
 // excerpt of its parent it can be judged against alone — a dispatch to the
@@ -394,8 +396,8 @@ export function removeDomain(id: string): void {
 // (spec_maintenance_portal renameComponent / renameMethod / renameType / retireSpecialists) — pure 1:1
 // forwards to the core orchestrator, stated explicitly for the same anchored
 // conformance check.
-export { renameComponent, renameMethod, renameType, renameField } from './provision.js';
-export type { FieldRename } from './provision.js';
+export { renameComponent, renameMethod, renameType, renameField, renameParam } from './provision.js';
+export type { FieldRename, ParamRename } from './provision.js';
 export type { ComponentRename, MethodRename, TypeRename } from './provision.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
@@ -564,6 +566,7 @@ export {
   injectGuide,
   writeRootGuideDelegator,
   reinjectLocalGuides,
+  registerProjectServer,
 } from '../utils/ai-guide.js';
 export { readStampVersion } from './stamp.js';
 

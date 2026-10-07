@@ -371,6 +371,13 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: renameField
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameParam
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:07:59.838Z'
+updatedAt: '2026-10-07T06:25:17.721Z'

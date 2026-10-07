@@ -62,12 +62,23 @@ methods:
         targetComponent: authoring_core_adapter
         targetMethod: updateSpec
       - stepNumber: 5
+        description: >-
+          When the write changes a Portal's transport — a dry run included, before anything is
+          written — name its impact on the callers: read the components (and, through
+          loadImplementationSpecs, their implementations' call, register and dispatch steps) and add
+          one notice per Adapter that states another transport and calls this Portal: the
+          ADAPTER_TRANSPORT_MISMATCH the change raises there, with the way out (state the new
+          transport, or none to follow the Portal)
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 6
         description: Decide whether this write invalidated any test
         type: branch
         condition: the change report names a changed or deleted method and the project declares test roots
-        onTrueStep: 6
-        onFalseStep: 8
-      - stepNumber: 6
+        onTrueStep: 7
+        onFalseStep: 9
+      - stepNumber: 7
         description: >-
           Place each changed method in the file realizing it: for a contract, every implementation
           realizing it with its symbol and file; for an implementation or a type, the method's entry
@@ -75,7 +86,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Find the tests that encode those methods, so the write that creates the collision is the
           one that reports it — a spec pass that changes a contract and says nothing is how a brief
@@ -87,7 +98,7 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Return the change report: what changed, which of the delta's paths changed nothing, or
           that nothing did and nothing was written — carrying the respellings the write applied
@@ -344,4 +355,4 @@ methods:
         outcome: reported
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-04T13:57:38.901Z'
+updatedAt: '2026-10-07T06:23:19.752Z'

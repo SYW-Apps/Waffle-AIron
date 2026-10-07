@@ -52,6 +52,8 @@ export interface ExternalsOptions {
   add?: string[];
   /** use: names to stop importing (--remove a,b). */
   remove?: string[];
+  /** consumers: folders to scan for projects declaring this one as an external (--search <dir>…). */
+  search?: string[];
 }
 
 function printJson(value: unknown): void {
@@ -78,7 +80,9 @@ function printPins(pins: ExternalPin[]): void {
     const what = pin.digest ? ` ${pin.usedNames} used name(s), ${pin.digest.slice(0, 19)}…` : '';
     logger.info(`${chalk.cyan(pin.alias)} → ${pin.project ?? '?'}: ${outcome(pin.outcome)}${what}${pin.detail ? ` — ${pin.detail}` : ''}`);
     for (const ref of pin.unexported) {
-      logger.info(`    unexported: "${ref.specId}" reaches "${ref.target}"${ref.member ? ` (${ref.member})` : ''} — export it from the producer's L0 to pin it`);
+      // A used member the snapshot no longer carries is already named in the detail; say who uses it.
+      const fix = ref.position === 'uncarried' ? 'the producer no longer has it — follow its rename or adapt the use' : 'export it from the producer\'s L0 to pin it';
+      logger.info(`    unexported: "${ref.specId}" reaches "${ref.target}"${ref.member ? ` (${ref.member})` : ''} — ${fix}`);
     }
   }
 }
@@ -114,15 +118,26 @@ function printStatuses(statuses: ExternalStatus[]): void {
       logger.info(`    ${name}: ${state}${u.code ? ` ${u.code}` : ''}${u.detail ? ` — ${u.detail}` : ''}`);
     }
   }
-  // One legend for every word above, and the fix each one asks for.
-  logger.info(chalk.gray(
-    'Words: incompatible — a name this project uses changed, was renamed or was removed since the pin (adapt the uses, then re-pin); '
-      + 'not compared — the producer could not be read, or a use is not in the pin (make the producer reachable, or re-pin; never a pass); '
-      + 'drifted — the producer moved since the pin while nothing used changed, or the pinned snapshot carries a fact the producer no longer says (an abi, a transport, a role: re-pin to refresh it); ok — every used name matches the pin and the snapshot is current. '
-      + 'Per name: unchanged; changed (its signature moved); renamed (the producer\'s rename trace names the new name — follow it); '
-      + 'removed (gone from the producer\'s export table); unlocked (used but not in the pin yet — re-pin); unavailable (not compared — never a pass).',
-  ));
+  // A legend for the words above that need one — only those this output used,
+  // each with the fix it asks for. `ok`, `unchanged` and `changed` read as
+  // themselves; a result that is all ok prints no legend at all.
+  const used = new Set<string>([
+    ...statuses.map((s) => relationHealth(s) as string),
+    ...statuses.flatMap((s) => s.uses.map((u) => u.state as string)),
+  ]);
+  const legend = Object.entries(STATUS_LEGEND).filter(([word]) => used.has(word)).map(([, text]) => text);
+  if (legend.length > 0) logger.info(chalk.gray(legend.join(' · ')));
 }
+
+/** The words of the status table that ask for something, and what each asks for. */
+const STATUS_LEGEND: Record<string, string> = {
+  incompatible: 'incompatible: adapt the uses, then re-pin',
+  unavailable: 'not compared: make the producer reachable, or re-pin — never a pass',
+  drifted: 'drifted: re-pin when convenient',
+  renamed: 'renamed: follow the rename, then re-pin',
+  removed: 'removed: gone from the producer\'s exports — adapt the use',
+  unlocked: 'unlocked: used but not in the pin yet — re-pin',
+};
 
 /** The list table: alias, producer, source kind and relation, audience, pinned digest or the problem. */
 function printListings(rows: ExternalListing[]): void {
@@ -179,12 +194,16 @@ function printUseChange(change: ExternalUseChange, dryRun: boolean): void {
 }
 
 /** The consumers table: one line per family project that consumes this one. */
-function printConsumers(rows: ExternalConsumer[]): void {
-  if (!rows.length) logger.info('No project of the family in reach consumes this project.');
+function printConsumers(rows: ExternalConsumer[], searched: boolean): void {
+  if (!rows.length) logger.info(`No project ${searched ? 'of the family in reach, nor in the searched folders,' : 'of the family in reach'} consumes this project.`);
   for (const r of rows) {
-    logger.info(`${chalk.cyan(r.project)} (${r.section}.${r.alias}): ${r.names.length ? r.names.join(', ') : chalk.gray('declares it, uses no name yet')}`);
+    const broken = r.broken?.length ? chalk.red(` — still writes ${r.broken.map((n) => `${n} (no longer exported)`).join(', ')}`) : '';
+    const where = r.found === 'search' ? ` ${chalk.gray(`[${r.directory}]`)}` : '';
+    logger.info(`${chalk.cyan(r.project)} (${r.section}.${r.alias})${where}: ${r.names.length ? r.names.join(', ') : chalk.gray('declares it, uses no name yet')}${broken}`);
   }
-  logger.info(chalk.gray('Only the family read from the highest root in reach is listed: a sibling checkout, git or hosted consumer outside it declares its dependency on its own side and is not visible here.'));
+  logger.info(chalk.gray(searched
+    ? 'The family in reach, and the project roots in the searched folders that declare this one by path or git. A consumer elsewhere (another machine, a hosted project) declares its dependency on its own side.'
+    : 'Only the family read from the highest root in reach is listed: a sibling checkout or git consumer is found with `--search <dir>…` (the folder holding the checkouts); a hosted one declares its dependency on its own side.'));
 }
 
 /** The worst health over every external, as the exit code: 1 incompatible, 2 not compared, 0 otherwise. */
@@ -275,9 +294,9 @@ export async function runExternals(action: string, aliases: string[], options: E
     }
     case 'consumers': {
       // Steps 14-15.
-      const rows = listConsumers();
+      const rows = listConsumers(options.search);
       if (options.json) printJson(rows);
-      else printConsumers(rows);
+      else printConsumers(rows, (options.search ?? []).length > 0);
       return;
     }
     default:

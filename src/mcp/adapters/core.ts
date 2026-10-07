@@ -23,6 +23,7 @@ export {
   renameMethod,
   renameType,
   renameField,
+  renameParam,
   loadProjectConfig,
   setNetwork,
   getStatusReport,
@@ -33,4 +34,6 @@ export {
   resolveDomains,
   loadProjectVariants,
   resolveVariantGuidance,
+  reinjectLocalGuides,
+  registerProjectServer,
 } from '../../core/index.js';

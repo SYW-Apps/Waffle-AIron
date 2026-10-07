@@ -25,12 +25,15 @@ methods:
       subsystem: the L0, a system-level type, project configuration) may be changed: a subsystem
       decided at its own rung answers with its own writable; anything else is writable exactly when
       its root is not unwritable.
+    symbol: writeReachPermits
   - name: denials
     signature: 'denials(root: string): SubsystemWriteRule[]'
     returns: list<SubsystemWriteRule>
     description: >-
       The subsystems of this root the request may not change — what a whole-tree write (a family
       migration, a lock) must name when it refuses.
+    symbol: writeReachDenials
+sourcePath: src/utils/fs.ts
 lint:
   allow:
     - code: UNUSED_TYPE
@@ -41,4 +44,4 @@ lint:
         registry's save/delete and the family migration's rehearse read it through its permits and
         denials methods, named in their narratives.
 createdAt: '2026-10-03T13:35:37.708Z'
-updatedAt: '2026-10-04T10:21:29.527Z'
+updatedAt: '2026-10-07T06:29:41.775Z'

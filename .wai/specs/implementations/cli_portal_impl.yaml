@@ -676,6 +676,16 @@ methods:
         targetComponent: cli_runner
         targetMethod: runTypeRenameField
     symbol: rename-field <type> <field> <new-name>
+  - name: methodRenameParam
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon method rename-param <component> <method> <param> <new-name>` with its
+          parsed arguments to cli_runner.runMethodRenameParam.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMethodRenameParam
+    symbol: rename-param <component> <method> <param> <new-name>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-06T23:08:06.331Z'
+updatedAt: '2026-10-07T06:25:26.177Z'

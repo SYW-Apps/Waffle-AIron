@@ -59,11 +59,35 @@ function getBaseId(id: string): string {
 
 const isAllUppercase = (s: string) => /^[A-Z0-9_]+$/.test(s);
 
+/**
+ * The method names of the extension point an interface implements
+ * (`implements: alias::name`), read where implements-contracts reads them: a
+ * declared external's pin (or a foreign snapshot), else a contained member's
+ * live export table. Empty when the interface implements nothing or the
+ * reference does not resolve (project-boundaries reports that).
+ */
+function implementedNames(ctx: RuleContext, ref: string | undefined): Set<string> {
+  if (ref === undefined) return new Set();
+  const surface = ctx.resolveSurfaceRef(ref);
+  if (surface.kind === 'resolved') {
+    return surface.entry.role === 'implement' ? new Set(surface.entry.methods.map((m) => m.name)) : new Set();
+  }
+  const [alias, name] = ref.split('::');
+  if (name === undefined) return new Set();
+  const key = ctx.projectFamily?.nodes.find((n) => n.namespace === '')?.aliases.get(alias);
+  if (key === undefined) return new Set();
+  const entry = (ctx.exportTables ?? []).find((t) => t.level === 'project' && t.owner === key)
+    ?.entries.find((e) => e.kind === 'component' && e.publicName === name);
+  if (!entry || entry.role !== 'implement' || !entry.component) return new Set();
+  const methods = entry.interface ? ctx.interfaceMap.get(entry.interface)?.methods : ctx.interfaceMethodsOf(entry.component);
+  return new Set((methods ?? []).map((m) => m.name));
+}
+
 export const namingRule: SddRule = {
   name: 'naming-conventions',
   judges: 'design',
   description:
-    "Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's effective targetLanguage: the configured methods casing when set, else the language's own convention, so a Rust tree is snake_case without configuring anything, and the authoring and rename tools accept exactly what this rule accepts.",
+    "Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's effective targetLanguage: the configured methods casing when set, else the language's own convention, so a Rust tree is snake_case without configuring anything, and the authoring and rename tools accept exactly what this rule accepts. A contract that implements another project's extension point (`implements`) takes the names of the methods it implements — and of their parameters — from the producer, whose language they are spelled in: those methods, on the contract and on its implementations, are exempt from the casing rule, and the rename tools accept them.",
   codes: [
     { code: 'NAMING_CONVENTION_VIOLATION', defaultSeverity: 'warning', summary: 'Item name or ID does not match the configured casing pattern or regex' },
     { code: 'STEREOTYPE_NAMING_VIOLATION', defaultSeverity: 'warning', summary: 'Component name or ID does not match stereotype suffix/prefix/regex rules' },
@@ -164,7 +188,11 @@ export const namingRule: SddRule = {
       // language's convention (methodCasingFor) — the authoring and rename
       // tools ask the same question.
       const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(comp?.subsystem));
+      // The producer named the methods of an extension point this contract
+      // implements — and their parameters — in its own language.
+      const dictated = implementedNames(ctx, intf.implements);
       for (const m of intf.methods) {
+        if (dictated.has(m.name)) continue;
         checkNamedValue(ctx, m.name, methodCasing, `Interface method "${m.name}" on "${intf.id}" does not match naming convention "${methodCasing}"${namingConfig?.methods ? '' : ' (its target language\'s convention)'}.`, intf.id, isDraft);
 
         // Method parameter variable naming
@@ -184,7 +212,9 @@ export const namingRule: SddRule = {
       const isDraft = ctx.isImplementationDraft(impl);
 
       const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(comp?.subsystem));
+      const dictated = implementedNames(ctx, intf?.implements);
       for (const m of impl.methods) {
+        if (dictated.has(m.name)) continue;
         checkNamedValue(ctx, m.name, methodCasing, `Implementation method "${m.name}" on "${impl.id}" does not match naming convention "${methodCasing}".`, impl.id, isDraft);
       }
     }

@@ -213,6 +213,14 @@ export interface CodeIndex {
    */
   possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
   /**
+   * Every file declaring a named class whose `implements` clause names the
+   * type `typeName` declared in `path` — the clause's name resolved where the
+   * class's file writes it. The step from an interface in a shared contracts
+   * file to the classes that realize it: a POSSIBILITY, never a proven
+   * origin. Exact grade only; pure over the index's own facts.
+   */
+  implementorsOf(path: string, typeName: string): ReadonlySet<string>;
+  /**
    * What a name a file publishes IS, followed through every forwarding the
    * code writes down: the pair itself, then for each export-from that
    * republishes the name — named or star, aliased or not (`export { a as b }
@@ -639,6 +647,8 @@ export interface RuleContext {
     patterns: LoadedPattern[];
     /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
     guarantees: string[];
+    /** Pack-contributed package names per technology name — what technology.packages adds to the built-in table. */
+    technologyPackages: Record<string, string[]>;
     /** Declarative rule assertions (closed kinds, pack-instantiated), evaluated by one assertion-* rule per kind. */
     assertions: LoadedAssertion[];
     /**

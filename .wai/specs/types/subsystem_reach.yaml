@@ -25,5 +25,6 @@ fields:
       subsystem's own setting, or the project chain when the subsystem's settings do not decide
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-03T13:35:29.281Z'
-updatedAt: '2026-10-03T13:35:29.288Z'
+updatedAt: '2026-10-07T06:28:53.507Z'

@@ -376,13 +376,14 @@ describe('an unpinned family use the live producer broke (platform)', () => {
     expect(composed.map((i) => [i.code, i.severity])).toContainEqual(['EXTERNAL_INCOMPATIBLE', 'error']);
   });
 
-  it('an unpinned use still present live stays unavailable (never a pass, never a false break)', () => {
+  it('an unpinned use still present live fails the composed gate as EXTERNAL_UNPINNED (never a pass, never a false break)', () => {
     const f = buildContractFamily();
     cleanups.push(() => f.cleanup());
     bind(f.billing);
     const [status] = getExternalsStatus();
     expect(status.uses).toEqual([expect.objectContaining({ publicName: 'ledger-portal', state: 'unlocked' })]);
-    expect(compose('billing').findings.map((i) => i.code)).toEqual(['EXTERNAL_CHECK_UNAVAILABLE']);
+    // Round 3: a never-pinned use is no warning — the composed gate cannot tell what it was judged against.
+    expect(compose('billing').findings.map((i) => i.code)).toEqual(['EXTERNAL_UNPINNED']);
   });
 });
 

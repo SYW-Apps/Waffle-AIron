@@ -2,11 +2,13 @@ kind: value-object
 id: external_consumer
 name: ExternalConsumer
 description: >-
-  One family project that consumes the bound project, as `wairon externals consumers` lists it from
-  the producer's root: which project, under which alias and declaration section it reaches the
-  producer, and which of the producer's public names its specs use. Read-only and within reach: the
-  family graph read from the highest root the climb reaches; a sibling checkout, git or hosted
-  consumer outside that family declares its dependency on its own side and is never listed here.
+  One project that consumes the bound project, as `wairon externals consumers` and
+  sdd_list_consumers list it from the producer's root: which project, under which alias and
+  declaration section it reaches the producer, which of the producer's public names its specs use,
+  and which names it still writes that the producer no longer exports. The family graph read from
+  the highest root the climb reaches, plus — when folders are searched — every project root in them
+  declaring the producer by a path or git source (a sibling checkout outside the family). A hosted
+  consumer declares its dependency on its own side and is never listed here.
 subsystem: sdd_core
 fields:
   - name: project
@@ -35,7 +37,17 @@ fields:
       The producer's public names the consumer's specs use, sorted; empty when it declares the
       producer but uses nothing yet
     optional: false
+  - name: broken
+    type: list<string>
+    description: >-
+      The names its specs still write that bind to no public name of the producer — what a breaking
+      change just broke — sorted; absent when none
+    optional: true
+  - name: found
+    type: string
+    description: '`search` for a project root met in a searched folder outside the family; absent for the family'
+    optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-10-06T23:03:22.646Z'
-updatedAt: '2026-10-06T23:03:23.402Z'
+updatedAt: '2026-10-07T06:38:16.804Z'

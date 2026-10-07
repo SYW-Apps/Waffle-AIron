@@ -33,5 +33,7 @@ fields:
     type: list<string>
     optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareLinkInput
 createdAt: '2026-07-17T22:32:40.007Z'
-updatedAt: '2026-10-04T10:21:03.764Z'
+updatedAt: '2026-10-07T06:28:58.793Z'

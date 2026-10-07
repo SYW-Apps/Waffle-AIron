@@ -71,7 +71,7 @@ to the artifacts the host AI tool consumes:
   (`runWithProjectRoot`) — reusing the core, validation, and MCP layers unchanged.
 - **Everything is file-based** under `.wai/` — no database, and no daemon for the
   core workflow. `wairon serve` is an **opt-in** hosting daemon (see the
-  [hosted server guide](design/hosted-mcp-server.md)) that serves the same
+  [hosted server guide](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md)) that serves the same
   file-based tools over HTTP.
 
 ---

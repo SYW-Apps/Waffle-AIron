@@ -28,5 +28,7 @@ fields:
     type: string
     optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareArtifactResult
 createdAt: '2026-07-17T22:32:54.133Z'
-updatedAt: '2026-10-04T23:40:35.733Z'
+updatedAt: '2026-10-07T06:28:55.943Z'

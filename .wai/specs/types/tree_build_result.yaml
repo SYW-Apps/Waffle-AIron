@@ -24,5 +24,6 @@ fields:
     optional: false
 methods: []
 componentClass: tree_codec
+sourcePath: sdk/src/types.ts
 createdAt: '2026-08-12T17:18:24.355Z'
-updatedAt: '2026-10-04T10:29:22.061Z'
+updatedAt: '2026-10-07T06:28:20.303Z'

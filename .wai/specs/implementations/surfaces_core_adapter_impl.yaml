@@ -136,6 +136,20 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: importNames
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getLoaderIssues
+  - name: approvedRevision
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: approvedRevision
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-06T23:04:56.307Z'
+updatedAt: '2026-10-07T10:55:02.809Z'

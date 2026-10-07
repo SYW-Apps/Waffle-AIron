@@ -27,7 +27,7 @@ import { listProjectRoots, loadComponentSpecs, loadImplementationSpecs } from '.
 // ...and over the Project Family Index of the same Repository, for the
 // the references the scan bound, counted into each consumer's usage (never in
 // a cycle: the family index depends on the Spec Index alone).
-import { projectFamilyGraph } from './project-family.js';
+import { implementedMethods, projectFamilyGraph } from './project-family.js';
 
 // ---------------------------------------------------------------------------
 // export_resolver and export_index — export tables, resolved the way a module
@@ -69,11 +69,16 @@ const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
  * Portal's transport (transport.exportKind). An authored kind is read only as
  * the legacy value, where no transport derives one.
  */
-function exportKindOf(comp: ComponentSpec, authored: string | undefined): string | undefined {
+function exportKindOf(comp: ComponentSpec, authored: string | undefined, role?: string): string | undefined {
   // A library is called in-process: shown as InProcess, never as the
   // free-form network kind Custom a generator would read as a wire surface.
   if (comp.componentType === 'Portal' && comp.transport === 'InProcess') return 'InProcess';
   if (comp.componentType === 'Portal' && comp.transport) return transportExportKind(comp.transport);
+  // An extension point held by an Adapter (a trait, a port) is realized
+  // in-process by its consumers — over the transport it calls, when it names one.
+  if (role === 'implement' && comp.componentType === 'Adapter') {
+    return !comp.transport || comp.transport === 'InProcess' ? 'InProcess' : transportExportKind(comp.transport);
+  }
   return authored;
 }
 
@@ -368,7 +373,7 @@ function bindOwn(world: ExportWorld, sub: SubsystemSpec, pi: PublicInterface, pr
     component: comp.id,
     ...(narrowed ? { interface: narrowed } : {}),
     componentType: comp.componentType,
-    ...(exportKindOf(comp, pi.type) ? { type: exportKindOf(comp, pi.type)! } : {}),
+    ...(exportKindOf(comp, pi.type, pi.role) ? { type: exportKindOf(comp, pi.type, pi.role)! } : {}),
     ...(pi.details !== undefined ? { details: pi.details } : {}),
     ...(pi.role ? { role: pi.role } : {}),
     via: [],
@@ -844,7 +849,7 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
   // Steps 3-4: none, an empty usage.
   if (references.length === 0) return { consumer, producer, used: [], unexported: [] };
   const table = resolveProjectExportTable(producer || undefined);
-  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string> }>();
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string> }>();
   const unexported: CrossProjectReference[] = [];
   // Step 5: each reference counted under the name it bound to.
   for (const ref of references) {
@@ -853,7 +858,8 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
       unexported.push(ref);
       continue;
     }
-    const slot = used.get(entry.publicName) ?? { kind: entry.kind, members: new Set<string>() };
+    const slot = used.get(entry.publicName) ?? { kind: entry.kind, members: new Set<string>(), specs: new Set<string>() };
+    slot.specs.add(ref.specId);
     if (entry.kind === 'type') slot.members.add('type');
     else if (ref.member !== undefined) slot.members.add(ref.member);
     used.set(entry.publicName, slot);
@@ -864,7 +870,7 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
     producer,
     used: [...used.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort() })),
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort() })),
     unexported,
   };
 }
@@ -883,6 +889,7 @@ function importedName(authored: string, use: string[]): string {
  */
 function membersAt(ref: AuthoredReference): string[] {
   if (ref.position === 'type') return ['type'];
+  if (ref.position === 'implements') return implementedMethods(ref.specId, ref.authored);
   if (ref.position === 'narrative' || ref.position === 'calls') {
     const impl = loadImplementationSpecs().find((i) => i.id === ref.specId);
     const out: string[] = [];
@@ -927,10 +934,11 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     && ((r.form === 'alias' && r.authored.split('::').length === 2 && r.authored.startsWith(`${alias}::`))
       || (r.form === 'import' && (r.importedVia ?? '').split(', ').includes(alias))));
   // Step 3: each counted under the public name it spells, with the members its position reaches.
-  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string> }>();
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string> }>();
   for (const ref of through) {
     const publicName = ref.form === 'import' ? importedName(ref.authored, use) : ref.authored.slice(alias.length + 2);
-    const slot = used.get(publicName) ?? { kind: ref.position === 'type' ? 'type' as const : 'component' as const, members: new Set<string>() };
+    const slot = used.get(publicName) ?? { kind: ref.position === 'type' ? 'type' as const : 'component' as const, members: new Set<string>(), specs: new Set<string>() };
+    slot.specs.add(ref.specId);
     for (const member of membersAt(ref)) slot.members.add(member);
     used.set(publicName, slot);
   }
@@ -940,7 +948,7 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     producer: alias,
     used: [...used.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort() })),
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort() })),
     unexported: [],
   };
 }

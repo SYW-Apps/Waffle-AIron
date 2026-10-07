@@ -150,6 +150,21 @@ methods:
       be stale; prose (descriptions, display names) and provenance (stateId, generatedAt) are never
       a fact here. Empty when the snapshot says what the producer says now. Pure.
     sourcePath: src/models/surface-references.ts
+  - name: changesSince
+    signature: 'changesSince(older: surface_snapshot): list<surface_change>'
+    params:
+      - name: older
+        type: surface_snapshot
+        description: The baseline snapshot
+    returns: list<surface_change>
+    description: >-
+      What this producer's public surface changed from an older snapshot of it: each public name
+      (contract entry or exported type) added, removed, renamed per this snapshot's rename trace
+      (`formerly`), or changed — its audience, or a type's shape — and inside each contract kept,
+      each method added, removed, renamed per its trace, or changed in signature (memberDigest).
+      Prose and provenance are never a change. Sorted by name, then member. Pure.
+    sourcePath: src/models/surface-references.ts
+    symbol: surfaceChanges
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-06T23:03:45.327Z'
+updatedAt: '2026-10-07T10:55:58.455Z'

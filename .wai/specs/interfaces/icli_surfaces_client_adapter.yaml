@@ -106,11 +106,27 @@ methods:
         description: The alias, the names to add and remove, and dryRun
   - name: listConsumers
     description: >-
-      Forward to surface_portal.listConsumers: the family projects in reach that consume this
-      project (`wairon externals consumers`).
-    signature: 'listConsumers(): list<ExternalConsumer>'
+      Forward to surface_portal.listConsumers: the projects that consume this project — the family
+      in reach, and the project roots in the searched folders (`wairon externals consumers [--search
+      <dir>…]`).
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
     returns: list<ExternalConsumer>
-    params: []
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diffSurface
+    description: >-
+      Forward to surface_portal.diffSurface: the public-surface changelog since the last committed
+      approval, a named revision or a saved snapshot (`wairon surface diff`).
+    signature: 'diffSurface(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-10-06T23:06:33.042Z'
+updatedAt: '2026-10-07T10:59:26.884Z'

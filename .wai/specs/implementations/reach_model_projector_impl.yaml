@@ -42,7 +42,8 @@ methods:
       - stepNumber: 6
         description: >-
           Place every own component: a ComponentPlacement with the project key, its subsystem and
-          its block, so a party is known and a caller is named by its workload
+          its block, so a party is known and a caller is named by its workload; and list every own
+          subsystem's key, one holding only types included, so it is known as a party too
         type: local
       - stepNumber: 7
         description: >-
@@ -70,9 +71,10 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Carry every verb, call, placement and topic end of each project's own model, re-placed in
-          that project's innermost network with its keys qualified into the root's key space, and
-          gather each network's gateways from its projects' outside-entered gateway Portals
+          Carry every verb, call, placement, subsystem and topic end of each project's own model,
+          re-placed in that project's innermost network with its keys qualified into the root's key
+          space, and gather each network's gateways from its projects' outside-entered gateway
+          Portals
         type: local
       - stepNumber: 4
         description: >-
@@ -91,4 +93,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T12:58:16.938Z'
-updatedAt: '2026-10-06T23:02:57.466Z'
+updatedAt: '2026-10-07T06:21:06.209Z'

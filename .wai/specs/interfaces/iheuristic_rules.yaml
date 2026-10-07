@@ -76,7 +76,9 @@ methods:
       intent-language — the contract is the swap seam, so the vendor name is wrong even on the
       owning component's own interface. A technology is matched by its name, or — when it declares
       `matches` because its name is also an ordinary word of the tree (a package named after the
-      file format it reads) — by those tokens alone.
+      file format it reads) — by those tokens alone. Two declarations of one technology are one home
+      whichever notation each is written in: a component binding it as a bare name and one binding
+      it as `{name, matches}` are both inside it, even when one form's tokens police nothing.
     signature: 'technologyBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -98,7 +100,11 @@ methods:
       patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's
       effective targetLanguage: the configured methods casing when set, else the language's own
       convention, so a Rust tree is snake_case without configuring anything, and the authoring and
-      rename tools accept exactly what this rule accepts.
+      rename tools accept exactly what this rule accepts. A contract that implements another
+      project's extension point (`implements`) takes the names of the methods it implements — and of
+      their parameters — from the producer, whose language they are spelled in: those methods, on
+      the contract and on its implementations, are exempt from the casing rule, and the rename tools
+      accept them.
     signature: 'namingConventions(ctx: RuleContext): void'
     returns: void
     params:
@@ -251,4 +257,4 @@ methods:
           could name them as their signatureFrom
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-06T13:04:29.710Z'
+updatedAt: '2026-10-07T06:21:18.616Z'

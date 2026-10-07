@@ -6,9 +6,13 @@ methods:
   - name: encodeFlows
     description: >-
       The matrix as JSON, CSV or Markdown: every fact of every flow, in the matrix's order, each
-      flow the gate refuses marked REFUSED with its findings and each flagged one marked with its
-      codes; the document lists the gate findings and whether a flow was refused. Pure.
-    signature: 'encodeFlows(flows: list<NetworkFlow>, format: NetworkOutputFormat): NetworkDocument'
+      flow the gate refuses marked REFUSED with its findings and each flagged or noted one marked
+      with its codes; the document lists the gate findings at their own severity and whether a flow
+      was refused. JSON names the bound root's parties and network by the root project's id, never
+      by its empty key. Pure.
+    signature: >-
+      encodeFlows(flows: list<NetworkFlow>, format: NetworkOutputFormat, rootProject?: string):
+      NetworkDocument
     returns: NetworkDocument
     params:
       - name: flows
@@ -16,6 +20,12 @@ methods:
       - name: format
         type: NetworkOutputFormat
         description: json, csv or markdown
+      - name: rootProject
+        type: string
+        description: >-
+          The bound root's project id, written where a party's project or a crossed network is the
+          root's empty key
+        optional: true
     guarantees:
       - idempotent
   - name: encodePolicy
@@ -24,13 +34,17 @@ methods:
       policy per callee workload, admitting exactly its matrix sources and the bindings' outside
       blocks for a flow from outside, with the port when the binding names one. A flow the gate
       refuses is never admitted: it is left out and named in the head of the output with its
-      findings, and the document says a flow was refused. A design name with no binding gets the
-      placeholder label wairon.dev/workload: <name> and is listed as unbound; a flow from outside
-      with no outside blocks admits nothing and lists outside as unbound. The unbound names also
-      head the output as comments, so the file says what it could not bind. Deterministic. Pure.
+      findings, and the document says a flow was refused. A bindings key that names a renamed
+      project's former name still binds it, and a note names the key to rename. A design name with
+      no binding gets the placeholder label wairon.dev/workload: <name> and is listed as unbound; a
+      flow from outside with no outside blocks admits nothing and lists outside as unbound. A
+      workload whose verbs differ in who reaches them (an outside verb beside a network-only one) is
+      noted: a policy admits per pod and port, so it cannot separate them, and the note names the
+      Portal-level binding that splits them. The unbound names and the notes also head the output as
+      comments. Deterministic. Pure.
     signature: >-
-      encodePolicy(flows: list<NetworkFlow>, bindings: NetworkBindings, format:
-      NetworkOutputFormat): NetworkDocument
+      encodePolicy(flows: list<NetworkFlow>, bindings: NetworkBindings, format: NetworkOutputFormat,
+      formerNames?: map<string, string>): NetworkDocument
     returns: NetworkDocument
     params:
       - name: flows
@@ -40,8 +54,12 @@ methods:
       - name: format
         type: NetworkOutputFormat
         description: 'A policy target: kubernetes-network-policy'
+      - name: formerNames
+        type: map<string, string>
+        description: Each renamed project's former name mapped to its current key (reach_model.formerNames)
+        optional: true
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-10-06T13:10:53.369Z'
-updatedAt: '2026-10-06T23:04:50.313Z'
+updatedAt: '2026-10-07T06:19:34.507Z'

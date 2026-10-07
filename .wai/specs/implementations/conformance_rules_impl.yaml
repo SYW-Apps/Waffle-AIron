@@ -172,15 +172,18 @@ methods:
         description: >-
           An empty toFiles is Level 1 territory (an unmapped target, or a target subsystem whose
           every mapped file is shared with the source), a shared file is the N:1 same-file collapse,
-          and a trace realizes the edge — a runtime import, a re-export, the reverse import for a
-          mounting declarer, or a type-only import of a fromFile
-          (source_file_facts.typeOnlyBindings, each specifier resolved against mappedPaths) landing
-          in toFiles: continue with the next target
+          an Adapter's edge to a Portal reached over an out-of-process transport is the link the
+          design models — realized by the Adapter's transport client, never by an import, so no
+          import across that boundary is ever asked for — and a trace realizes the edge — a runtime
+          import, a re-export, the reverse import for a mounting declarer, or a type-only import of
+          a fromFile (source_file_facts.typeOnlyBindings, each specifier resolved against
+          mappedPaths) landing in toFiles: continue with the next target
         type: branch
         condition: >-
-          toFiles is non-empty, fromFiles and toFiles share no file, graph.connects(fromFiles,
-          toFiles, component is a Portal or Observer) is false, and no type-only import of a
-          fromFile resolves into toFiles
+          the edge is not a remote link (component is an Adapter and target a Portal whose transport
+          is set and not InProcess), toFiles is non-empty, fromFiles and toFiles share no file,
+          graph.connects(fromFiles, toFiles, component is a Portal or Observer) is false, and no
+          type-only import of a fromFile resolves into toFiles
         onFalseStep: 10
       - stepNumber: 14
         label: unrealizedReport
@@ -204,9 +207,11 @@ methods:
       - stepNumber: 16
         description: >-
           toPaths = the mapped files other than fromPath among code.possibleOriginsOf(site,
-          fromPath) — the module the receiver's declared type, class or annotation names — each of
-          which realizes a component with a contract method the call's name is (its name or a
-          per-method symbol): a call into anything else is no modelled collaboration
+          fromPath) — the module the receiver's declared type, class or annotation names; the
+          analysis has already read a receiver written through a non-null assertion, a cast or
+          parentheses, and a local alias or destructuring of a field, as that field — each of which
+          realizes a component with a contract method the call's name is (its name or a per-method
+          symbol): a call into anything else is no modelled collaboration
         type: local
       - stepNumber: 17
         description: >-
@@ -231,13 +236,20 @@ methods:
           hold it — a runtime edge was judged above) and edgeJustified refuses, report
           UNDECLARED_DEPENDENCY once per edge (site `<fromPath> -> <toPath>`, the same site a
           runtime import of it reports under), naming the call written through the
-          type-only-imported collaborator
+          type-only-imported collaborator. A call in a Portal's own file that resolves on neither
+          tier — its receiver nothing declares, binds or aliases (a cast to any or unknown is no
+          declaration) — under the name of a write- or lifecycle-effect method of a data component
+          in the Portal's own subsystem or a subsystem it depends into, which no implementation of
+          the Portal claims, is PORTAL_CALL_UNRESOLVED (notice; site `<fromPath> -> <name>`): the
+          analysis could not follow it, and says so
         type: local
       - stepNumber: 20
         description: >-
           Build each technology's home: for every implementation declaring technologies, its
-          component, the components it owns and the pattern that owns it, keyed by every declared
-          token (the name, or its `matches` when it declares them) lower-cased
+          component, the components it owns and the pattern that owns it, keyed by every package the
+          technology is imported by (technology.packages over the packages loaded packs contribute:
+          its declared tokens, the built-in table's packages for its name, and the contributed ones)
+          lower-cased
         type: local
       - stepNumber: 21
         label: techLoop
@@ -285,7 +297,7 @@ methods:
         description: Check each implementation
         type: loop
         over: ctx.implementations
-        endStep: 20
+        endStep: 22
       - stepNumber: 6
         description: >-
           Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
@@ -306,7 +318,8 @@ methods:
           methodImpl.sourceFile(impl.sourcePath), and a contract method with no entry falls back to
           impl.sourcePath. noFileAtAll = impl.sourceFiles() is empty. begun =
           code.holdsAny(impl.sourceFiles()): realization has begun once any file the implementation
-          names exists. strict = ctx.rules.conformance.requireCode
+          names exists. strict = ctx.rules.conformance.requireCode. planned = an empty list of the
+          implementation's planned files
         type: local
       - stepNumber: 9
         description: >-
@@ -379,10 +392,9 @@ methods:
         label: missingReport
         description: >-
           A named file that is not on disk is planned, at method level as at implementation level
-          and whether or not the realization has begun: report SOURCE_FILE_PLANNED (notice, or error
-          naming rules.conformance.requireCode when strict; spec impl.id; draft context from draft)
-          naming owner and file: planned, not written yet; method-realization judges the methods in
-          it once it exists
+          and whether or not the realization has begun: add owner and file to planned — the
+          implementation's planned files are reported together once its files are checked, so a
+          planned design reads one line per component
         type: local
       - stepNumber: 19
         description: Continue with the next file
@@ -394,6 +406,20 @@ methods:
           Report CONFORMANCE_ANALYSIS_SKIPPED (warning; spec impl.id; draft context from draft)
           naming owner and file: it could not be analyzed (binary or unreadable), so the methods in
           it were not checked
+        type: local
+      - stepNumber: 21
+        label: plannedGuard
+        description: An implementation with no planned file continues with the next implementation
+        type: branch
+        condition: planned is non-empty
+        onFalseStep: 5
+      - stepNumber: 22
+        label: plannedReport
+        description: >-
+          Report SOURCE_FILE_PLANNED once for the implementation (notice, or error naming
+          rules.conformance.requireCode when strict; spec impl.id; draft context from draft; covers
+          the planned files) naming every planned file with its owner: planned, not written yet;
+          method-realization judges the methods in each once it exists
         type: local
     symbol: check
     exportedVia: sourceFileLinkageRule
@@ -785,8 +811,26 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.types
-        endStep: 12
+        endStep: 14
       - stepNumber: 2
+        label: unlinkedType
+        description: >-
+          A type that names no sourcePath of its own, outside a chained subproject, is one whose
+          shape nothing compares with code — said, never left silent
+        type: branch
+        condition: type.sourcePath is unset and !ctx.isInChainedSubproject(type.subsystem)
+        onFalseStep: 4
+      - stepNumber: 3
+        label: unlinkedReport
+        description: >-
+          Report MISSING_TYPE_SOURCE_PATH (spec type.id): a notice (an error naming
+          rules.conformance.requireCode) while the code of the type's subsystem has not begun — no
+          file an implementation of a component in that subsystem names exists (for a type no
+          subsystem owns, no file of any implementation) — saying to plan the type's sourcePath with
+          the implementations'; a warning once that code exists, since the type is data no check
+          reads
+        type: local
+      - stepNumber: 4
         description: >-
           A type that names no sourcePath claims nothing, and a chained child's sourcePaths are
           relative to its own root, so the child judges them in its own run: continue with the next
@@ -794,26 +838,26 @@ methods:
         type: branch
         condition: type.sourcePath is set and !ctx.isInChainedSubproject(type.subsystem)
         onFalseStep: 1
-      - stepNumber: 3
+      - stepNumber: 5
         description: >-
           code = ctx.codeIndex(); blocked = an empty set of the files whose status already stopped
           them from realizing anything
         type: local
-      - stepNumber: 4
+      - stepNumber: 6
         label: fileLoop
         description: Check the status of each distinct file the type names, once per file
         type: loop
         loopKind: forEach
         over: type.sourceFiles() (its own sourcePath, then each method's)
-        endStep: 6
-      - stepNumber: 5
+        endStep: 8
+      - stepNumber: 7
         description: >-
           An analyzed file realizes what it holds; a file the model knows nothing about is judged by
           nobody here
         type: branch
         condition: facts = code.factsAt(ctx.codeModel.pathKey(file)) exists with a status other than analyzed
-        onFalseStep: 4
-      - stepNumber: 6
+        onFalseStep: 6
+      - stepNumber: 8
         description: >-
           Add the file to blocked and report the problem its status names, spec'd to type.id:
           SOURCE_PATH_ESCAPES_ROOT (error) when escaped; when missing, MISSING_SOURCE_FILE (error)
@@ -822,7 +866,7 @@ methods:
           written yet; CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the file and,
           when it is a method's own file rather than the type's, the methods that name it
         type: local
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           The declaration the claim promises: its symbol when the code-level name legitimately
           differs, else the type's own name. The declaration tier alone would accept a file that
@@ -834,24 +878,24 @@ methods:
           published being facts.exportedNames at exact grade (empty when facts.reexportOnly, a
           barrel declaring nothing of its own), else code.declarationsAt(that key), since only exact
           analysis separates an export from a mention
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Report UNREALIZED_TYPE (warning; spec type.id) naming the type, the name looked for, the
           file and the grade it was analyzed at: the claim points at code that does not hold the
           declaration — correct the sourcePath, or bind the code-level name with symbol
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         label: methodLoop
         description: Judge each pure method of the claim
         type: loop
         loopKind: forEach
         over: type.methods
-        endStep: 12
-      - stepNumber: 10
+        endStep: 14
+      - stepNumber: 12
         description: file = the method's own sourcePath when it names one, else type.sourcePath
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           A method is realized under its symbol when the code names it differently — a pure type
           method is often a free function named after its type
@@ -859,8 +903,8 @@ methods:
         condition: >-
           file is not in blocked, code.factsAt(ctx.codeModel.pathKey(file)) reports it analyzed, and
           code.declarationsAt(that key) does not hold method.symbol, else method.name
-        onFalseStep: 9
-      - stepNumber: 12
+        onFalseStep: 11
+      - stepNumber: 14
         description: >-
           Report UNREALIZED_TYPE_METHOD (warning; spec type.id) naming the method, the name looked
           for, the file and the grade it was analyzed at
@@ -1884,4 +1928,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-06T23:06:40.909Z'
+updatedAt: '2026-10-07T10:53:31.039Z'

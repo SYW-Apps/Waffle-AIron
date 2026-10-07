@@ -277,7 +277,9 @@ methods:
         type: string
         description: >-
           Its new name, an identifier in the tree's method casing
-          (naming_rule_config.methodCasingFor its targetLanguage)
+          (naming_rule_config.methodCasingFor its targetLanguage) — any identifier for a component
+          one of whose contracts implements another project's extension point, whose producer names
+          those methods
       - name: pinSymbol
         type: bool
         description: >-
@@ -1062,6 +1064,64 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_rename_field
+  - name: renameParam
+    description: >-
+      Tool: rename a parameter of a contract method; the old name joins the parameter's rename trace
+      (previousNames), which the design export shows as `formerly`, each signature is re-derived and
+      an HTTP path placeholder that bound the parameter is respelled. Refuses a name another
+      parameter of the method holds or retired. Reports the interfaces it moved in and the
+      placeholders respelled.
+    signature: 'renameParam(id: string, method: string, param: string, newName: string): ParamRename'
+    returns: ParamRename
+    params:
+      - name: id
+        type: string
+        description: The component whose contract method's parameter is renamed (namespaced if needed)
+      - name: method
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_param
+  - name: listConsumers
+    description: >-
+      Tool (scope: tree, a read): who consumes the bound project — the producer's answer to "who
+      breaks if I change my surface": the family projects in reach that declare it, and with search
+      the project roots in the named folders that declare it by path or git (a sibling checkout).
+      Each with its alias, the names it uses and the names it still writes that are no longer
+      exported. A hosted request may not search folders.
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_list_consumers
+  - name: diffSurface
+    description: >-
+      Tool (scope: tree, a read): the bound project's public-surface changelog against its last
+      committed approval (or a named git revision, or a saved native snapshot): names and contract
+      methods added, removed, renamed (traced) and changed in signature — what release notes are
+      written from.
+    signature: 'diffSurface(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_surface_diff
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:07:48.263Z'
+updatedAt: '2026-10-07T11:00:35.239Z'

@@ -149,6 +149,12 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   edit(plan, target.namespace, 'id', `id: ${oldId} → ${newId} (${oldId} kept in previousIds)`, { root: target.directory, call: 'renameId', args: [oldId, newId] });
   for (const h of holders.filter((x) => x.external)) planPin(plan, h, oldId, newId);
   plan.notes.push(`Consumers outside the family that name "${oldId}" by path are not found by a rename: each must rewrite its own external (its next gate reports the id change).`);
+  // The member's key follows the id when its alias was the old id: the deployment side names it by that key.
+  if (target.namespace !== '' && target.mountAlias === oldId) {
+    const oldKey = target.namespace;
+    const newKey = target.parent ? `${target.parent}::${newId}` : newId;
+    plan.notes.push(`Deployment names: a network bindings file and an observed-flow export name this project's workloads by its key — rename the bindings keys "${oldKey}" and every "${oldKey}::…" (its subsystems and Portals) to "${newKey}" and "${newKey}::…", and the telemetry names that follow them. Until then \`wairon network policy\` and \`check\` resolve them through previousIds and print a NOTE naming each key.`);
+  }
   if (approved !== undefined && target.mountAlias === newId) {
     plan.notes.push(`${label(target.namespace)} kept "${oldId}" where its alias is "${newId}" because its lock approved "${approved}" (id-locked): the rename resolves it — PROJECT_ID_RENAMED until the re-lock approves "${newId}".`);
   }

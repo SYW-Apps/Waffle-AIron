@@ -22,5 +22,11 @@ fields:
     description: Raw request body
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No wairon declaration: the hosting boundary receives Node's own http IncomingMessage
+        (src/server/http.ts), a platform type, so no file of this project declares the shape.
 createdAt: '2026-07-04T12:58:04.741Z'
-updatedAt: '2026-10-04T10:20:17.265Z'
+updatedAt: '2026-10-07T06:30:13.241Z'

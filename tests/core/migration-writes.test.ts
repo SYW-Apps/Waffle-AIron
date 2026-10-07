@@ -155,7 +155,8 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
       expect(unpin('books')).toBe(true);
       expect(unpin('books')).toBe(false);
     });
-    expect(lockOf(f.billing)).toEqual({});
+    // The last entry gone, the lock file goes with it.
+    expect(fs.existsSync(path.join(f.billing, '.wai', 'externals.lock.yaml'))).toBe(false);
     expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'books.yaml'))).toBe(false);
   });
 

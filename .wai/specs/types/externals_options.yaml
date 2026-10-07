@@ -46,7 +46,13 @@ fields:
     type: list<string>
     description: 'use: names to stop importing, comma-separated (--remove a,b)'
     optional: true
+  - name: search
+    type: list<string>
+    description: >-
+      consumers: folders to scan, besides the family in reach, for project roots declaring this one
+      as an external (--search <dir>…)
+    optional: true
 methods: []
 sourcePath: src/commands/externals.ts
 createdAt: '2026-10-03T17:11:27.059Z'
-updatedAt: '2026-10-06T23:03:54.791Z'
+updatedAt: '2026-10-07T06:38:14.352Z'

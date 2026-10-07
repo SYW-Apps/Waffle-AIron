@@ -73,6 +73,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: scanAllSpecs
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Read every component spec through the core subsystem's published tree read
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadComponentSpecs
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-10-04T13:57:28.185Z'
+updatedAt: '2026-10-07T06:23:17.313Z'

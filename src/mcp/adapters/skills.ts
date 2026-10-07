@@ -3,4 +3,4 @@
 // re-exports of the skills portal. The skill resources resolve relative to the
 // package; the server instructions read the request-scoped project root.
 // ---------------------------------------------------------------------------
-export { listResources, readResource, buildServerInstructions } from '../../core/skills-portal.js';
+export { listResources, readResource, buildServerInstructions, exportSddSkills } from '../../core/skills-portal.js';

@@ -48,12 +48,16 @@ methods:
       - stepNumber: 7
         description: >-
           Mark each flow with the model's findings that sit on it, each as `CODE: message`: a
-          finding sited at a verb (its Portal and the verb) sits on that verb's entry flows, one
-          sited at a call (its calling component and the call's evidence) on the flow that evidence
-          gives; an error joins refusedBy, a warning or notice flaggedBy
+          finding sited at a verb (its Portal and the verb, or the verbs it covers) sits on that
+          verb's entry flows, one sited at a call (its calling component and the call's evidence) on
+          the flow that evidence gives; an error joins refusedBy, a warning flaggedBy, a notice
+          notedBy
         type: local
       - stepNumber: 8
-        description: 'Answer the flows in a stable order: by callee, then caller'
+        description: >-
+          Answer the flows in a stable order: by callee, then caller; for a model focused on a
+          member (model.focus, read at the member's own root), only the flows that start or land
+          inside that member, exactly as the family root derives them
         type: return
         outcome: list<NetworkFlow>
     detail: full
@@ -67,7 +71,8 @@ methods:
       - stepNumber: 2
         description: >-
           Is either name unknown to the model: no placement's project, subsystem or component, no
-          verb, and neither outside nor a network names it?
+          subsystem of model.subsystems (one holding only types counts), no verb, no `<alias>::`
+          through one of model.externals, and neither outside nor a network names it?
         type: branch
         condition: a party name denotes nothing in the model
         onFalseStep: 4
@@ -94,8 +99,10 @@ methods:
         description: >-
           Answer not allowed: when a refused flow joins the pair, naming its findings (the design
           has it, the gate refuses it); else, when no network-transport verb lies within the callee,
-          as in-process (a direct call inside one process, never a network flow); else naming the
-          nearest admitted flows to the callee so the asker sees what is allowed instead
+          as in-process (a direct call inside one process, or another project's party reached
+          through an external, which this design's network model holds no verb of; never a network
+          flow here); else naming the nearest admitted flows to the callee so the asker sees what is
+          allowed instead
         type: return
         outcome: not allowed
       - stepNumber: 8
@@ -111,4 +118,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T13:11:56.327Z'
-updatedAt: '2026-10-06T23:04:18.728Z'
+updatedAt: '2026-10-07T06:20:00.987Z'

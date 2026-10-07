@@ -18,4 +18,6 @@ export {
   removeExternal,
   updateExternalUse,
   listConsumers,
+  // `wairon surface diff`: the public-surface changelog since the last approval.
+  diffSurface,
 } from '../../core/surface-portal.js';

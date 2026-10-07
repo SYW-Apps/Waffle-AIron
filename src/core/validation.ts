@@ -1245,6 +1245,15 @@ export function familyRelations(): ProjectRelations[] {
 }
 
 /**
+ * ivalidator_portal.unpinnedExternals — the bound project's declared externals
+ * never pinned (family_validator.unpinned): what `wairon lock` refuses to
+ * approve over. Writes nothing.
+ */
+export function unpinnedExternals(): string[] {
+  return familyValidator.unpinned();
+}
+
+/**
  * ivalidator_portal.adviseExternals — the advisory live comparison of the
  * bound project's externals the run did not compose (family_validator.advise):
  * EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED and EXTERNAL_LIVE_UNCOMPARED,

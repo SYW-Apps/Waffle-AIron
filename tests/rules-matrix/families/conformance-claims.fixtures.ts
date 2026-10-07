@@ -62,6 +62,36 @@ const pickingSpecs = {
 
 export default [
   // -------------------------------------------------------------------------
+  // MISSING_TYPE_SOURCE_PATH — a type no file claims is never shape-checked
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'MISSING_TYPE_SOURCE_PATH',
+    severity: 'warning',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
+    scenario:
+      'The shipment manifest entity names no source file while the warehouse subsystem already has code — so nothing ever compares its fields with the record the code holds.',
+    tree: {
+      ...pickingSpecs,
+      types: [{ id: 'shipment-manifest', name: 'ShipmentManifest', subsystem: 'warehouse', fields: [{ name: 'id', type: 'string', key: 'primary' }] }],
+      files: { 'src/warehouse/picking.ts': PICKING_MODULE },
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_TYPE_SOURCE_PATH',
+    expectFire: false,
+    reason: 'A type that names the file declaring it is a claim the shape check reads — exactly what the finding asks for.',
+    scenario: 'The shipment manifest entity names the logistics manifest module, which exports the ShipmentManifest interface.',
+    tree: {
+      ...pickingSpecs,
+      types: [{ id: 'shipment-manifest', name: 'ShipmentManifest', subsystem: 'warehouse', sourcePath: 'src/warehouse/manifest.ts', fields: [{ name: 'id', type: 'string', key: 'primary' }] }],
+      files: {
+        'src/warehouse/picking.ts': PICKING_MODULE,
+        'src/warehouse/manifest.ts': 'export interface ShipmentManifest { id: string; }\n',
+      },
+    },
+  }),
+  // -------------------------------------------------------------------------
   // UNREALIZED_TYPE
   // -------------------------------------------------------------------------
   defineRuleFixture({

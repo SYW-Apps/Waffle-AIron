@@ -25,7 +25,7 @@ import type { ValidationIssue } from '../validation.js';
 // ---------------------------------------------------------------------------
 
 /** A network finding with the site an allow names. */
-type NetworkFinding = ValidationIssue & { at?: string };
+type NetworkFinding = ValidationIssue & { at?: string; covers?: string[] };
 
 /** How a network id reads in a finding ('' is the bound project's own). */
 function networkName(id: string): string {
@@ -62,12 +62,14 @@ export function familyCodes(): string[] {
 }
 
 /** inetwork_arbiter.judge — the network findings of a reach model. */
-export function judge(model: ReachModel): (ValidationIssue & { at?: string })[] {
+export function judge(model: ReachModel): (ValidationIssue & { at?: string; covers?: string[] })[] {
   const out: NetworkFinding[] = [];
   const verbFinding = (severity: ValidationIssue['severity'], code: string, v: VerbReach, message: string): void => {
     out.push({ severity, code, message, specId: v.portal, at: v.verb });
   };
   const family = model.scope === 'family';
+  // Step 4 collects the bypassed verbs per Portal; step 12 reports each Portal once.
+  const bypassed = new Map<string, VerbReach[]>();
   const byPortal = new Map<string, VerbReach[]>();
   for (const v of model.verbs) byPortal.set(v.portal, [...(byPortal.get(v.portal) ?? []), v]);
 
@@ -79,8 +81,7 @@ export function judge(model: ReachModel): (ValidationIssue & { at?: string })[] 
       const scope = entry.scope ?? 'outside';
       // Steps 3-4: an outside entry inside a declared network must be on a gateway.
       if (scope === 'outside' && v.network !== undefined && !v.gateway) {
-        verbFinding('error', 'GATEWAY_BYPASSED', v,
-          `Portal verb "${verbName(v)}" sits inside ${networkName(v.network)} and is entered from outside it, but "${v.portal}" is not a gateway: callers from outside a network reach it only through its gateway. Make the Portal a gateway (variant: gateway), or route the outside callers through the network's gateway and narrow this entry to scope network.`);
+        bypassed.set(v.portal, [...(bypassed.get(v.portal) ?? []), v]);
       }
       // Steps 5-6: a network-scoped entry needs a boundary around it.
       if (scope === 'network' && v.network === undefined && family) {
@@ -130,12 +131,36 @@ export function judge(model: ReachModel): (ValidationIssue & { at?: string })[] 
     });
   }
 
-  // Step 12: more than one gateway in one network, sited on its first gateway
-  // Portal, so the finding belongs to that gateway's project and an allow on
-  // that Portal covers it.
+  // Step 12: GATEWAY_BYPASSED once per Portal entered from outside a network
+  // it is not the gateway of — at the verb when it is one, else covering them.
+  for (const [portal, verbs] of bypassed) {
+    const network = verbs[0].network!;
+    const gatewayless = (model.networks.find((n) => n.id === network)?.gateways.length ?? 0) === 0;
+    const names = verbs.map((v) => `"${v.verb}"`).join(', ');
+    const subject = verbs.length === 1 ? `Portal verb "${verbName(verbs[0])}"` : `Portal "${portal}" (${verbs.length} verbs: ${names})`;
+    const way = gatewayless
+      ? ` ${networkName(network).replace(/^t/, 'T')} has no gateway yet: in a project that runs as one process, the Portal its callers enter IS the gateway — mark "${portal}" variant: gateway. Otherwise route the outside callers through the network's gateway and narrow ${verbs.length === 1 ? 'this entry' : 'these entries'} to scope network.`
+      : ` Make the Portal a gateway (variant: gateway), or route the outside callers through the network's gateway and narrow ${verbs.length === 1 ? 'this entry' : 'these entries'} to scope network.`;
+    out.push({
+      severity: 'error',
+      code: 'GATEWAY_BYPASSED',
+      message: `${subject} sits inside ${networkName(network)} and is entered from outside it, but "${portal}" is not a gateway: callers from outside a network reach it only through its gateway.${way}`,
+      specId: portal,
+      ...(verbs.length === 1 ? { at: verbs[0].verb } : { covers: verbs.map((v) => v.verb) }),
+    });
+  }
+
+  // ...then more than one gateway in one network, sited on one stable
+  // gateway: the first by its local name among those the declaring project
+  // holds itself (else among all), so the project's own run and the family run
+  // site it on the same Portal and one allow covers it in both.
+  const localName = (key: string): string => (key.includes('::') ? key.slice(key.lastIndexOf('::') + 2) : key);
+  const byLocal = (a: string, b: string): number => localName(a).localeCompare(localName(b)) || a.localeCompare(b);
   for (const n of model.networks) {
     if (n.gateways.length < 2) continue;
-    const first = [...n.gateways].sort()[0];
+    const ownProject = (g: string): boolean => model.verbs.some((v) => v.portal === g && v.project === n.id);
+    const own = n.gateways.filter(ownProject);
+    const first = [...(own.length > 0 ? own : n.gateways)].sort(byLocal)[0];
     out.push({
       severity: 'notice',
       code: 'MULTIPLE_GATEWAYS',

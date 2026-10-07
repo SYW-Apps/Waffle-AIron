@@ -16,5 +16,9 @@ fields:
     type: bool
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: Spec-only demo project — the flowops automation ships no source checkout in this example.
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'

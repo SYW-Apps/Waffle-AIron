@@ -29,5 +29,6 @@ fields:
     optional: true
 methods: []
 componentClass: pack_scaffold
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:12:50.242Z'
-updatedAt: '2026-10-04T23:39:59.009Z'
+updatedAt: '2026-10-07T06:28:17.907Z'

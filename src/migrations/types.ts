@@ -217,6 +217,12 @@ export interface FamilyMigrationReport {
   applied: boolean;
   outcome?: TransactionOutcome;
   relock: string[];
+  /**
+   * The files written to set a project the migration made up for its own
+   * sessions (guides and root pointer, skills, .mcp.json), relative to its
+   * root — present when the route that applied it scaffolds (the MCP tools).
+   */
+  sessionScaffold?: string[];
 }
 
 /** migration_plan.blocked — true when any refusal is present. */

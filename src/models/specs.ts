@@ -912,6 +912,11 @@ export const MethodParamSchema = z.object({
   type: z.string(),
   description: z.string().optional(),
   optional: z.boolean().optional(),
+  /**
+   * The parameter's rename trace: every name it held before, oldest first —
+   * written by the rename-param tool, shown as `formerly` in the design export.
+   */
+  previousNames: z.array(z.string().min(1)).optional(),
 });
 export type MethodParam = z.infer<typeof MethodParamSchema>;
 
@@ -2313,6 +2318,19 @@ export const SurfaceTypeDefSchema = z.object({
   values: z.array(EnumValueSchema).optional(),
   /** A named scalar's one primitive, in place of fields; only on a value-object that declares it. */
   holds: z.string().optional(),
+  /**
+   * The type's own methods (its checked constructors, its pure operations),
+   * each with its signature, params and returns, so a binding written against
+   * the pin knows them. Carried, never digested: a pin taken before they were
+   * carried lacks them and reads as stale (re-pin), never as incompatible.
+   */
+  methods: z.array(z.object({
+    name: z.string(),
+    signature: z.string(),
+    params: z.array(z.object({ name: z.string(), type: z.string(), description: z.string().optional(), optional: z.boolean().optional() })).optional(),
+    returns: z.string(),
+    description: z.string().optional(),
+  })).optional(),
   /**
    * The type's rename trace as the producer recorded it (previousIds), so a
    * consumer pinned to a former name reads a rename rather than a removal.

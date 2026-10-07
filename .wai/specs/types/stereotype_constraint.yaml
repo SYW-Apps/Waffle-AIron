@@ -14,5 +14,12 @@ fields:
     description: Why the governing profile forbids or discourages these stereotypes.
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline zod object of ProfileDefSchema's
+        forbiddenStereotypes and discouragedStereotypes arrays in src/core/extensions.ts, so there
+        is no symbol a sourcePath could bind.
 createdAt: '2026-07-14T18:56:11.004Z'
-updatedAt: '2026-10-04T10:21:12.987Z'
+updatedAt: '2026-10-07T06:30:04.765Z'

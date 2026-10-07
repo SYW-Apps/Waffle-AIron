@@ -16,7 +16,8 @@ methods:
     detail: intent
     intent: >-
       Serializes the lock to YAML with its aliases sorted and writes .wai/externals.lock.yaml
-      atomically, creating .wai/ when missing; a write failure propagates.
+      atomically, creating .wai/ when missing; a lock with no external and no parent entry deletes
+      the file instead (no empty `externals: {}` stays behind); a write failure propagates.
   - name: readSnapshot
     narrative: []
     detail: intent
@@ -51,4 +52,4 @@ methods:
       atomically, creating the directory when missing; a write failure propagates.
 status: complete
 createdAt: '2026-09-26T18:11:39.138Z'
-updatedAt: '2026-10-02T20:23:24.727Z'
+updatedAt: '2026-10-07T10:56:26.407Z'

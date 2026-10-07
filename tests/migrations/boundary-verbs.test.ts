@@ -11,6 +11,10 @@ import { validateProject } from '../../src/core/validation.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as migrations from '../../src/migrations/index.js';
+import { runLock } from '../../src/commands/lock.js';
+import { computeGateStateId } from '../../src/core/validation.js';
+import { readLockState } from '../../src/core/specs.js';
+import { diffAgainstApproval } from '../../src/core/approval.js';
 import { buildContractFamily, buildReferenceFamily, type ContractFamily, type ReferenceFamily } from '../helpers/reference-family.js';
 import { at, dirHash, familyFindings, familyLines, migrate, newFindings, pinAt, plan, put, waiState } from '../helpers/family-verbs.js';
 
@@ -412,5 +416,58 @@ describe('stage 6 — move-is-free', () => {
     expect(refs()).toEqual(beforeRefs);
     expect(familyFindings(f.top)).toEqual(before);
     vi.restoreAllMocks();
+  });
+});
+
+// ── a storage move owes no re-lock ──────────────────────────────────────────
+
+describe('externalize into a part — a storage move — agrees with lock and lock-check', () => {
+  const roots: string[] = [];
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setProjectRoot(null);
+    invalidateSpecCache();
+    for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
+  });
+
+  const lockTop = async (top: string): Promise<void> => {
+    await at(top, async () => {
+      invalidateSpecCache();
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    });
+    invalidateSpecCache();
+  };
+
+  it('an approved project whose specs only move storage is no project to re-lock, and its approval still holds', async () => {
+    const f = shopFamily();
+    roots.push(f.top);
+    await lockTop(f.top);
+    const planned = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
+    expect(planned.refusals).toEqual([]);
+    // Before: "To re-lock once applied: this project (.)" for a move nothing in the approval covers.
+    expect(planned.relock).toEqual([]);
+    const report = at(f.top, () => migrations.apply(planned));
+    expect(report.applied).toBe(true);
+    expect(report.relock).toEqual([]);
+    invalidateSpecCache();
+    // lock-check's reading and lock's reading agree: approved, no spec changed — only moved.
+    expect(at(f.top, () => readLockState(computeGateStateId()).state)).toBe('locked');
+    const diff = at(f.top, () => diffAgainstApproval())!;
+    expect(diff.added.length + diff.changed.length + diff.removed.length).toBe(0);
+    expect(diff.moved.length).toBeGreaterThan(0);
+  });
+
+  it('control: a project with an unapproved change still owes its re-lock', async () => {
+    const f = shopFamily();
+    roots.push(f.top);
+    await lockTop(f.top);
+    write(f.top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders, and refunds.', subsystem: 'orders', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [] });
+    invalidateSpecCache();
+    const planned = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
+    expect(planned.relock.map((d) => path.resolve(d))).toEqual([path.resolve(f.top)]);
+    at(f.top, () => migrations.discard(planned));
   });
 });

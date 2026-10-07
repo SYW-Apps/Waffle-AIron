@@ -201,7 +201,7 @@ methods:
         endStep: 14
         catches:
           - error: a core writer's refusal
-            step: 21
+            step: 22
       - stepNumber: 6
         description: Which writer?
         type: switch
@@ -301,21 +301,32 @@ methods:
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock.
           A rename lists every owner it writes, lock or none, the renamed project first: the id is
-          part of what any approval of them names
+          part of what any approval of them names. A storage move (externalize into a part) changes
+          nothing the approval covers, so an owner whose approval, read on the rehearsal copy, still
+          covers every spec (only moved storage) is no project to re-lock — the plan agrees with
+          `wairon lock` and `wairon lock-check`
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
       - stepNumber: 20
+        description: >-
+          For a storage move, compare each such owner's rehearsed tree with its approval: an owner
+          whose diff names no added, changed or removed spec (its moved specs paired as moves) is
+          dropped from the re-lock list
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: diffAgainstApproval
+      - stepNumber: 21
         description: Answer the plan with its rehearsal, file changes and re-lock list
         type: return
         outcome: rehearsed plan
-      - stepNumber: 21
+      - stepNumber: 22
         label: refused-on-copy
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
           its message
@@ -404,4 +415,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-03T13:40:40.368Z'
+updatedAt: '2026-10-07T10:54:56.288Z'

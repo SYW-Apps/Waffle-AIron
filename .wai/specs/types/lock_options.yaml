@@ -22,7 +22,13 @@ fields:
       and never writes below it (parent-lock-writes-nothing-below). Each member is locked at its own
       root.
     optional: true
+  - name: all
+    type: bool
+    description: >-
+      List every changed spec of the approval summary. Without it a long list is summarized — the
+      first few paths of each kind, then a count of the rest and the flag that lists them all.
+    optional: true
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-07-24T18:06:34.277Z'
-updatedAt: '2026-10-04T10:20:24.667Z'
+updatedAt: '2026-10-07T06:23:04.629Z'

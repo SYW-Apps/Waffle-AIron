@@ -528,6 +528,8 @@ describe('web graph orchestrator (sdd_host)', () => {
     invalidateSpecCache();
     const expectedCounts = new Map<string, number>();
     for (const iss of expected.issues) {
+      // Notices are counted apart (noticeCount), never in issueCount.
+      if (iss.severity === 'notice') continue;
       if (iss.specId) expectedCounts.set(iss.specId, (expectedCounts.get(iss.specId) ?? 0) + 1);
     }
 

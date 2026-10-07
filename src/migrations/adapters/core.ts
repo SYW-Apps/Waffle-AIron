@@ -34,8 +34,9 @@ export {
   removeMember,
   repointExternal,
   removeExternal,
-  // approval_portal: a project's lock record.
+  // approval_portal: a project's lock record, and what moved past it.
   approvalRecord,
+  diffAgainstApproval,
   // spec_maintenance_portal: a legacy mount moved into `members`, and a spec's
   // references written in their canonical form.
   moveMountToMembers,

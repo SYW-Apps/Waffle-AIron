@@ -154,13 +154,16 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     invalidateSpecCache();
     const own = workspaceFor(path.join(root, 'packages', 'core')).loadImplementationSpec('core_orch_impl');
     expect(own?.sourcePath).toBe('src/orch.ts');
-    expect(own?.simPath).toBe('../../sim/orch.sim.ts');
+    // A project never names a file outside its root (round-3 trial): the
+    // harness left outside is planned where it lies relative to the family
+    // root, now under the member's — the plan says so, the code is not moved.
+    expect(own?.simPath).toBe('sim/orch.sim.ts');
 
     internalizeMember('core', { home: '' });
     invalidateSpecCache();
     const back = loadImplementationSpec('core_orch_impl');
     expect(back?.sourcePath).toBe('packages/core/src/orch.ts');
-    expect(back?.simPath).toBe('sim/orch.sim.ts');
+    expect(back?.simPath).toBe('packages/core/sim/orch.sim.ts');
   });
 
   it("re-expresses each method's own sourcePath against the new root and back, leaving an absolute one alone", () => {
@@ -199,12 +202,13 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     invalidateSpecCache();
     const childRaw = rawImpl(path.join(root, 'packages', 'core'));
     expect(childRaw.sourcePath).toBe('src/orch.ts');
-    expect(childRaw.methods.map((m: any) => m.sourcePath)).toEqual(['src/commands/run.ts', '../../tools/stop.ts', absolute]);
+    // The one left outside the new root is re-expressed member-relative (planned there), never `../../`.
+    expect(childRaw.methods.map((m: any) => m.sourcePath)).toEqual(['src/commands/run.ts', 'tools/stop.ts', absolute]);
 
     internalizeMember('core', { home: '' });
     invalidateSpecCache();
     const parentRaw = rawImpl(root);
-    expect(parentRaw.methods.map((m: any) => m.sourcePath)).toEqual(['packages/core/src/commands/run.ts', 'tools/stop.ts', absolute]);
+    expect(parentRaw.methods.map((m: any) => m.sourcePath)).toEqual(['packages/core/src/commands/run.ts', 'packages/core/tools/stop.ts', absolute]);
   });
 });
 

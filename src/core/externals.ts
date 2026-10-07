@@ -83,7 +83,14 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
     return parsed.data;
   },
   writeLock(lock) {
-    writeAtomically(lockPath(getProjectRoot()), serializeYaml(sortedLock(lock)));
+    const file = lockPath(getProjectRoot());
+    // A lock with no entry left goes with its last entry, as the externals
+    // directory goes with its last snapshot: `externals: {}` pins nothing.
+    if (Object.keys(lock.externals).length === 0 && lock.parent === undefined) {
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+      return;
+    }
+    writeAtomically(file, serializeYaml(sortedLock(lock)));
   },
   readSnapshot(alias) {
     // Null when absent or malformed: status then reports the alias as unpinned.

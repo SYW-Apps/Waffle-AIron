@@ -292,6 +292,13 @@ methods:
         type: call
         targetComponent: external_producers
         targetMethod: listConsumers
+  - name: approvedRevision
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow
+        type: call
+        targetComponent: external_producers
+        targetMethod: approvedRevision
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:04:47.024Z'
+updatedAt: '2026-10-07T10:54:00.174Z'

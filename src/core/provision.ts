@@ -47,6 +47,7 @@ import {
   type SpecRefKind,
   type WritableSpecKind,
   assertSpecsInReach,
+  signatureFacts,
 } from './specs.js';
 import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
@@ -66,6 +67,7 @@ import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/i
 import {
   SpecIdSchema,
   PUBLIC_NAME_RE,
+  SURFACE_AUDIENCES,
   nameKey,
   type ComponentSpec,
   type ImplementationSpec,
@@ -1173,7 +1175,7 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   }
   // Step 8: an asserted `as: part` would now contradict the content.
   if (declaration?.as === 'part') projectConfigRepository.updateMember(alias, { as: '' });
-  const result: PromoteResult = { respelled: [], memberRespelled: [], exported: [], imported: [], consumersDropped: [], entriesDeclared: [], topicsCrossing: [] };
+  const result: PromoteResult = { respelled: [], memberRespelled: [], exported: [], imported: [], consumersDropped: [], entriesDeclared: [], topicsCrossing: [], pathsRebased: [], signaturesRederived: [] };
   // Step 9: every reference across the new boundary respelled, targets unchanged.
   const parentSide = rewriteRefsIn(crossing.in.map((c) => c.spec).filter(unique), (ref, position) =>
     (INTO_MEMBER_POSITIONS.has(position) && crossing.insideTargets.has(ref) ? `${alias}::${ref}` : ref), { result, member: false });
@@ -1222,8 +1224,90 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
     });
   }
   invalidateSpecCache();
-  // Step 15: promoted; nothing locked — answered with what crossed.
+  // Step 17: every file path of the new project that escapes its root, re-expressed member-relative.
+  rebaseEscapingPaths(dir, getProjectRoot(), result);
+  // Step 18: every signature text the respelling left stale, re-derived on either side.
+  rederiveSignatures(new Set(result.respelled.map((r) => r.specId)), result.signaturesRederived);
+  runWithProjectRoot(dir, () => {
+    invalidateSpecCache();
+    rederiveSignatures(new Set(result.memberRespelled.map((r) => localIn(r.specId, memberKey ?? alias))), result.signaturesRederived);
+  });
+  invalidateSpecCache();
+  // Step 19: promoted; nothing locked — answered with what crossed.
   return result;
+}
+
+/**
+ * Step 17 of promoteMember: each file path a new project's implementation or
+ * type names (sourcePath, each method's sourcePath, simPath) that escapes its
+ * root is re-expressed as the path the file has relative to the family root,
+ * read under the member's root — where the code lives once it is moved in. The
+ * source is not moved, so until then it is planned code there; a path inside
+ * the root, an absolute one, or one escaping the family root too is left
+ * alone. Each recorded, naming where the file still lies.
+ */
+function rebaseEscapingPaths(memberDir: string, familyRoot: string, result: PromoteResult): void {
+  const shownMember = toPosixPath(path.relative(familyRoot, memberDir)) || '.';
+  for (const file of specFilesUnder(aiPathsAt(memberDir).specsDir())) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (!raw || typeof raw !== 'object') continue;
+    const isImplementation = 'contract' in raw;
+    if (!isImplementation && specKind(raw) !== 'type') continue;
+    let changed = false;
+    const rebase = (holder: any, key: string, where: string): void => {
+      const p = holder[key];
+      if (typeof p !== 'string' || p === '' || path.isAbsolute(p)) return;
+      const absolute = path.resolve(memberDir, p);
+      if (isWithinDir(memberDir, absolute)) return;
+      const next = toPosixPath(path.relative(familyRoot, absolute));
+      if (next.startsWith('..') || path.isAbsolute(next)) return;
+      holder[key] = next;
+      changed = true;
+      result.pathsRebased.push(`${raw.id} ${where}: ${p} → ${next} (the code is not moved: it is planned there until ${next} of the parent moves into ${shownMember})`);
+    };
+    for (const key of isImplementation ? ['sourcePath', 'simPath'] : ['sourcePath']) rebase(raw, key, key);
+    if (Array.isArray(raw.methods)) {
+      for (const method of raw.methods) {
+        if (method && typeof method === 'object') rebase(method, 'sourcePath', `${method.name} sourcePath`);
+      }
+    }
+    if (changed) writeYamlFile(file, raw);
+  }
+  invalidateSpecCache();
+}
+
+/**
+ * Step 18 of promoteMember (and the last of demoteMember): under the bound
+ * root, each contract or type among `touched` whose stored signature text its
+ * params now contradict re-saved, so the writer derives the text. Each
+ * recorded before and after.
+ */
+function rederiveSignatures(touched: Set<string>, lines: string[]): void {
+  if (touched.size === 0) return;
+  invalidateSpecCache();
+  const stale = signatureFacts().staleTexts.filter((t) => touched.has(t.specId));
+  if (stale.length === 0) return;
+  const saved = new Set<string>();
+  for (const t of stale) {
+    const key = `${t.kind}:${t.specId}`;
+    if (!saved.has(key)) {
+      saved.add(key);
+      if (t.kind === 'interface') {
+        const intf = loadInterfaceSpec(t.specId);
+        if (intf) saveInterfaceSpec(intf);
+      } else {
+        const type = loadTypeSpec(t.specId);
+        if (type) saveSpec('type', type);
+      }
+    }
+    lines.push(`${t.specId}.${t.method}: ${t.stored} → ${t.derived}`);
+  }
+  invalidateSpecCache();
 }
 
 /**
@@ -1246,6 +1330,10 @@ export interface PromoteResult {
   entriesDeclared: string[];
   /** One line per topic the new boundary separates from its pair (the family run pairs it). */
   topicsCrossing: string[];
+  /** One line per file path of the new project that escaped its root and was re-expressed member-relative. */
+  pathsRebased: string[];
+  /** One line per contract or type method whose stored signature text the respelling left stale and was re-derived. */
+  signaturesRederived: string[];
 }
 
 /** The calls a set of implementations makes into a set of Portals: portal → verb → the calling components. */
@@ -1547,31 +1635,119 @@ function dropCrossingConsumers(inside: RawSpec[], outside: RawSpec[], result: Pr
   }
 }
 
+/** Ascending reach rank of an audience; an absent one reads as instance, the default an L0 entry declares. */
+function audienceRank(audience: string | undefined): number {
+  const idx = (SURFACE_AUDIENCES as readonly string[]).indexOf(audience ?? 'instance');
+  return idx === -1 ? (SURFACE_AUDIENCES as readonly string[]).indexOf('instance') : idx;
+}
+
 /**
- * Step 13 (completeness): every name the parent's L0 now re-exports from the
- * member — an entry `from: <alias>` naming a component or a type, or a whole
- * re-export of it — exported by the new project too, so no re-export is left
- * pointing at a name the member does not export.
+ * Step 15 (completeness): every name the parent's L0 now re-exports from the
+ * member — an entry `from: <alias>` naming a component, an interface or a type,
+ * or a whole re-export of it — exported by the new project too, at the parent
+ * entry's audience or wider, under the public name the parent entry gave it;
+ * then each such parent entry re-pointed at that public name, so no re-export
+ * names an item the member does not export and none is wider than its source.
  */
 function exportReExported(inside: RawSpec[], memberDir: string, alias: string, result: PromoteResult): void {
   invalidateSpecCache();
-  const entries = ((loadSystemSpec()?.publicInterfaces ?? []) as ExportEntry[]).filter((e) => e.from === alias);
-  if (entries.length === 0) return;
-  const targets = entries.map((e) => e.component ?? e.typeDef).filter((t): t is string => t !== undefined);
-  const whole = entries.some((e) => e.component === undefined && e.typeDef === undefined);
+  const parent = loadSystemSpec();
+  const parentEntries = (parent?.publicInterfaces ?? []) as ExportEntry[];
+  const entries = parentEntries.filter((e) => e.from === alias);
+  if (!parent || entries.length === 0) return;
+  const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: parent.name }) ?? parent.name;
+  // The public name each named parent entry requests from the member, by entry.
+  const repointed = new Map<ExportEntry, { name: string; field: 'component' | 'typeDef'; item: string }>();
   runWithProjectRoot(memberDir, () => {
-    for (const name of exportItems(targets)) result.exported.push(`${alias} L0: ${name} (re-exported by the parent)`);
-    if (!whole) return;
     invalidateSpecCache();
     const system = loadSystemSpec();
     if (!system) return;
-    const own = (system.publicInterfaces ?? []) as ExportEntry[];
-    const added = inside.filter((s) => s.kind === 'subsystem' && !own.some((e) => e.from === s.id && e.component === undefined && e.typeDef === undefined))
-      .map((s) => ({ from: s.id, audience: 'project' }));
-    if (added.length === 0) return;
-    saveSystemSpec({ ...system, publicInterfaces: [...own, ...added] as typeof system.publicInterfaces });
-    for (const e of added) result.exported.push(`${alias} L0: everything ${e.from} exports (re-exported whole by the parent)`);
+    const own = [...(system.publicInterfaces ?? [])] as ExportEntry[];
+    const types = loadTypeSpecs();
+    let changed = false;
+    for (const e of entries) {
+      const audience = e.audience ?? 'instance';
+      // A whole re-export: every subsystem of the part re-exported whole, at the parent's audience.
+      if (e.component === undefined && e.typeDef === undefined && e.interface === undefined) {
+        for (const s of inside.filter((x) => x.kind === 'subsystem')) {
+          const whole = own.find((x) => x.from === s.id && x.component === undefined && x.typeDef === undefined && x.interface === undefined);
+          if (whole) {
+            if (audienceRank(whole.audience) < audienceRank(audience)) {
+              whole.audience = audience;
+              changed = true;
+              result.exported.push(`${alias} L0: everything ${s.id} exports widened to ${audience} (re-exported whole by the parent)`);
+            }
+            continue;
+          }
+          own.push({ from: s.id, audience });
+          changed = true;
+          result.exported.push(`${alias} L0: everything ${s.id} exports at ${audience} (re-exported whole by the parent)`);
+        }
+        continue;
+      }
+      // A named one: the item it names, a type or a component (an interface names its component).
+      const type = e.typeDef !== undefined ? types.find((t) => t.id === localIn(e.typeDef!, alias)) : undefined;
+      const interfaceId = e.interface !== undefined ? localIn(e.interface, alias) : undefined;
+      const componentId = e.component !== undefined
+        ? localIn(e.component, alias)
+        : interfaceId !== undefined ? loadInterfaceSpec(interfaceId)?.component : undefined;
+      const component = type === undefined && componentId !== undefined ? loadComponentSpec(componentId) : null;
+      if (type === undefined && !component) continue;
+      const field: 'component' | 'typeDef' = type ? 'typeDef' : 'component';
+      const item = type ? type.id : component!.id;
+      const publicName = e.as ?? (e.id as string | undefined) ?? (interfaceId ?? item);
+      if (type?.subsystem) exportTypeFromSubsystem(type.subsystem, type.id);
+      // An entry the member already holds for the item keeps its public name, widened to the parent's audience.
+      const held = own.find((x) => x[field] === item && (interfaceId === undefined || x.interface === undefined || x.interface === interfaceId));
+      if (held) {
+        if (audienceRank(held.audience ?? 'project') < audienceRank(audience)) {
+          held.audience = audience;
+          changed = true;
+        }
+        const name = (held.as ?? (held.id as string | undefined) ?? (held.interface ?? item)) as string;
+        result.exported.push(`${alias} L0: ${item} as ${name} at ${held.audience} (re-exported by the parent)`);
+        repointed.set(e, { name, field, item });
+        continue;
+      }
+      const subsystem = type ? type.subsystem : component!.subsystem;
+      own.push({
+        ...(subsystem ? { from: subsystem } : {}),
+        [field]: item,
+        ...(interfaceId !== undefined && !type ? { interface: interfaceId } : {}),
+        ...(publicName !== (interfaceId ?? item) ? { as: publicName } : {}),
+        ...(e.details !== undefined ? { details: e.details } : {}),
+        audience,
+      });
+      changed = true;
+      result.exported.push(`${alias} L0: ${item}${publicName !== item ? ` as ${publicName}` : ''} at ${audience} (re-exported by the parent)`);
+      repointed.set(e, { name: publicName, field, item });
+    }
+    if (changed) saveSystemSpec({ ...system, publicInterfaces: own as typeof system.publicInterfaces });
+    // The public name each item is exported under, as the member's own table binds it.
+    invalidateSpecCache();
+    const table = resolveProjectExports();
+    for (const [e, to] of repointed) {
+      const interfaceId = e.interface !== undefined ? localIn(e.interface, alias) : undefined;
+      const bound = table.entries.find((x) => (to.field === 'typeDef'
+        ? x.typeDef === to.item
+        : x.component === to.item && (interfaceId === undefined || x.interface === undefined || x.interface === interfaceId)));
+      if (bound) to.name = bound.publicName;
+    }
   });
+  invalidateSpecCache();
+  if (repointed.size === 0) return;
+  // Each named parent entry re-exports the member's public name now, its own `as`, audience and details kept.
+  const next = parentEntries.map((e) => {
+    const to = repointed.get(e);
+    if (!to) return e;
+    const { component: _c, interface: _i, typeDef: _t, ...rest } = e;
+    const before = e.interface ?? e.component ?? e.typeDef;
+    const out: ExportEntry = { ...rest, [to.field]: to.name, ...(e.as === undefined && to.name !== before ? { as: before } : {}) };
+    const shownAs = out.as ?? to.name;
+    result.exported.push(`${parentId} L0: ${shownAs} re-exported through ${alias} as ${to.name} at ${e.audience ?? 'instance'} (was ${before} from subsystem ${alias})`);
+    return out;
+  });
+  saveSystemSpec({ ...parent, publicInterfaces: next as typeof parent.publicInterfaces });
   invalidateSpecCache();
 }
 
@@ -1685,6 +1861,11 @@ export interface InternalizeResult {
    * project boundary's export table granted, kept as the list a part needs.
    */
   consumersRestored: string[];
+  /**
+   * Demote only: one line per contract or type method whose stored signature
+   * text the respelling back left stale and was re-derived from its params.
+   */
+  signaturesRederived?: string[];
 }
 
 /** The member's .wai entries this write knows, by the group its deleted list names them under. */
@@ -2250,7 +2431,7 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
     refusals.push(`its metadata needs a home subsystem (--home) — ${home === '' ? 'none was named' : `"${home}" is no subsystem of the member or of this project`}; its subsystems are ${subsystems.join(', ') || 'none'}`);
   }
   if (refusals.length > 0) throw new WaironError(`demote refused: "${alias}" cannot become a part — ${refusals.join('; ')}.`);
-  const result: InternalizeResult = { subsystems, types, placed: [], externals: [], deleted: [], notCarried: [], consumersRestored: [] };
+  const result: InternalizeResult = { subsystems, types, placed: [], externals: [], deleted: [], notCarried: [], consumersRestored: [], signaturesRederived: [] };
   // What crosses the old boundary, by public name on each side, read BEFORE anything is written.
   const intoMember = localsOf(dir);
   const backOut = localsOf(root);
@@ -2303,6 +2484,8 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
   invalidateSpecCache();
   for (const spec of [...parentSide, ...memberSide]) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
   invalidateSpecCache();
+  // Every signature text the respelling back left stale, re-derived from its params.
+  rederiveSignatures(new Set([...parentSide, ...memberSide].map((s) => s.id)), result.signaturesRederived ??= []);
   // Step 15.
   return result;
 }
@@ -3165,10 +3348,16 @@ export function renameMethod(componentId: string, methodName: string, newName: s
       `chained-component: "${componentId}" lives in another project; rename its method from that project's own root. ${memberRootWay(componentId, `sdd_rename_method ${componentId.slice(componentId.lastIndexOf('::') + 2)} <method> <new name>`)}`,
     );
   }
-  // Steps 6–7: the new name must be an identifier in the tree's method casing.
+  // Steps 6–7: the new name must be an identifier in the tree's method casing —
+  // unless a contract of the component implements another project's extension
+  // point, whose producer names those methods in its own language: then any
+  // identifier, and IMPLEMENTS_MISMATCH judges it against the producer's.
   const casing = methodCasingOf(component);
-  if (!methodNameFits(newName, casing)) {
-    throw new WaironError(`invalid-name: "${newName}" is not an identifier in this tree's method casing (${casing}).`);
+  const dictated = loadInterfaceSpecs().some((i) => i.component === componentId && i.implements !== undefined);
+  if (dictated ? !IDENTIFIER.test(newName) : !methodNameFits(newName, casing)) {
+    throw new WaironError(dictated
+      ? `invalid-name: "${newName}" is not an identifier (a letter or underscore, then letters, digits or underscores).`
+      : `invalid-name: "${newName}" is not an identifier in this tree's method casing (${casing}).`);
   }
 
   // Step 8: the component's own contracts, and the ones declaring the method.
@@ -3730,6 +3919,102 @@ export function renameField(typeId: string, field: string, newName: string): Fie
   invalidateSpecCache();
   // Step 7.
   return { type: qualifiedTypeId(type), from: field, to: newName, rewritten };
+}
+
+/** What renaming a parameter of a contract method changed (param_rename). */
+export interface ParamRename {
+  /** The component whose contract method's parameter moved. */
+  component: string;
+  /** The contract method the parameter belongs to. */
+  method: string;
+  /** The parameter's name before the rename. */
+  from: string;
+  /** The parameter's name after it. */
+  to: string;
+  /** Ids of the interfaces the parameter was renamed in. */
+  movedIn: string[];
+  /** The endpoint path placeholders respelled, `<interface>.<method>: {old} -> {new}`. */
+  rewritten: string[];
+}
+
+/**
+ * Rename a parameter of a contract method (core_orchestrator.renameParam). The
+ * parameter moves on every interface of the component that declares the
+ * method, keeping its place, type, description and optionality, its old name
+ * appended to its rename trace (previousNames — `formerly` in the design
+ * export); the writer re-derives each signature from the params, and an HTTP
+ * path placeholder `{old}` on the method's own binding is respelled. Prose is
+ * never rewritten. Refuses before any write: component-missing,
+ * chained-component, method-missing, param-missing, invalid-name, name-taken
+ * and name-retired.
+ */
+export function renameParam(componentId: string, methodName: string, param: string, newName: string): ParamRename {
+  // Steps 1-2: the component, in this project.
+  const component = loadComponentSpec(componentId);
+  if (!component) throw new WaironError(`component-missing: no component has the id "${componentId}".`);
+  if (componentId.includes('::')) {
+    throw new WaironError(
+      `chained-component: "${componentId}" lives in another project; rename its parameter from that project's own root. ${memberRootWay(componentId, `sdd_rename_param ${componentId.slice(componentId.lastIndexOf('::') + 2)} ${methodName} ${param} <new name>`)}`,
+    );
+  }
+  // Step 3: the contracts that declare the method.
+  const contracts = loadInterfaceSpecs().filter((i) => i.component === componentId);
+  const moving = contracts.filter((i) => i.methods.some((m) => m.name === methodName));
+  // Step 4: every guard, before any write.
+  if (moving.length === 0) throw new WaironError(`method-missing: no contract of "${componentId}" declares the method "${methodName}".`);
+  for (const contract of moving) {
+    const method = contract.methods.find((m) => m.name === methodName)!;
+    const params = method.params ?? [];
+    if (method.signatureFrom !== undefined) {
+      throw new WaironError(`param-missing: "${contract.id}.${methodName}" takes its parameters from ${method.signatureFrom}; rename the parameter there.`);
+    }
+    if (!params.some((p) => p.name === param)) {
+      throw new WaironError(`param-missing: "${contract.id}.${methodName}" declares no parameter "${param}"${params.length ? ` (it declares ${params.map((p) => p.name).join(', ')})` : ''}.`);
+    }
+    if (params.some((p) => p.name === newName && p.name !== param)) {
+      throw new WaironError(`name-taken: "${contract.id}.${methodName}" already has a parameter "${newName}".`);
+    }
+    const retired = params.find((p) => p.name !== param && (p.previousNames ?? []).includes(newName));
+    if (retired) {
+      throw new WaironError(`name-retired: parameter "${retired.name}" of "${contract.id}.${methodName}" lists "${newName}" in its previousNames — the name is retired on this method. Unsetting that previousNames releases it.`);
+    }
+  }
+  if (!IDENTIFIER.test(newName)) {
+    throw new WaironError(`invalid-name: "${newName}" is not an identifier (a letter or underscore, then letters, digits or underscores).`);
+  }
+  // A producer names the parameters of an extension point this component implements.
+  const variables = projectConfigRepository.load()?.rules?.naming?.variables;
+  const dictated = contracts.some((i) => i.implements !== undefined);
+  if (variables && !dictated && !methodNameFits(newName, variables)) {
+    throw new WaironError(`invalid-name: "${newName}" does not match this tree's parameter naming (rules.naming.variables: ${variables}).`);
+  }
+  if (newName === param) return { component: componentId, method: methodName, from: param, to: newName, movedIn: [], rewritten: [] };
+  // Step 5: the hosted request's write reach, before the first write.
+  assertSpecsInReach(moving.map((i) => ({ kind: 'interface', id: i.id })), `renaming parameter "${param}" of "${componentId}.${methodName}"`, false);
+  // Steps 6-8: the parameter moves on each contract; the writer derives the signature.
+  const rewritten: string[] = [];
+  const placeholder = `{${param}}`;
+  for (const contract of moving) {
+    saveInterfaceSpec({
+      ...contract,
+      methods: contract.methods.map((m) => {
+        if (m.name !== methodName) return m;
+        const params = (m.params ?? []).map((p) => (p.name === param
+          ? { ...p, name: newName, previousNames: [...(p.previousNames ?? []), param] }
+          : p));
+        let endpoint = m.endpoint;
+        if (endpoint && endpoint.transport === 'HTTP' && endpoint.path.includes(placeholder)) {
+          endpoint = { ...endpoint, path: endpoint.path.split(placeholder).join(`{${newName}}`) };
+          rewritten.push(`${contract.id}.${methodName}: {${param}} -> {${newName}}`);
+        }
+        return { ...m, params, ...(endpoint ? { endpoint } : {}) };
+      }),
+    });
+  }
+  // Step 9.
+  invalidateSpecCache();
+  // Step 10.
+  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten };
 }
 
 /** The file the loader keeps a type in, by its id, owner and group. */

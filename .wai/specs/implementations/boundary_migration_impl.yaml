@@ -209,10 +209,11 @@ methods:
         description: >-
           Bind the bound project's rehearsal root and externalize the subsystem — into a part, or
           with `as: project` into a member project; a core refusal propagates. As a project, record
-          what the core answers — each respelled reference, export, import, dropped consumers entry,
-          entry declared on a verb the parent calls, and topic now crossing the boundary — as the
-          plan's edits and notes, so the plan lists exactly what the rehearsal wrote and what the
-          family run, not the new project's own gate, pairs
+          what the core answers — each respelled reference, export and re-pointed re-export, import,
+          dropped consumers entry, entry declared on a verb the parent calls, file path re-expressed
+          under the new root, signature text re-derived, and topic now crossing the boundary — as
+          the plan's edits and notes, so the plan lists exactly what the rehearsal wrote and what
+          the family run, not the new project's own gate, pairs
         type: call
         targetComponent: migration_core_adapter
         targetMethod: externalizeSubsystem
@@ -237,10 +238,11 @@ methods:
       - stepNumber: 16
         description: >-
           Bind the bound project's rehearsal root and promote the part in place; a core refusal
-          propagates. Record what the core answers — each respelled reference, export, import,
-          dropped consumers entry, entry declared on a verb the parent calls, and topic now crossing
-          the boundary — as the plan's edits and notes, so the plan lists exactly what the rehearsal
-          wrote and what the family run, not the new project's own gate, pairs
+          propagates. Record what the core answers — each respelled reference, export and re-pointed
+          re-export, import, dropped consumers entry, entry declared on a verb the parent calls,
+          file path re-expressed under the new root, signature text re-derived, and topic now
+          crossing the boundary — as the plan's edits and notes, so the plan lists exactly what the
+          rehearsal wrote and what the family run, not the new project's own gate, pairs
         type: call
         targetComponent: migration_core_adapter
         targetMethod: promoteMember
@@ -260,8 +262,9 @@ methods:
         label: demote
         description: >-
           Bind the bound project's rehearsal root and demote the member in place with the plan's
-          destination; a core refusal propagates, and each consumers list the demote widened is
-          recorded as one of the plan's edits, so the plan lists what its rehearsal wrote
+          destination; a core refusal propagates, and each consumers list the demote widened and
+          each signature text it re-derived is recorded as one of the plan's edits, so the plan
+          lists what its rehearsal wrote
         type: call
         targetComponent: migration_core_adapter
         targetMethod: demoteMember
@@ -433,4 +436,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-06T23:08:27.840Z'
+updatedAt: '2026-10-07T06:25:36.048Z'

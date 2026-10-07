@@ -416,7 +416,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   // failure decision (they reflect declared drafts, not incomplete finished
   // work). Make that explicit in the summary.
   if (options.ci && waivedWarnings > 0) {
-    logger.info(chalk.gray(`${waivedWarnings} draft-related warning(s) (non-fatal in --ci): excluded from the failure decision because the referenced specs are in draft/design status.`));
+    logger.warn(`--ci waived ${waivedWarnings} draft-related warning(s): excluded from the failure decision because the referenced specs are in draft/design status. They fail --ci once those specs are marked complete.`);
   }
 
   const failOnWarnings = !!options.ci && hasFatalWarnings;
@@ -433,7 +433,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     if (!treeChecked) {
       logger.success('Nothing to check yet: the spec tree is empty, and the project configuration is valid.');
     } else if (options.ci) {
-      logger.success('All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted; notices never fail).');
+      logger.success(`All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted; notices never fail)${waivedWarnings > 0 ? ` — ${waivedWarnings} draft-related warning(s) waived` : ''}.`);
     } else if (warningTotal > 0) {
       logger.warn(`Passed with ${warningTotal} warning(s) — not a failure here, but \`wairon validate --ci\` fails on them${waivedWarnings > 0 ? ` (except the ${waivedWarnings} draft-related one(s))` : ''}.`);
     } else {

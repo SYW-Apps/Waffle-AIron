@@ -53,7 +53,14 @@ fields:
       whole is not recreated: absent reads as any subsystem of the project, and nothing durable
       survives the promote to tell it from a list never written.
     optional: false
+  - name: signaturesRederived
+    type: list<string>
+    description: >-
+      Demote only: one line per contract or type method whose stored signature text the respelling
+      back left stale and was re-derived from its params, e.g. "ihit_client.reportHit:
+      reportHit(hit: analytics::hit): async void → reportHit(hit: analytics.hit): async void".
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-30T20:21:50.730Z'
-updatedAt: '2026-10-06T00:37:52.831Z'
+updatedAt: '2026-10-07T06:25:32.793Z'

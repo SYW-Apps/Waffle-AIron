@@ -39,5 +39,6 @@ fields:
     description: True when before.value equals after.value
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T16:27:09.521Z'
-updatedAt: '2026-10-04T10:20:54.482Z'
+updatedAt: '2026-10-07T06:28:50.467Z'

@@ -82,5 +82,12 @@ fields:
     description: 'JSONRPC: the JSON-RPC method name.'
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline zod input schema (and generic argument) of the
+        sdd_set_endpoints registration in src/mcp/server.ts, so there is no symbol a sourcePath
+        could bind.
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-06T12:55:07.918Z'
+updatedAt: '2026-10-07T06:30:11.460Z'

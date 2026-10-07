@@ -406,6 +406,8 @@ interface ExactFacts {
   memberTypes: Map<string, Set<string>>;
   /** The one type each type alias names outright, by alias name. */
   aliasTargets: Map<string, string>;
+  /** The interface names each named class's `implements` clause writes, by class name. */
+  implementsClauses: Map<string, string[]>;
   /**
    * The members of each named shape the file declares, by declaration name
    * — an interface's, a class's, a type literal alias's, and a derived
@@ -491,6 +493,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const localTypes = new Map<string, Set<string>>();
   const memberTypes = new Map<string, Set<string>>();
   const aliasTargets = new Map<string, string>();
+  const implementsClauses = new Map<string, string[]>();
   const typeShapes = new Map<string, TypeShapeFact>();
   const functionParams = new Map<string, ParameterFact[][]>();
   const functionRoutes = new Map<string, Map<string, RouteFact>>();
@@ -587,7 +590,17 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const typeReferenceName = (type: import('typescript').TypeNode | undefined): string | undefined => {
     let at = type;
     for (let depth = 0; at && depth < 4; depth++) {
-      if (!ts.isTypeReferenceNode(at) || !ts.isIdentifier(at.typeName)) return undefined;
+      // `T | null`, `T | undefined` and `(T)` declare a T that may be absent:
+      // the collaborator is still a T wherever a call reaches it.
+      while (at && ts.isParenthesizedTypeNode(at)) at = at.type;
+      if (at && ts.isUnionTypeNode(at)) {
+        const present = at.types.filter((t) => !(
+          t.kind === ts.SyntaxKind.UndefinedKeyword || t.kind === ts.SyntaxKind.NullKeyword
+          || (ts.isLiteralTypeNode(t) && t.literal.kind === ts.SyntaxKind.NullKeyword)));
+        if (present.length !== 1) return undefined;
+        at = present[0];
+      }
+      if (!at || !ts.isTypeReferenceNode(at) || !ts.isIdentifier(at.typeName)) return undefined;
       const name = at.typeName.text;
       if (!MEMBER_PRESERVING.has(name) || !at.typeArguments?.length) return name;
       at = at.typeArguments[0];
@@ -888,6 +901,46 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     let score = 1;
     const callees = new Map<string, CallSiteFact>();
     const addSite = (site: CallSiteFact): void => { callees.set(siteKey(site), site); };
+    // A receiver is read through what only the type checker cares about — a
+    // non-null assertion, parentheses, `satisfies`, a cast to a NAMED type —
+    // so `this.store!.save()` is the same call as `this.store.save()`, never a
+    // receiver nobody can follow. A cast to `any` or `unknown` (or to an
+    // inline shape) says nothing about the value, and is not see-through: such
+    // a receiver stays one the analysis cannot follow, and says so.
+    const namedCast = (type: import('typescript').TypeNode): boolean =>
+      ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName);
+    const unwrapped = (expression: import('typescript').Expression): import('typescript').Expression => {
+      let at = expression;
+      while (
+        ts.isNonNullExpression(at) || ts.isParenthesizedExpression(at)
+        || (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(at))
+        || ((ts.isAsExpression(at) || ts.isTypeAssertionExpression(at)) && namedCast(at.type))
+      ) at = at.expression;
+      return at;
+    };
+    // The names this body binds to one of the instance's FIELDS — `const s =
+    // this.store`, `const { store } = this`, `const { store: s } = this` — so
+    // a call through the local alias is the call through the field it holds.
+    const fieldAliases = new Map<string, string>();
+    const collectAliases = (node: import('typescript').Node): void => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        const init = unwrapped(node.initializer);
+        if (ts.isIdentifier(node.name) && ts.isPropertyAccessExpression(init)
+          && unwrapped(init.expression).kind === ts.SyntaxKind.ThisKeyword && ts.isIdentifier(init.name)) {
+          fieldAliases.set(node.name.text, init.name.text);
+        } else if (ts.isObjectBindingPattern(node.name) && init.kind === ts.SyntaxKind.ThisKeyword) {
+          for (const element of node.name.elements) {
+            if (element.dotDotDotToken || !ts.isIdentifier(element.name)) continue;
+            const property = element.propertyName
+              ? propertyNameText(element.propertyName)
+              : element.name.text;
+            if (property) fieldAliases.set(element.name.text, property);
+          }
+        }
+      }
+      ts.forEachChild(node, collectAliases);
+    };
+    if (fn.body) collectAliases(fn.body);
     const count = (node: import('typescript').Node): void => {
       if (namedFunctionName(node) !== undefined) return;
       if (ts.isIfStatement(node) || ts.isConditionalExpression(node)
@@ -914,10 +967,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         const callee = node.expression;
         if (ts.isIdentifier(callee)) addSite({ name: callee.text, member: false });
         else if (ts.isPropertyAccessExpression(callee)) {
-          const receiver = callee.expression;
+          const receiver = unwrapped(callee.expression);
           const name = callee.name.text;
-          if (ts.isIdentifier(receiver)) addSite({ name, member: true, via: receiver.text });
-          else if (ts.isPropertyAccessExpression(receiver) && receiver.expression.kind === ts.SyntaxKind.ThisKeyword) {
+          if (ts.isIdentifier(receiver) && fieldAliases.has(receiver.text)) {
+            // A local alias of a field: the call through the field it holds.
+            addSite({ name, member: true, field: fieldAliases.get(receiver.text)! });
+          } else if (ts.isIdentifier(receiver)) addSite({ name, member: true, via: receiver.text });
+          else if (ts.isPropertyAccessExpression(receiver) && unwrapped(receiver.expression).kind === ts.SyntaxKind.ThisKeyword) {
             addSite({ name, member: true, field: receiver.name.text });
           } else if (ts.isNewExpression(receiver) && ts.isIdentifier(receiver.expression)) {
             // `new ApprovalRegistry(store).create()` — only a plainly named
@@ -943,7 +999,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
             let at: import('typescript').Expression = receiver;
             while (ts.isPropertyAccessExpression(at) && !at.questionDotToken && ts.isIdentifier(at.name)) {
               chain.unshift(at.name.text);
-              at = at.expression;
+              at = unwrapped(at.expression);
             }
             if (ts.isIdentifier(at)) chain.unshift(at.text);
             else if (at.kind === ts.SyntaxKind.ThisKeyword) chain.unshift('this');
@@ -1178,6 +1234,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         (clause) => clause.token === ts.SyntaxKind.ExtendsKeyword,
       );
       recordDeclaredShape(node.name.text, node.members, extendsOther);
+      // What the class says it IMPLEMENTS: the names its implements clause
+      // writes, each read as a field's declared type is. The step from an
+      // interface in a shared contracts file to the class that realizes it.
+      const implemented = (node.heritageClauses ?? [])
+        .filter((clause) => clause.token === ts.SyntaxKind.ImplementsKeyword)
+        .flatMap((clause) => clause.types.map((t) => (ts.isIdentifier(t.expression) ? t.expression.text : undefined)))
+        .filter((name): name is string => name !== undefined);
+      if (implemented.length > 0 && !implementsClauses.has(node.name.text)) implementsClauses.set(node.name.text, implemented);
     } else if (ts.isTypeAliasDeclaration(node)) {
       if (ts.isTypeLiteralNode(node.type)) recordDeclaredShape(node.name.text, node.type.members, false);
       else {
@@ -1428,7 +1492,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -2008,6 +2072,7 @@ export function buildCodeModel(
             localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
             memberTypes: Object.fromEntries([...facts.memberTypes].map(([k, v]) => [k, [...v]])),
             aliasTargets: Object.fromEntries(facts.aliasTargets),
+            ...(facts.implementsClauses.size > 0 ? { implementsClauses: Object.fromEntries(facts.implementsClauses) } : {}),
             typeShapes: Object.fromEntries(facts.typeShapes),
             functionParams: Object.fromEntries(facts.functionParams),
             functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),

@@ -54,6 +54,21 @@ fields:
     type: PrincipalSubject
     description: The administrator who bound the repository.
     optional: false
+  - name: credentialRef
+    type: string
+    description: >-
+      Secret-store key of this connection's own PAT (a distinct org/account per binding); the
+      binding resolves it first, then the shared git-token.
+    optional: true
+  - name: includeCredentials
+    type: bool
+    description: >-
+      Instance scope only: also mirror hashed credential records (auth/credentials.json). Default
+      false — a full restore of local logins and agent tokens needs them, but the hashes then live
+      in the remote repository.
+    optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: GitBackingBinding
 createdAt: '2026-07-16T15:37:56.601Z'
-updatedAt: '2026-10-04T10:28:54.146Z'
+updatedAt: '2026-10-07T06:29:43.566Z'

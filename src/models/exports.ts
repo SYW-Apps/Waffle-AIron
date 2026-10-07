@@ -103,6 +103,8 @@ export interface ExportUse {
   kind: ExportKind;
   /** Contract method names, `capability:<name>`, or `type`; sorted, empty for a bare dependency. */
   members: string[];
+  /** The consumer's specs whose references reach the name, sorted. */
+  specs?: string[];
 }
 
 /**

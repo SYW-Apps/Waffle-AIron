@@ -27,9 +27,8 @@ methods:
         onFalseStep: 5
       - stepNumber: 4
         description: >-
-          Report GATEWAY_BYPASSED (error) at the verb: callers from outside the network reach a
-          Portal that is not its gateway; make the Portal a gateway or route the outside callers
-          through the gateway
+          Collect the verb under its Portal for GATEWAY_BYPASSED: callers from outside the network
+          reach a Portal that is not its gateway (reported once per Portal after the loop)
         type: local
       - stepNumber: 5
         description: A network-scoped entry needs a boundary around it
@@ -78,9 +77,14 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          For each network of model.networks with more than one gateway, report MULTIPLE_GATEWAYS
-          (notice) naming them, sited on its first gateway Portal (in sorted order) so the finding
-          belongs to that gateway's project and an allow on that Portal covers it
+          Report GATEWAY_BYPASSED (error) once per Portal that collected verbs: at the verb when it
+          is one, else covering every verb it collected, the message naming them; when the network
+          has no gateway at all, the message says so and names the way out (a single-process
+          project's entry Portal is its own gateway: make it variant gateway). Then, for each
+          network of model.networks with more than one gateway, report MULTIPLE_GATEWAYS (notice)
+          naming them, sited on one stable gateway: the first by its local name among those the
+          declaring project holds itself (else among all), so the project run and the family run
+          site it on the same Portal and one allow covers it in both
         type: local
       - stepNumber: 13
         description: Answer the findings in a stable order
@@ -97,4 +101,4 @@ methods:
         outcome: the family codes
 status: complete
 createdAt: '2026-10-06T12:58:27.434Z'
-updatedAt: '2026-10-06T18:50:35.479Z'
+updatedAt: '2026-10-07T06:20:11.605Z'

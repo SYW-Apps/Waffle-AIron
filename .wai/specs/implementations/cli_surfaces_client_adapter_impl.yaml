@@ -81,6 +81,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: listConsumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: diffSurface
 status: complete
 createdAt: '2026-07-10T23:16:03.846Z'
-updatedAt: '2026-10-06T23:06:34.427Z'
+updatedAt: '2026-10-07T10:59:28.349Z'

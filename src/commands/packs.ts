@@ -66,7 +66,9 @@ export interface PackCommandOptions {
   pin?: boolean;
   /** bundle: every selection the project declares. */
   all?: boolean;
-  /** Apply without showing the impact report first. */
+  /** Apply without showing the impact report first. `init` accepts it too and
+   *  ignores it: scaffolding never prompts, and a script passing -y to every
+   *  pack command must not be refused. */
   yes?: boolean;
 }
 

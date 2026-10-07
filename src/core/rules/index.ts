@@ -95,6 +95,8 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   // L4 expectations: implementations and their code linkage.
   MISSING_IMPLEMENTATION_METHOD: 'implementations',
   MISSING_SOURCE_PATH: 'implementations',
+  MISSING_TYPE_SOURCE_PATH: 'implementations',
+  PORTAL_CALL_UNRESOLVED: 'implementations',
   METHOD_SOURCE_PATH_MISSING: 'implementations',
   SOURCE_FILE_PLANNED: 'implementations',
   PORTAL_AUTH_UNMET: 'implementations',
@@ -142,6 +144,7 @@ const COMPLETENESS_RULES = new Set([
   // Structural conformance: a draft tree is allowed to name code that does
   // not exist yet — the findings gate only once the specs claim completeness.
   'MISSING_SOURCE_PATH',
+  'MISSING_TYPE_SOURCE_PATH',
   'METHOD_SOURCE_PATH_MISSING',
   'MISSING_SOURCE_FILE',
   'SOURCE_FILE_PLANNED',
@@ -1041,7 +1044,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     documentationConfigFor,
     namingConfigFor,
     isBuiltinType,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [], deprecations: extensions.deprecations ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [], deprecations: extensions.deprecations ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),

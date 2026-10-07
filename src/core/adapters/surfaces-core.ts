@@ -39,4 +39,8 @@ export {
   resolveExternalCandidate,
   importNames,
   listExternalConsumers,
+  // A producer whose files fail to parse is unreadable, never a producer that removed names.
+  getLoaderIssues,
+  // `wairon surface diff`: the project's tree at its last committed approval.
+  approvedRevision,
 } from '../index.js';

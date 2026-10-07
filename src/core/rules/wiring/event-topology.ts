@@ -89,6 +89,8 @@ export const eventTopologyRule: SddRule = {
         `Component "${e.compId}" emits topic "${e.topic}" (${e.vias.join(', ')}), but nothing in this tree subscribes to it — the event goes nowhere. Wire a subscriber (subscribesTo, or a MessageBus subscribe endpoint), fix the topic name, or lint.allow with the external consumer named.`,
         e.compId,
         ctx.isComponentDraft(e.compId),
+        undefined,
+        { at: e.topic },
       );
     }
     for (const s of subscribers) {
@@ -99,6 +101,8 @@ export const eventTopologyRule: SddRule = {
         `Component "${s.compId}" subscribes to topic "${s.topic}" (${s.vias.join(', ')}), but nothing in this tree emits it — the handler can never fire from inside this system. Wire the emitter (emits, or a MessageBus publish endpoint), fix the topic name, or lint.allow with the external source named.`,
         s.compId,
         ctx.isComponentDraft(s.compId),
+        undefined,
+        { at: s.topic },
       );
     }
   },

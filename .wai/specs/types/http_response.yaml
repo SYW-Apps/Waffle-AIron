@@ -16,5 +16,11 @@ fields:
     description: Response body
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No wairon declaration: the hosting boundary answers through Node's own http ServerResponse
+        (src/server/http.ts), a platform type, so no file of this project declares the shape.
 createdAt: '2026-07-04T12:58:06.691Z'
-updatedAt: '2026-10-04T10:28:57.850Z'
+updatedAt: '2026-10-07T06:30:14.202Z'

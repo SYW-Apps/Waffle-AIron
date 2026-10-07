@@ -12,6 +12,7 @@ import {
   writeLockRecord,
   specPathsInScope,
   loadSystemSpec,
+  loadComponentSpecs,
   readLockState,
   readLockRecord,
   reexpress,
@@ -28,7 +29,7 @@ import { effectiveProjectId } from '../models/project.js';
 import { describeApprover } from '../models/lock.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
-import { computeGateStateId, familyApprovals, type ValidationResult } from '../core/validation.js';
+import { computeGateStateId, familyApprovals, unpinnedExternals, type ValidationResult } from '../core/validation.js';
 import { designOnly, memberPinOf, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
@@ -57,6 +58,8 @@ export interface LockOptions {
    * root.
    */
   recursive?: boolean;
+  /** List every changed spec in the summary instead of summarizing a long list. */
+  all?: boolean;
 }
 
 /** Flags of the `wairon lock-check` merge gate (cli_lock_adapter LockCheckOptions). */
@@ -408,8 +411,45 @@ function codeLine(code: CodeAnalysis | undefined): string {
     + `(analyzer ${code.analyzer.validatorVersion}, grade ${code.analyzer.grade}) — CI enforces them, not the lock`;
 }
 
+/** Past this many paths of one kind, the summary lists the first few and counts the rest (`--all` lists them all). */
+const LIST_LIMIT = 12;
+/** How many paths of one kind a summarized list still shows. */
+const LIST_HEAD = 8;
+
+/** One kind of change, listed — whole under --all or when short, else its head and a count of the rest. */
+function listPaths(mark: string, paths: string[], all: boolean): boolean {
+  const shown = all || paths.length <= LIST_LIMIT ? paths : paths.slice(0, LIST_HEAD);
+  for (const p of shown) logger.info(`  ${mark} ${p}`);
+  if (shown.length < paths.length) {
+    logger.info(`  ${mark} … and ${paths.length - shown.length} more`);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * What the design is approved under that moved although no own spec did: the
+ * gate identity against the record's (the doctrine, the network declaration,
+ * a consumed contract's pin, `composition`, a member's approval), and the
+ * project id against the one the record names. Empty when nothing did.
+ */
+function inputsMoved(previous: LockRecord | null, captured: StateId, projectId: string | null): string[] {
+  if (!previous) return [];
+  const moved: string[] = [];
+  if (previous.projectId !== undefined && projectId !== null && previous.projectId !== projectId) {
+    moved.push(`the project id (${previous.projectId} → ${projectId})`);
+  }
+  const sameIdentity = previous.stateId.algorithm === captured.algorithm && previous.stateId.digest === captured.digest;
+  if (!sameIdentity && moved.length === 0) {
+    moved.push(previous.stateId.algorithm !== captured.algorithm
+      ? `the gate identity this wairon release computes (approved by wairon ${previous.validatorVersion ?? 'an earlier release'})`
+      : 'an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval');
+  }
+  return moved;
+}
+
 /** Print what is being approved: the own spec diff, the code half, and each direct member. */
-function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
+function summarize(gate: ValidationResult, members: ProjectApproval[], captured: StateId, options: LockOptions): void {
   // Against the previous approval, not against each spec's stored status: the
   // human is deciding about a CHANGE, and "3 specs moved since you last said
   // yes" is the question they can answer. A first approval has nothing to
@@ -430,12 +470,36 @@ function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
       logger.info('First approval of this tree — the whole spec tree becomes the approved baseline.');
     }
   } else if (diffSize(diff) === 0) {
-    logger.info('Nothing has changed since the last approval — this re-records the approval and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
+    // No own spec moved — but the approval may still not cover what is about
+    // to be recorded: an input the identity covers, or the project id. Say
+    // which, instead of "nothing has changed" over a lock that clears it.
+    const config = loadProjectConfig();
+    const moved = inputsMoved(readLockRecord(), captured, config ? effectiveProjectId(config) : null);
+    if (moved.length > 0) {
+      logger.info(`No spec changed since the last approval, but what the design is approved under did: ${moved.join('; ')}. This re-approves the unchanged design under it, and refreshes the generated outputs of this project.`);
+    } else {
+      logger.info('Nothing has changed since the last approval — this re-records the approval and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
+    }
   } else {
     logger.info(`${diffSize(diff)} spec(s) changed since the last approval:`);
-    for (const p of diff.changed) logger.info(`  ~ ${p}`);
-    for (const p of diff.added) logger.info(`  + ${p}`);
-    for (const p of diff.removed) logger.info(`  - ${p}`);
+    const all = options.all === true;
+    const cut = [
+      listPaths('~', diff.changed, all),
+      listPaths('+', diff.added, all),
+      listPaths('-', diff.removed, all),
+    ].some(Boolean);
+    if (cut) logger.info('  (`wairon lock --all` lists every one; `wairon status --all` names them too)');
+  }
+  // A storage move is no design change: named apart, never as + and -.
+  if (diff && diff.moved.length > 0) {
+    logger.info(`${diff.moved.length} spec file(s) moved storage with their content unchanged (no design change):`);
+    listPaths('→', diff.moved, options.all === true);
+  }
+  // Status is readiness, not approval — a draft design may be approved, and
+  // the lock says plainly that is what it is doing.
+  const components = loadComponentSpecs();
+  if (components.length > 0 && components.every((c) => c.status === 'draft' || c.status === 'design')) {
+    logger.warn(`Every component (${components.length}) is still draft or design: this approves the design as it stands, drafts included. Status is readiness, never approval — mark specs complete when they are ready to implement.`);
   }
   logger.info(codeLine(gate.analysis));
   // A member's own edits never show up in this project's spec diff: what this
@@ -468,7 +532,7 @@ function summarize(gate: ValidationResult, members: ProjectApproval[]): void {
 export async function runLock(options: LockOptions, gate: ValidationResult, captured: StateId): Promise<LockRecord | null> {
   // Steps 1-3: what is being approved, and each direct member at its own root.
   const members = familyApprovals(1).filter((a) => a.parent === '');
-  summarize(gate, members);
+  summarize(gate, members, captured, options);
 
   // Steps 4-6: the configuration, and a parent that requires approved members.
   const config = loadProjectConfig();
@@ -478,6 +542,15 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     throw new LockRefusedError(
       `composition.requireApprovedMembers: direct member(s) not approved — ${unapproved.map(describeMemberState).join(', ')}. `
         + 'Lock each at its own root first (`wairon lock` there); a parent never approves below itself. Nothing was written.',
+    );
+  }
+  // An external declared but never pinned is never a pass, so it is never
+  // approved: nothing records what this design is judged against.
+  const unpinned = unpinnedExternals();
+  if (unpinned.length > 0) {
+    throw new LockRefusedError(
+      `declared external(s) never pinned — ${unpinned.map((a) => `"${a}"`).join(', ')}: nothing records what this design is judged against, `
+        + `so a producer that broke it could not be told. Pin first (\`wairon externals pin ${unpinned.join(' ')}\`), then lock. Nothing was written.`,
     );
   }
   logger.blank();

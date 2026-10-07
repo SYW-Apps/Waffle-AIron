@@ -32,7 +32,7 @@ methods:
         type: LockOptions
         description: >-
           CLI flags: --yes (skip confirmation), --subsystem (scope narrowing of the approved
-          digests)
+          digests), --all (list every changed spec of the summary)
       - name: gate
         type: ValidationResult
         description: >-
@@ -90,4 +90,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-06T10:10:39.141Z'
+updatedAt: '2026-10-07T06:24:08.966Z'

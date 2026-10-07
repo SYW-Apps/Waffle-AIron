@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { flows as matrix, why } from './adapters/network.js';
-import { setNetwork } from './adapters/core.js';
+import { loadProjectConfig, setNetwork } from './adapters/core.js';
 import type { FlowExplanation, NetworkFlow } from './adapters/network.js';
 
 /** Whether a flow lands in the named project, Portal or portal.verb. */
@@ -40,8 +40,11 @@ export function explain(from: string, to: string): FlowExplanation {
  * whether it wrote.
  */
 export function declare(declared: boolean, description: string | null): boolean {
-  // Step 1: the declaration, or none.
-  const network = declared ? (description ? { description } : {}) : null;
-  // Steps 2-3: written through the core client adapter.
+  // Step 1: a declaration already held keeps its description unless a new one is given.
+  const held = declared ? loadProjectConfig()?.network : undefined;
+  const kept = description ?? (typeof held === 'object' && held !== null ? held.description ?? null : null);
+  // Step 2: the declaration, or none.
+  const network = declared ? (kept ? { description: kept } : {}) : null;
+  // Steps 3-4: written through the core client adapter.
   return setNetwork(network);
 }

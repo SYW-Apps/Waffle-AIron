@@ -686,7 +686,9 @@ methods:
             step: 4
           - value: list
             step: 6
-        defaultStep: 8
+          - value: diff
+            step: 8
+        defaultStep: 10
       - stepNumber: 2
         description: Export the own surface (audience/format/out/portal from options)
         type: call
@@ -697,7 +699,9 @@ methods:
           Report the export result: every written path — with several portals and no --portal, one
           file per portal is written and each path is listed. Without an out path, print the single
           document when one portal remains, else list the available portals (portalId + name) so the
-          caller can pick with --portal, rather than printing nothing.
+          caller can pick with --portal, rather than printing nothing. An OpenAPI export with no
+          HTTP Portal (an in-process library) is refused naming why, never answered with the native
+          entries.
         type: return
         outcome: exported
       - stepNumber: 4
@@ -719,6 +723,20 @@ methods:
         type: return
         outcome: listed
       - stepNumber: 8
+        description: >-
+          Compare the public surface with the last committed approval, or with --against (a git
+          revision or a saved native snapshot)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: diffSurface
+      - stepNumber: 9
+        description: >-
+          Print what it was compared with, then one line per change grouped removed, renamed,
+          changed, added, and how many a consumer may have to follow; or the JSON answer under
+          --json
+        type: return
+        outcome: changelog printed
+      - stepNumber: 10
         description: >-
           Unknown surface action — for `externals` and `pin`, which stage 3 removed, the error names
           `wairon externals list|status|pin` instead
@@ -3282,16 +3300,19 @@ methods:
         outcome: use changed
       - stepNumber: 14
         label: consumers
-        description: List the family projects in reach that consume this project
+        description: >-
+          List the projects that consume this project: the family in reach, and with --search the
+          project roots in the named folders that declare it by path or git
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: listConsumers
       - stepNumber: 15
         description: >-
           Print one line per consumer — its project, the alias and section it declares this project
-          under, the names it uses — then that a consumer outside the family read (a sibling
-          checkout, a git or hosted consumer) declares its dependency on its own side and is not
-          listed; or the JSON answer
+          under, the root of one found by the search, the names it uses and the names it still
+          writes that are no longer exported — then where else a consumer can be (a sibling checkout
+          is found with --search; a hosted one declares its dependency on its own side); or the JSON
+          answer
         type: return
         outcome: consumers listed
       - stepNumber: 16
@@ -3722,7 +3743,9 @@ methods:
       - stepNumber: 2
         description: >-
           Print it, or write it to --out, then print each gate finding that refused or marked a row
-          (a refused row is never allowed)
+          at its own severity (a refused row is never allowed), and exit non-zero when the gate
+          refused a row, so a pipeline that writes the matrix fails on a refused design; at a
+          member's root, say the matrix is the enclosing family's, judged at its root
         type: local
   - name: runNetworkPolicy
     narrative:
@@ -3738,9 +3761,12 @@ methods:
         targetMethod: policy
       - stepNumber: 3
         description: >-
-          Print it or write it to --out, then list each unbound design name with the placeholder
-          label it was given, and each gate finding; when the gate refused a flow, say it was left
-          out and exit non-zero
+          Print it or write it to --out, then each note (a bindings key resolved through a renamed
+          project's former name, a workload whose verbs differ in reach on one port), each unbound
+          design name with the placeholder label it was given, and each gate finding. Exit non-zero
+          when the gate refused a flow (it was left out), and when any name is unbound: an applied
+          policy over an unbound workload selects nothing it should and denies its ingress by
+          default, so the run says so instead of passing
         type: return
         outcome: policy written
       - stepNumber: 4
@@ -3773,9 +3799,9 @@ methods:
         targetMethod: check
       - stepNumber: 3
         description: >-
-          Print the gate findings when there are any, then the unexpected flows, the disallowed
-          flows (a declared verb, not allowed from that source), the unknown verbs, then the
-          unexercised flows, each with its count
+          Print the gate findings when there are any, each former-name note, then the unexpected
+          flows, the disallowed flows (a declared verb, not allowed from that source), the unknown
+          verbs, then the unexercised flows, each with its count
         type: local
       - stepNumber: 4
         description: >-
@@ -3804,11 +3830,18 @@ methods:
   - name: runNetworkDeclare
     narrative:
       - stepNumber: 1
+        description: >-
+          Read the project's configuration: a declaration it already holds keeps its description
+          when --description is not given
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
         description: Declare the network, with --description when given, through the core adapter
         type: call
         targetComponent: cli_core_adapter
         targetMethod: setNetwork
-      - stepNumber: 2
+      - stepNumber: 3
         description: >-
           Say what was written (or that it already was), that the network rules now judge the
           design, and to re-lock
@@ -3843,6 +3876,26 @@ methods:
           Print the move, the specs rewritten, and that the approval reads the renamed type as
           changed until the next `wairon lock`
         type: local
+  - name: runMethodRenameParam
+    sourcePath: src/commands/method.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Rename the parameter through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renameParam
+      - stepNumber: 3
+        description: >-
+          Print the move, the interfaces it moved in, the placeholders respelled, and that the
+          approval reads the contract as changed until the next `wairon lock`
+        type: local
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -3858,4 +3911,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T23:08:57.220Z'
+updatedAt: '2026-10-07T11:01:02.294Z'

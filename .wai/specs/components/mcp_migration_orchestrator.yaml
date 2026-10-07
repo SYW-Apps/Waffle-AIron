@@ -3,17 +3,22 @@ name: MCP Migration Orchestrator
 description: >-
   The one workflow behind every member tool that changes a family's shape (sdd_attach_member,
   sdd_rename_project, sdd_rename_member_alias, sdd_detach_member, sdd_adopt_member,
-  sdd_internalize_member, sdd_externalize_subsystem): plan the request, and with dryRun answer the
-  plan and drop it; otherwise apply it when nothing refuses. An agent has no confirmation prompt, so
-  dryRun is the confirmation: the tool descriptions tell an agent to dry-run first and show the
-  plan. It also answers the pending-transaction banner sdd_get_status and sdd_validate_tree lead
-  with. Its own component beside mcp_orchestrator for the reason mcp_externals_orchestrator is: one
-  responsibility, one collaborator.
+  sdd_internalize_member, sdd_externalize_subsystem, sdd_promote_member, sdd_demote_member): plan
+  the request, and with dryRun answer the plan and drop it; otherwise apply it when nothing refuses
+  — and when the applied migration made a project (a promote, or an externalize as project), set
+  that project up for its own sessions as the CLI's verbs do: its guides and root pointer, its
+  skills and its portable .mcp.json. An agent has no confirmation prompt, so dryRun is the
+  confirmation: the tool descriptions tell an agent to dry-run first and show the plan. It also
+  answers the pending-transaction banner sdd_get_status and sdd_validate_tree lead with. Its own
+  component beside mcp_orchestrator for the reason mcp_externals_orchestrator is: one
+  responsibility, one collaborator set.
 subsystem: sdd_mcp
 componentType: Orchestrator
 owns: []
 dependsOn:
   - mcp_migration_adapter
+  - mcp_core_adapter
+  - mcp_skills_adapter
 status: complete
 createdAt: '2026-09-30T20:39:25.526Z'
-updatedAt: '2026-09-30T21:34:08.612Z'
+updatedAt: '2026-10-07T06:21:56.049Z'

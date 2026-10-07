@@ -20,5 +20,11 @@ fields:
     optional: true
 methods: []
 componentClass: cli_runner
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the flags are the inline `opts` parameter type of statusCommand in
+        src/cli/runner.ts, so there is no symbol a sourcePath could bind.
 createdAt: '2026-08-12T18:49:18.857Z'
-updatedAt: '2026-10-05T23:52:54.608Z'
+updatedAt: '2026-10-07T06:30:31.468Z'

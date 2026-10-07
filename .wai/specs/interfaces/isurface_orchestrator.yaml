@@ -64,16 +64,22 @@ methods:
       snapshot path, the snapshot's canonical content digest, the role, the commit, and the `used`
       map — every public name the consumer's references land on or spell, `alias::name` references
       and bare names bound through the alias's `use` import alike, each used member with its
-      canonical signature digest — filled for outside producers too since stage 8; a name imported
-      by `use` but referenced nowhere is not used. A git external is pinned at its ref's head,
-      fetched; a git member at its declared commit (moving a member's commit is `wairon member
-      update`, never a pin). An unchanged snapshot is not rewritten; with no aliases named, lock
-      entries and snapshots for aliases no longer declared are removed. At a non-contained PART
-      (stage 8): pin its parent instead — the excerpt of the parent's specs the part references and
-      the parent's governing configuration, read with the parent on disk at PartOf.path, into
-      .wai/externals/<parent id>.yaml and the lock's `parent` entry; naming an alias at a part is
-      refused. An alias the project does not declare is refused before anything is written; an
-      unresolved or unreachable producer is reported and keeps its previous pin. Never locks.
+      canonical signature digest (each method of an implemented extension point too) — filled for
+      outside producers too since stage 8; a name imported by `use` but referenced nowhere is not
+      used. A used member the snapshot no longer carries is named in the outcome's unexported
+      references (with the spec that uses it) and its detail, so the CLI line and the MCP answer
+      agree; a pin that records no use at all says plainly that no spec references the external yet
+      and that it fills on the next pin. A producer whose spec files fail to parse is unreadable,
+      naming the file and the error. A git external is pinned at its ref's head, fetched; a git
+      member at its declared commit (moving a member's commit is `wairon member update`, never a
+      pin). An unchanged snapshot is not rewritten; with no aliases named, lock entries and
+      snapshots for aliases no longer declared are removed (the lock file itself with its last
+      entry). At a non-contained PART (stage 8): pin its parent instead — the excerpt of the
+      parent's specs the part references and the parent's governing configuration, read with the
+      parent on disk at PartOf.path, into .wai/externals/<parent id>.yaml and the lock's `parent`
+      entry; naming an alias at a part is refused. An alias the project does not declare is refused
+      before anything is written; an unresolved or unreachable producer is reported and keeps its
+      previous pin. Never locks.
     signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
     returns: list<ExternalPin>
     params:
@@ -87,16 +93,21 @@ methods:
       run composes from. For each declared external and each referenced project member (a `../`, git
       or hosted source): how it resolves, whether it is pinned, and — when the producer is reachable
       — each used member (as locked, and as the consumer's references use it now, bare names bound
-      through `use` imports included) compared at signature level with the live producer (decision
-      19) by canonical digest: unchanged, changed, removed, or unlocked (used now but not in the
-      lock). Since stage 8 every producer is compared per use — a sibling checkout (source.path), a
-      git repository (an external at its ref's head, a referenced member at its pinned commit), a
-      hosted record — so a producer outside the family that breaks a used method is stale, not
-      merely drifted. Anything it cannot compare — an unreachable or unfetchable producer, an
-      unexported reference — is unavailable with EXTERNAL_CHECK_UNAVAILABLE, never a pass; a
-      source.hosted external read outside a hosted server says why in its reason: "hosted-only
-      producer `<id>`: available only through the hosted server". A producer whose root lies outside
-      the request's reach is marked outOfReach. Writes nothing.
+      through `use` imports included, each method of an implemented extension point included)
+      compared at signature level with the live producer (decision 19) by canonical digest:
+      unchanged, changed, renamed (per the producer's rename trace, with the name it went to),
+      removed, or unlocked (used now but not in the lock). A reference that binds to no public name
+      at all, whose name the live table no longer holds, is a break the live producer proves
+      (removed or renamed), pinned or not. Since stage 8 every producer is compared per use — a
+      sibling checkout (source.path), a git repository (an external at its ref's head, a referenced
+      member at its pinned commit), a hosted record — so a producer outside the family that breaks a
+      used method is stale, not merely drifted. Anything it cannot compare — an unreachable or
+      unfetchable producer, a producer whose spec files fail to parse (`producer unreadable: <file>:
+      <error>`), an unexported reference it still exports — is unavailable with
+      EXTERNAL_CHECK_UNAVAILABLE, never a pass; a source.hosted external read outside a hosted
+      server says why in its reason: "hosted-only producer `<id>`: available only through the hosted
+      server". A producer whose root lies outside the request's reach is marked outOfReach. Writes
+      nothing.
     signature: 'getExternalsStatus(offline?: bool): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params:
@@ -235,15 +246,39 @@ methods:
         optional: true
   - name: listConsumers
     description: >-
-      The family projects in reach that consume the bound project — each with the alias and section
-      it declares the bound project under and the public names its specs use — so a producer sees
-      who breaks before it changes its surface. Read-only; a consumer outside the family read
-      declares its dependency on its own side and is never listed.
-    signature: 'listConsumers(): list<ExternalConsumer>'
+      The projects that consume the bound project — the family in reach, and with search folders
+      every project root in them declaring it as an external by path or git (a sibling checkout) —
+      each with the alias and section it declares the bound project under, the public names its
+      specs use, and the names it still writes that the bound project no longer exports, so a
+      producer sees who breaks before it changes its surface. Read-only.
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
     returns: list<ExternalConsumer>
-    params: []
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diff
+    description: >-
+      The bound project's public-surface changelog (`wairon surface diff`, sdd_surface_diff): its
+      export table now (the whole table, every audience) against the same table at its last
+      committed approval — or at a named git revision, or in a saved native surface snapshot file —
+      as names and contract methods added, removed, renamed (traced) and changed in signature
+      (surface_snapshot.changesSince). What a producer writes release notes from and weighs a
+      breaking change by. Read-only.
+    signature: 'diff(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: >-
+          A git revision or a saved native surface snapshot file; the last committed approval when
+          omitted
+        optional: true
+    previousNames:
+      - isurface_orchestrator.diffSurface
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-06T23:15:27.312Z'
+updatedAt: '2026-10-07T10:59:43.523Z'

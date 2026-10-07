@@ -248,10 +248,32 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
   for (const ref of family.authoredReferences) {
     if (ref.position === 'type') addRaw(ref, 'type');
     else if (ref.position === 'auth') addRaw(ref, 'auth');
-    else if (ref.position === 'implements') addRaw(ref, 'implements');
+    else if (ref.position === 'implements') {
+      // An implemented extension point is used method by method: each one a pin records.
+      for (const method of implementedMethods(ref.specId, ref.authored)) addRaw(ref, 'implements', method);
+    }
     else if (ref.position === 'calls') addRaw(ref, 'calls', calledMethod.get(`${ref.specId}|${ref.authored}`), callerOf.get(ref.specId));
   }
   return out;
+}
+
+/**
+ * The methods of an extension point an implementing contract uses: each
+ * method it declares, by the name it takes its signature from when that is a
+ * method of the implemented export (`alias::name.method`), else by its own
+ * name — an implementation declares every method of the point under its name.
+ * What a pin records a digest for, so a producer renaming or changing a method
+ * a consumer implements is a moved use like any call.
+ */
+export function implementedMethods(interfaceId: string, implemented: string): string[] {
+  const intf = loadInterfaceSpecs().find((i) => i.id === interfaceId);
+  const out = new Set<string>();
+  for (const method of intf?.methods ?? []) {
+    const source = method.signatureFrom;
+    const dot = source?.lastIndexOf('.') ?? -1;
+    out.add(source !== undefined && dot > 0 && source.slice(0, dot) === implemented ? source.slice(dot + 1) : method.name);
+  }
+  return [...out];
 }
 
 /** iproject_family_index.graph — the whole project graph of the current scan. */

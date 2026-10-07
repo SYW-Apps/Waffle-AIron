@@ -278,6 +278,17 @@ methods:
         description: The approval record
     guarantees:
       - idempotent
+  - name: resolveChainingParent
+    description: >-
+      Forward to the core portal: the bound root's chaining parent (the parent root that declares it
+      as a member, and its alias there), or null at a top root or when the request may not read
+      above its root. Read by the derived networking alone, to compose a member's view from its
+      enclosing family; the owner's gate never climbs.
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:05:11.377Z'
+updatedAt: '2026-10-07T06:20:34.614Z'

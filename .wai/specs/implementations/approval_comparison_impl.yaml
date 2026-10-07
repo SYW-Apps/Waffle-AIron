@@ -63,10 +63,13 @@ methods:
           specsReading is `design`, raw-content digests (CRLF normalized) when it names none, a
           record written before format 3 — and compare against the digests the record carries: a
           path the record does not cover is added, one whose digest differs is changed, one the
-          record covers that is gone is removed, and the rest are unchanged
+          record covers that is gone is removed, and the rest are unchanged; then pair each added
+          path with a removed one of the same digest (in path order, each used once) as a move —
+          storage moved, content did not — taking both out of added and removed and counting the new
+          path as unchanged
         type: local
       - stepNumber: 5
-        description: Answer with the four lists
+        description: 'Answer with the lists: added, changed, removed, unchanged and moved'
         type: return
         outcome: compared
   - name: approvalRecord
@@ -267,4 +270,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-06T23:09:06.952Z'
+updatedAt: '2026-10-07T06:24:03.950Z'

@@ -26,6 +26,14 @@ fields:
   - name: allowDownloadOpenapi
     type: bool
     optional: true
+  - name: html
+    type: string
+    description: >-
+      Captured self-contained view HTML, on success — served by the portal so it never reaches into
+      the snapshot repository itself.
+    optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: SharedViewResult
 createdAt: '2026-07-17T22:32:51.513Z'
-updatedAt: '2026-10-04T23:40:34.024Z'
+updatedAt: '2026-10-07T06:29:46.414Z'

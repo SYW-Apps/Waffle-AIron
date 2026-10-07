@@ -638,6 +638,12 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "formerly": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [

@@ -48,16 +48,38 @@ methods:
         description: The normalized declaration, as it would be written
   - name: listConsumers
     description: >-
-      The family projects that consume the bound project, from its own root: the graph read at the
-      highest root the reach-gated climb reaches, and for every other project in it that declares
-      the bound project — as an external whose producer it binds to, or as a contained member — its
-      id, key, root, alias, section and the public names its specs use (spec_loader.exportUsage).
-      Read-only and within reach: a consumer outside the family read (a sibling checkout, a git or
-      hosted consumer) declares its dependency on its own side and is never listed. Empty when
-      nothing in reach consumes it.
-    signature: 'listConsumers(): list<ExternalConsumer>'
+      The projects that consume the bound project, from its own root: the graph read at the highest
+      root the reach-gated climb reaches, and for every other project in it that declares the bound
+      project — as an external whose producer it binds to, or as a contained member — its id, key,
+      root, alias, section, the public names its specs use (spec_loader.exportUsage) and the names
+      it still writes that the producer no longer exports (broken). With search folders, also every
+      project root in (or directly under) them that declares the bound project as an external by a
+      path source resolving to it or a git source naming its id — a sibling checkout outside the
+      family — with the names it spells through that alias (spec_loader.pinnedUsage), marked found:
+      search. Read-only; a hosted request may not search folders (refused). Empty when nothing
+      consumes it.
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
     returns: list<ExternalConsumer>
-    params: []
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: approvedRevision
+    description: >-
+      The bound project's tree as it stood at a revision, materialized read-only in the fetch cache:
+      the named ref (a branch, tag or commit), else the commit that last recorded its approval (the
+      last commit to change .wai/lock.json). Throws naming why when the project is in no git work
+      tree, the ref names no commit, or no approval was ever committed. No network: the repository
+      is the local one.
+    signature: 'approvedRevision(against?: string): approved_revision'
+    returns: approved_revision
+    params:
+      - name: against
+        type: string
+        description: A git revision; the last committed approval when omitted
+        optional: true
+    effect: io
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-06T23:04:15.830Z'
+updatedAt: '2026-10-07T10:53:21.442Z'
