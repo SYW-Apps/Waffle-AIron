@@ -132,6 +132,20 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: unpinned
+  - name: unrecordedExternalUses
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator
+        type: call
+        targetComponent: family_validator
+        targetMethod: unrecorded
+  - name: implementsProblem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator
+        type: call
+        targetComponent: family_validator
+        targetMethod: implementsProblem
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T10:58:38.137Z'
+updatedAt: '2026-10-07T18:51:00.419Z'

@@ -36,7 +36,7 @@ blanket draft→complete freeze being reverted by hand **four times** (lines 18,
 27, 34, 41), once annotated *"product gap: lock needs phase awareness"*.
 
 And a second gate had grown on top of the first — see
-[the removed `promote` step](hosted-mcp-server.md#4-state-scoped-lock).
+[the removed `promote` step](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md#4-state-scoped-lock).
 
 ---
 

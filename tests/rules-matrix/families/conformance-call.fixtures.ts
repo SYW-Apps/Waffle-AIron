@@ -34,6 +34,10 @@
  *    no narrative step declares that call — a boundary crossing that nothing
  *    imports, which the file-level checks structurally cannot see. A call to a
  *    same-file PRIVATE helper is no modelled method and is never reported.
+ *  - UNDECLARED_WRITE_CALL (warning): the realized function calls a write- or
+ *    lifecycle-effect method of ANOTHER component in ANOTHER file, as the type
+ *    checker resolves the call, and no narrative step or declared call names
+ *    it — a mutation the design says the method never makes.
  */
 import { defineRuleFixture } from '../harness.js';
 
@@ -1409,6 +1413,26 @@ export default [
       'The dispatch desk scheduler declares both of the colocated carrier quote adapter calls it makes, quotes and surcharges alike.',
     tree: declaredCallDeskTree(['carrier-quote-adapter.fetchQuotes', 'carrier-quote-adapter.fetchSurcharges']),
   }),
+  // -------------------------------------------------------------------------
+  // UNDECLARED_WRITE_CALL — the converse direction across files: a mutation
+  // the narrative never claims, resolved by the type checker
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'UNDECLARED_WRITE_CALL',
+    severity: 'warning',
+    anchoredTo: 'stats_reporter_impl',
+    expectFire: true,
+    scenario:
+      'The stats reporter narrates a read of the hit counter and a return, but its code also bumps the counter through the store\'s write method on every report.',
+    tree: hitCounterTree('await this.counter.bump(code);'),
+  }),
+  defineRuleFixture({
+    code: 'UNDECLARED_WRITE_CALL',
+    expectFire: false,
+    reason: 'A READ the narrative does not claim is no mutation: only a write- or lifecycle-effect method of another component is the unnarrated state change.',
+    scenario: 'The stats reporter reads the hit counter a second time to log it, a read its narrative does not repeat.',
+    tree: hitCounterTree('void (await this.counter.count(code));'),
+  }),
 ];
 
 /**
@@ -2188,6 +2212,74 @@ function payslipContractTree(repositoryModule: string, implementsContract = true
         `export class PayslipStore${implementsContract ? ' implements PayslipRows' : ''} {`,
         '  append(payslipId: string): void {',
         '    // persist the payslip row',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    },
+  };
+}
+
+/** A stats reporter that narrates a read of the hit counter store; `extra` is what its code does besides. */
+function hitCounterTree(extra: string): import('../harness.js').FixtureTree {
+  return {
+    subsystems: [{ id: 'stats', description: 'Hit counting and reporting.' }],
+    components: [
+      { id: 'hit-counter', componentType: 'Store', subsystem: 'stats', durability: 'ram-projection', description: 'Counts hits per short code.',
+        lint: { allow: [{ code: 'UNOWNED_STORE', reason: 'one keyed counter, no lookups beyond the key' }] } },
+      { id: 'stats-reporter', componentType: 'Orchestrator', subsystem: 'stats', description: 'Reports the hits of a short code.', dependsOn: ['hit-counter'] },
+    ],
+    interfaces: [
+      {
+        id: 'ihit_counter',
+        component: 'hit-counter',
+        methods: [
+          { name: 'bump', description: 'Count one hit for a code.', effect: 'write', params: [{ name: 'code', type: 'string' }], returns: 'async void' },
+          { name: 'count', description: 'The hits counted for a code.', effect: 'read', params: [{ name: 'code', type: 'string' }], returns: 'async int' },
+        ],
+      },
+      {
+        id: 'istats_reporter',
+        component: 'stats-reporter',
+        methods: [{ name: 'report', description: 'Report the hits of a code.', params: [{ name: 'code', type: 'string' }], returns: 'async int' }],
+      },
+    ],
+    implementations: [
+      {
+        id: 'hit_counter_impl',
+        contract: 'ihit_counter',
+        sourcePath: 'src/counter.ts',
+        methods: [
+          { name: 'bump', detail: 'intent', intent: 'Adds one to the count held for the code, starting from zero.' },
+          { name: 'count', detail: 'intent', intent: 'Answers the count held for the code, zero for an unknown code.' },
+        ],
+      },
+      {
+        id: 'stats_reporter_impl',
+        contract: 'istats_reporter',
+        sourcePath: 'src/reporter.ts',
+        methods: [{ name: 'report', narrative: [
+          { stepNumber: 1, type: 'call', description: 'Read the hits of the code', targetComponent: 'hit-counter', targetMethod: 'count' },
+          { stepNumber: 2, type: 'return', description: 'Answer the count', outcome: 'counted' },
+        ] }],
+      },
+    ],
+    files: {
+      'src/counter.ts': [
+        'export class HitCounter {',
+        '  private readonly counts = new Map<string, number>();',
+        '  async bump(code: string): Promise<void> { this.counts.set(code, (this.counts.get(code) ?? 0) + 1); }',
+        '  async count(code: string): Promise<number> { return this.counts.get(code) ?? 0; }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/reporter.ts': [
+        "import type { HitCounter } from './counter.js';",
+        'export class StatsReporter {',
+        '  constructor(private readonly counter: HitCounter) {}',
+        '  async report(code: string): Promise<number> {',
+        `    ${extra}`,
+        '    return this.counter.count(code);',
         '  }',
         '}',
         '',

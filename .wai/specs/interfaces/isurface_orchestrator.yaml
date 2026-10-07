@@ -277,8 +277,24 @@ methods:
         optional: true
     previousNames:
       - isurface_orchestrator.diffSurface
+  - name: unrecordedUses
+    description: >-
+      The uses of each PINNED external (and referenced project member) that its pin does not record:
+      every public name, and every method of one, the bound project's specs use now through the
+      alias — counted offline exactly as a pin counts them (external_producers.resolveDeclared with
+      offline set: the family producer's export usage, else the usage by the public name it spells)
+      — that the lock entry's `used` map does not hold, keeping only the ones the pinned snapshot
+      carries (a use the snapshot does not carry is a design error the gate reports, which no re-pin
+      cures). Keyed by alias, each value `<name>` or `<name>.<method>`, sorted; an alias with none
+      is left out. What `wairon lock` refuses to approve over and `wairon lock-check` fails on: the
+      pin is what a producer's break is judged against, so a use it does not record could not be
+      told. No producer is read; writes nothing.
+    signature: 'unrecordedUses(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-07T10:59:43.523Z'
+updatedAt: '2026-10-07T18:32:25.209Z'

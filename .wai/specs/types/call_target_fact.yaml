@@ -1,0 +1,32 @@
+kind: value-object
+id: call_target_fact
+name: CallTargetFact
+description: >-
+  One place a call the type checker resolved can land in THIS project's code: the file holding the
+  declaration (or an implementor of it), the class, interface or shape it is a member of, and the
+  member's name. A declaration in a dependency's typings or the language's own library is no target
+  — it is nobody's component.
+subsystem: sdd_validator
+fields:
+  - name: path
+    type: string
+    description: Canonical project-relative path of the file holding the declaration or implementor
+    optional: false
+  - name: container
+    type: string
+    description: The class, interface or named shape the member belongs to; absent for a module-level function
+    optional: true
+  - name: member
+    type: string
+    description: The declared name of the method or function the call reaches
+    optional: false
+  - name: via
+    type: string
+    description: >-
+      declaration when the checker named this declaration itself; implementor when the declaration
+      sits in an interface or type shape and this is a class of the project that realizes it
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-07T18:28:18.707Z'
+updatedAt: '2026-10-07T18:28:19.617Z'

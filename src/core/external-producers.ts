@@ -279,6 +279,7 @@ function familyConsumers(bound: string, top: string): ExternalConsumer[] {
         alias,
         section: external ? 'externals' : 'members',
         names: usage.used.map((u) => u.publicName).sort(),
+        ...usesOf(usage),
         ...brokenNames(usage),
       });
     }
@@ -294,6 +295,11 @@ function familyConsumers(bound: string, top: string): ExternalConsumer[] {
 function brokenNames(usage: { unexported: { authored: string }[] }): { broken?: string[] } {
   const names = [...new Set(usage.unexported.map((r) => r.authored.split('::').pop() ?? r.authored))].sort();
   return names.length ? { broken: names } : {};
+}
+
+/** What a consumer uses, method-granular (each public name with the members its references reach); absent when nothing. */
+function usesOf(usage: { used: ExternalConsumer['uses'] & object }): { uses?: NonNullable<ExternalConsumer['uses']> } {
+  return usage.used.length ? { uses: usage.used.map((u) => ({ publicName: u.publicName, kind: u.kind, members: [...u.members].sort(), ...(u.specs ? { specs: [...u.specs].sort() } : {}) })) } : {};
 }
 
 /** The project roots a searched folder holds: itself when it is one, else each folder directly under it that is. */
@@ -348,6 +354,7 @@ function searchedConsumers(bound: string, search: string[]): ExternalConsumer[] 
         alias: declared.alias,
         section: 'externals',
         names: (usage?.used ?? []).map((u) => u.publicName).sort(),
+        ...(usage ? usesOf(usage) : {}),
         found: 'search',
       };
     });

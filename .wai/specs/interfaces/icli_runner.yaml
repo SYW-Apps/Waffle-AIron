@@ -777,9 +777,13 @@ methods:
   - name: announceBinding
     description: >-
       Name the project a command is about to act on: `project <id> at <root>` on one line, on stderr
-      so a machine-readable stdout (`export`, `--json`) stays pure. Silent for a command that acts
-      on no project (init, the hosted and login commands, `mcp serve` and `dev`, which announce
-      their own) and where no project binds the folder — the command itself says that.
+      so a machine-readable stdout (`export`, `--json`) stays pure, and nothing under --silent.
+      Silent for a command that acts on no project (init, the hosted and login commands, `mcp serve`
+      and `dev`, which announce their own) and where no project binds the folder — the command
+      itself says that. A bound project whose .wai/project.yaml does not parse as YAML refuses the
+      command here, with one line naming the file, the line and the key (YamlSyntaxError) — every
+      command alike, none running on defaults — except doctor, which diagnoses the file in its own
+      words.
     signature: 'announceBinding(commandPath: string): void'
     returns: void
     params:
@@ -908,6 +912,32 @@ methods:
       - name: newName
         type: string
         description: Its new name
+  - name: runMethodRename
+    description: >-
+      `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dir...>]
+      [--no-pin-symbol]`: rename a contract method and retarget every reference to it, the old name
+      kept in its rename trace (previousNames, `formerly` in the design export). Prints what moved
+      (or, with --dry-run, would move) and was retargeted, the prose left alone, the export entries
+      publishing it, and every consumer whose specs call it through one of them — the family in
+      reach and the consumer checkouts found in the searched folders — as the projects the rename
+      breaks; a refusal prints its reason and exits non-zero.
+    signature: >-
+      runMethodRename(componentId: string, methodName: string, newName: string, options:
+      MethodRenameOptions): async void
+    returns: async void
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: options
+        type: MethodRenameOptions
+        description: '--dry-run, --search <dir...> and --no-pin-symbol'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T06:25:20.472Z'
+updatedAt: '2026-10-07T18:41:21.338Z'

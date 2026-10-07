@@ -12,13 +12,15 @@ name: Approved design (wairon lock-check)
 #
 #   jobs:
 #     approved-design:
-#       uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
+#       uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v<version>
 #       with:
-#         wairon-version: '6.0.0'
+#         wairon-version: '<version>'
 #
-# 6.0.0 is the first release that ships this workflow and `wairon lock-check`.
-# On a dev build, pin the dev tag matching `wairon --version` instead (e.g.
-# @v5.1.1-dev.107 with wairon-version: '5.1.1-dev.107').
+# <version> is the version you lock with — what `wairon --version` prints where
+# you run `wairon lock`: a release X.Y.Z (tag vX.Y.Z), or a dev build
+# X.Y.Z-dev.N (tag vX.Y.Z-dev.N). Check it is on npm first:
+# `npm view @wairon/cli@<version> version`. This workflow and `wairon
+# lock-check` first ship with 6.0.0 and its dev builds.
 #
 # Pin @<ref> to a TAG, never to `main` or `dev`. A moving branch means the check
 # gating your merges can change under you between two runs of the same commit —

@@ -160,12 +160,18 @@ methods:
           tells somebody that something changed, a list tells them what to look at: the text names
           the first few and counts the rest, and `moved` carries every one (`~` changed, `+` added,
           `-` removed) for a caller that wants the whole account — with the member and upgrade notes
-          appended, and report drift when the specs moved, a member's pin moved, or the identity was
-          upgraded. A member that is merely drifted or never approved is named but is not this
-          project's drift. A format-2 lock that still holds gets one more line: it is read in its
-          original reading, and `wairon doctor --fix` carries it into the design reading without a
-          review (approval_comparison.reexpress), after which adding or moving a sourcePath never
-          drifts it
+          appended, and report drift when the specs moved, a member's pin moved, the identity was
+          upgraded, or the root's own entry is drifted. When no own spec moved but the root's own
+          entry is drifted, "no spec has changed since" never stands alone: it goes on to say what
+          the approval owes — the entry's `owed` sentence when it carries one (a moved project id,
+          an external never pinned or used beyond its pin) with the remedy, else that an input the
+          gate identity covers moved (the doctrine, the network declaration, a consumed contract's
+          pin, `composition` or a member's approval) and that one `wairon lock` re-approves the
+          unchanged design — so status never reads approved while `lock-check` refuses. A member
+          that is merely drifted or never approved is named but is not this project's drift. A
+          format-2 lock that still holds gets one more line: it is read in its original reading, and
+          `wairon doctor --fix` carries it into the design reading without a review
+          (approval_comparison.reexpress), after which adding or moving a sourcePath never drifts it
         type: return
         outcome: verdict
     symbol: approvalVerdict
@@ -274,4 +280,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-07T11:36:10.392Z'
+updatedAt: '2026-10-07T18:33:15.066Z'

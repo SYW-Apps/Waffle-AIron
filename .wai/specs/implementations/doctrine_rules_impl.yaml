@@ -1269,7 +1269,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the bound project's own authored references
-        endStep: 14
+        endStep: 16
       - stepNumber: 5
         description: >-
           Take the reference's resolution from ctx.resolveCrossProject(spec, position, reference as
@@ -1302,7 +1302,7 @@ methods:
       - stepNumber: 8
         description: Next reference
         type: jump
-        toStep: 14
+        toStep: 16
       - stepNumber: 9
         label: unexported
         description: >-
@@ -1318,7 +1318,7 @@ methods:
       - stepNumber: 10
         description: Next reference
         type: jump
-        toStep: 14
+        toStep: 16
       - stepNumber: 11
         label: ambiguousImport
         description: >-
@@ -1329,7 +1329,7 @@ methods:
       - stepNumber: 12
         description: Next reference
         type: jump
-        toStep: 14
+        toStep: 16
       - stepNumber: 13
         label: unavailable
         description: >-
@@ -1339,40 +1339,56 @@ methods:
           doctor --fix`). Never a pass
         type: local
       - stepNumber: 14
+        label: implements-role
+        description: >-
+          A resolved `implements` reference must land on an extension point: the entry it resolves
+          to — a contained member's live table, or the external's pin — is exported with role
+          implement
+        type: branch
+        condition: the reference is an interface's implements and its entry's role is not implement
+        onTrueStep: 15
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Report EXTERNAL_NOT_EXPORTED (error) on the referring spec, in its draft context, carrying
+          the resolution: the name is exported for consumers to call, not as an extension point —
+          implement an entry the producer exports with role implement, or call this one
+        type: local
+      - stepNumber: 16
         label: judged
         description: The reference is judged
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
         description: For each subsystem's trustedLinks entries
         type: loop
         loopKind: forEach
         over: every subsystem the bound project owns, and its trustedLinks entries
-        endStep: 19
-      - stepNumber: 16
+        endStep: 21
+      - stepNumber: 18
         description: >-
           Find the project the link lands in: ProjectFamily.producerOf(the link as written, from the
           declaring subsystem's project) — the loader leaves trustedLinks raw, so it is read here
           the way the scan binds a reference: a bare subsystem id is local, `alias::sub` lands in
           the project the alias names
         type: local
-      - stepNumber: 17
+      - stepNumber: 19
         description: Does the link stay inside its project?
         type: branch
         condition: the producer is unknown, or is the project that owns the declaring subsystem
-        onTrueStep: 19
-        onFalseStep: 18
-      - stepNumber: 18
+        onTrueStep: 21
+        onFalseStep: 20
+      - stepNumber: 20
         description: >-
           Report TRUSTED_LINK_CROSSES_PROJECT (error) on the declaring subsystem, in its draft
           context, naming the linked subsystem and its project: a trusted link waives the
           client-Adapter shim inside one project and cannot pierce a project boundary; reach the
           other project through its exports
         type: local
-      - stepNumber: 19
+      - stepNumber: 21
         label: linked
         description: The link is judged
         type: local
-      - stepNumber: 20
+      - stepNumber: 22
         description: Every boundary is judged
         type: return
         outcome: judged
@@ -1540,4 +1556,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-07T06:22:04.854Z'
+updatedAt: '2026-10-07T18:51:20.016Z'

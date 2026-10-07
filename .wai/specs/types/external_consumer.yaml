@@ -47,7 +47,30 @@ fields:
     type: string
     description: '`search` for a project root met in a searched folder outside the family; absent for the family'
     optional: true
-methods: []
+  - name: uses
+    type: list<ExportUse>
+    description: >-
+      What its specs use, method-granular: each public name with the contract methods (or `type`, or
+      `capability:<name>`) its references reach on it and the specs that reach it, sorted by name —
+      what a producer reads before it renames a method; absent when it uses nothing
+    optional: true
+methods:
+  - name: reaches
+    signature: 'reaches(publicNames: list<string>, member: string): bool'
+    params:
+      - name: publicNames
+        type: list<string>
+        description: The public names that publish the member
+      - name: member
+        type: string
+        description: The contract method (or `type`)
+    returns: bool
+    description: >-
+      Whether this consumer's specs reach `member` on one of `publicNames` — a method its references
+      call on an exported contract (or, for `type`, an exported type it names). What tells a
+      producer that renaming that method breaks this consumer. Pure.
+    sourcePath: src/models/project-family.ts
+    symbol: consumerReaches
 sourcePath: src/models/project-family.ts
 createdAt: '2026-10-06T23:03:22.646Z'
-updatedAt: '2026-10-07T06:38:16.804Z'
+updatedAt: '2026-10-07T18:41:08.171Z'

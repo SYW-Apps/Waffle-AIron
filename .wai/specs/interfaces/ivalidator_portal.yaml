@@ -228,6 +228,30 @@ methods:
     returns: list<string>
     params: []
     effect: read
+  - name: unrecordedExternalUses
+    description: >-
+      The uses of each pinned external of the bound project that its pin does not record ("used now,
+      but not in the lock"), keyed by alias, each `<name>` or `<name>.<method>` — counted offline
+      from its own pins and references. What `wairon lock` refuses to approve over exactly as it
+      refuses a never-pinned external: the pin records none of these uses, so a producer that broke
+      one could not be told. Writes nothing.
+    signature: 'unrecordedExternalUses(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
+  - name: implementsProblem
+    description: >-
+      What `validate` would say of a contract declaring `implements: <ref>`, without writing it: an
+      undeclared alias, a name the producer does not export, or one exported for calling rather than
+      with role implement — one sentence prefixed with its code, or null. What sdd_update_spec
+      reports on a write (a dry run included) that sets `implements`. Writes nothing.
+    signature: 'implementsProblem(ref: string): string?'
+    returns: string?
+    params:
+      - name: ref
+        type: string
+        description: The `alias::name` the contract would implement
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T10:57:39.689Z'
+updatedAt: '2026-10-07T18:50:52.673Z'

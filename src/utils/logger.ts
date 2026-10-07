@@ -12,6 +12,11 @@ export function setLogLevel(level: LogLevel): void {
   currentLevel = level;
 }
 
+/** Whether --silent is in force: output a command writes itself, past the logger, is held back too. */
+export function isSilent(): boolean {
+  return currentLevel === 'silent';
+}
+
 function shouldLog(level: LogLevel): boolean {
   if (currentLevel === 'silent') return false;
   if (currentLevel === 'info') return level === 'info';

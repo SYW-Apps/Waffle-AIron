@@ -59,7 +59,7 @@ describe('wairon validate', () => {
     pinExternals();
     f.setLedgerContract('record');
     const { out, failed } = await validateAt(f.top);
-    expect(out).toContain('Per project (each its own gate):');
+    expect(out).toContain('Per project (its own gate, and the family findings on it):');
     expect(out).toMatch(/house \(bound\) — .*error\(s\)/);
     expect(out).toMatch(/ledger — .*error\(s\)/);
     expect(out).toMatch(/billing — .*error\(s\)/);
@@ -77,7 +77,7 @@ describe('wairon validate', () => {
     pinExternals();
     f.setLedgerContract('record');
     const plain = await validateAt(f.billing);
-    expect(plain.out).toMatch(/judged against its pin alone; `wairon validate --family`/);
+    expect(plain.out).toMatch(/judged against its pin alone; the advisory live comparison reads its live producer/);
     expect(plain.out).not.toContain('EXTERNAL_INCOMPATIBLE');
     const composed = await validateAt(f.billing, { family: true });
     expect(composed.out).toMatch(/\[billing \(bound\)\] \[EXTERNAL_INCOMPATIBLE\]/);
@@ -117,7 +117,7 @@ describe('sdd_validate_tree', () => {
     bind(f.billing);
     const atMember = (await client.callTool({ name: 'sdd_validate_tree', arguments: {} })).structuredContent as Record<string, any>;
     expect(atMember.projects).toBeUndefined();
-    expect(atMember.hint).toMatch(/`wairon validate --family`/);
+    expect(atMember.hint).toMatch(/the advisory live comparison reads/);
     bind(f.billing);
     const withFamily = (await client.callTool({ name: 'sdd_validate_tree', arguments: { family: true } })).structuredContent as Record<string, any>;
     expect(withFamily.projects.map((p: { key: string }) => p.key)).toEqual(['']);

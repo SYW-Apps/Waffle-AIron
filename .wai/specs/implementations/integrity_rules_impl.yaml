@@ -896,8 +896,11 @@ methods:
         type: loop
         loopKind: forEach
         over: >-
-          the bound root's authored references in a leading, super or path form, and its bare names
-          whose first segment (before `::` or `.`) is the project's own id (a self-prefix)
+          the bound root's authored references in a leading, super or path form — except a
+          two-segment `x::y` that binds nowhere, which is the current `alias::name` form with an
+          alias the project does not declare (EXTERNAL_UNDECLARED says so; reading it as a member
+          path would misdescribe it) — and its bare names whose first segment (before `::` or `.`)
+          is the project's own id (a self-prefix)
         endStep: 5
       - stepNumber: 5
         label: reported
@@ -1458,4 +1461,4 @@ methods:
     exportedVia: implementsContractsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-07T10:58:55.499Z'
+updatedAt: '2026-10-07T18:51:21.233Z'

@@ -485,8 +485,8 @@ methods:
       (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
       nothing is written.
     signature: >-
-      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
-      MethodRename
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
     returns: MethodRename
     params:
       - name: componentId
@@ -507,6 +507,12 @@ methods:
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name so its
           function still binds; true when omitted
+        optional: true
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer what the rename would move, retarget and leave alone, refusing exactly as the real
+          rename would, and write nothing
         optional: true
   - name: moveRenamedSpecs
     description: >-
@@ -1300,4 +1306,4 @@ methods:
         description: Its new name
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T06:24:54.852Z'
+updatedAt: '2026-10-07T18:41:10.854Z'

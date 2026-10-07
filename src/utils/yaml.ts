@@ -1,5 +1,7 @@
+import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { readFileOrNull, writeFile } from './fs.js';
+import { YamlSyntaxError } from './errors.js';
 
 // ---------------------------------------------------------------------------
 // YAML read/write helpers
@@ -7,15 +9,31 @@ import { readFileOrNull, writeFile } from './fs.js';
 
 /**
  * Parse a YAML string into an unknown value.
- * Throws a descriptive error on parse failure.
+ * Throws a YamlSyntaxError on parse failure: one line naming the file (relative
+ * to the working directory when it lies under it), the 1-based line and, for
+ * an error about one key (a duplicated mapping key), that key.
  */
 export function parseYaml(content: string, sourcePath?: string): unknown {
   try {
     return yaml.load(content);
   } catch (err) {
-    const loc = sourcePath ? ` (${sourcePath})` : '';
-    throw new Error(`Failed to parse YAML${loc}: ${String(err)}`);
+    if (!(err instanceof yaml.YAMLException)) throw err;
+    const mark = err.mark as { line?: number } | undefined;
+    const line = typeof mark?.line === 'number' ? mark.line + 1 : undefined;
+    const reason = err.reason || err.message;
+    // The key a key-level error is about: the mapping key the marked line opens.
+    const text = line !== undefined ? content.split(/\r?\n/)[line - 1] : undefined;
+    const key = /mapping key/.test(reason) && text !== undefined
+      ? /^\s*(?:-\s+)?(["']?)([^"':#]+?)\1\s*:/.exec(text)?.[2]
+      : undefined;
+    throw new YamlSyntaxError(sourcePath === undefined ? undefined : displayPath(sourcePath), line, reason, key);
   }
+}
+
+/** A file path as a reader types it: relative to the working directory when under it, else as given. */
+function displayPath(file: string): string {
+  const rel = path.relative(process.cwd(), file);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.split(path.sep).join('/') : file;
 }
 
 /**

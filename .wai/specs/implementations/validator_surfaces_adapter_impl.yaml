@@ -35,6 +35,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: pinnedParent
+  - name: unrecordedUses
+    narrative:
+      - stepNumber: 1
+        description: Call unrecordedUses on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: unrecordedUses
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-10-06T10:15:02.746Z'
+updatedAt: '2026-10-07T18:32:53.741Z'

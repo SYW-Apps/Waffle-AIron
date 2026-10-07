@@ -67,7 +67,7 @@ function judgeOwnIdentity(ctx: RuleContext, identity: ProjectIdentity): void {
     ctx.addIssue(
       'notice',
       'PROJECT_ID_RENAMED',
-      `Project "${identity.name}" was renamed from "${identity.lockedId}", the id its lock approved, to "${identity.id}" (the old id is kept in previousIds) — run \`wairon lock\` to approve the new id.`,
+      `Project "${identity.id}" was renamed from "${identity.lockedId}", the id its lock approved (the old id is kept in previousIds) — the approval is owed until \`wairon lock\` approves the new id, and \`wairon lock-check\` fails until then.`,
     );
   }
   // Steps 8-9: the id moved since the lock approved it.

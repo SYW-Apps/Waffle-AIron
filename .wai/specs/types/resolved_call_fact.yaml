@@ -1,0 +1,53 @@
+kind: value-object
+id: resolved_call_fact
+name: ResolvedCallFact
+description: >-
+  One call expression of a file as the TypeScript type checker resolved it: what was invoked, how it
+  was written, which body it sits in, and every place in this project it can land. Where
+  CallSiteFact records the SHAPE a pure model can follow, this records the checker's answer, so a
+  receiver reached through an alias, a field chain, an element access, a destructured method, a
+  factory's result, a barrel or a port interface lands where the checker says it lands, whatever its
+  spelling. A call whose callee the checker cannot resolve to any declaration because its receiver's
+  type is gone (any, unknown, untyped) is marked unresolved rather than dropped.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: >-
+      The invoked name: the declared member a target names, else the name as written (a property, an
+      element-access string key, an identifier)
+    optional: false
+  - name: written
+    type: string
+    description: The callee as written, whitespace-collapsed and shortened — what a finding quotes
+    optional: false
+  - name: enclosing
+    type: string
+    description: >-
+      The name of the innermost named function-like the call sits in (a function, a method, an
+      accessor, or the named slot of an arrow or function initializer); absent at module scope
+    optional: true
+  - name: enclosingContainer
+    type: string
+    description: The top-level class or object literal whose member that function-like is, when it is one
+    optional: true
+  - name: targets
+    type: list<CallTargetFact>
+    description: >-
+      Every place in this project's own code the call can land: the declaration the checker
+      resolved, and, for a declaration in an interface or type shape, each class of the project that
+      realizes it — the classes whose implements clause names it when any does, else every class
+      whose instance type the checker finds assignable to it and which declares the member. Empty
+      for a call that lands only in a dependency or the language library
+    optional: false
+  - name: unresolved
+    type: bool
+    description: >-
+      True when the checker resolved the callee to no declaration at all because its receiver (or
+      the callee itself) is typed any, unknown or not at all — neither a landing nor its absence
+      means anything
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-07T18:28:29.773Z'
+updatedAt: '2026-10-07T18:28:30.621Z'

@@ -160,6 +160,15 @@ methods:
       named revision or a saved snapshot (`wairon surface diff`, sdd_surface_diff). Read-only.
       Forwarded to the surface orchestrator.
     signatureFrom: surface_orchestrator.diff
+  - name: unrecordedUses
+    description: >-
+      The uses of each pinned external of the bound project that its pin does not record, keyed by
+      alias (`<name>` or `<name>.<method>`), counted offline — what `wairon lock` refuses over and
+      `wairon lock-check` fails on. Pure 1:1 forward.
+    signature: 'unrecordedUses(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-07T10:55:51.654Z'
+updatedAt: '2026-10-07T18:32:26.953Z'

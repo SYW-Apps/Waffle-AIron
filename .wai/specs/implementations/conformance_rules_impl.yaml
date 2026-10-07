@@ -202,16 +202,28 @@ methods:
           Every call a mapped file makes through a collaborator is collaboration, whatever the form
           of the import that typed it
         type: loop
-        over: each mapped path fromPath and each call site of its source_file_facts.functionCallSites
+        over: >-
+          each mapped path fromPath: for a Portal realized there, each call of the Portal's own code
+          — its source_file_facts.resolvedCalls when the type checker read the file (every one when
+          the file realizes only Portals; at a file shared with other components, those whose
+          enclosing function is a body the Portal's own methods reach: their symbols and the helpers
+          closedCallSites follows from them, leaving out a Portal method realized by the same body
+          as another component's modelled method in that file (N:1 identity makes that body the
+          other component's code) and stopping at such methods' anchors), else the shape facts' call
+          sites closed over the Portal's methods; and, for every mapped file, each call site of its
+          source_file_facts.functionCallSites
         endStep: 19
       - stepNumber: 16
         description: >-
-          toPaths = the mapped files other than fromPath among code.possibleOriginsOf(site,
-          fromPath) — the module the receiver's declared type, class or annotation names; the
-          analysis has already read a receiver written through a non-null assertion, a cast or
-          parentheses, and a local alias or destructuring of a field, as that field — each of which
-          realizes a component with a contract method the call's name is (its name or a per-method
-          symbol): a call into anything else is no modelled collaboration
+          toPaths = for a resolved call, the files of its targets other than fromPath — the
+          declaration the checker resolved the callee to, whatever the receiver's spelling, and for
+          a declaration in an interface or type shape each project class realizing it; for a
+          shape-fact site, the mapped files other than fromPath among code.possibleOriginsOf(site,
+          fromPath) and the module its receiver's declared type names — the analysis has already
+          read a receiver written through a non-null assertion, a cast or parentheses, and a local
+          alias or destructuring of a field, as that field. Each toPath counts where it realizes a
+          component with a contract method the call's name is (its name or a per-method symbol): a
+          call into anything else is no modelled collaboration
         type: local
       - stepNumber: 17
         description: >-
@@ -232,16 +244,24 @@ methods:
       - stepNumber: 19
         label: typeOnlyEdge
         description: >-
-          For each toPath that only a type-only import connects (graph.importsOf(fromPath) does not
-          hold it — a runtime edge was judged above) and edgeJustified refuses, report
+          For each toPath that the file does not import at runtime (graph.importsOf(fromPath) does
+          not hold it — a runtime edge was judged above) and edgeJustified refuses, report
           UNDECLARED_DEPENDENCY once per edge (site `<fromPath> -> <toPath>`, the same site a
-          runtime import of it reports under), naming the call written through the
-          type-only-imported collaborator. A call in a Portal's own file that resolves on neither
-          tier — its receiver nothing declares, binds or aliases (a cast to any or unknown is no
-          declaration) — under the name of a write- or lifecycle-effect method of a data component
-          in the Portal's own subsystem or a subsystem it depends into, which no implementation of
-          the Portal claims, is PORTAL_CALL_UNRESOLVED (notice; site `<fromPath> -> <name>`): the
-          analysis could not follow it, and says so
+          runtime import of it reports under), naming the call: a shape-fact site counts here only
+          when a type-only import connects the two files, and a Portal's resolved call only when it
+          lands on a data component (Repository, Index, Store, Registry), whatever connects them (a
+          port the Portal declares itself connects nothing) — any other resolved landing is left to
+          the import graph, because the checker resolves a call through every re-export to the
+          module that declares it, past the forwarding module (an Adapter re-exporting its provider)
+          the file imports on purpose. A call of the Portal's own code that resolves to nothing — a
+          resolved call marked unresolved (its receiver or callee typed any, unknown or nothing, a
+          cast to either included; the checker's own error type, a name from a package with no
+          typings in reach, is not such a receiver), or, without a type checker, a site whose
+          receiver nothing declares, binds or aliases — under the name of a write- or
+          lifecycle-effect method of a data component in the Portal's own subsystem or a subsystem
+          it depends into, which no implementation of the Portal claims, is PORTAL_CALL_UNRESOLVED
+          (warning; site `<fromPath> -> <name>`): the analysis could not follow it, and fails closed
+          rather than passing it
         type: local
       - stepNumber: 20
         description: >-
@@ -249,7 +269,9 @@ methods:
           component, the components it owns and the pattern that owns it, keyed by every package the
           technology is imported by (technology.packages over the packages loaded packs contribute:
           its declared tokens, the built-in table's packages for its name, and the contributed ones)
-          lower-cased
+          lower-cased. Then every technology of the built-in table and of the loaded packs that no
+          implementation binds gets an EMPTY home under its packages: the design never says where it
+          lives, so every importer is outside it
         type: local
       - stepNumber: 21
         label: techLoop
@@ -264,7 +286,9 @@ methods:
           When the specifier's package name (`@scope/name` or its first segment) equals a technology
           token exactly and no component realized at the file is in that technology's home, report
           TECH_LEAKAGE_IN_CODE (warning; site `<path> -> <package>`) naming the technology and its
-          home: move the vendor call behind the component that binds it
+          home: move the vendor call behind the component that binds it — or, for a technology with
+          an empty home, saying that no implementation binds it: bind it on the data-layer component
+          that owns the vendor call
         type: local
     symbol: check
     exportedVia: dependencyConformanceRule
@@ -290,7 +314,11 @@ methods:
         description: >-
           Report CONFORMANCE_DEGRADED (warning; run-wide: no spec id, no draft context) with the
           count of degradedTsFiles: structural findings carry their grade, but dependency
-          conformance skips these files; install typescript in the analyzed project
+          conformance skips these files. The analyzer reads with the project's own TypeScript when
+          it ships the JavaScript compiler API and with the copy wairon depends on otherwise, so
+          neither TypeScript 7 nor a project without TypeScript degrades a run: what is left is a
+          wairon installation missing its own typescript dependency, or a file the compiler could
+          not parse — the finding says to reinstall wairon
         type: local
       - stepNumber: 5
         label: implLoop
@@ -1118,7 +1146,7 @@ methods:
           and those calls against its narrative
         type: loop
         over: methods
-        endStep: 18
+        endStep: 20
       - stepNumber: 3
         description: >-
           tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
@@ -1298,7 +1326,7 @@ methods:
           method
         type: branch
         condition: crossings is non-empty
-        onFalseStep: 2
+        onFalseStep: 19
       - stepNumber: 18
         label: colocatedReport
         description: >-
@@ -1307,6 +1335,35 @@ methods:
           component method it is: sharing a file does not make the hop internal — it crosses a
           component boundary nothing imports, which no file-level check can see. Narrate the call,
           declare it in `calls`, or move the code so the boundary is real
+        type: local
+      - stepNumber: 19
+        label: writeCalls
+        description: >-
+          writes = the calls of the file's source_file_facts.resolvedCalls (none where no type
+          checker read it) whose enclosing function is a body the method's function reaches in its
+          own file — fnSymbol and the helpers the stopping walk (the one the colocated direction
+          takes) follows from it, never past a colocated modelled method, whose calls are its own
+          narrative's — and that land, through a target in ANOTHER file, on a contract method (its
+          name or a per-method symbol) of a component other than this one whose effect is write or
+          lifecycle, which is claimed nowhere. Claimed are: what declared names, what every modelled
+          method sharing this very body (the same file and anchor, N:1 identity) claims, and every
+          landing a claimed target IS or forwards to by identity — its own files under its accepted
+          names and targetForwards of it, since an Adapter re-exporting its provider's function is
+          called under the Adapter's claim while the checker resolves the call past it. Left out: a
+          call from a Portal into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE judges it), an
+          Adapter's call on a Portal reached over an out-of-process transport (the link the design
+          models), and, as for crossings, every call of a function that forwards by identity to a
+          modelled method written in another file. A same-file target is the colocated direction's
+          subject and never counted twice
+        type: local
+      - stepNumber: 20
+        label: writeReport
+        description: >-
+          When writes is non-empty, report UNDECLARED_WRITE_CALL (warning; spec impl.id; draft
+          context the entry's draftContext), one finding per method naming each component method
+          written to and the call as written: the code changes state the design says this method
+          never touches. Narrate the call, declare it in `calls`, or remove it. Carried like its
+          siblings, one unit per component.method
         type: local
     symbol: check
     exportedVia: callConformanceRule
@@ -1574,11 +1631,12 @@ methods:
       - stepNumber: 4
         label: read
         description: >-
-          Take the shape's data members and whether the code lets each be absent. Method-style
-          members are not data and are left to the method axis `typeRealization` already judges;
-          counting them here would accuse every behavioural interface of carrying undeclared state.
-          A field the spec gives a function type that the code writes as a method is one fact in two
-          spellings, not a disagreement
+          Take the shape's data members and whether the code lets each be absent — a class's
+          constructor parameter properties are fields it declares, absent-able only when marked
+          optional. Method-style members are not data and are left to the method axis
+          `typeRealization` already judges; counting them here would accuse every behavioural
+          interface of carrying undeclared state. A field the spec gives a function type that the
+          code writes as a method is one fact in two spellings, not a disagreement
         type: local
       - stepNumber: 5
         description: Decide whether this shape's whole membership is in front of us
@@ -1928,4 +1986,4 @@ methods:
     exportedVia: asyncConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-07T10:53:31.039Z'
+updatedAt: '2026-10-07T19:22:23.098Z'

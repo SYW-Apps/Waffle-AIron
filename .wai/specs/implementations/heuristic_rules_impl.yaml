@@ -940,9 +940,11 @@ methods:
         label: comp_leak_check
         description: >-
           When comp.id is outside home.scope, check its surfaces (id/name, description, dependsOn,
-          owns, basePath) for a match against home; when any surface matches, report TECH_LEAKAGE
-          (warning; draft context ctx.isComponentDraft(comp.id)) naming comp.id, home.label, the
-          matched surfaces and ownersDesc(home).
+          owns, basePath) for a match against home — the description only when comp is no data-layer
+          seam (Adapter, Store, Registry or Index): a seam's prose names a technology about its own
+          realization, which is no binding; when any surface matches, report TECH_LEAKAGE (warning;
+          draft context ctx.isComponentDraft(comp.id)) naming comp.id, home.label, the matched
+          surfaces and ownersDesc(home).
         type: local
       - stepNumber: 15
         label: leak_sub_loop
@@ -968,11 +970,12 @@ methods:
       - stepNumber: 18
         label: intf_leak_check
         description: >-
-          When intf.id is outside home.scope and home matches the joined prose of intf.description
-          and every method's description, report TECH_LEAKAGE (warning; draft context
-          ctx.isComponentDraft(intf.component) or intf.status being 'draft' or 'design') naming
-          intf.id, home.label and ownersDesc(home). Prose INSIDE the owning scope may name the tech
-          - that is honest documentation, not coupling.
+          When intf.id is outside home.scope and intf.component is no data-layer seam, and home
+          matches the joined prose of intf.description and every method's description, report
+          TECH_LEAKAGE (warning; draft context ctx.isComponentDraft(intf.component) or intf.status
+          being 'draft' or 'design') naming intf.id, home.label and ownersDesc(home). Prose INSIDE
+          the owning scope may name the tech - that is honest documentation, not coupling - and so
+          may a seam's contract prose about its own realization.
         type: local
       - stepNumber: 19
         label: leak_impl_loop
@@ -987,12 +990,12 @@ methods:
         label: impl_leak_check
         description: >-
           When this implementation's id is outside home.scope, match home against
-          implementationText(impl): its description and its sourceFiles(), plus for every method its
-          intent and, for every narrative step, its
-          description/targetComponent/targetMethod/condition/over/on/outcome/error and every case
-          value / catch error. On a match, report TECH_LEAKAGE (warning; draft context
-          ctx.isImplementationDraft(impl)) naming the implementation's id, home.label and
-          ownersDesc(home).
+          implementationText(impl): its source files and, for every narrative step, its
+          targetComponent/targetMethod; and, unless the implementation realizes a data-layer seam's
+          contract, its description, every method's intent and every step's
+          description/condition/over/on/outcome/error with every case value / catch error. On a
+          match, report TECH_LEAKAGE (warning; draft context ctx.isImplementationDraft(impl)) naming
+          the implementation's id, home.label and ownersDesc(home).
         type: local
       - stepNumber: 21
         label: leak_type_loop
@@ -1050,4 +1053,4 @@ methods:
     exportedVia: signatureSourceSuggestionsRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-07T06:22:15.448Z'
+updatedAt: '2026-10-07T18:28:20.643Z'

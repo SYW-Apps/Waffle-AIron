@@ -11,18 +11,19 @@ methods:
       Plan moving the id of the project request.project names (a member alias path from the bound
       project; the bound project itself when empty) to request.newId. Refusals: no such project
       (not-a-member) or its directory absent (member-absent); the family's top is out of reach
-      (family-partial: a rename must reach every consumer, and one could live above); a malformed
-      new id, or one a family project already answers to (id-collision); a reference to the project
-      whose position cannot be respelled (reference-unwritable). Edits: the project's id moved, the
-      old one appended to previousIds; for every family project whose alias table names it — its
-      parent's member entry, and every external that binds to it — an alias equal to the old id
-      renamed to the new id with each of that project's `old::name` references, its `use`-carrying
-      entry and its L0 `from: old` re-exports respelled, and an alias that differs kept, with an
-      external's `project` repointed to the new id; each pin under such an alias carried to its new
-      key and producer id, digest unchanged. Notes: consumers outside the family naming the old id
-      by path, which only they can rewrite (their externals report the id change at their next
-      gate); the id-locked case resolved when the new id is the member's alias. Re-lock: every
-      project written, the renamed one first — always, because the id is part of what was approved.
+      (family-partial: a rename must reach every consumer, and one could live above); a new id
+      outside the project-id grammar (id-invalid), or one a family project already answers to
+      (id-collision); a reference to the project whose position cannot be respelled
+      (reference-unwritable). Edits: the project's id moved, the old one appended to previousIds;
+      for every family project whose alias table names it — its parent's member entry, and every
+      external that binds to it — an alias equal to the old id renamed to the new id with each of
+      that project's `old::name` references, its `use`-carrying entry and its L0 `from: old`
+      re-exports respelled, and an alias that differs kept, with an external's `project` repointed
+      to the new id; each pin under such an alias carried to its new key and producer id, digest
+      unchanged. Notes: consumers outside the family naming the old id by path, which only they can
+      rewrite (their externals report the id change at their next gate); the id-locked case resolved
+      when the new id is the member's alias. Re-lock: every project written, the renamed one first —
+      always, because the id is part of what was approved.
     signature: 'planRename(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -41,12 +42,12 @@ methods:
     description: >-
       Plan renaming the bound project's alias request.alias (a member or an external) to
       request.newAlias. Refusals: the alias is declared under neither map (not-a-member); the new
-      alias is malformed or already declared (alias-taken). Edits, in the bound project only: the
-      alias rekeyed (value, description and `use` kept); every reference the bound project wrote as
-      `alias::name` respelled `newAlias::name` at its position; its L0 `from: alias` re-exports
-      respelled; an external's pin carried to the new alias, digest unchanged. Nothing in the
-      member, the producer or any sibling changes (alias-rename-touches-no-sibling). Notes: a local
-      spec id equal to the new alias (LOCAL_ID_SHADOWS_PROJECT would report it).
+      alias is malformed (alias-invalid) or already declared (alias-taken). Edits, in the bound
+      project only: the alias rekeyed (value, description and `use` kept); every reference the bound
+      project wrote as `alias::name` respelled `newAlias::name` at its position; its L0 `from:
+      alias` re-exports respelled; an external's pin carried to the new alias, digest unchanged.
+      Nothing in the member, the producer or any sibling changes (alias-rename-touches-no-sibling).
+      Notes: a local spec id equal to the new alias (LOCAL_ID_SHADOWS_PROJECT would report it).
     signature: >-
       planAliasRename(family: ProjectFamily, bound: string, request: MigrationRequest):
       MigrationPlan
@@ -83,4 +84,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:34:26.022Z'
-updatedAt: '2026-09-30T22:58:32.579Z'
+updatedAt: '2026-10-07T18:29:19.207Z'

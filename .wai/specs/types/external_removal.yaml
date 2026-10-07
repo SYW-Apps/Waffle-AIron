@@ -14,8 +14,8 @@ fields:
   - name: removed
     type: bool
     description: >-
-      Whether `.wai/project.yaml` no longer carries the declaration because this call took it out
-      (false on a refusal, on a dry run, and for an orphaned pin whose declaration was already gone)
+      Whether this call took the declaration out of `.wai/project.yaml` — or, on a dry run, would
+      take it out (false on a refusal and an orphaned pin)
     optional: false
   - name: unpinned
     type: bool
@@ -28,4 +28,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-06T23:03:02.727Z'
-updatedAt: '2026-10-06T23:03:03.482Z'
+updatedAt: '2026-10-07T18:51:24.207Z'

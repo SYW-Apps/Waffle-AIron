@@ -10,6 +10,28 @@ export class WaironError extends Error {
 }
 
 /**
+ * Thrown when a YAML file does not parse (a duplicated key, a bad indent):
+ * one line naming the file, the line and — when the error is about one — the
+ * key, e.g. `.wai/project.yaml:33: duplicated mapping key "rules"`. A
+ * WaironError, so every command prints it as one `✖` line, never a stack.
+ */
+export class YamlSyntaxError extends WaironError {
+  constructor(
+    readonly file: string | undefined,
+    readonly line: number | undefined,
+    readonly reason: string,
+    readonly key: string | undefined,
+  ) {
+    const where = file ? `${file}${line !== undefined ? `:${line}` : ''}: ` : line !== undefined ? `line ${line}: ` : '';
+    const advice = /duplicated mapping key/.test(reason)
+      ? ' — a key may appear once per mapping: merge the two blocks into one'
+      : '';
+    super(`${where}${reason}${key !== undefined ? ` "${key}"` : ''}${advice} (the YAML does not parse, so nothing in it was read)`);
+    this.name = 'YamlSyntaxError';
+  }
+}
+
+/**
  * Thrown when the project has not been initialized (.wai/ directory missing).
  */
 export class ProjectNotInitializedError extends WaironError {

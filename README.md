@@ -224,9 +224,10 @@ git add .wai && git commit -m "Approve the design"
 #    never approved; plain lock-check only fails an approval that no longer matches.
 wairon lock-check --strict
 npm ci                      # TS/JS project with code: install the project's dependencies first
-                            # (pnpm install --frozen-lockfile / yarn install --immutable): the gate
-                            # reads your code with YOUR TypeScript; without it --ci fails on
-                            # CONFORMANCE_DEGRADED. The reusable workflow does this for you.
+                            # (pnpm install --frozen-lockfile / yarn install --immutable), so the
+                            # gate reads your code with YOUR TypeScript (5 or 6); without one —
+                            # or on TypeScript 7 — it reads with the copy wairon ships. The
+                            # reusable workflow does this for you.
 wairon validate --ci        # the conformance gate, run at the FAMILY ROOT (the project that
                             # declares the members): there it is the family run, which judges
                             # the network proofs; externals are judged against their pins
@@ -267,9 +268,11 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon diagram [--all] [--canvas] [--drawio] [--excalidraw] [--sequence <comp:method>]` | Mermaid, interactive canvas, and editable draw.io/Excalidraw exports |
 | `wairon network flows \| policy \| diagram \| check \| why` | Networking derived from the design: allowed flows, Kubernetes `NetworkPolicy`, a trust-boundary diagram, live-flow checks ([details](docs/network.md)) |
 | `wairon rules list` | The conformance rule registry (the architecture linter) |
-| `wairon pack init \| build \| install \| use \| unuse \| impact \| sync \| bundle \| which \| list \| add \| remove` | Extension packs: injected profiles, language tables, and rules |
+| `wairon pack init \| build \| install \| use \| unuse \| impact \| sync \| bundle \| which <name> \| list \| add \| remove` | Extension packs: injected profiles, language tables, and rules |
 | `wairon member …` / `wairon subsystem externalize` / `wairon project rename` | Members (parts and projects) and the family migrations |
-| `wairon externals add \| pin \| status \| list` | Declare, pin and check the externals a project consumes (`status` is the opt-in live gate) |
+| `wairon externals add \| pin \| status \| list \| remove \| use \| consumers [--search <dirs>]` | Declare, pin and check the externals a project consumes (`status` is the opt-in live gate); from a producer, `consumers --search ..` finds who consumes it, sibling checkouts included |
+| `wairon surface export \| import \| list \| diff [--against <ref\|file>]` | Exchange a public surface (native snapshot or OpenAPI, one document per portal); `diff` is the public-surface changelog since the last committed approval |
+| `wairon method rename-param` / `wairon type rename-field` | Rename a contract parameter or a type field and respell every reference; the old name joins the rename trace |
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon lock [-y]` | Validate the design as complete and record its approval in `.wai/lock.json`, code findings beside it; no spec file is rewritten |
@@ -291,12 +294,12 @@ See [docs/cli.md](docs/cli.md). Summary:
 - [Vision](docs/vision.md) — long-term direction
 - [CLI Reference](docs/cli.md) — all commands and MCP tools
 - [Design export](docs/design-export.md) — the `wairon export` JSON format for generators and translators
-- [Supervisor doctrine](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/supervisor-doctrine.md) — how Supervisors and Actors may depend on data and effects
+- [Supervisor doctrine](docs/design/supervisor-doctrine.md) — how Supervisors and Actors may depend on data and effects
 - [Hosted server](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md) — self-host wairon over HTTP (Docker, auth, sizing)
-- [Pack scoping](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/pack-scoping.md) — the pack store, per-project selection, and reproducibility (design)
-- [Connecting-agent entrypoint](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/connecting-agent-entrypoint.md) — MCP `instructions`, prompts, and skill composition
-- [Execution budgets](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/execution-budgets.md) — what each agent's work costs to do, derived alongside what it owns (design)
-- [Approval baselines](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/approval-baseline.md) — what `lock` approves, and why it stopped rewriting your spec tree (design)
+- [Pack scoping](docs/design/pack-scoping.md) — the pack store, per-project selection, and reproducibility (design)
+- [Connecting-agent entrypoint](docs/design/connecting-agent-entrypoint.md) — MCP `instructions`, prompts, and skill composition
+- [Execution budgets](docs/design/execution-budgets.md) — what each agent's work costs to do, derived alongside what it owns (design)
+- [Approval baselines](docs/design/approval-baseline.md) — what `lock` approves, and why it stopped rewriting your spec tree (design)
 - [Extending wairon](docs/extending-wairon.md) — extension packs & wrapper products (with a [working example](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/wrapper/))
 - [Templates](docs/templates.md) — agent rendering templates
 - [Standards](docs/standards/INDEX.md) — the architecture standards the SDD model is built on
@@ -315,7 +318,7 @@ validation), js-yaml, the MCP SDK, and Vitest. Bundled with tsup.
 Actively developed. For bugs or questions, open an issue.
 
 Working on this repo (or delegating work in it) — see
-[CONTRIBUTING.md](https://github.com/SYW-Apps/Waffle-AIron/blob/main/CONTRIBUTING.md) for what this checkout does differently: line
+[CONTRIBUTING.md](CONTRIBUTING.md) for what this checkout does differently: line
 endings, the gate commands and their baselines, and the stale-MCP-server tell.
 The conventions that hold for *any* wairon project ship in the `sdd-implement`
 and `sdd-delegate` skills.

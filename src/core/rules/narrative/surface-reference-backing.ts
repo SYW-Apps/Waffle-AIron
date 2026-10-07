@@ -88,10 +88,19 @@ export const surfaceReferenceBackingRule: SddRule = {
           // expose it, with the guarantees the step asserts.
           const surfaceMethod = resolved.entry.methods.find(m => m.name === step.targetMethod);
           if (!surfaceMethod) {
+            // The rename trace answers "renamed to"; a name it does not know
+            // may be newer than the pin, which only a re-pin can learn.
+            const renamedTo = resolved.entry.methods.find((m) => (m.formerly ?? []).some((f) => f === step.targetMethod || f.endsWith(`.${step.targetMethod}`)))?.name;
+            const alias = target.includes('::') ? target.split('::')[0] : undefined;
+            const hint = renamedTo !== undefined
+              ? ` It was renamed to "${renamedTo}" (the producer's rename trace records "${step.targetMethod}") — follow the rename.`
+              : alias !== undefined
+                ? ` If the producer added it after this pin was taken, the pin cannot know it: re-pin (\`wairon externals pin ${alias}\`) once the producer exports it.`
+                : '';
             ctx.addIssue(
               'error',
               'SURFACE_REF_NOT_EXPOSED',
-              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" on cross-tree component "${target}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} "${step.targetMethod}" on cross-tree component "${target}" (step ${step.stepNumber}), but the surface snapshot of "${resolved.snapshot.projectName}" does not expose that method on "${resolved.entry.id}".${hint}`,
               impl.id,
               isDraftCtx,
               resolution,

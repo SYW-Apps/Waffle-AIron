@@ -374,6 +374,33 @@ methods:
     returns: list<string>
     params: []
     effect: read
+  - name: unrecorded
+    description: >-
+      The uses of each pinned external (and referenced project member) of the bound project that its
+      pin does not record, keyed by alias, each `<name>` or `<name>.<method>` — read offline from
+      the bound root's own pins and references (validator_surfaces_adapter.unrecordedUses). With
+      unpinned, what a project's approval owes: `wairon lock` refuses until a re-pin records them.
+      Writes nothing.
+    signature: 'unrecorded(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
+  - name: implementsProblem
+    description: >-
+      What `validate` would say of a contract that declares `implements: <ref>`, read without
+      writing it — for a write to report before (or as) it lands, a dry run included: the alias
+      names no member or external of the bound project (EXTERNAL_UNDECLARED), the producer's table —
+      a member's live one, or the external's pin — has no such public name (EXTERNAL_NOT_EXPORTED),
+      or the name is exported for consumers to CALL, not as an extension point exported with role
+      implement (EXTERNAL_NOT_EXPORTED). Null when the reference names an extension point, or cannot
+      be judged here (no pin yet). Writes nothing.
+    signature: 'implementsProblem(ref: string): string?'
+    returns: string?
+    params:
+      - name: ref
+        type: string
+        description: The `alias::name` the contract would implement
+    effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-07T10:58:33.855Z'
+updatedAt: '2026-10-07T18:50:50.075Z'

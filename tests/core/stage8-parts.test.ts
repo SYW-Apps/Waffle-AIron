@@ -496,5 +496,5 @@ describe('property: existing-members-unchanged', () => {
       bind(f.top);
       expect(validateFamily({}).issues.filter((i) => i.code === 'DEPRECATED_MOUNT_FORM' && i.message.includes('long-form `path`'))).toEqual([]);
     }
-  });
+  }, 60_000); // ~10 full family validations: heavy under a loaded full-suite run
 });

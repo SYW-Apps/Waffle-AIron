@@ -131,7 +131,7 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   const held = config.members?.[alias];
   const heldPath = held !== undefined ? memberLocationOf(held) : undefined;
   if (dir !== null && heldPath !== undefined && path.resolve(node.directory, heldPath) === dir) return plan;
-  if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-taken', bound, `"${alias}" is no alias: an alias must fit [a-z0-9-_]+`);
+  if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-invalid', bound, `"${alias}" is no alias: an alias must fit [a-z0-9-_]+`);
   else if (config.members?.[alias] !== undefined || config.externals?.[alias] !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${alias}"`);
   if (dir !== null) {
     const external = Object.entries(config.externals ?? {}).find(([, e]) => externalSourceOf(e)?.path && path.resolve(node.directory, externalSourceOf(e)!.path!) === dir);

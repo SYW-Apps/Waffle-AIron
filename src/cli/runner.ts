@@ -8,8 +8,8 @@
 // ---------------------------------------------------------------------------
 
 import * as path from 'path';
-import { logger } from '../utils/logger.js';
-import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
+import { isSilent, logger } from '../utils/logger.js';
+import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../utils/errors.js';
 // The runner imports each command adapter module DIRECTLY (not through the
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
@@ -248,9 +248,14 @@ export function announceBinding(commandPath: string): void {
   try {
     const config = runWithProjectRoot(root, () => loadProjectConfig());
     if (config) id = effectiveProjectId(config);
-  } catch { /* an unreadable configuration names no id */ }
-  // Step 7.
-  process.stderr.write(`project ${id ?? path.basename(root)} at ${root}\n`);
+  } catch (e) {
+    // Steps 7-8: a configuration that does not parse refuses every command
+    // alike (doctor diagnoses it in its own words); one failing its schema
+    // names the folder, and the command reports it.
+    if (e instanceof YamlSyntaxError && first !== 'doctor') throw e;
+  }
+  // Step 9: nothing under --silent.
+  if (!isSilent()) process.stderr.write(`project ${id ?? path.basename(root)} at ${root}\n`);
 }
 
 // ---------------------------------------------------------------------------

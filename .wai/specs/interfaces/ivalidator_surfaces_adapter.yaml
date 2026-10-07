@@ -38,6 +38,15 @@ methods:
     signature: 'pinnedParent(): PinnedParent?'
     returns: PinnedParent?
     params: []
+  - name: unrecordedUses
+    description: >-
+      The uses of each pinned external of the bound project its pin does not record, keyed by alias,
+      via the surface portal — what a project's approval owes before it can be re-approved
+      (family_validator.approvals, unrecorded).
+    signature: 'unrecordedUses(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-10-06T10:15:01.641Z'
+updatedAt: '2026-10-07T18:32:28.572Z'

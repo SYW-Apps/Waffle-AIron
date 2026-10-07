@@ -5,7 +5,9 @@ description: >-
   serves with a single workflow), bound to its CLI endpoint, and takes its arguments and flags in
   the shape of the cli_runner workflow it dispatches to — so every signature comes from that
   workflow. Exit codes and output are the workflow's; the portal adds only argv parsing, the global
-  --verbose/--silent log level, and printing a WaironError with exit 1.
+  --verbose/--silent log level, and printing whatever a command throws as ONE `✖` line with exit 1 —
+  a WaironError's message as it is, any other error's message the same way, never a stack trace (the
+  stack is printed only when WAIRON_DEBUG is set, for a bug report).
 component: cli_portal
 methods:
   - name: init
@@ -467,6 +469,15 @@ methods:
     endpoint:
       transport: CLI
       command: wairon method rename-param <component> <method> <param> <new-name>
+  - name: methodRename
+    description: >-
+      `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dir...>]
+      [--no-pin-symbol]`: rename a contract method and retarget every reference to it, keeping the
+      old name in its rename trace, and name the consumers it breaks.
+    signatureFrom: cli_runner.runMethodRename
+    endpoint:
+      transport: CLI
+      command: wairon method rename <component> <method> <new-name>
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-07T06:25:24.424Z'
+updatedAt: '2026-10-07T18:41:51.221Z'

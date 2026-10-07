@@ -126,6 +126,13 @@ function enumValuesFrom(schema: Record<string, unknown>): EnumValue[] {
     .map(name => ({ name, ...(described.has(name) ? { description: described.get(name)! } : {}) }));
 }
 
+/** The parameter names an OpenAPI path template declares: its `{code}` segments. */
+function pathTemplateNames(pathTemplate: string): string[] {
+  const names: string[] = [];
+  for (const m of pathTemplate.matchAll(/\{([^}/]+)\}/g)) names.push(m[1]);
+  return names;
+}
+
 function operationFor(method: MethodSignature, closureIds: Set<string>): Record<string, unknown> {
   const endpoint = method.endpoint;
   const httpVerb = endpoint && endpoint.transport === 'HTTP' ? endpoint.method.toLowerCase() : 'post';
@@ -150,7 +157,22 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
   // round-trips everything the native YAML snapshot preserves.
   if (method.ext && Object.keys(method.ext).length) op['x-wairon-ext'] = method.ext;
 
-  if (params.length) {
+  // A param the path template names (`/stats/{code}`) is a path parameter —
+  // always required, the path cannot be built without it — and OpenAPI calls a
+  // templated path that declares none invalid. The rest go in the query (a verb
+  // without a body) or the JSON body (POST, PUT, PATCH).
+  const templated = new Set(endpoint && endpoint.transport === 'HTTP' ? pathTemplateNames(endpoint.path) : []);
+  const inPath = params.filter(p => templated.has(p.name));
+  const rest = params.filter(p => !templated.has(p.name));
+  const parameter = (p: (typeof params)[number], where: 'path' | 'query'): Record<string, unknown> => ({
+    name: p.name,
+    in: where,
+    required: where === 'path' ? true : !p.optional,
+    ...(p.description ? { description: p.description } : {}),
+    schema: schemaFor(p.type, closureIds),
+  });
+  const parameters = inPath.map(p => parameter(p, 'path'));
+  if (rest.length) {
     if (bodyVerbs.has(httpVerb)) {
       op.requestBody = {
         required: true,
@@ -158,22 +180,17 @@ function operationFor(method: MethodSignature, closureIds: Set<string>): Record<
           'application/json': {
             schema: {
               type: 'object',
-              properties: Object.fromEntries(params.map(p => [p.name, schemaFor(p.type, closureIds)])),
-              required: params.filter(p => !p.optional).map(p => p.name),
+              properties: Object.fromEntries(rest.map(p => [p.name, schemaFor(p.type, closureIds)])),
+              required: rest.filter(p => !p.optional).map(p => p.name),
             },
           },
         },
       };
     } else {
-      op.parameters = params.map(p => ({
-        name: p.name,
-        in: 'query',
-        required: !p.optional,
-        ...(p.description ? { description: p.description } : {}),
-        schema: schemaFor(p.type, closureIds),
-      }));
+      parameters.push(...rest.map(p => parameter(p, 'query')));
     }
   }
+  if (parameters.length) op.parameters = parameters;
   return op;
 }
 

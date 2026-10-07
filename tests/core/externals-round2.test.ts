@@ -291,7 +291,8 @@ describe('`externals remove`, malformed sources and the dry run (R2-29, platform
     const p = pair();
     bind(p.studio);
     pinExternals();
-    expect(remove('geo', true)).toEqual({ alias: 'geo', removed: false, unpinned: true });
+    // A dry run answers what the real run then does (platform R4: it said removed: false).
+    expect(remove('geo', true)).toEqual({ alias: 'geo', removed: true, unpinned: true });
     expect(remove('geo')).toEqual({ alias: 'geo', removed: true, unpinned: true });
     expect(studioConfig(p.studio).externals).toBeUndefined();
     expect(externalsRepository.readSnapshot('geo')).toBeNull();

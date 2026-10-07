@@ -301,18 +301,19 @@ methods:
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock.
           A rename lists every owner it writes, lock or none, the renamed project first: the id is
-          part of what any approval of them names. A storage move (externalize into a part) changes
-          nothing the approval covers, so an owner whose approval, read on the rehearsal copy, still
-          covers every spec (only moved storage) is no project to re-lock — the plan agrees with
-          `wairon lock` and `wairon lock-check`
+          part of what any approval of them names. A storage move — any verb whose planned edits
+          only move and delete files (externalize into a part, internalize a part) — changes nothing
+          the approval covers, so an owner whose approval, read on the rehearsal copy, still covers
+          every spec (only moved storage) is no project to re-lock — the plan agrees with `wairon
+          lock` and `wairon lock-check`
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
       - stepNumber: 20
         description: >-
-          For a storage move, compare each such owner's rehearsed tree with its approval: an owner
-          whose diff names no added, changed or removed spec (its moved specs paired as moves) is
-          dropped from the re-lock list
+          For a storage move (every planned edit a move or a delete), compare each such owner's
+          rehearsed tree with its approval: an owner whose diff names no added, changed or removed
+          spec (its moved specs paired as moves) is dropped from the re-lock list
         type: call
         targetComponent: migration_core_adapter
         targetMethod: diffAgainstApproval
@@ -415,4 +416,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-07T10:54:56.288Z'
+updatedAt: '2026-10-07T18:37:12.796Z'

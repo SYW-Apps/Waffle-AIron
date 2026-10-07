@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import type { ExternalConsumer } from '../models/project-family.js';
 import {
   saveSystemSpec,
   saveSpec,
@@ -3321,6 +3322,10 @@ export interface MethodRename {
    * added. Reported, never prevented. Empty when the contract is not exported.
    */
   publishedIn: string[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
+  /** The consumers of an export publishing the method whose specs call it by its old name: the ones the rename breaks. Filled by the caller that read them. */
+  breaks?: ExternalConsumer[];
 }
 
 /**
@@ -3336,7 +3341,7 @@ export interface MethodRename {
  * (invalid-name), a method the component does not declare (method-missing), and
  * a new name a moving contract already declares (name-taken).
  */
-export function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean): MethodRename {
+export function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean, dryRun?: boolean): MethodRename {
   // Steps 1–3: the component must exist…
   const component = loadComponentSpec(componentId);
   if (!component) {
@@ -3425,6 +3430,26 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     `renaming method "${componentId}.${methodName}"`,
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
+
+  // Steps 15-16: a dry run answers what the rename WOULD do — refused exactly
+  // as the real one above — and writes nothing.
+  if (dryRun) {
+    const realizing = implementations.filter((impl) => movingContracts.has(impl.contract) && impl.methods.some((m) => m.name === methodName));
+    const wouldPin = pinSymbol !== false && realizing.some((impl) => impl.methods.find((m) => m.name === methodName)?.symbol === undefined);
+    const wouldRewrite = [...rewriteRefFields(reachDir, methodRemap, undefined, true), ...rekeyLintAllows(reachDir, rename, true)];
+    return {
+      component: componentId,
+      from: methodName,
+      to: newName,
+      renamed: [...moving.map((i) => i.id), ...realizing.map((impl) => impl.id)],
+      rewritten: [...new Set(wouldRewrite.map((spec) => spec.id))],
+      mentions: collectMentions(reachDir, methodName, moving),
+      ...(wouldPin ? { pinnedSymbol: methodName } : {}),
+      carried: Array.isArray(registerEdits) ? registerEdits : [],
+      publishedIn: exportsPublishing(componentId, new Set(moving.map((i) => i.id))),
+      dryRun: true,
+    };
+  }
 
   // Steps 15–16: the method moves on each of those contracts — its name, and,
   // for a prose method, the name inside its signature. A method with params has

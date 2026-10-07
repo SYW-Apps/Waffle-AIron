@@ -242,7 +242,7 @@ export function renderSpecFindings(result: ValidationResult, all = false): SpecT
   if (skipped.error + skipped.warning + skipped.notice > 0 || (all && result.issues.length > 100)) renderCodeTotals(result);
   if (result.projects) {
     logger.blank();
-    logger.info('Per project (each its own gate):');
+    logger.info('Per project (its own gate, and the family findings on it):');
     for (const p of result.projects) {
       const mark = p.valid ? chalk.green('ok') : chalk.red('fails');
       logger.info(`  ${projectLabel(p.key, result)} — ${mark}: ${p.errors} error(s), ${p.warnings} warning(s), ${p.notices} notice(s)`);

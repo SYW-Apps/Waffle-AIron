@@ -66,7 +66,12 @@ methods:
       - stepNumber: 1
         description: >-
           Parse both parties: a project, a subsystem, a component (or portal, or portal.verb),
-          outside, or network[:<id>]
+          outside, or network[:<id>]. A name the model does not know as written is read the way
+          `network policy` and `network check` read one: a renamed project's former id
+          (model.formerNames, `<former>` or `<former>::…`) as its current one, and — at a member's
+          own root (model.focus) — a bare name of the member's own (`ingestion_portal.recordHit`) as
+          `<focus>::<name>`, the form its own hint recommends; each such reading is said as a note
+          at the head of the chain
         type: local
       - stepNumber: 2
         description: >-
@@ -79,7 +84,8 @@ methods:
       - stepNumber: 3
         description: >-
           Answer not allowed with the unknown names: a typo, not a refusal — the chain says so and
-          how a party is named
+          how a party is named (at a member's root, that its own components may be named bare or as
+          `<member>::<name>`)
         type: return
         outcome: unknown party
       - stepNumber: 4
@@ -118,4 +124,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T13:11:56.327Z'
-updatedAt: '2026-10-07T06:20:00.987Z'
+updatedAt: '2026-10-07T18:49:12.676Z'

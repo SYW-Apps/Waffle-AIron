@@ -100,7 +100,13 @@ methods:
         description: >-
           Run the reachability and network checks only the family can make: the networks around each
           member, the proof of every network-scoped entry, and every call that crosses into a
-          network
+          network. At a member's own root inside a family in reach, the bound root's graph holds
+          neither the family's network nor its callers, so judging it there would call every
+          network-scoped entry unproven and say no network encloses it: the checks are then the
+          enclosing family's — its model composed and judged at its top root
+          (family_validator.reachModel, steps 1-4), its findings narrowed to the bound project and
+          its own members and stamped with their keys here — so the member's family run says what
+          the family run at the root says about it
         type: call
         targetComponent: family_validator
         targetMethod: checkReach
@@ -112,8 +118,10 @@ methods:
       - stepNumber: 15
         description: >-
           Return the family verdict: valid when no project's gate and no family finding holds an
-          error, with every project's totals and the aliases of the bound project's externals it
-          composed in reach (`composed`), which the advisory live comparison then skips
+          error, with every project's totals counted from the findings listed under it — its own
+          gate's (after topics are paired across the family) and the family's findings stamped with
+          its key — so a count never disagrees with the list, and the aliases of the bound project's
+          externals it composed in reach (`composed`), which the advisory live comparison then skips
         type: return
         outcome: ValidationResult
   - name: compose
@@ -209,11 +217,12 @@ methods:
         description: >-
           Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED and each
           drifted one as MEMBER_DRIFTED, saying so when the drift is only the stage-5 identity
-          upgrade (re-lock once); a referenced project member that could not be opened (offline, its
-          checkout absent, out of reach) is EXTERNAL_CHECK_UNAVAILABLE once, naming why — its gate
-          and its composition did not run, never a pass. Parts get none of these: a part has no lock
-          of its own, its approval is the declaring project's. The root's own lock is not a family
-          finding
+          upgrade (re-lock once), and quoting what its approval owes when it carries an `owed`
+          sentence (a moved id, an external to pin) instead of calling it changed; a referenced
+          project member that could not be opened (offline, its checkout absent, out of reach) is
+          EXTERNAL_CHECK_UNAVAILABLE once, naming why — its gate and its composition did not run,
+          never a pass. Parts get none of these: a part has no lock of its own, its approval is the
+          declaring project's. The root's own lock is not a family finding
         type: local
       - stepNumber: 6
         description: >-
@@ -510,7 +519,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the selected projects that loaded
-        endStep: 9
+        endStep: 13
       - stepNumber: 4
         description: >-
           Bind the project's own root for the next calls, restoring the caller's binding afterwards
@@ -537,11 +546,41 @@ methods:
           absent when never
         type: local
       - stepNumber: 8
+        description: >-
+          Read the project's own configuration, to judge its id against the one its lock record
+          approved: the gate identity does not cover the id, so a project renamed by the rename
+          migration (PROJECT_ID_RENAMED) or with an id changed by hand (PROJECT_ID_CHANGED) would
+          otherwise read approved while `lock-check` refuses it. The resolution is
+          project_config.identity(record.projectId) — the one the project-identity rule and
+          `lock-check` judge by
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 9
+        description: Read the declared externals this project never pinned
+        type: call
+        targetComponent: family_validator
+        targetMethod: unpinned
+      - stepNumber: 10
+        description: Read the uses of its pinned externals that their pins do not record
+        type: call
+        targetComponent: family_validator
+        targetMethod: unrecorded
+      - stepNumber: 11
+        description: >-
+          Decide what the approval on record still owes, when it has a record: the id moved since it
+          (`the project id moved since the approval (<approved> → <now>)`), a declared external
+          never pinned, or a use its pin does not record (`external "<alias>" is used beyond its
+          pin: <uses>`) — each one a reason `wairon lock-check` refuses and `wairon lock` refuses or
+          must clear. Anything owed makes the state drifted, whatever the identity said, and is
+          carried as `owed`, one sentence; nothing owed leaves the state as decided
+        type: local
+      - stepNumber: 12
         description: For a member, read its parent's lock record from the parent's directory
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 9
+      - stepNumber: 13
         description: >-
           Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
           1, for one release) its `children` entry; matches when that equals the member's subject,
@@ -549,7 +588,7 @@ methods:
           when the parent has no record or names no pin for the alias. The root's own entry carries
           no pin
         type: local
-      - stepNumber: 10
+      - stepNumber: 14
         description: Return the entries, root first
         type: return
         outcome: ProjectApproval[]
@@ -879,6 +918,53 @@ methods:
         description: Answer every declared alias the lock holds no entry for
         type: return
         outcome: the aliases with no lock entry, parts left out
+  - name: unrecorded
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the uses of the bound root's pinned externals that their pins do not record, counted
+          offline from its own pins and references
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: unrecordedUses
+      - stepNumber: 2
+        description: Answer them keyed by alias
+        type: return
+        outcome: unrecorded uses by alias
+  - name: implementsProblem
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Split the reference into its alias and public name; a reference without `::` names no
+          other project and is not judged here
+        type: local
+      - stepNumber: 2
+        description: 'Read the bound root''s project graph: the aliases of its members and the projects they name'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 3
+        description: Read the bound root's pinned externals, each with the snapshot its pin names
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listPinnedExternals
+      - stepNumber: 4
+        description: 'A member alias: read that member''s live L0 export table'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
+        description: >-
+          Decide: an alias that is neither a member nor a declared external is EXTERNAL_UNDECLARED;
+          an external not pinned yet cannot be judged (null); a table or pinned snapshot with no
+          entry of that public name is EXTERNAL_NOT_EXPORTED; an entry whose role is not implement
+          is EXTERNAL_NOT_EXPORTED too — it is exported for consumers to call, and only an extension
+          point (role implement) is implemented
+        type: local
+      - stepNumber: 6
+        description: Answer the sentence, prefixed with its code, or null
+        type: return
+        outcome: problem or null
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-07T10:58:36.545Z'
+updatedAt: '2026-10-07T19:08:48.042Z'

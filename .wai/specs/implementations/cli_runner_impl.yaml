@@ -531,7 +531,7 @@ methods:
         type: branch
         condition: the folder has no project configuration yet
         onTrueStep: 18
-        onFalseStep: 20
+        onFalseStep: 21
       - stepNumber: 18
         description: >-
           Read the store packs that apply by default, to seed as the new configuration's pack
@@ -550,6 +550,13 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
       - stepNumber: 20
+        description: >-
+          Seed the context directory (.wai/context/) with its generated files through the core
+          adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 21
         label: bootstrap_l0
         description: >-
           Bootstrap the L0 system spec through core, completing only what is missing (the same
@@ -557,27 +564,27 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: ensureProjectInitialized
-      - stepNumber: 21
+      - stepNumber: 22
         label: export_skills
         description: Export SDD skills templates for the configured targets only
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           For each tool the person chose to install machine-wide, find its global configuration file
           through the core adapter
         type: call
         targetComponent: cli_core_adapter
         targetMethod: globalGuideFilePath
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Find the in-project configuration file of each configured target as well — a target nobody
           chose gets none
         type: call
         targetComponent: cli_core_adapter
         targetMethod: localGuideFilePath
-      - stepNumber: 24
+      - stepNumber: 25
         description: >-
           Write the guide into each one the plan asked for — the machine-wide guide into the global
           file, the in-project one into the local file. They say different things on purpose: the
@@ -585,7 +592,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: injectGuide
-      - stepNumber: 25
+      - stepNumber: 26
         description: >-
           Write the repository-root pointer for every target that got a local guide, and for the
           targets that want only a root file. A pointer rather than a copy, so there is one document
@@ -593,7 +600,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: writeRootGuideDelegator
-      - stepNumber: 26
+      - stepNumber: 27
         description: Report what was created and where, and name the next command to run
         type: return
         outcome: initialized
@@ -725,7 +732,10 @@ methods:
       - stepNumber: 8
         description: >-
           Compare the public surface with the last committed approval, or with --against (a git
-          revision or a saved native snapshot)
+          revision or a saved native snapshot). A comparison that cannot be made — the project is in
+          no git work tree, the revision names no commit, or no approval of it was ever committed —
+          is refused as one line naming why and what to do (lock and commit, or `--against
+          <ref|file>`), exit 1, never an uncaught stack trace
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: diffSurface
@@ -3333,9 +3343,10 @@ methods:
         description: >-
           Print one line per consumer — its project, the alias and section it declares this project
           under, the root of one found by the search, the names it uses and the names it still
-          writes that are no longer exported — then where else a consumer can be (a sibling checkout
-          is found with --search; a hosted one declares its dependency on its own side); or the JSON
-          answer
+          writes that are no longer exported — and under it the methods its specs call on each
+          contract it uses (`<name>.<method>`), so a producer about to rename a method reads who
+          calls it; then where else a consumer can be (a sibling checkout is found with --search; a
+          hosted one declares its dependency on its own side); or the JSON answer, `uses` included
         type: return
         outcome: consumers listed
       - stepNumber: 16
@@ -3742,15 +3753,31 @@ methods:
         outcome: no project
       - stepNumber: 6
         description: >-
-          Read the bound project's configuration for its effective id (an unreadable configuration
-          names the folder instead)
+          Read the bound project's configuration for its effective id (a configuration that fails
+          its schema names the folder instead; the command reports that in its own words)
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 7
-        description: Write `project <id> at <root>` to stderr, the root as an absolute path
-        type: local
+        description: >-
+          Does the configuration file not parse as YAML (a duplicated key, a bad indent) while the
+          command is not doctor, which diagnoses it in its own words?
+        type: branch
+        condition: project.yaml does not parse and the command is not doctor
+        onTrueStep: 8
+        onFalseStep: 9
       - stepNumber: 8
+        description: >-
+          Refuse the command with the parse error as one line naming the file, the line and the key:
+          no command runs on a configuration it cannot read, and every one says so alike
+        type: throw
+        error: YamlSyntaxError
+      - stepNumber: 9
+        description: >-
+          Write `project <id> at <root>` to stderr, the root as an absolute path — nothing under
+          --silent
+        type: local
+      - stepNumber: 10
         description: Done
         type: return
         outcome: announced
@@ -3919,6 +3946,44 @@ methods:
           Print the move, the interfaces it moved in, the placeholders respelled, and that the
           approval reads the contract as changed until the next `wairon lock`
         type: local
+  - name: runMethodRename
+    sourcePath: src/commands/method.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume this project — the family in reach, and the consumer
+          checkouts in the --search folders — before anything moves, each with the names and methods
+          its specs use
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the method through the core adapter — or, with --dry-run, ask what the rename would
+          do, refused exactly as the real rename would be and writing nothing
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renameMethod
+      - stepNumber: 4
+        description: >-
+          Keep the consumers whose specs reach the old method on a public name the report says
+          publishes it (external_consumer.reaches): the projects the rename breaks
+        type: local
+      - stepNumber: 5
+        description: >-
+          Print what moved (or would move) and was retargeted, the prose left alone, the pinned
+          symbol, the export entries publishing it, and each consumer it breaks with its folder and
+          alias — or that none in reach calls it, naming --search for checkouts outside the family;
+          a dry run ends with "Nothing was written", a real one with the re-lock the rename owes
+        type: return
+        outcome: renamed
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -3934,4 +3999,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T11:36:08.477Z'
+updatedAt: '2026-10-07T19:22:24.385Z'

@@ -546,9 +546,20 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
     const own = (approvals ?? []).find((a) => a.key === '');
     const carry = isContentReadingRecord(approval) && own?.state === 'approved' ? `\n${REEXPRESS_HINT}` : '';
     if (diffSize(diff) === 0) {
+      // No own spec moved — but when the root's own entry is drifted, the
+      // approval still owes something, and "no spec has changed" never stands
+      // alone: say what (the entry's own sentence), else that an input the
+      // gate identity covers moved. A moved member pin explains itself below.
+      const owes = own?.state === 'drifted' && !own.upgraded
+        ? (own.owed !== undefined
+          ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock-check\` fails until it is cleared${/never pinned|beyond its pin/.test(own.owed) ? ' — pin first (`wairon externals pin`), then `wairon lock`' : ' — `wairon lock` re-approves the unchanged design'}.`
+          : pinDrift
+            ? ''
+            : ' But what it was approved under did change: an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval. `wairon lock` re-approves the unchanged design.')
+        : '';
       return {
-        text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${childNote}${carry}\n`,
-        drifted: pinDrift,
+        text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${owes}${childNote}${carry}\n`,
+        drifted: pinDrift || own?.state === 'drifted',
       };
     }
 
@@ -575,6 +586,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       text: `\n${headline} — approved ${approval.lockedAt} by ${by}:\n`
         + named.map((p) => `  ${p}`).join('\n')
         + (rest > 0 ? `\n  … and ${rest} more` : '')
+        + (own?.owed !== undefined ? `\nThe approval also owes: ${own.owed}.` : '')
         + childNote
         + carry
         + '\n',

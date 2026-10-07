@@ -88,6 +88,7 @@ import { validateProject, validateRegistry, validateFamily, measurePackImpact, f
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
+import { consumerReaches } from '../models/project-family.js';
 import { selectsFamily } from '../models/validation-options.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
@@ -446,7 +447,13 @@ const externalConsumersOutput = {
     names: z.array(z.string()),
     broken: z.array(z.string()).optional(),
     found: z.enum(['search']).optional(),
-  })).describe('Each consumer with the alias and section it declares this project under, the public names its specs use, the names it still writes that this project no longer exports (broken), and found: search for one met in a searched folder outside the family.'),
+    uses: z.array(z.object({
+      publicName: z.string(),
+      kind: z.string(),
+      members: z.array(z.string()),
+      specs: z.array(z.string()).optional(),
+    })).optional().describe('Method-granular use: each public name with the contract methods (or `type`, `capability:<name>`) its references reach, and the specs that reach it.'),
+  })).describe('Each consumer with the alias and section it declares this project under, the public names its specs use (and, in uses, the methods it calls on each), the names it still writes that this project no longer exports (broken), and found: search for one met in a searched folder outside the family.'),
   ...staleServerOutput,
 };
 
@@ -960,8 +967,9 @@ const validateTreeOutput = {
   ),
   hint: z.string().optional().describe(
     "The owner's gate: present when the project declares externals — they were judged against their pins alone, "
-    + 'and `wairon validate --family` composes them against their live producers. A family run: present when '
-    + "externals were left out because their producers lie outside the run's reach.",
+    + 'and the advisory live comparison reads their live producers. A family run: present when '
+    + "externals were left out because their producers lie outside the run's reach. At a member's own root it also "
+    + 'says that the member\'s network proofs are judged at the family root, as `wairon validate` prints it.',
   ),
   projects: z.array(z.object({
     key: z.string().describe("The project's key in the family root's scan ('' for the root itself)."),
@@ -2164,7 +2172,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; method: string; newName: string; pinSymbol?: boolean }>(server,
+  reg<{ id: string; method: string; newName: string; pinSymbol?: boolean; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_method',
     {
       description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript; for a component one of whose contracts implements another project\'s extension point, any identifier, since the producer names those methods (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
@@ -2173,13 +2181,20 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         method: z.string().describe('The method name as it stands'),
         newName: z.string().describe('Its new name: an identifier in the method casing of the tree (snake_case in a Rust or Python tree, camelCase in a TypeScript one)'),
         pinSymbol: z.boolean().optional().describe('Whether an implementation that declares no symbol is pinned to the old name so its function still binds; true when omitted'),
+        dryRun: z.boolean().optional().describe('Answer what the rename would move, retarget and break (the consumers that call the method through an export), and write nothing'),
+        search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling checkouts), relative to the bound project root or absolute'),
       },
     },
-    ({ id, method, newName, pinSymbol }) => {
+    ({ id, method, newName, pinSymbol, dryRun, search }) => {
       try {
-        // mcp_orchestrator.renameMethod: resolve the id in the bound tree,
-        // rename through the core adapter, and return the report as the result.
-        return json(renameMethod(qualifiedComponentId(id), method, newName, pinSymbol));
+        // mcp_orchestrator.renameMethod: resolve the id in the bound tree, read
+        // the consumers before anything moves, rename (or ask what it would
+        // do) through the core adapter, and name the consumers it breaks.
+        const root = getProjectRoot();
+        const consumers = externalConsumers(search?.map((d) => path.resolve(root, d)));
+        const report = renameMethod(qualifiedComponentId(id), method, newName, pinSymbol, dryRun);
+        const breaks = report.publishedIn.length > 0 ? consumers.filter((c) => consumerReaches(c, report.publishedIn, method)) : [];
+        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
         return errText(String(e));
       }
@@ -2835,6 +2850,13 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // reach) — marked advisory, never part of `valid`.
         const advised = adviseExternals(familyRun ? result.composed : undefined);
         const all = [...result.issues, ...advised];
+        // Step 7: at a member's own root, the line `wairon validate` prints:
+        // its network proofs are judged at the family root.
+        const parent = resolveChainingParent();
+        const memberLine = parent
+          ? `Member "${parent.alias}" of ${parent.parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there${familyRun ? ' (this family run took them from the enclosing family, narrowed to this member)' : '; here its network entries count as declared, not proven'}.`
+          : undefined;
+        const hint = [result.hint, memberLine].filter((h): h is string => !!h).join(' ');
         // The text block is the same JSON it has always been; the structured
         // twin is that very object, so the two can never disagree.
         return jsonStructured({
@@ -2845,7 +2867,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             ...banner.map((message) => ({ severity: 'notice' as const, code: 'TRANSACTION_PENDING', message })),
             ...all.filter((i) => i.severity === 'notice'),
           ],
-          ...(result.hint ? { hint: result.hint } : {}),
+          ...(hint ? { hint } : {}),
           ...(result.projects ? { projects: result.projects } : {}),
         });
       } catch (e) {
@@ -3213,7 +3235,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const root = getProjectRoot();
         const consumers = externalConsumers(search?.map((d) => path.resolve(root, d)));
         const lines = consumers.length
-          ? consumers.map((c) => `${c.project} (${c.section}.${c.alias})${c.found ? ` [${c.directory}]` : ''}: ${c.names.length ? c.names.join(', ') : 'declares it, uses no name yet'}${c.broken?.length ? ` — still writes ${c.broken.join(', ')} (no longer exported)` : ''}`)
+          ? consumers.map((c) => {
+            const calls = (c.uses ?? []).flatMap((u) => u.members.filter((m) => m !== 'type').map((m) => `${u.publicName}.${m}`));
+            return `${c.project} (${c.section}.${c.alias})${c.found ? ` [${c.directory}]` : ''}: ${c.names.length ? c.names.join(', ') : 'declares it, uses no name yet'}${c.broken?.length ? ` — still writes ${c.broken.join(', ')} (no longer exported)` : ''}${calls.length ? `; calls ${calls.join(', ')}` : ''}`;
+          })
           : [`No project ${search?.length ? 'of the family in reach, nor in the searched folders,' : 'of the family in reach'} consumes this project.${search?.length ? '' : ' Pass search with the folder holding sibling checkouts to look outside the family.'}`];
         return structured(lines.join('\n'), { consumers });
       } catch (e) {

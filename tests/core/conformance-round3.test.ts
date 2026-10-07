@@ -195,7 +195,7 @@ describe('2. a write shortcut hidden behind `!`, a cast or a local alias', () =>
     expect(byCode(res, 'PORTAL_WRITE_SHORTCUT_IN_CODE')).toEqual([]);
     const unresolved = byCode(res, 'PORTAL_CALL_UNRESOLVED');
     expect(unresolved).toHaveLength(1);
-    expect(unresolved[0].severity).toBe('notice');
+    expect(unresolved[0].severity).toBe('warning');
     expect(unresolved[0].message).toContain('repo-a.record');
   });
 

@@ -17,7 +17,7 @@ silently rot.
 
 > **New model (preferred).** Installing a pack makes it *available*; a project
 > then *selects* it. Installing no longer grants a pack authority over every
-> project on the machine — see [pack scoping](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/pack-scoping.md).
+> project on the machine — see [pack scoping](design/pack-scoping.md).
 
 ```sh
 wairon pack install ./appenser-1.2.0.wpack   # into this wairon install's store
@@ -98,7 +98,7 @@ arguments** — each selection carries its own source, so one command restores a
 project's doctrine anywhere:
 
 ```yaml
-- uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v5
+- uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v<version>   # the version you lock with (see docs/cli.md)
   with:
     packs: sync          # sync (default) | none (bundled repos) | explicit sources
 - run: npm ci            # a TS/JS project with code: its own dependencies first (see docs/cli.md)

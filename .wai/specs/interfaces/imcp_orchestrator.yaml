@@ -114,9 +114,14 @@ methods:
         description: Its new id
   - name: renameMethod
     description: >-
-      Resolve the namespaced component id against the bound tree, then rename its contract method
-      through the core adapter
-    signature: 'renameMethod(id: string, method: string, newName: string, pinSymbol?: bool): MethodRename'
+      Resolve the namespaced component id against the bound tree, read the projects that consume the
+      bound project (the family in reach, and the searched folders' consumer checkouts), then rename
+      its contract method through the core adapter — or, with dryRun, answer what the rename would
+      do and write nothing — and name every consumer whose specs call the method through an export
+      publishing it: the ones the rename breaks
+    signature: >-
+      renameMethod(id: string, method: string, newName: string, pinSymbol?: bool, dryRun?: bool,
+      search?: list<string>): MethodRename
     returns: MethodRename
     params:
       - name: id
@@ -135,6 +140,16 @@ methods:
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, the consumers it breaks included, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
         optional: true
   - name: updateSpec
     description: >-
@@ -393,4 +408,4 @@ methods:
         description: Its new name
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-07T06:25:31.974Z'
+updatedAt: '2026-10-07T18:41:16.393Z'

@@ -77,8 +77,8 @@ methods:
   - name: renameMethod
     description: 'Forward to core_portal.renameMethod: rename a contract method and every reference to it'
     signature: >-
-      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
-      MethodRename
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
     returns: MethodRename
     params:
       - name: componentId
@@ -97,6 +97,10 @@ methods:
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
         optional: true
   - name: loadImplementationSpec
     description: Calls loadImplementationSpec on core portal
@@ -286,4 +290,4 @@ methods:
         description: Its new name
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T06:25:28.121Z'
+updatedAt: '2026-10-07T18:41:14.527Z'

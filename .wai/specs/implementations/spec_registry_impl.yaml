@@ -120,7 +120,9 @@ methods:
           form — derived signature text for every method with params, from the canonical types,
           nothing a signatureFrom supplies — keeps the stored status on a draft or status-less save,
           stamps updatedAt, re-parses through the writer schema and collects placement notices and
-          the respellings it applied
+          the respellings it applied. A type held by a part writes its file paths (its sourcePath
+          and each method's) back relative to the part's own root, the inverse of the scan's
+          normalization, exactly as a part's implementation does — so load → save stays a fixpoint
         type: local
       - stepNumber: 2
         label: home
@@ -264,4 +266,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-05T06:50:21.870Z'
+updatedAt: '2026-10-07T18:37:11.557Z'

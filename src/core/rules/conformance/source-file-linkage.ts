@@ -59,7 +59,7 @@ export const sourceFileLinkageRule: SddRule = {
     { code: 'MISSING_SOURCE_PATH', defaultSeverity: 'notice', summary: 'An implementation whose realization has not begun names no source file (for itself or for some contract methods) — designed, not linked to code yet; an error under rules.conformance.requireCode' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file an implementation or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file an implementation or one of its methods names could not be analyzed (binary/unreadable) — realization of the methods in it was not checked' },
-    { code: 'CONFORMANCE_DEGRADED', defaultSeverity: 'warning', summary: 'TypeScript/JavaScript files were analyzed below exact grade (compiler not resolvable) — dependency conformance skips them' },
+    { code: 'CONFORMANCE_DEGRADED', defaultSeverity: 'warning', summary: 'TypeScript/JavaScript files were analyzed below exact grade (no usable compiler could be loaded, or it could not read them) — dependency conformance skips them' },
     { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'Source files an implementation or its methods name are not on disk — planned, not written yet, whether or not another file it names exists; one notice per implementation naming every planned file, and method-realization judges the methods in each once it exists. An error under rules.conformance.requireCode' },
     { code: 'METHOD_SOURCE_PATH_MISSING', defaultSeverity: 'warning', summary: 'An implementation whose realization has begun leaves contract methods without a source file — structural conformance cannot link them to code' },
   ],
@@ -80,7 +80,7 @@ export const sourceFileLinkageRule: SddRule = {
       ctx.addIssue(
         'warning',
         'CONFORMANCE_DEGRADED',
-        `${degradedTsFiles.length} TypeScript/JavaScript source file(s) were analyzed below exact grade — no TypeScript compiler API could be loaded from the analyzed project or the wairon installation: either no \`typescript\` package is installed there, or the installed one ships no JavaScript compiler API (TypeScript 7's native compiler has none; this analyzer reads the TypeScript 5.x API). Structural findings carry their grade, but dependency conformance skips these files. To restore exact analysis, make a TypeScript 5.x package resolvable from the analyzed project (\`npm i -D typescript@5\`) — on TypeScript 7, check \`node -e "console.log(typeof require('typescript').createSourceFile)"\` prints function.`,
+        `${degradedTsFiles.length} TypeScript/JavaScript source file(s) were analyzed below exact grade — no TypeScript compiler API could be loaded, or the compiler could not read them. The analysis reads with the project's own \`typescript\` when it ships the JavaScript compiler API (TypeScript 5 or 6) and with the copy wairon depends on otherwise, so this is not about the project's TypeScript version: unless the compiler failed on these very files, the wairon installation is missing its own \`typescript\` dependency — reinstall wairon. Structural findings carry their grade, but dependency conformance skips these files.`,
       );
     }
 

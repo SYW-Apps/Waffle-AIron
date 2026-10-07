@@ -81,6 +81,11 @@ export function listPinnedExternals(): PinnedExternal[] {
   return surfaceOrchestrator.listPinnedExternals();
 }
 
+/** isurface_portal.unrecordedUses — each pinned external's uses its pin does not record, keyed by alias, counted offline. Pure 1:1 forward. */
+export function unrecordedUses(): Record<string, string[]> {
+  return surfaceOrchestrator.unrecordedUses();
+}
+
 /**
  * isurface_portal.declareExternal — declare one external of the bound project
  * (`wairon externals add`, sdd_add_external): refused in one sentence naming

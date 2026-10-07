@@ -348,10 +348,12 @@ methods:
           live snapshot lists the name among its unresolved re-exports; a name or member used now
           but not in the lock is compared live too: gone from the live table it is renamed or
           removed (a break the live producer already proves, pinned or not), present it is unlocked
-          (not in the lock — re-pin); an unexported reference of a family producer is unavailable.
-          Stale when a used member changed, was renamed or went away; drifted when the live content
-          digest differs from the pinned one, or when the pinned snapshot carries facts the live one
-          no longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
+          (not in the lock — re-pin); an unexported reference of a family producer is unavailable —
+          and a name already answered as renamed or removed (under any member, a type's `type`
+          included) is answered once, never a second time for its unexported references. Stale when
+          a used member changed, was renamed or went away; drifted when the live content digest
+          differs from the pinned one, or when the pinned snapshot carries facts the live one no
+          longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
           against the live one) — a stale snapshot is never ok
         type: local
       - stepNumber: 10
@@ -724,8 +726,52 @@ methods:
         description: Answer the project, what it was compared with, and the changes
         type: return
         outcome: surface_diff
+  - name: unrecordedUses
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's pinned externals — each declared alias with its lock entry and
+          the snapshot it names; an alias never pinned, or whose snapshot cannot be read, has
+          nothing a use could be recorded in and is left out (unpinned is its own refusal)
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listPinnedExternals
+      - stepNumber: 2
+        description: 'None pinned: answer an empty map without resolving anything'
+        type: branch
+        condition: no declared external carries a lock entry and a readable snapshot
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the empty map
+        type: return
+        outcome: none
+      - stepNumber: 4
+        description: >-
+          Resolve the declared externals OFFLINE — no producer is read over the network, only the
+          usages are wanted: each binding's usage is counted exactly as a pin counts it (a family
+          producer's export usage, else the usage by the public name it spells)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 5
+        description: >-
+          For each pinned alias: every used public name the lock entry's `used` map does not hold is
+          unrecorded (as `<name>`, or `<name>.<method>` for each method it uses), and every used
+          method of a name it holds with methods recorded that is not among them is unrecorded
+          (`<name>.<method>`); a name recorded with no members covers the whole name, as the live
+          comparison reads it. Keep only the uses the pinned snapshot carries
+          (surface_snapshot.memberDigest answers a digest for the method or the type, or the
+          snapshot holds the name): a use it does not carry is a design error the gate reports, and
+          no re-pin could record it. Sort each alias's uses and leave out an alias with none
+        type: local
+      - stepNumber: 6
+        description: Answer the map
+        type: return
+        outcome: unrecorded uses by alias
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-07T11:01:52.178Z'
+updatedAt: '2026-10-07T18:51:44.896Z'

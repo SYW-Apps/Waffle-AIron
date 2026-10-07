@@ -776,9 +776,11 @@ methods:
         onFalseStep: 53
       - stepNumber: 52
         description: >-
-          Add the one-line hint to the result: its externals were judged against their pins alone,
-          and `validate --family` composes them against their live producers. A hint, not a finding:
-          it never changes the verdict
+          Add the one-line hint to the result: its externals were judged against their pins alone;
+          the advisory live comparison beside this verdict reads their live producers (offline), and
+          `wairon externals status` is the opt-in live gate. A hint, not a finding: it never changes
+          the verdict — and it never sends a project without members to `validate --family`, which
+          composes nothing more for it
         type: local
       - stepNumber: 53
         label: done
@@ -822,4 +824,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T23:05:24.879Z'
+updatedAt: '2026-10-07T18:46:57.223Z'

@@ -131,7 +131,7 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   // A completed rename plans nothing.
   if (target && target.id === newId) return plan;
   if (!plan.whole) refuse(plan, 'family-partial', '', 'the family\'s top is out of this request\'s reach, and a rename must reach every consumer — run it from the top project');
-  if (!PROJECT_ID_RE.test(newId)) refuse(plan, 'id-collision', '', `"${newId}" is no project id: [a-z0-9-_.], starting and ending alphanumeric`);
+  if (!PROJECT_ID_RE.test(newId)) refuse(plan, 'id-invalid', '', `"${newId}" is no project id: [a-z0-9-_.], starting and ending alphanumeric`);
   const taken = family.nodes.find((n) => n.id === newId || (n.namespace !== '' && n.namespace === newId));
   if (taken) refuse(plan, 'id-collision', taken.namespace, `${label(taken.namespace)} already answers to "${newId}"`);
   if (target && target.id === undefined) refuse(plan, 'id-moved', target.namespace, `${label(target.namespace)} has no id to move — declare one first`);
@@ -231,7 +231,7 @@ export function planAliasRename(family: ProjectFamily, bound: string, request: M
   if (!declared(alias) && declared(next)) return plan;
   // Step 1.
   if (!declared(alias)) refuse(plan, 'not-a-member', bound, `${label(bound)} declares no member or external "${alias}"`);
-  if (!EXTERNAL_ALIAS_RE.test(next)) refuse(plan, 'alias-taken', bound, `"${next}" is no alias: an alias must fit [a-z0-9-_]+`);
+  if (!EXTERNAL_ALIAS_RE.test(next)) refuse(plan, 'alias-invalid', bound, `"${next}" is no alias: an alias must fit [a-z0-9-_]+`);
   else if (declared(next)) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${next}"`);
   // Steps 2-3.
   if (plan.refusals.length > 0) return plan;

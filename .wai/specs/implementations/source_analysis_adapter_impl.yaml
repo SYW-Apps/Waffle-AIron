@@ -1,11 +1,12 @@
 id: source_analysis_adapter_impl
 name: Source Analysis Adapter Implementation
 description: >-
-  Tiered source-file analysis with zero mandatory parser dependencies. The TypeScript compiler is
-  this component's bound technology, but the binding is opportunistic: dynamically resolved from the
-  analyzed project's node_modules first, wairon's own installation second, and simply absent
-  otherwise — pattern-table and generic-scan tiers keep conformance functional (at a recorded lower
-  grade) on hosted checkouts without node_modules and on any language.
+  Tiered source-file analysis. The TypeScript compiler is this component's bound technology and
+  wairon's one parser dependency: the analyzed project's own compiler is used when it ships the
+  JavaScript compiler API (TypeScript 5 or 6), and wairon's own copy otherwise — so a project on
+  TypeScript 7 (whose native compiler ships no JavaScript API), or with no TypeScript at all, is
+  still read at exact grade. Pattern-table and generic-scan tiers keep conformance functional, at a
+  recorded lower grade, for every other language and for a file whose exact analysis fails.
 contract: isource_analysis_adapter
 sourcePath: src/core/source-analysis.ts
 technologies:
@@ -51,10 +52,16 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Select the analyzer per file: exact AST when the TypeScript compiler module resolves
-          dynamically for ts/js (analyzed project's node_modules first, wairon's own installation
-          second, never bundled); else the file language's declarative pattern table (built-in
-          tables merged under extension-pack registrations); else the generic word-boundary scan
+          Select the analyzer per file: exact AST for ts/js through the TypeScript compiler module —
+          the analyzed project's own when it resolves from the project's package.json, loads,
+          carries the JavaScript compiler API (createSourceFile, createProgram) and is a major
+          version below 7, else wairon's own dependency; the loaded module is remembered under what
+          it depends on (the resolved package.json's path, version and modification time), so
+          installing, upgrading or removing the project's typescript is seen by the next run of a
+          long-lived process, and a module left in the require cache by the previous install is
+          evicted before the new one loads; else the file language's declarative pattern table
+          (built-in tables merged under extension-pack registrations); else the generic
+          word-boundary scan
         type: local
       - stepNumber: 6
         description: >-
@@ -106,11 +113,32 @@ methods:
           receivers resolve in the real module's scope and never in the barrel's
         type: local
       - stepNumber: 8
+        label: resolveCalls
+        description: >-
+          Resolve every call with the type checker: build one program over every exact-grade ts/js
+          file of the run, under the compiler options of the project's tsconfig.json when one is
+          readable (its module resolution, paths and baseUrl), with JavaScript allowed, a fixed ES
+          library and no ambient @types, reusing each parsed source file from a cache keyed on the
+          compiler module, the file's path and its exact text — so a changed file, or a different
+          compiler, is never answered from a stale parse. For each call expression of an analyzed
+          file record a ResolvedCallFact: the callee followed through parentheses, non-null
+          assertions, casts and satisfies, and through .call/.apply/.bind to the function they are
+          invoked on; the declarations its resolved signature and its symbol name, kept when they
+          lie inside the project root and outside node_modules; for a declaration in an interface or
+          a type shape, the project classes that realize it (the ones whose implements clause names
+          it when any does, else every class declaring the member whose instance type the checker
+          finds assignable to the shape); the innermost named function-like the call sits in and its
+          top-level container; and unresolved when no declaration answers because the receiver or
+          the callee is typed any, unknown or not at all. A call into a dependency or the language
+          library records no target and is not unresolved. A program the compiler cannot build
+          leaves every file without resolved calls, and the rules fall back to the shape facts
+        type: local
+      - stepNumber: 9
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
           root-file list the unclaimed-source rule judges, and the local-package map every import
@@ -173,4 +201,4 @@ methods:
         outcome: found
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-05T00:39:10.484Z'
+updatedAt: '2026-10-07T18:28:46.063Z'

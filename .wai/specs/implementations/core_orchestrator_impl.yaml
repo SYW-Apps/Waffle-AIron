@@ -1168,30 +1168,23 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadComponentSpec
       - stepNumber: 2
-        description: 'Guard: the component must exist'
+        description: >-
+          Guard: the component must exist, and belong to the bound project itself — a member project
+          is written from its own root
         type: branch
-        condition: the component does not exist
+        condition: >-
+          the component does not exist, or componentId is namespaced into a chained mount (it
+          carries the :: separator)
         onFalseStep: 4
       - stepNumber: 3
         label: component-missing
-        description: Refuse a component that does not exist
-        type: throw
-        error: 'component-missing: no component has this id'
-      - stepNumber: 4
-        description: 'Guard: the component must belong to the bound project itself'
-        type: branch
-        condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
-        onFalseStep: 6
-      - stepNumber: 5
-        label: chained-component
         description: >-
-          Refuse a component inside another project: a member project is written from its own root.
-          The refusal names the member's folder and the same rename run from a session there
+          Refuse, writing nothing: a component that does not exist (component-missing), or one
+          inside another project (chained-component) — the refusal names that project's folder and
+          the session to open there
         type: throw
-        error: >-
-          chained-component: the component lives in another project; rename its method from that
-          project's own root, naming its folder and the session to open there
-      - stepNumber: 6
+        error: component-missing or chained-component
+      - stepNumber: 4
         description: >-
           Guard: the new name must be an identifier in the method casing of the tree's language:
           naming_rule_config.methodCasingFor(the subsystem's effective targetLanguage), the casing
@@ -1206,15 +1199,15 @@ methods:
           newName is outside the identifier grammar: not an identifier at all, or carrying a
           separator, or — when no contract of the component declares `implements` — not in that
           casing
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 6
+      - stepNumber: 5
         label: invalid-name
         description: Refuse a new name outside the grammar
         type: throw
         error: >-
           invalid-name: the new name must be an identifier in the tree's method casing (naming the
           casing)
-      - stepNumber: 8
+      - stepNumber: 6
         description: >-
           Load every interface spec, for the component's own contracts and the names they already
           declare, and collect the contracts that move: every interface of this component that
@@ -1222,38 +1215,38 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: loadInterfaceSpecs
-      - stepNumber: 9
+      - stepNumber: 7
         description: 'Guard: the component must declare the method'
         type: branch
         condition: no contract of the component declares methodName
-        onFalseStep: 11
-      - stepNumber: 10
+        onFalseStep: 9
+      - stepNumber: 8
         label: method-missing
         description: Refuse a method the component does not declare
         type: throw
         error: 'method-missing: no contract of this component declares that method'
-      - stepNumber: 11
+      - stepNumber: 9
         description: 'Guard: the new name must be free on every contract that moves, and not retired there'
         type: branch
         condition: >-
           one of those contracts already declares a method under newName, or one of its methods
           lists `<that contract>.<newName>` in its rename trace (previousNames)
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 11
+      - stepNumber: 10
         label: name-taken
         description: >-
           Refuse a new name already declared on that interface (name-taken), or retired by one of
           its methods (name-retired, naming the method whose previousNames holds it)
         type: throw
         error: 'name-taken or name-retired: that interface already declares, or retired, the new name'
-      - stepNumber: 13
+      - stepNumber: 11
         description: >-
           Load every implementation spec, for the realizations of those contracts and the narratives
           that refer to the method
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
-      - stepNumber: 14
+      - stepNumber: 12
         description: >-
           Describe the move as the debt register and the lint allows key findings by it
           (identity_rename: the method on this component becomes newName, on the contracts that
@@ -1263,6 +1256,22 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
+      - stepNumber: 13
+        label: dry-run
+        description: Asked for a dry run?
+        type: branch
+        condition: dryRun is true
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Answer what the rename WOULD do, writing nothing: the specs the method would move in (the
+          contracts that declare it and the implementations realizing it), the specs the rewriter
+          and the lint-allow rekey would retarget (both asked dry), the mentions left alone, the
+          export entries publishing it, the symbol a pin would set, and the register edits the dry
+          rekey above computed — marked dryRun
+        type: return
+        outcome: dry run
       - stepNumber: 15
         description: Move the method on every contract of the component that declares it
         type: loop
@@ -2806,4 +2815,4 @@ methods:
         error: WaironError
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T06:25:31.040Z'
+updatedAt: '2026-10-07T18:55:43.587Z'

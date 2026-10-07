@@ -6,9 +6,11 @@ description: >-
   conformance tier, a route registration), and its action hands the parsed arguments and flags to
   one cli_runner workflow, either in ./runner.ts or in the command module that realizes it. A
   preAction hook sets the log level from --verbose/--silent and hands the command's path to
-  cli_runner.announceBinding, so every command that acts on a project names the one it bound before
-  it runs; main() parses argv and turns a WaironError into its message and exit 1. The file reaches
-  no adapter and holds no workflow.
+  cli_runner.announceBinding, so every command that acts on a project names the one it bound (and is
+  refused on a configuration that does not parse) before it runs; main() parses argv and turns ANY
+  error a command throws into one `✖` line with its message and exit 1 — the stack only when
+  WAIRON_DEBUG is set — so user input never meets a raw Node stack trace. The file reaches no
+  adapter and holds no workflow.
 contract: icli_portal
 sourcePath: src/cli/index.ts
 methods:
@@ -686,6 +688,16 @@ methods:
         targetComponent: cli_runner
         targetMethod: runMethodRenameParam
     symbol: rename-param <component> <method> <param> <new-name>
+  - name: methodRename
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon method rename <component> <method> <new-name>` with its parsed arguments
+          and options to cli_runner.runMethodRename.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMethodRename
+    symbol: rename <component> <method> <new-name>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-07T06:25:26.177Z'
+updatedAt: '2026-10-07T18:41:52.316Z'

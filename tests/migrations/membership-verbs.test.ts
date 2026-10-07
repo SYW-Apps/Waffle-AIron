@@ -120,6 +120,8 @@ describe('stage 6 — the membership verbs', () => {
     const cases: [Record<string, string>, string][] = [
       [{ alias: 'x', path: path.relative(f.top, outside) }, 'not-contained'],
       [{ alias: 'billing', path: 'fresh' }, 'alias-taken'],
+      // A malformed alias is alias-invalid, as rename-alias names it — never alias-taken.
+      [{ alias: 'Bad Alias', path: 'fresh' }, 'alias-invalid'],
       [{ alias: 'again', path: 'ledger' }, 'already-member'],
       [{ alias: 'crm2', path: 'crm' }, 'already-member'],
       [{ alias: 'nothing', path: 'empty' }, 'not-a-project'],

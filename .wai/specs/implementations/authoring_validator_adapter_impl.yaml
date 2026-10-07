@@ -22,6 +22,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: findTestsReferencing
+  - name: implementsProblem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: implementsProblem
 status: complete
 createdAt: '2026-09-18T21:13:03.714Z'
-updatedAt: '2026-09-25T20:49:16.586Z'
+updatedAt: '2026-10-07T18:51:02.663Z'

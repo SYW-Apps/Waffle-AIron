@@ -101,7 +101,11 @@ describe('stage 6 — the identity verbs', () => {
     const graph = at(f.top, () => projectFamilyGraph());
     expect(graph.authoredReferences.filter((r) => r.authored.startsWith('ledger::'))).toEqual([]);
     expect(graph.nodes.flatMap((n) => [...n.aliases.keys()])).not.toContain('ledger');
-    expect(newFindings(before, familyFindings(f.top)), familyLines(f.top).join('\n')).toEqual([]);
+    // The renamed member's approval is owed — named by the family exactly as
+    // its own status and lock-check name it (round 4: status said approved).
+    const added = newFindings(before, familyFindings(f.top));
+    expect(added.filter((l) => l !== 'warning MEMBER_DRIFTED'), familyLines(f.top).join('\n')).toEqual([]);
+    if (added.length > 0) expect(familyLines(f.top).join('\n')).toMatch(/MEMBER_DRIFTED .*renamed since the approval \(ledger → books-ledger\)/);
     // The re-lock the rename asks for: PROJECT_ID_RENAMED (a notice) before it, never PROJECT_ID_CHANGED.
     const gate = at(f.ledger, () => validateProject());
     expect(codesOf(gate.issues, 'PROJECT_ID_RENAMED', 'PROJECT_ID_CHANGED')).toEqual(['PROJECT_ID_RENAMED']);
@@ -122,12 +126,12 @@ describe('stage 6 — the identity verbs', () => {
     expect(at(f.billing, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code)).toEqual([]);
   });
 
-  it('rename refuses — each writing nothing: not-a-member, member-absent, id-collision (taken or malformed), family-partial', () => {
+  it('rename refuses — each writing nothing: not-a-member, member-absent, id-collision (taken), id-invalid (malformed — not mislabelled a collision, round-4 trial), family-partial', () => {
     const f = family();
     const cases: [() => ReturnType<typeof plan>, string][] = [
       [() => plan(f.top, { verb: 'rename', project: 'ghost', newId: 'spirit' }), 'not-a-member'],
       [() => plan(f.top, { verb: 'rename', project: 'ledger', newId: 'billing' }), 'id-collision'],
-      [() => plan(f.top, { verb: 'rename', project: 'ledger', newId: 'Not An Id' }), 'id-collision'],
+      [() => plan(f.top, { verb: 'rename', project: 'ledger', newId: 'Not An Id' }), 'id-invalid'],
       [() => runWithProjectBinding(f.billing, { topRoot: f.billing, parentReach: false }, () => { invalidateSpecCache(); return migrations.plan({ verb: 'rename', newId: 'invoices' }); }), 'family-partial'],
     ];
     for (const [run, code] of cases) {
@@ -212,9 +216,9 @@ describe('stage 6 — the identity verbs', () => {
     expect(text).toContain('# the family\nmembers:\n  books: ledger\n  billing: billing');
   });
 
-  it('rename-alias refuses — each writing nothing: not-a-member, alias-taken (declared, or malformed)', () => {
+  it('rename-alias refuses — each writing nothing: not-a-member, alias-taken (declared), alias-invalid (malformed)', () => {
     const f = family();
-    for (const [alias, newAlias, code] of [['ghost', 'spirit', 'not-a-member'], ['ledger', 'billing', 'alias-taken'], ['ledger', 'Not An Alias', 'alias-taken']]) {
+    for (const [alias, newAlias, code] of [['ghost', 'spirit', 'not-a-member'], ['ledger', 'billing', 'alias-taken'], ['ledger', 'Not An Alias', 'alias-invalid'], ['ledger', 'aux', 'alias-invalid']]) {
       const before = dirHash(f.top);
       expect(plan(f.top, { verb: 'rename-alias', alias, newAlias }).refusals.map((r) => r.code), code).toEqual([code]);
       expect(dirHash(f.top), code).toEqual(before);

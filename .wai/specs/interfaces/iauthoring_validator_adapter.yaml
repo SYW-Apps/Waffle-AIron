@@ -45,6 +45,17 @@ methods:
         description: Project-relative test directories from the project's conformance settings
     guarantees:
       - idempotent
+  - name: implementsProblem
+    description: >-
+      What validate would say of a contract declaring `implements: <ref>`, without writing it.
+      Forwarded to the validator portal.
+    signature: 'implementsProblem(ref: string): string?'
+    returns: string?
+    params:
+      - name: ref
+        type: string
+        description: The `alias::name` the contract would implement
+    effect: read
 status: complete
 createdAt: '2026-09-18T21:11:59.866Z'
-updatedAt: '2026-10-04T10:18:34.145Z'
+updatedAt: '2026-10-07T18:50:55.236Z'

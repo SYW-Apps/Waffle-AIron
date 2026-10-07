@@ -102,6 +102,23 @@ function didYouMean(ctx: RuleContext, ref: AuthoredReference): string {
   return close.length ? ` Did you mean ${close.map((n) => `"${n}"`).join(' or ')}?` : '';
 }
 
+/**
+ * The role an `alias::name` reference's entry is exported with — from the
+ * external's pin, else the contained member's live table; `call` when it names
+ * none; undefined when the entry cannot be found here.
+ */
+function exportedRole(ctx: RuleContext, authored: string): string | undefined {
+  const surface = ctx.resolveSurfaceRef(authored);
+  if (surface.kind === 'resolved') return surface.entry.role ?? 'call';
+  const [alias, name] = authored.split('::');
+  if (name === undefined) return undefined;
+  const key = ctx.projectFamily?.nodes.find((n) => n.namespace === '')?.aliases.get(alias);
+  if (key === undefined) return undefined;
+  const entry = (ctx.exportTables ?? []).find((t) => t.level === 'project' && t.owner === key)?.entries.find((e) => e.publicName === name);
+  if (!entry || entry.kind !== 'component') return undefined;
+  return entry.role ?? 'call';
+}
+
 /** The `externals` entry that would declare the producer. */
 function declaration(producer: ProjectNode | null): string {
   const id = producer?.id;
@@ -186,8 +203,22 @@ export const projectBoundariesRule: SddRule = {
             resolution,
           );
           break;
-        default:
+        default: {
+          // Steps 14-15: a resolved `implements` must land on an extension
+          // point — an entry exported with role implement.
+          if (ref.position !== 'implements') break;
+          const role = exportedRole(ctx, ref.authored);
+          if (role === undefined || role === 'implement') break;
+          ctx.addIssue(
+            'error',
+            'EXTERNAL_NOT_EXPORTED',
+            `${where}, which the producer exports for consumers to call (role ${role}), not as an extension point: \`implements\` names an entry exported with role implement. Implement an extension point the producer exports with role implement, or call this one instead.`,
+            ref.specId,
+            draft,
+            resolution,
+          );
           break;
+        }
       }
     }
     // Steps 15-19: a trusted link stays inside its project.

@@ -211,15 +211,26 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadComponentSpecs
       - stepNumber: 2
-        description: Rename the contract method and retarget every reference to it via the core client adapter
+        description: >-
+          Read the projects that consume the bound project — the family in reach, and the consumer
+          checkouts in the searched folders — before anything moves, each with the names and methods
+          its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the contract method and retarget every reference to it via the core client adapter
+          — or, with dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameMethod
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
-          Shape the tool response from the report: the specs the method moved in, the specs whose
-          references were retargeted, the specs whose prose still names it, and the pinned symbol
-          when one was set
+          Shape the tool response from the report: the specs the method moved in (or would), the
+          specs whose references were retargeted, the specs whose prose still names it, the pinned
+          symbol when one was set, and `breaks` — every consumer read above whose specs reach the
+          old method on a public name the report says publishes it (external_consumer.reaches)
         type: return
         outcome: MethodRename
   - name: updateSpec
@@ -646,10 +657,21 @@ methods:
         targetMethod: adviseExternals
       - stepNumber: 7
         description: >-
-          Answer the verdict — the family run's (each finding under its project) or the owner's
-          gate's — split into errors, warnings and notices, the advisory findings among them marked
-          advisory (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED: what
-          moved live, who uses it, the fix), which never make the tree invalid
+          At a member's own root, read the chaining parent within the request's reach: the owner's
+          gate there counts the member's network entries as declared, and the answer must say so as
+          `wairon validate` does — its network proofs are judged at the family root (a family run
+          asked here gets them from the enclosing family, narrowed to the member)
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 8
+        description: >-
+          Answer the verdict — the family run's (each finding under its project, each project's
+          totals counted from the findings listed under it) or the owner's gate's — split into
+          errors, warnings and notices, the advisory findings among them marked advisory
+          (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED: what moved live,
+          who uses it, the fix), which never make the tree invalid, with the run's hint and, at a
+          member's root, the member line `wairon validate` prints
         type: return
         outcome: ValidationResult
     symbol: sdd_validate_tree
@@ -745,4 +767,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-07T06:25:42.069Z'
+updatedAt: '2026-10-07T18:46:58.343Z'
