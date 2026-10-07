@@ -10,6 +10,7 @@ import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type Pro
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
 import type { InternalizeResult, PromoteResult } from '../core/index.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // boundary_migration — internalize and externalize: specs crossing a project
@@ -181,7 +182,7 @@ function retiredExports(family: ProjectFamily, bound: string, memberKey: string 
     const [first, name, ...rest] = ref.authored.split('::');
     if (rest.length === 0 && name !== undefined && aliases.has(first)) used.add(targetOf(name) ?? name);
   }
-  for (const a of aliases) for (const name of memberConfig?.externals?.[a]?.use ?? []) if (name !== '*') used.add(targetOf(name) ?? name);
+  for (const a of aliases) for (const name of ownGet(memberConfig?.externals, a)?.use ?? []) if (name !== '*') used.add(targetOf(name) ?? name);
   const elsewhere = new Set(family.references.filter((r) => r.producer === bound && r.consumer !== bound && r.consumer !== memberKey).map((r) => r.target));
   const system = runWithProjectRoot(boundNode.directory, () => core.loadSpec('system', 'system')) as SystemSpec | null;
   return ((system?.publicInterfaces ?? []) as { from?: string; as?: string; component?: string; typeDef?: string; audience?: string }[])
@@ -232,7 +233,7 @@ function carriedExternals(family: ProjectFamily, bound: string, member: ProjectN
   const boundNode = familyNode(family, bound)!;
   const boundConfig = configAt(boundNode.directory);
   return Object.entries(configAt(member.directory)?.externals ?? {})
-    .filter(([a, e]) => (e.project ?? a) !== boundNode.id && boundConfig?.members?.[a] === undefined)
+    .filter(([a, e]) => (e.project ?? a) !== boundNode.id && ownGet(boundConfig?.members, a) === undefined)
     .map(([a]) => a);
 }
 
@@ -279,7 +280,7 @@ function respellConsumer(plan: MigrationPlan, family: ProjectFamily, c: Consumer
 
 /** Any other consumer: its external repointed at the bound project's id (a source path re-expressed), re-pinned last. */
 function repointConsumer(plan: MigrationPlan, c: Consumer, boundNode: ProjectNode): Consumer {
-  const declared = configAt(c.node.directory)?.externals?.[c.alias];
+  const declared = ownGet(configAt(c.node.directory)?.externals, c.alias);
   const project = boundNode.id !== undefined && boundNode.id !== c.alias ? boundNode.id : null;
   const source = declared?.source ? { path: posix(path.relative(c.node.directory, boundNode.directory)) } : null;
   edit(plan, c.node.namespace, 'external', `externals: ${c.alias} names ${boundNode.id ?? 'the top project'}${source ? ` at ${source.path}` : ''}`, { root: c.node.directory, call: 'repointExternal', args: [c.alias, project, source] });
@@ -296,7 +297,7 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   const node = familyNode(family, bound)!;
   const subKey = keyIn(bound, id);
   // A completed externalize plans nothing: the id is a member at that path, and no subsystem of ours any more.
-  const done = configAt(node.directory)?.members?.[id];
+  const done = ownGet(configAt(node.directory)?.members, id);
   const donePath = done === undefined ? undefined : memberLocationOf(done);
   const asProject = request.as === 'project';
   if (donePath !== undefined && request.path !== undefined && path.resolve(node.directory, donePath) === path.resolve(node.directory, request.path)) return plan;
@@ -315,7 +316,7 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   // An existing part at that directory is joined (stage 8): its alias is taken by it, rightly.
   const joined = dir === null ? undefined : node.parts.find((p) => p.directory !== undefined && path.resolve(p.directory) === dir);
   const config = configAt(node.directory);
-  if (!joined && (config?.members?.[id] !== undefined || config?.externals?.[id] !== undefined)) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${id}"`);
+  if (!joined && (ownGet(config?.members, id) !== undefined || ownGet(config?.externals, id) !== undefined)) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${id}"`);
   if (joined && asProject) refuse(plan, 'externalize-refused', bound, `externalize into the part "${joined.alias}" and promote the part, rather than externalize as a project into it`);
   const colliding = asProject ? family.nodes.find((n) => n.id === id) : undefined;
   if (colliding) refuse(plan, 'id-collision', colliding.namespace, `${label(colliding.namespace)} already answers to "${id}"`);
@@ -475,7 +476,7 @@ export function planPromote(family: ProjectFamily, bound: string, request: Migra
   const collision = family.nodes.find((n) => n.id === newId);
   if (collision) refuse(plan, 'id-collision', collision.namespace, `${label(collision.namespace)} already answers to "${newId}"`);
   const config = configAt(node.directory);
-  if (newId !== alias && (config?.members?.[newId] !== undefined || config?.externals?.[newId] !== undefined)) {
+  if (newId !== alias && (ownGet(config?.members, newId) !== undefined || ownGet(config?.externals, newId) !== undefined)) {
     refuse(plan, 'alias-taken', bound, `${label(bound)} already declares the alias "${newId}"`);
   }
   // Every other family project's used names realized in the part must stay

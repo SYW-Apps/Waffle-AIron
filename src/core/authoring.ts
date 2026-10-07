@@ -30,7 +30,8 @@ import {
   type TypeExpressionProblem,
   type TypeRespelling,
 } from '../models/type-grammar.js';
-import type { RulesConfig } from '../models/project.js';
+import { fitsMethodCasing, methodCasingFor, type RulesConfig } from '../models/project.js';
+import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
 import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKind } from './specs.js';
 import { qualifiedTypeId } from '../models/type-references.js';
 // authoring_core_adapter and authoring_validator_adapter — every hop out of the
@@ -223,12 +224,77 @@ export function componentCandidateGate(
       // the stored spec already held is not judged, so it stays repairable.
       const written = deltaWrittenTypeProblems(kind, merged, stored ?? null);
       if (written.length) throw new Error(`${typeProblemRefusal(kind, String((merged as { id?: string }).id), written)} Nothing was written.`);
+      // A method, parameter or field name the delta introduced, judged as writeSpec judges one.
+      const names = introducedNameProblems(kind, merged, stored ?? null);
+      if (names.length) throw new Error(nameRefusal(kind, String((merged as { id?: string }).id), names));
       if (kind !== 'component') return;
       const verdict = validateComponentCandidate(merged as ComponentSpec, options);
       if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
       return noticesFrom(verdict);
     },
   };
+}
+
+/** A method as the name check reads it: its name and its parameters' names. */
+interface NamedMethod { name?: unknown; params?: { name?: unknown }[] }
+
+/**
+ * writeSpec steps 13-16 and the update hook: every method, parameter and field
+ * name an interface or a type candidate INTRODUCES — one the stored spec does
+ * not already hold, so a spec carrying an older name can still be edited —
+ * judged by the identifier grammar (identifier.problemAs), the target
+ * language's reserved words (identifier.reservedIn), uniqueness in its place,
+ * and, for a new contract method of a contract that implements no other
+ * project's extension point, the tree's method casing — exactly what the
+ * rename tools refuse, so define and rename accept the same names. Answers one
+ * sentence per problem; empty when every name is acceptable.
+ */
+function introducedNameProblems(kind: WritableSpecKind, candidate: unknown, stored: Spec | null): string[] {
+  if ((kind !== 'interface' && kind !== 'type') || !candidate || typeof candidate !== 'object') return [];
+  const spec = candidate as { component?: string; subsystem?: string; implements?: string; methods?: NamedMethod[]; fields?: { name?: unknown }[] };
+  const held = stored as { methods?: NamedMethod[]; fields?: { name?: unknown }[] } | null;
+  // Step 14: the effective target language and the method casing of the tree.
+  const owner = kind === 'interface' ? (spec.component ? (loadSpec('component', spec.component) as ComponentSpec | null)?.subsystem : undefined) : spec.subsystem;
+  const language = ((owner ? (loadSpec('subsystem', owner) as SubsystemSpec | null)?.targetLanguage : undefined)
+    ?? (loadSpec('system', 'system') as SystemSpec | null)?.targetLanguage)?.trim().toLowerCase() || undefined;
+  const casing = methodCasingFor(loadProjectConfig()?.rules?.naming, language);
+  const problems: string[] = [];
+  const judge = (name: unknown, what: 'method' | 'param' | 'field', where: string, isNew: boolean): void => {
+    if (typeof name !== 'string' || !isNew) return;
+    const problem = identifierProblem(name, what) ?? reservedWordProblem(name, what, language, casing);
+    if (problem) problems.push(`${where}: ${problem}`);
+  };
+  const duplicates = (names: unknown[], where: string): void => {
+    const seen = new Set<string>();
+    for (const n of names) {
+      if (typeof n !== 'string') continue;
+      if (seen.has(n)) problems.push(`${where}: "${n}" is declared twice — a lookup by name would bind one of them at random`);
+      seen.add(n);
+    }
+  };
+  // Step 15: methods (with their parameters) and fields, each against the stored one of its name.
+  const methods = Array.isArray(spec.methods) ? spec.methods : [];
+  duplicates(methods.map((m) => m?.name), `${kind} "${(candidate as { id?: string }).id}"`);
+  for (const m of methods) {
+    const before = held?.methods?.find((h) => h?.name === m?.name);
+    judge(m?.name, 'method', `method "${String(m?.name)}"`, !before);
+    if (kind === 'interface' && !before && spec.implements === undefined && typeof m?.name === 'string'
+      && identifierProblem(m.name, 'method') === null && !fitsMethodCasing(m.name, casing)) {
+      problems.push(`method "${m.name}": not an identifier in this tree's method casing (${casing}) — sdd_rename_method refuses it the same way`);
+    }
+    const params = Array.isArray(m?.params) ? m.params : [];
+    duplicates(params.map((p) => p?.name), `the parameters of method "${String(m?.name)}"`);
+    for (const p of params) judge(p?.name, 'param', `parameter "${String(p?.name)}" of method "${String(m?.name)}"`, !before?.params?.some((h) => h?.name === p?.name));
+  }
+  const fields = Array.isArray(spec.fields) ? spec.fields : [];
+  duplicates(fields.map((f) => f?.name), `the fields of type "${(candidate as { id?: string }).id}"`);
+  for (const f of fields) judge(f?.name, 'field', `field "${String(f?.name)}"`, !held?.fields?.some((h) => h?.name === f?.name));
+  return problems;
+}
+
+/** The sentence a name problem is refused with (invalid-name). */
+function nameRefusal(kind: WritableSpecKind, id: string, problems: string[]): string {
+  return `invalid-name: ${kind} "${id}" introduces ${problems.length === 1 ? 'a name' : 'names'} the tree cannot hold — ${problems.join('; ')}. Nothing was written.`;
 }
 
 /** An interface's or a type's type positions read under the grammar; null for any other kind. */
@@ -885,6 +951,9 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   const application = applyRestatement(restatement, existing, parent as SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | null);
   // Steps 7-8: a refusal stops the write before anything reaches disk.
   if (application.refusal !== undefined) throw new Error(application.refusal);
+  // Steps 13-16: the method, parameter and field names the candidate introduces.
+  const names = introducedNameProblems(restatement.kind, application.spec, existing);
+  if (names.length) throw new Error(nameRefusal(restatement.kind, id, names));
   // Steps 9-12: the intrinsic judgement, for the one kind judged at the boundary.
   const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
   // Steps 13-15: to disk — the legacy mount form refused before anything is written.

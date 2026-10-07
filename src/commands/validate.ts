@@ -5,7 +5,7 @@ import { pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
-import { loadProjectConfig, loadRegistry, findLegacySpecFiles, resolveChainingParent, loadSubsystemSpecs } from '../core/index.js';
+import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecFiles, resolveChainingParent, loadSubsystemSpecs } from '../core/index.js';
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -249,6 +249,7 @@ export function renderSpecFindings(result: ValidationResult, all = false): SpecT
     }
   }
   if (result.hint) logger.info(result.hint);
+  if (result.codeReading) logger.info(result.codeReading);
   return tally;
 }
 
@@ -390,7 +391,17 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
 
   else {
     logger.header('SDD Architectural Specs');
-    logger.info(chalk.gray('No spec tree yet (.wai/specs holds no L0): there is no design to check. Start one with the sdd-architect skill.'));
+    // A specs folder with no L0 but spec files below it is a tree whose root
+    // was deleted (a bad merge, a `git rm` of the wrong path) — never an empty
+    // tree: reading it as one switched the gate off over everything below it.
+    const orphaned = findOrphanedSpecFiles();
+    if (orphaned.length > 0) {
+      logger.error(orphanedTreeMessage(orphaned));
+      hasErrors = true;
+      treeChecked = true;
+    } else {
+      logger.info(chalk.gray('No spec tree yet (.wai/specs holds no L0): there is no design to check. Start one with the sdd-architect skill.'));
+    }
   }
 
   // The conformance debt register, said out loud on every run. A suppression
@@ -440,4 +451,16 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       logger.success('All checks passed.');
     }
   }
+}
+
+/**
+ * What `validate` and `lock-check` say of a specs folder that holds spec
+ * files but no L0: the root that is missing, how many files it leaves
+ * unjudged (the first few named), and how to restore it.
+ */
+function orphanedTreeMessage(orphaned: string[]): string {
+  const shown = orphaned.slice(0, 3).join(', ') + (orphaned.length > 3 ? `, … and ${orphaned.length - 3} more` : '');
+  return `The L0 System spec (.wai/specs/.index.yaml) is missing, but ${orphaned.length} spec file(s) remain below it (${shown}): `
+    + 'the tree is not empty, its root is gone, so nothing below it can be judged. Restore it from version control '
+    + '(`git checkout -- .wai/specs/.index.yaml`); remove the remaining spec files only if the whole design is meant to go.';
 }

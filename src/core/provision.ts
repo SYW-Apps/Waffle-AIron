@@ -57,7 +57,8 @@ import { projectConfigRepository, projectConfigRepositoryAt } from '../config/pr
 import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
-import { admits, declaredMembers, DesignDepthSchema, methodCasingFor, readExternalSource, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
+import { aliasGrammarProblem, admits, declaredMembers, DesignDepthSchema, methodCasingFor, readExternalSource, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
 import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
 // The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
@@ -85,6 +86,7 @@ import {
   transportKind,
   type Transport,
 } from '../models/index.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // Project provisioning (sdd_core, used by sdd_host)
@@ -258,7 +260,7 @@ function memberDeclarationsAt(dir: string): MemberAt[] {
     const pp = (raw as { projectPath?: unknown }).projectPath;
     const id = (raw as { id?: unknown }).id;
     if (typeof pp !== 'string' || pp.trim() === '' || typeof id !== 'string') continue;
-    if (seen.has(id) || config?.externals?.[id] !== undefined) continue;
+    if (seen.has(id) || ownGet(config?.externals, id) !== undefined) continue;
     seen.add(id);
     out.push({ alias: id, path: pp, form: 'mount' });
   }
@@ -419,10 +421,11 @@ function scaffoldRequirements(requirements: PackRequirement[], installed: Instal
 export function createMember(alias: string, source: string, description?: string, as?: string): MemberCreation {
   // Steps 1-2: guard the alias and the source.
   const written = typeof source === 'string' ? source.trim() : '';
-  if (!EXTERNAL_ALIAS_RE.test(alias) || written === '') {
-    throw new WaironError(
-      `an alias and a path are required to create a member: the alias must fit [a-z0-9-_]+ (got "${alias}") and the source must not be empty.`,
-    );
+  if (!EXTERNAL_ALIAS_RE.test(alias)) {
+    throw new WaironError(`Refusing to create the member "${alias}": ${aliasGrammarProblem(alias)}. Nothing was written.`);
+  }
+  if (written === '') {
+    throw new WaironError(`Refusing to create the member "${alias}": a member needs a source — a path, \`<git url>#<commit>\` — and it was empty. Nothing was written.`);
   }
   if (as !== undefined && as !== 'part' && as !== 'project') {
     throw new WaironError(`Refusing to create the member "${alias}": \`as: ${as}\` — a member is a part or a project.`);
@@ -442,6 +445,11 @@ export function createMember(alias: string, source: string, description?: string
   // scaffolded; a leading `../` is the explicit way out.
   const root = getProjectRoot();
   const memberDir = parsed.storage === 'contained' ? assertContainedProjectPath(root, relPath) : path.resolve(root, relPath);
+  // The project's own .wai holds its spec tree and configuration: never a member.
+  const fromWai = path.relative(aiPathsAt(root).root(), memberDir);
+  if (!fromWai.startsWith('..') && !path.isAbsolute(fromWai)) {
+    throw new WaironError(`Refusing to create the member "${alias}" at "${written}": that is ${fromWai === '' ? 'the project\'s own .wai directory' : 'inside the project\'s own .wai directory'}, which holds its spec tree and configuration — choose a folder outside it. Nothing was written.`);
+  }
   // Step 10: a part (the default) or a project?
   const created = as === 'project'
     ? { ...scaffoldMemberProject(alias, memberDir, description), as: 'project' as const }
@@ -801,7 +809,7 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   if (!joined && fs.existsSync(aiPathsAt(partDir).projectConfig())) {
     throw new WaironError(`cannot externalize "${subsystemId}": ${partDir} already holds a configuration (.wai/project.yaml) — a new part's directory holds none; creating one never overwrites it.`);
   }
-  if (!joined && (declaredMembers(projectConfigRepository.load() ?? {}).some((m) => m.alias === alias) || projectConfigRepository.load()?.externals?.[alias] !== undefined)) {
+  if (!joined && (declaredMembers(projectConfigRepository.load() ?? {}).some((m) => m.alias === alias) || ownGet(projectConfigRepository.load()?.externals, alias) !== undefined)) {
     throw new WaironError(`cannot externalize "${subsystemId}": this project already declares the alias "${alias}".`);
   }
   const partSpecsDir = aiPathsAt(partDir).specsDir();
@@ -1056,7 +1064,7 @@ function promoteRefusals(family: ProjectFamily, insideFiles: string[], outsideFi
   }
   // The id a family project already answers to.
   if (family.nodes.some((n) => n.id === id)) out.push(`the id "${id}" is already a project of the family`);
-  if (!PROJECT_ID_RE_LOCAL.test(id)) out.push(`the id "${id}" breaks the project-id grammar`);
+  if (identifierProblem(id, 'project-id') !== null) out.push(`the id "${id}" breaks the project-id grammar: ${identifierProblem(id, 'project-id')}`);
   // References back out need this project's id to name it by.
   const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
   if (crossing.out.length > 0 && parentId === null) out.push('its specs reference this project, which has no id for it to name — declare one first (`wairon id set`)');
@@ -1087,9 +1095,6 @@ function climbsOf(family: ProjectFamily, ids: ReadonlySet<string>, parentId: str
   }
   return { map, refused: [...new Set(refused)] };
 }
-
-/** The project-id grammar, restated where promote checks a new id before anything is written. */
-const PROJECT_ID_RE_LOCAL = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
 /** Rewrite the references of each spec in `specs` through `remap`; answers the specs that changed. */
 function rewriteRefsIn(specs: RawSpec[], remap: (ref: string, position: RefPosition) => string, record?: { result: PromoteResult; member: boolean }): RewrittenSpec[] {
@@ -2095,17 +2100,17 @@ function aliasConflicts(scan: InternalizeScan, bound: ProjectConfig): string[] {
   const out: string[] = [];
   for (const m of declaredMembers(scan.config ?? ({} as ProjectConfig))) {
     if (m.alias === scan.alias) continue;
-    const here = bound.members?.[m.alias] ?? bound.externals?.[m.alias];
+    const here = ownGet(bound.members, m.alias) ?? ownGet(bound.externals, m.alias);
     const dir = path.resolve(scan.memberDir, m.source.path ?? '');
-    const boundPath = bound.members?.[m.alias] !== undefined ? memberLocationOf(bound.members[m.alias]) : undefined;
+    const boundPath = ownGet(bound.members, m.alias) !== undefined ? memberLocationOf(ownGet(bound.members, m.alias)!) : undefined;
     const same = boundPath !== undefined && path.resolve(getProjectRoot(), boundPath) === dir;
     if (here !== undefined && !same) out.push(`its member "${m.alias}" is an alias this project already declares for another project`);
   }
   for (const [a, decl] of Object.entries(scan.config?.externals ?? {})) {
     if (carriedExternal(scan, a, decl) === 'parent') continue;
     const producer = decl.project ?? a;
-    const member = bound.members?.[a];
-    const external = bound.externals?.[a];
+    const member = ownGet(bound.members, a);
+    const external = ownGet(bound.externals, a);
     if (member !== undefined && a !== scan.alias && memberIdAt(memberLocationOf(member) ?? '') !== producer) {
       out.push(`its external "${a}" is a member alias this project declares for another project`);
     }
@@ -2295,7 +2300,7 @@ function carryDeclarations(scan: InternalizeScan, result: InternalizeResult): vo
     const source = externalSourceOf(decl)?.path !== undefined && !path.isAbsolute(externalSourceOf(decl)!.path!)
       ? { path: toPosixPath(path.relative(root, path.resolve(scan.memberDir, externalSourceOf(decl)!.path!))) }
       : decl.source;
-    if (bound.members?.[alias] === undefined) {
+    if (ownGet(bound.members, alias) === undefined) {
       projectConfigRepository.declareExternal(alias, {
         ...(decl.project !== undefined ? { project: decl.project } : {}),
         ...(source ? { source } : {}),
@@ -2451,7 +2456,7 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
   const parentSide = rewriteRefsIn(ownSpecs, across(new Set([alias]), intoMember, false));
   const memberSide = rewriteRefsIn(memberSpecs, across(parentAliases, backOut, true));
   // A bare name the member imported from this project by `use` crossed too.
-  for (const pa of parentAliases) for (const name of config?.externals?.[pa]?.use ?? []) if (name !== '*') crossed.add(backOut.get(name) ?? name);
+  for (const pa of parentAliases) for (const name of ownGet(config?.externals, pa)?.use ?? []) if (name !== '*') crossed.add(backOut.get(name) ?? name);
   const memberNow = rawSpecs(specFilesUnder(aiPathsAt(dir).specsDir()).filter((f) => path.resolve(f) !== path.resolve(aiPathsAt(dir).specsSystem())));
   const parentNow = rawSpecs(ownSpecFiles(family, aiPathsAt(dir).specsDir()));
   // ... and every `alias::<type>` token of a type expression or an asserted invariant, which no whole-value position holds.
@@ -3266,7 +3271,7 @@ const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * expression is honoured, on top of the identifier grammar.
  */
 function methodNameFits(name: string, casing: string): boolean {
-  const known = METHOD_CASINGS[casing];
+  const known = ownGet(METHOD_CASINGS, casing);
   if (known) return known.test(name);
   if (!IDENTIFIER.test(name)) return false;
   try {
@@ -3278,8 +3283,23 @@ function methodNameFits(name: string, casing: string): boolean {
 
 /** The method casing of a component's tree: its subsystem's targetLanguage, else the system's, against the configured naming. */
 function methodCasingOf(component: { subsystem: string }): string {
-  const language = loadSubsystemSpec(component.subsystem)?.targetLanguage ?? loadSystemSpec()?.targetLanguage;
-  return methodCasingFor(projectConfigRepository.load()?.rules?.naming, language);
+  return methodCasingFor(projectConfigRepository.load()?.rules?.naming, languageOf(component.subsystem));
+}
+
+/** The effective targetLanguage of a subsystem (else the system's), lowercased; undefined when the tree declares none. */
+function languageOf(subsystem: string | undefined): string | undefined {
+  const language = (subsystem !== undefined ? loadSubsystemSpec(subsystem)?.targetLanguage : undefined) ?? loadSystemSpec()?.targetLanguage;
+  return language?.trim().toLowerCase() || undefined;
+}
+
+/**
+ * Why a new method, parameter or field name is refused before its casing is
+ * judged: the identifier grammar (identifier.problemAs — empty, over 64
+ * characters, a leading digit, __proto__) or a word the tree's target language
+ * reserves for that kind (identifier.reservedIn). Null when neither refuses it.
+ */
+function memberNameRefusal(name: string, kind: 'method' | 'param' | 'field', subsystem: string | undefined, casing?: string): string | null {
+  return identifierProblem(name, kind) ?? reservedWordProblem(name, kind, languageOf(subsystem), casing);
 }
 
 /**
@@ -3359,6 +3379,9 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // identifier, and IMPLEMENTS_MISMATCH judges it against the producer's.
   const casing = methodCasingOf(component);
   const dictated = loadInterfaceSpecs().some((i) => i.component === componentId && i.implements !== undefined);
+  // The identifier grammar and the target language's reserved words, whatever the casing.
+  const refusal = memberNameRefusal(newName, 'method', component.subsystem, casing);
+  if (refusal !== null) throw new WaironError(`invalid-name: ${refusal}.`);
   if (dictated ? !IDENTIFIER.test(newName) : !methodNameFits(newName, casing)) {
     throw new WaironError(dictated
       ? `invalid-name: "${newName}" is not an identifier (a letter or underscore, then letters, digits or underscores).`
@@ -3880,6 +3903,8 @@ export function renameField(typeId: string, field: string, newName: string): Fie
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
     throw new WaironError(`invalid-name: "${newName}" is not an identifier (a letter or underscore, then letters, digits or underscores).`);
   }
+  const fieldRefusal = memberNameRefusal(newName, 'field', type.subsystem);
+  if (fieldRefusal !== null) throw new WaironError(`invalid-name: ${fieldRefusal}.`);
   const taken = fields.find((f) => f !== moving && f.name === newName);
   if (taken) throw new WaironError(`name-taken: type "${type.id}" already has a field "${newName}".`);
   const retired = fields.find((f) => f !== moving && (f.previousNames ?? []).includes(newName));
@@ -4007,6 +4032,8 @@ export function renameParam(componentId: string, methodName: string, param: stri
   if (!IDENTIFIER.test(newName)) {
     throw new WaironError(`invalid-name: "${newName}" is not an identifier (a letter or underscore, then letters, digits or underscores).`);
   }
+  const paramRefusal = memberNameRefusal(newName, 'param', component.subsystem);
+  if (paramRefusal !== null) throw new WaironError(`invalid-name: ${paramRefusal}.`);
   // A producer names the parameters of an extension point this component implements.
   const variables = projectConfigRepository.load()?.rules?.naming?.variables;
   const dictated = contracts.some((i) => i.implements !== undefined);
@@ -4031,6 +4058,12 @@ export function renameParam(componentId: string, methodName: string, param: stri
         if (endpoint && endpoint.transport === 'HTTP' && endpoint.path.includes(placeholder)) {
           endpoint = { ...endpoint, path: endpoint.path.split(placeholder).join(`{${newName}}`) };
           rewritten.push(`${contract.id}.${methodName}: {${param}} -> {${newName}}`);
+        }
+        // The Express idiom `/:name` is the same placeholder, respelled in its own form.
+        const colon = new RegExp(`/:${param}(?![A-Za-z0-9_])`, 'g');
+        if (endpoint && endpoint.transport === 'HTTP' && colon.test(endpoint.path)) {
+          endpoint = { ...endpoint, path: endpoint.path.replace(colon, `/:${newName}`) };
+          rewritten.push(`${contract.id}.${methodName}: :${param} -> :${newName}`);
         }
         return { ...m, params, ...(endpoint ? { endpoint } : {}) };
       }),

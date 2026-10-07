@@ -2,6 +2,7 @@ import { SddRule, RuleCode } from './types.js';
 
 import { hierarchyRule } from './integrity/hierarchy-integrity.js';
 import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
+import { memberNamesRule } from './integrity/member-names.js';
 import { localIdsRule } from './integrity/local-ids.js';
 import { projectIdentityRule } from './integrity/project-identity.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
@@ -139,6 +140,7 @@ export const SDD_RULES: SddRule[] = [
   // questions of the same ids: the segment no id may spend, and whether a
   // local id names one spec (and reads apart from the project's aliases).
   reservedIdSegmentsRule,
+  memberNamesRule,
   localIdsRule,
   // The project's own id, beside the spec ids: declared, well-formed, and the
   // one its lock approved.

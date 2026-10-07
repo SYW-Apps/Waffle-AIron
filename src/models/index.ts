@@ -4,6 +4,7 @@ export * from './project.js';
 export * from './registry.js';
 export * from './template.js';
 export * from './specs.js';
+export * from './identifiers.js';
 export * from './technology-packages.js';
 export * from './type-references.js';
 export * from './type-grammar.js';

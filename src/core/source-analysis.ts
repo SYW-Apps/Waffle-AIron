@@ -369,6 +369,28 @@ function resolveTypeScript(projectRoot: string): TsModule | null {
   return compilerFrom(path.join(projectRoot, 'package.json'), true) ?? compilerFrom(__filename, false);
 }
 
+/** compiler_identity — which compiler an exact-grade analysis reads a project with, and whose copy it is. */
+export interface CompilerIdentity {
+  version: string;
+  source: 'project' | 'wairon';
+}
+
+/**
+ * isource_analysis_adapter.compilerIdentity — which compiler an exact-grade
+ * analysis of this project reads it with, resolved exactly as
+ * resolveTypeScript resolves it: the project's own (one with the JavaScript
+ * compiler API), else wairon's own copy; null when neither loads. What
+ * `validate` names in its code-reading line.
+ */
+export function compilerIdentity(projectRoot: string): CompilerIdentity | null {
+  // Step 1: the project's own.
+  const own = compilerFrom(path.join(projectRoot, 'package.json'), true);
+  if (own) return { version: String(own.version), source: 'project' };
+  // Step 2: wairon's copy.
+  const shipped = compilerFrom(__filename, false);
+  return shipped ? { version: String(shipped.version), source: 'wairon' } : null;
+}
+
 interface ExactFacts {
   declared: Set<string>;
   anchors: Set<string>;
@@ -714,6 +736,24 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   ): void => {
     const fields: ShapeMemberFact[] = [];
     const methods: string[] = [];
+    // A PRIVATE field a getter of the same class reads is backing storage:
+    // the getter is the member the type's data is read through, and the
+    // field behind it is implementation (`private readonly a` behind
+    // `get amountMinor()`). A private field nothing exposes stays data.
+    const backing = new Set<string>();
+    for (const member of members) {
+      if (!ts.isGetAccessorDeclaration(member) || !member.body) continue;
+      const read = (node: import('typescript').Node): void => {
+        if (ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword) backing.add(node.name.text);
+        ts.forEachChild(node, read);
+      };
+      read(member.body);
+    }
+    const isPrivate = (node: import('typescript').ClassElement | import('typescript').TypeElement | import('typescript').ParameterDeclaration): boolean =>
+      (!!node.name && ts.isPrivateIdentifier(node.name))
+      || !!ts.canHaveModifiers(node) && !!ts.getModifiers(node)?.some(m => m.kind === ts.SyntaxKind.PrivateKeyword);
+    const isBacking = (node: import('typescript').ClassElement | import('typescript').TypeElement | import('typescript').ParameterDeclaration, name: string): boolean =>
+      isPrivate(node) && backing.has(name);
     for (const member of members) {
       // A constructor names no member of its own, but each of its parameter
       // PROPERTIES (`constructor(public readonly amount: number)`) declares a
@@ -723,6 +763,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       if (ts.isConstructorDeclaration(member)) {
         for (const param of member.parameters) {
           if (!isParameterProperty(param) || !ts.isIdentifier(param.name)) continue;
+          if (isBacking(param, param.name.text)) continue;
           fields.push({ name: param.name.text, optional: !!param.questionToken });
         }
         continue;
@@ -733,6 +774,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
         methods.push(memberName);
       } else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
+        if (isBacking(member, memberName)) continue;
         fields.push({ name: memberName, optional: !!member.questionToken });
       }
     }
@@ -2330,37 +2372,175 @@ function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: str
     for (const decl of symbol?.declarations ?? []) if (MEMBER_KINDS.has(decl.kind)) decls.add(decl);
 
     const targets = targetsOf(decls);
+    // A computed key that names no single member — a template, a
+    // concatenation, a string-typed variable — and a member read off a type
+    // the code CAST to an index signature both leave the call landing on no
+    // declaration of this project, and the cast or the key is what made it so.
+    const computedKey = ts.isElementAccessExpression(callee) && !literalKey(callee.argumentExpression);
+    const indexCast = receiver !== undefined && castToIndex(receiver);
     const fact: ResolvedCallFact = {
-      name: targets.find(t => t.via === 'declaration')?.member ?? nameText(nameNode) ?? '',
+      name: targets.find(t => t.via === 'declaration')?.member ?? (computedKey ? '' : nameText(nameNode)) ?? '',
       written: callee.getText().replace(/\s+/g, ' ').slice(0, 80),
       targets,
     };
     const where = enclosingOf(call);
     if (where.name !== undefined) fact.enclosing = where.name;
     if (where.container !== undefined) fact.enclosingContainer = where.container;
-    if (decls.size === 0 && (isOpaque(checker.getTypeAtLocation(callee)) || (receiver !== undefined && isOpaque(checker.getTypeAtLocation(receiver))))) {
+    const opaque = decls.size === 0
+      && (isOpaque(checker.getTypeAtLocation(callee)) || (receiver !== undefined && isOpaque(checker.getTypeAtLocation(receiver))));
+    if (opaque || (targets.length === 0 && (computedKey || indexCast))) {
       fact.unresolved = true;
+      if (receiver !== undefined) {
+        const receivers = classesOf(unwrap(receiver), fact.name);
+        if (receivers.length > 0) fact.receivers = receivers;
+      }
     }
     return fact;
+  };
+
+  /** Whether an element-access key names one member: a string or number literal, or an expression the checker types as one literal. */
+  function literalKey(key: import('typescript').Expression): boolean {
+    if (ts.isStringLiteralLike(key) || ts.isNumericLiteral(key)) return true;
+    const type = checker.getTypeAtLocation(key);
+    return (type.flags & (ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral | ts.TypeFlags.UniqueESSymbol)) !== 0;
+  }
+
+  /** Whether an expression, as written, is cast (as, an assertion) to a type with an index signature, any or unknown. */
+  function castToIndex(expr: import('typescript').Expression): boolean {
+    for (let at = expr; ;) {
+      if (ts.isAsExpression(at) || ts.isTypeAssertionExpression(at)) {
+        const type = checker.getTypeAtLocation(at);
+        if (isOpaque(type) || checker.getIndexInfosOfType(type).length > 0) return true;
+        at = at.expression;
+      } else if (ts.isParenthesizedExpression(at) || ts.isNonNullExpression(at) || ts.isSatisfiesExpression(at)) {
+        at = at.expression;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  /** The project classes an expression's type is, or that realize the interface or shape it is — each as a target under `member`. */
+  function classesOf(expr: import('typescript').Expression, member: string): CallTargetFact[] {
+    const out: CallTargetFact[] = [];
+    const seen = new Set<string>();
+    const add = (target: CallTargetFact): void => {
+      const id = `${target.path}|${target.container ?? ''}`;
+      if (!seen.has(id)) { seen.add(id); out.push(target); }
+    };
+    const type = checker.getTypeAtLocation(expr);
+    for (const part of type.isUnionOrIntersection() ? type.types : [type]) {
+      const symbol = part.getSymbol() ?? part.aliasSymbol;
+      for (const decl of symbol?.declarations ?? []) {
+        const key = ownKey(decl.getSourceFile());
+        if (!key) continue;
+        if (ts.isClassLike(decl) && decl.name) add({ path: key, container: decl.name.text, member, via: 'declaration' });
+        else if (ts.isInterfaceDeclaration(decl) || ts.isTypeLiteralNode(decl)) {
+          for (const c of implementorsOf(decl)) add({ path: c.path, container: c.name, member, via: 'implementor' });
+        }
+      }
+    }
+    return out;
+  }
+
+  const FUNCTION_DECLS = new Set<number>([
+    ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.MethodSignature, ts.SyntaxKind.FunctionDeclaration,
+    ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.PropertySignature, ts.SyntaxKind.PropertyAssignment,
+    ts.SyntaxKind.VariableDeclaration, ts.SyntaxKind.GetAccessor,
+  ]);
+
+  /**
+   * Whether an expression sits where the code takes its VALUE rather than
+   * invoking it: an argument, an initializer, an assigned or returned value,
+   * an array element, the receiver of `.bind`, or of `.call`/`.apply` that
+   * is not invoked on the spot (an invoked one is a call resolveOne reads).
+   */
+  const isValuePosition = (node: import('typescript').Node): boolean => {
+    let at = node;
+    while (at.parent && (ts.isParenthesizedExpression(at.parent) || ts.isAsExpression(at.parent) || ts.isNonNullExpression(at.parent)
+      || ts.isSatisfiesExpression(at.parent) || ts.isTypeAssertionExpression(at.parent))) at = at.parent;
+    const parent = at.parent;
+    if (!parent) return false;
+    if ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) && parent.expression !== at) return true;
+    if (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) return parent.initializer === at;
+    if (ts.isArrayLiteralExpression(parent) || ts.isReturnStatement(parent) || ts.isSpreadElement(parent)) return true;
+    if (ts.isArrowFunction(parent)) return parent.body === at;
+    if (ts.isBinaryExpression(parent)) return parent.right === at && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken;
+    if (ts.isPropertyAccessExpression(parent) && parent.expression === at) {
+      const via = parent.name.text;
+      if (via === 'bind') return true;
+      if (via === 'call' || via === 'apply') return !(parent.parent && ts.isCallExpression(parent.parent) && parent.parent.expression === parent);
+    }
+    return false;
+  };
+
+  /** A function or method of this project the code takes as a value here, recorded as a reference; undefined for anything else. */
+  const referenceOf = (node: import('typescript').Expression): ResolvedCallFact | undefined => {
+    if (!isValuePosition(node)) return undefined;
+    const nameNode = ts.isPropertyAccessExpression(node) ? node.name
+      : ts.isElementAccessExpression(node) ? node.argumentExpression : node;
+    const symbol = symbolOf(nameNode);
+    const decls = (symbol?.declarations ?? []).filter(d => FUNCTION_DECLS.has(d.kind));
+    if (decls.length === 0) return undefined;
+    // Only a callable value: a field holding data is no reference to a function.
+    if (checker.getTypeAtLocation(node).getCallSignatures().length === 0) return undefined;
+    const callable = decls.map(d => (ts.isVariableDeclaration(d) && d.initializer
+      && (ts.isArrowFunction(d.initializer) || ts.isFunctionExpression(d.initializer)) ? d.initializer : d));
+    const targets = targetsOf(callable.filter(d => !ts.isVariableDeclaration(d)) as import('typescript').Declaration[]);
+    if (targets.length === 0) return undefined;
+    const fact: ResolvedCallFact = {
+      name: targets.find(t => t.via === 'declaration')?.member ?? nameText(nameNode) ?? '',
+      written: node.getText().replace(/\s+/g, ' ').slice(0, 80),
+      targets,
+      reference: true,
+    };
+    const where = enclosingOf(node);
+    if (where.name !== undefined) fact.enclosing = where.name;
+    if (where.container !== undefined) fact.enclosingContainer = where.container;
+    return fact;
+  };
+
+  const resolveFile = (sf: import('typescript').SourceFile): ResolvedCallFact[] => {
+    const calls: ResolvedCallFact[] = [];
+    const visit = (node: import('typescript').Node): void => {
+      try {
+        if (ts.isCallExpression(node)) {
+          const fact = resolveOne(node);
+          if (fact) calls.push(fact);
+        } else if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isIdentifier(node)) {
+          const fact = referenceOf(node);
+          if (fact) calls.push(fact);
+        }
+      } catch {
+        // one call the checker cannot answer never costs the file its others
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    return calls;
   };
 
   for (const [absolute, key] of files) {
     const sf = program.getSourceFile(absolute);
     if (!sf) continue;
-    const calls: ResolvedCallFact[] = [];
-    const visit = (node: import('typescript').Node): void => {
-      if (ts.isCallExpression(node)) {
-        try {
-          const fact = resolveOne(node);
-          if (fact) calls.push(fact);
-        } catch {
-          // one call the checker cannot answer never costs the file its others
-        }
+    out.set(key, resolveFile(sf));
+  }
+
+  // The project's own files the resolved calls reach that are no root of the
+  // run — a helper module no spec names — resolved too, transitively, so a
+  // rule can read unowned code as part of whoever calls into it.
+  const pending = [...out.values()];
+  while (pending.length) {
+    for (const call of pending.pop()!) {
+      for (const target of call.targets) {
+        if (out.has(target.path)) continue;
+        const sf = program.getSourceFile(path.resolve(projectRoot, target.path));
+        if (!sf || sf.isDeclarationFile || !ownKey(sf)) { out.set(target.path, []); continue; }
+        const calls = resolveFile(sf);
+        out.set(target.path, calls);
+        pending.push(calls);
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(sf);
-    out.set(key, calls);
+    }
   }
   return out;
 }
@@ -2521,10 +2701,17 @@ export function buildCodeModel(
     } catch {
       resolved = new Map();
     }
+    const held = new Set<string>();
     for (const facts of files) {
       const calls = resolved.get(facts.path);
-      if (calls) facts.resolvedCalls = calls;
+      if (calls) {
+        facts.resolvedCalls = calls;
+        held.add(facts.path);
+      }
     }
+    const reached: Record<string, ResolvedCallFact[]> = {};
+    for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
+    if (Object.keys(reached).length > 0) return { files, projectRoot, rootFiles, packages, reachedCalls: reached };
   }
 
   return { files, projectRoot, rootFiles, packages };

@@ -126,14 +126,30 @@ function judge(
   let wiring = 0;
   while (wiring < realized.length && realized[wiring].name !== undefined
     && injected.has(realized[wiring].name as string)) wiring++;
-  const taken = realized.slice(wiring);
+  let taken = realized.slice(wiring);
+
+  // ---- 3b. a leading surplus the NAMES prove ----
+  // When the code takes more than the contract declares and its trailing
+  // parameters carry the contract's names one for one, while the leading ones
+  // do not, the surplus is the LEADING run: `fulfillOrder(requester, orderId)`
+  // for a contract `fulfillOrder(orderId)` inserted `requester`, and naming
+  // `orderId` as the undeclared one would have the reader delete the wrong
+  // argument. Only every declared name agreeing settles it; anything less
+  // keeps the front alignment below.
+  const surplus = taken.length - declared.length;
+  const named = (offset: number): boolean => declared.every((param, i) => taken[offset + i]?.name === param.name);
+  let leading: ParameterFact[] = [];
+  if (surplus > 0 && declared.length > 0 && named(surplus) && !named(0)) {
+    leading = taken.slice(0, surplus);
+    taken = taken.slice(surplus);
+  }
 
   // ---- 4. match what remains against the declared list, FROM THE FRONT ----
   // A caller passes arguments in order, so the first remaining parameter IS
   // the first declared one. A leading parameter no injection accounts for
-  // therefore shows up as a shift and is reported by the COUNT below, never
-  // blamed on one name: aligning from the back would accuse the wrong argument
-  // and rename-report every position after it.
+  // the names do not prove (3b) therefore shows up as a shift and is reported
+  // by the COUNT below: aligning from the back on a guess would accuse the
+  // wrong argument and rename-report every position after it.
   const matched = Math.min(declared.length, taken.length);
   const found: Judgement = {
     unrealized: new Map(), undeclared: new Map(), renamed: new Map(), optionality: new Map(),
@@ -146,8 +162,12 @@ function judge(
   for (const param of declared.slice(matched)) {
     found.unrealized.set(param.name, { unit: param.name, told: `"${param.name}"` });
   }
+  leading.forEach((param, index) => {
+    const unit = unitOf(param, wiring + index);
+    found.undeclared.set(unit, { unit, told: `"${unit}"` });
+  });
   taken.slice(matched).forEach((param, index) => {
-    const unit = unitOf(param, wiring + matched + index);
+    const unit = unitOf(param, wiring + leading.length + matched + index);
     found.undeclared.set(unit, { unit, told: `"${unit}"` });
   });
 
@@ -197,7 +217,7 @@ function agreed(judgements: Judgement[], reading: keyof Judgement): ParamFinding
 export const paramConformanceRule: SddRule = {
   name: 'param-conformance',
   judges: 'code',
-  description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. Types agree when the code\'s annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract\'s canonical type — so `string[]` in the code agrees with `list<string>` in the contract, TypeScript\'s `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
+  description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. Types agree when the code\'s annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract\'s canonical type — so `string[]` in the code agrees with `list<string>` in the contract, TypeScript\'s `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing. Where the code takes more parameters than the contract declares and its TRAILING ones carry the contract\'s names one for one while its leading ones do not, the leading surplus is what is undeclared — an inserted first argument is named, never the declared one it pushed along. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
   codes: [
     {
       code: 'UNREALIZED_PARAM',

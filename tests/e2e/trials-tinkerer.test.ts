@@ -248,7 +248,8 @@ describe('tinkerer: lock messages say what they approve', () => {
     declareId(draft, 'linkshort');
     const r = await sb.run(['lock', '--yes'], draft);
     expectExit(r, 0);
-    expect(r.all).toContain('Every component (2) is still draft or design: this approves the design as it stands, drafts included. Status is readiness, never approval');
+    // Every draft spec kind is counted (round 5: components alone hid every draft L3/L4).
+    expect(r.all).toMatch(/\d+ of \d+ spec\(s\) are still draft or design \([^)]*2 components[^)]*\): this approves the design as it stands, drafts included\. Status is readiness, never approval/);
 
     const complete = sb.materialize('lock-all-complete', linkshort('complete'));
     declareId(complete, 'linkshort');

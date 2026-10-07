@@ -66,24 +66,35 @@ methods:
         targetComponent: cli_validator_adapter
         targetMethod: validateProjectConfig
       - stepNumber: 6
+        label: orphaned
+        description: >-
+          When the specs folder holds no L0 (and the project is no part), ask the core portal which
+          spec files are left standing below it: any is reported as an error naming the missing
+          .wai/specs/.index.yaml, how many files it leaves unjudged and the fix (restore it from
+          version control) — never as "nothing to check yet: the spec tree is empty", which turned a
+          deleted L0 into a green `validate --ci`
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findOrphanedSpecFiles
+      - stepNumber: 7
         description: >-
           Which spec-tree check? validation_options.selectsFamily(the configuration declares
           members): the family run at a parent or with --family, the owner's gate otherwise
         type: branch
         condition: the options select the family run
-        onFalseStep: 9
-      - stepNumber: 7
+        onFalseStep: 10
+      - stepNumber: 8
         description: >-
           Run the family run: every selected project's own gate, the composition findings and the
           family checks
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateFamily
-      - stepNumber: 8
+      - stepNumber: 9
         description: 'The family run already holds the owner''s gate of every selected project: go render'
         type: jump
-        toStep: 10
-      - stepNumber: 9
+        toStep: 11
+      - stepNumber: 10
         label: ownerGate
         description: >-
           Run the owner's gate over the bound project alone (skipped when the family run ran — the
@@ -91,7 +102,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 10
+      - stepNumber: 11
         label: advise
         description: >-
           Compare, offline and advisory, every external the run did not compose with its live
@@ -100,7 +111,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: adviseExternals
-      - stepNumber: 11
+      - stepNumber: 12
         label: render
         description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
@@ -151,4 +162,4 @@ methods:
         targetMethod: adviseExternals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:16:08.701Z'
+updatedAt: '2026-10-07T21:48:51.453Z'

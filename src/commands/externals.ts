@@ -175,7 +175,9 @@ function printRemoval(removal: ExternalRemoval, dryRun: boolean): void {
     logger.error(removal.refusal);
     return;
   }
-  const what = [removal.removed ? 'its declaration' : '', removal.unpinned ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
+  const declaration = removal.wouldRemove?.declaration ?? removal.removed;
+  const pin = removal.wouldRemove?.pin ?? removal.unpinned;
+  const what = [declaration ? 'its declaration' : '', pin ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
   if (dryRun) logger.info(`Dry run: would remove ${chalk.cyan(removal.alias)} — ${what}. Nothing was written.`);
   else logger.success(`Removed ${chalk.cyan(removal.alias)}: ${what}.`);
 }

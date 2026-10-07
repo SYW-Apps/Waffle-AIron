@@ -71,6 +71,7 @@ import {
 } from './adapters/surfaces-core.js';
 // externals_repository: the pinned digest of each dependency (the externals lock).
 import { externalsRepository } from './externals.js';
+import { ownGet } from '../utils/own.js';
 
 /** Refusal raised when the tree has no L0 to export (`no-system`). */
 export class NoSystemSpecError extends Error {
@@ -269,7 +270,7 @@ function projectSection(system: SystemSpec, table: ResolvedExport[], keys: KeyTa
 /** Step 23: one externals binding as a DesignDependency, with the digest its lock entry pins. */
 function dependency(binding: ExternalBinding, lock: ExternalsLock | null, keys: KeyTable): DesignDependency {
   const alias = binding.external.alias;
-  const digest = lock?.externals[alias]?.digest;
+  const digest = ownGet(lock?.externals, alias)?.digest;
   return {
     alias,
     projectId: binding.external.project,
@@ -281,7 +282,7 @@ function dependency(binding: ExternalBinding, lock: ExternalsLock | null, keys: 
 
 /** Step 23: one direct project member not among the externals, as a DesignDependency (role member). */
 function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null, keys: KeyTable): DesignDependency {
-  const digest = lock?.externals[member.alias]?.digest;
+  const digest = ownGet(lock?.externals, member.alias)?.digest;
   return {
     alias: member.alias,
     projectId: member.projectId,

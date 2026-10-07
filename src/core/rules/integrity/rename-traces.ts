@@ -61,7 +61,7 @@ export const renameTracesRule: SddRule = {
   name: 'rename-traces',
   judges: 'design',
   description:
-    'A rename trace (a spec\'s previousIds, a contract method\'s previousNames) names keys that no longer exist, and is what lets a consumer of the design export tell a rename from a delete plus an add; it must therefore be unambiguous. Reported: a trace entry equal to a live key of the same kind (a component, interface or implementation id; a type id within the same owner; `<interface>.<method>` of a declared method), and one former key claimed by two elements of the same kind. The rename tools and the gated write refuse both (id-retired, name-retired), so a finding means a hand edit; the message names both holders and the way out — rename the newcomer, or unset the trace entry and accept the delete plus an add a consumer will read.',
+    'A rename trace (a spec\'s previousIds, a contract method\'s previousNames) names keys that no longer exist, and is what lets a consumer of the design export tell a rename from a delete plus an add; it must therefore be unambiguous. Reported: a trace entry equal to a live key of the same kind (a component, interface or implementation id; a type id within the same owner; `<interface>.<method>` of a declared method) — its holder\'s own current key included, which a trace of former names can never hold — and one former key claimed by two elements of the same kind. The rename tools and the gated write refuse both (id-retired, name-retired), so a finding means a hand edit; the message names both holders and the way out — rename the newcomer, or unset the trace entry and accept the delete plus an add a consumer will read.',
   codes: [
     { code: CODE, defaultSeverity: 'warning', summary: 'A rename-trace entry equals a live key of the same kind, or two elements claim one former key' },
   ],
@@ -89,6 +89,16 @@ export const renameTracesRule: SddRule = {
         if (m.previousNames?.length) methodHolders.push({ key, specId: intf.id, label: `Method "${key}"`, trace: m.previousNames });
       }
     }
-    judgeKind(ctx, 'contract method', liveMethods, methodHolders, inNamespace);
+    // A bare method name in a contract method's trace is read on its own contract.
+    judgeKind(ctx, 'contract method', liveMethods, methodHolders, (entry, holder) =>
+      (entry.includes('.') || entry.includes('::') ? inNamespace(entry, holder) : `${holder.key.slice(0, holder.key.lastIndexOf('.'))}.${entry}`));
+    // A parameter's or a field's trace never holds the name it carries now.
+    const ownName = (specId: string, label: string, name: string, trace: string[] | undefined): void => {
+      if (trace?.includes(name)) report(ctx, { key: label, specId, label, trace }, `${label} lists its own name "${name}" in its rename trace — a rename never records the name it keeps. Unset the entry.`);
+    };
+    for (const intf of ctx.interfaces) {
+      for (const m of intf.methods) for (const p of m.params ?? []) ownName(intf.id, `Parameter "${p.name}" of method "${intf.id}.${m.name}"`, p.name, p.previousNames);
+    }
+    for (const t of ctx.types) for (const f of t.fields ?? []) ownName(t.id, `Field "${f.name}" of type "${qualifiedTypeId(t)}"`, f.name, f.previousNames);
   },
 };

@@ -98,6 +98,19 @@ methods:
     signature: 'holdsNoDesign(): bool'
     returns: bool
     params: []
+  - name: treeVerdict
+    description: >-
+      The lock-check verdict on a project whose specs folder holds no L0, or none when it holds one:
+      no tree at all is said so (approved unless strict — a repository with no design yet must not
+      start failing every strict consumer), and a specs folder whose L0 was deleted while spec files
+      remain below it is refused at every strictness, naming the missing .wai/specs/.index.yaml, how
+      many files it leaves unjudged and the fix — a bad merge never turns the gate green.
+    signature: 'treeVerdict(strict: bool): ApprovalCheck?'
+    returns: ApprovalCheck?
+    params:
+      - name: strict
+        type: bool
+        description: Whether --strict asks for an approved design
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-07T11:35:48.866Z'
+updatedAt: '2026-10-07T22:15:33.277Z'

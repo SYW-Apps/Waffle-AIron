@@ -1,9 +1,9 @@
 import { posix } from 'path';
 import {
   fieldTypesOf, implementationSourceFiles, importBindingOf, localTypesOf, methodSourceFile, pathKey, resolveImport,
-  technologyName, technologyPackages, TECHNOLOGY_PACKAGES, type CallSiteFact, type ComponentSpec, type ImplementationSpec,
+  technologyName, technologyPackages, TECHNOLOGY_PACKAGES, type CallSiteFact, type ComponentSpec, type ImplementationSpec, type ResolvedCallFact,
 } from '../../../models/index.js';
-import { closedCallSites } from './call-conformance.js';
+import { closedCallSites, throughText, unownedReach, writeCandidates } from './call-conformance.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -45,23 +45,35 @@ import { RuleContext, SddRule } from '../types.js';
 // are absent from the realization index, as in Level 1.
 // ---------------------------------------------------------------------------
 
+/**
+ * How a finding quotes a Portal's call: as written — a reference without the
+ * call parentheses — and, for one reached through unowned code, the site in
+ * the Portal's own code, the call it reaches there and the hops between.
+ */
+function quoteCall(call: ResolvedCallFact, site: ResolvedCallFact, through: readonly string[]): string {
+  const as = (c: ResolvedCallFact): string => (c.reference ? `\`${c.written}\` (taken as a value)` : `\`${c.written}(…)\``);
+  return through.length ? `${as(site)}, which reaches ${as(call)}${throughText(through)}` : as(call);
+}
+
 export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses — type coupling is allowed — but a CALL of a modelled contract method through a collaborator whose declared type comes from another component\'s file is runtime collaboration whatever the import\'s form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning); a type-only import realizes it, since `import type` is what dependency injection writes down. An Adapter\'s edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter\'s transport client realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would couple two deployables\' builds. Two twins of design rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal\'s own narrative already claims that call (the design rule\'s finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal\'s calls are resolved by the TypeScript type checker: every call written in a file realizing only Portals — in a file shared with other components, every call in a body the Portal\'s own methods reach — lands on the declaration its signature resolves to, whatever the receiver\'s spelling, and a declaration in an interface or type shape, a port the Portal declares for itself included, lands on each class of the project that realizes it (the classes whose implements clause names it when any does, else every class the checker finds assignable to it); such a landing on a component the file neither imports at runtime nor is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker could be loaded, the receiver is followed through the shape facts instead: a non-null assertion, parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field exactly as through the field itself. A call in a Portal\'s own file the analysis cannot resolve at all — its receiver typed any or unknown, cast to either, or typed nothing — under the name of a write- or lifecycle-effect method of a data component in the Portal\'s own subsystem or one it depends into, which the Portal does not already claim, fails closed: it is neither proven a shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read (PORTAL_CALL_UNRESOLVED). And a file importing a technology\'s package while no component it realizes is that technology\'s home is the leak TECH_LEAKAGE refuses in the design (TECH_LEAKAGE_IN_CODE): a technology\'s packages are its declared tokens (its name, or its `matches`), the curated built-in table of the common packages its name is known by (postgres: pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis, ioredis; mongodb: mongodb, mongoose; sqlite: better-sqlite3, sqlite3; kafka: kafkajs; rabbitmq: amqplib — an HTTP client is never a technology leak), and the packages a loaded pack contributes for it, each compared exactly with an import\'s package name. A package of the built-in table or of a loaded pack whose technology NO implementation binds is reported too, since the design never says where that technology lives: bind it on the data-layer component that owns the vendor call. Only exact-grade analyzed files participate; chained subprojects validate standalone.',
+    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses — type coupling is allowed — but a CALL of a modelled contract method through a collaborator whose declared type comes from another component\'s file is runtime collaboration whatever the import\'s form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target, or — where the type checker read a file of the source — as a call or reference the checker lands in a file of the target, through every barrel, port declaration, dependency bag and unowned helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading, hence warning); a type-only import realizes it, since `import type` is what dependency injection writes down. An Adapter\'s edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter\'s transport client realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would couple two deployables\' builds. Two twins of design rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal\'s own narrative already claims that call (the design rule\'s finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal\'s calls are resolved by the TypeScript type checker: every call written in a file realizing only Portals — in a file shared with other components, every call in a body the Portal\'s own methods reach — and every reference there to a function or method the code takes as a value (passed as an argument, assigned, returned, bound, handed to Reflect.apply), together with every call the UNOWNED code they reach makes (a function in a file no component realizes, or one that is none of its file\'s components\' modelled methods, read as if inlined at the call site, transitively to a bounded depth, the finding naming the hops), lands on the declaration its signature resolves to, whatever the receiver\'s spelling, and a declaration in an interface or type shape, a port the Portal declares for itself included, lands on each class of the project that realizes it (the classes whose implements clause names it when any does, else every class the checker finds assignable to it); such a landing on a component the file neither imports at runtime nor is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker could be loaded, the receiver is followed through the shape facts instead: a non-null assertion, parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field exactly as through the field itself. A call in a Portal\'s own code the analysis cannot resolve at all — its receiver typed any or unknown, cast to either or to an index signature, its member picked by a computed key, or typed nothing — under the name of a write- or lifecycle-effect method of a data component (where the checker recorded the receiver\'s ORIGINAL type, before any cast, a write of the data component that type lands on — any of its writes when a computed key names none; else one in the Portal\'s own subsystem or one it depends into), which the Portal does not already claim, fails closed: it is neither proven a shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read (PORTAL_CALL_UNRESOLVED). And a file importing a technology\'s package while no component it realizes is that technology\'s home is the leak TECH_LEAKAGE refuses in the design (TECH_LEAKAGE_IN_CODE): a technology\'s packages are its declared tokens (its name, or its `matches`), the curated built-in table of the common packages its name is known by (postgres: pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis, ioredis; mongodb: mongodb, mongoose; sqlite: better-sqlite3, sqlite3; kafka: kafkajs; rabbitmq: amqplib — an HTTP client is never a technology leak), and the packages a loaded pack contributes for it, each compared exactly with an import\'s package name. A package of the built-in table or of a loaded pack whose technology NO implementation binds is reported too, since the design never says where that technology lives: bind it on the data-layer component that owns the vendor call. Only exact-grade analyzed files participate; chained subprojects validate standalone.',
   codes: [
     { code: 'UNDECLARED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A runtime import, a call through a type-only-imported collaborator, or a Portal\'s call the type checker resolves into another component\'s file, between component-mapped files has no declared dependsOn/owns (or published-surface) justification' },
-    { code: 'PORTAL_WRITE_SHORTCUT_IN_CODE', defaultSeverity: 'error', summary: 'A Portal\'s code calls a write- or lifecycle-effect method of a data component (Repository, Index, Store, Registry) directly — the code twin of PORTAL_WRITE_SHORTCUT: mutations route through an Orchestrator' },
+    { code: 'PORTAL_WRITE_SHORTCUT_IN_CODE', defaultSeverity: 'error', summary: 'A Portal\'s code calls, or takes as a value, a write- or lifecycle-effect method of a data component (Repository, Index, Store, Registry) — directly or through unowned code it calls — the code twin of PORTAL_WRITE_SHORTCUT: mutations route through an Orchestrator' },
     { code: 'TECH_LEAKAGE_IN_CODE', defaultSeverity: 'warning', summary: 'A source file imports a technology\'s package although no component it realizes binds that technology — the code twin of TECH_LEAKAGE' },
-    { code: 'UNREALIZED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A declared dependsOn/owns edge between components in different files is realized by no import between any of their files' },
-    { code: 'PORTAL_CALL_UNRESOLVED', defaultSeverity: 'warning', summary: 'A call in a Portal\'s own file, under the name of a data component\'s write- or lifecycle-effect method, goes through a receiver the analysis cannot resolve (typed any or unknown, cast to either, or typed nothing) — neither proven a shortcut nor cleared, so it fails closed until the receiver carries its type' },
+    { code: 'UNREALIZED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A declared dependsOn/owns edge between components in different files is realized by no import between any of their files, nor by any call the type checker lands across it' },
+    { code: 'PORTAL_CALL_UNRESOLVED', defaultSeverity: 'warning', summary: 'A call in a Portal\'s own code, under the name of a data component\'s write- or lifecycle-effect method — or with its member picked by a computed key on a receiver that was a data component before a cast — goes through a receiver the analysis cannot resolve (typed any or unknown, cast to either or to an index signature, or typed nothing) — neither proven a shortcut nor cleared, so it fails closed until the receiver carries its type' },
   ],
 
   check(ctx: RuleContext): void {
     // ---- the mapped files, and the import graph closed over exactly them ----
     const code = ctx.codeIndex();
     const realization = ctx.realizationIndex();
+    const reach = unownedReach(ctx);
+    const candidatesOf = writeCandidates(ctx);
     const isExact = (p: string): boolean => code.exactPaths.has(p);
     const mappedPaths = new Set(realization.paths.filter(isExact));
     const graph = ctx.importGraph(mappedPaths);
@@ -184,6 +196,23 @@ export const dependencyConformanceRule: SddRule = {
     };
     const typeConnects = (from: string[], to: string[]): boolean =>
       from.some(f => { const traces = typeTracesOf(f); return to.some(t => traces.has(t)); });
+    // The files a file's code CALLS into, as the type checker resolves each
+    // call and reference — through a barrel, an `export *`, a port declared
+    // in a shared module, a dependency bag typed inline — and through every
+    // unowned helper it reaches. Where the checker read the file this is the
+    // judge, and the import graph above only accepts what it can on its own.
+    const callTraces = new Map<string, Set<string>>();
+    const callTracesOf = (file: string): Set<string> => {
+      let out = callTraces.get(file);
+      if (out) return out;
+      out = new Set<string>();
+      const calls = code.factsAt(file)?.resolvedCalls ?? [];
+      for (const { call } of reach(calls, file)) for (const t of call.targets) if (t.path !== file) out.add(t.path);
+      callTraces.set(file, out);
+      return out;
+    };
+    const callConnects = (from: string[], to: string[]): boolean =>
+      from.some(f => { const traces = callTracesOf(f); return to.some(t => traces.has(t)); });
 
     for (const component of ctx.components) {
       const fromFiles = filesOf(component.id);
@@ -224,6 +253,8 @@ export const dependencyConformanceRule: SddRule = {
         if (graph.connects(fromFiles, toFiles, isMountingDeclarer)) continue;
         // A type-only import realizes the edge too: DI writes nothing else.
         if (typeConnects(fromFiles, toFiles)) continue;
+        // A call the type checker lands in the target's files realizes it, whatever the imports look like.
+        if (callConnects(fromFiles, toFiles)) continue;
 
         const impls = mappedImplsOf(component.id);
         const declaredDependsOn = component.dependsOn.includes(targetId);
@@ -345,10 +376,21 @@ export const dependencyConformanceRule: SddRule = {
       }
     }
     /** The contract methods a call reaches at a file: each component realized there whose contract names it. */
-    const calledAt = (toPath: string, name: string): Array<{ component: ComponentSpec; method: { name: string; effect?: string } }> =>
+    // A landing the type checker resolved to a MODULE function (no container)
+    // is never a method a component reaches through an exportedVia handle —
+    // that one is a member of the object — so in a shared file the two
+    // same-named methods are told apart.
+    const calledAt = (toPath: string, name: string, moduleFunction = false): Array<{ component: ComponentSpec; method: { name: string; effect?: string } }> =>
       realization.componentsAt(toPath)
         .map(c => ({ component: c, method: calledMethodOf(c.id, name) }))
-        .filter((c): c is { component: ComponentSpec; method: { name: string; effect?: string } } => c.method !== undefined);
+        .filter((c): c is { component: ComponentSpec; method: { name: string; effect?: string } } => {
+          if (c.method === undefined) return false;
+          if (!moduleFunction) return true;
+          const via = realization.implementationsOf(c.component.id)
+            .map(impl => impl.methods.find(m => m.name === c.method!.name)?.exportedVia)
+            .find(v => v !== undefined);
+          return via === undefined;
+        });
 
     /** One call of a Portal's own code, read off the type checker's answer or, without one, the shape facts. */
     interface PortalCall {
@@ -357,10 +399,13 @@ export const dependencyConformanceRule: SddRule = {
       where: string;
       name: string;
       written: string;
-      landings: Array<{ toPath: string; member: string }>;
+      /** Each place the call lands, with the container the checker named (null where the shape facts read it, which name none). */
+      landings: Array<{ toPath: string; member: string; container: string | null | undefined }>;
       unresolved: boolean;
       /** True when the landings are the type checker's — what lets a call accuse an edge no import connects. */
       resolved: boolean;
+      /** The type checker's fact behind a resolved call: what a fail-closed finding reads the receiver's original type from. */
+      call?: ResolvedCallFact;
     }
     const portalCalls = (
       impls: ImplementationSpec[],
@@ -405,20 +450,25 @@ export const dependencyConformanceRule: SddRule = {
             if (!bodies.has(site.name)) bodies.set(site.name, method.name);
           }
         }
-        for (const rc of facts.resolvedCalls) {
-          const inBody = rc.enclosing !== undefined && bodies.has(rc.enclosing);
-          if (!onlyPortals && !inBody) continue;
-          const contractMethod = rc.enclosing !== undefined ? bodies.get(rc.enclosing) : undefined;
-          out.push({
-            impl: own.find(o => o.method.name === contractMethod)?.impl ?? anchorImpl,
-            where: contractMethod !== undefined ? `its method "${contractMethod}"`
-              : rc.enclosing !== undefined ? `its code (function "${rc.enclosing}")` : 'its module-scope code',
-            name: rc.name,
-            written: rc.written,
-            landings: rc.targets.map(t => ({ toPath: t.path, member: t.member })),
-            unresolved: rc.unresolved === true,
-            resolved: true,
-          });
+        const mine = facts.resolvedCalls.filter(rc => onlyPortals || (rc.enclosing !== undefined && bodies.has(rc.enclosing)));
+        // Each call is read where it was written AND, through every unowned
+        // function it reaches, as the calls that function's body makes — a
+        // persistence helper in a module no spec names is the Portal's code.
+        for (const site of mine) {
+          const contractMethod = site.enclosing !== undefined ? bodies.get(site.enclosing) : undefined;
+          for (const { call: rc, through } of reach([site], fromPath)) {
+            out.push({
+              impl: own.find(o => o.method.name === contractMethod)?.impl ?? anchorImpl,
+              where: contractMethod !== undefined ? `its method "${contractMethod}"`
+                : site.enclosing !== undefined ? `its code (function "${site.enclosing}")` : 'its module-scope code',
+              name: rc.name,
+              written: quoteCall(rc, site, through),
+              landings: rc.targets.map(t => ({ toPath: t.path, member: t.member, container: t.container })),
+              unresolved: rc.unresolved === true,
+              resolved: true,
+              call: rc,
+            });
+          }
         }
         return out;
       }
@@ -435,8 +485,8 @@ export const dependencyConformanceRule: SddRule = {
             impl,
             where: `its method "${method.name}"`,
             name: site.name,
-            written: `${site.via ?? (site.field ? `this.${site.field}` : '<receiver>')}.${site.name}`,
-            landings: [...landings].map(toPath => ({ toPath, member: site.name })),
+            written: `\`${site.via ?? (site.field ? `this.${site.field}` : '<receiver>')}.${site.name}(…)\``,
+            landings: [...landings].map(toPath => ({ toPath, member: site.name, container: null })),
             unresolved: landings.size === 0 && unfollowable(site, fromPath),
             resolved: false,
           });
@@ -467,16 +517,21 @@ export const dependencyConformanceRule: SddRule = {
           if (call.unresolved) {
             // Only a data component the Portal could plausibly be handed:
             // one in its own subsystem, or in a subsystem it depends into.
+            // Where the type checker recorded the receiver's original type,
+            // the data components it lands on — every write of theirs when a
+            // computed key names no member.
             const near = new Set([portal.subsystem, ...portal.dependsOn.map(d => ctx.componentMap.get(d)?.subsystem)]);
-            const candidates = (dataWrites.get(call.name) ?? []).filter(w =>
-              near.has(ctx.componentMap.get(w.component)?.subsystem) && !claims(portal.id, w.component, w.method));
-            const at = `${fromPath} -> ${call.name}`;
+            const candidates = (call.call
+              ? candidatesOf(call.call, portal, callee => DATA_COMPONENTS.has(callee.componentType))
+              : (dataWrites.get(call.name) ?? []).filter(w => near.has(ctx.componentMap.get(w.component)?.subsystem)))
+              .filter(w => !claims(portal.id, w.component, w.method));
+            const at = `${fromPath} -> ${call.name || candidates.map(w => `${w.component}.${w.method}`).join(', ')}`;
             if (candidates.length > 0 && !reportedUnresolved.has(at)) {
               reportedUnresolved.add(at);
               ctx.addIssue(
                 'warning',
                 'PORTAL_CALL_UNRESOLVED',
-                `Portal "${portal.id}": ${call.where} in "${fromPath}" calls \`${call.written}(…)\` through a receiver this analysis cannot follow (its type is any or unknown, or nothing declares it), and ${candidates.map(w => `${w.component}.${w.method}`).join(', ')} — a data component's write — carries that name. Neither proven a persistence shortcut nor cleared, so it fails closed: give the receiver its declared type (a field or parameter annotation, no cast to any or unknown) so the call can be judged.`,
+                `Portal "${portal.id}": ${call.where} in "${fromPath}" calls ${call.written} through a receiver this analysis cannot follow (its type is any or unknown, it is cast to either or to an index signature, a computed key picks the member, or nothing declares it), and ${candidates.map(w => `${w.component}.${w.method}`).join(', ')} — a data component's write — ${call.name ? 'carries that name' : 'is what its receiver was before the cast'}. Neither proven a persistence shortcut nor cleared, so it fails closed: give the receiver its declared type (a field or parameter annotation, no cast to any, unknown or an index signature, a member named in the code) so the call can be judged.`,
                 impl.id,
                 draftAt(fromPath),
                 undefined,
@@ -484,9 +539,9 @@ export const dependencyConformanceRule: SddRule = {
               );
             }
           }
-          for (const { toPath, member } of call.landings) {
+          for (const { toPath, member, container } of call.landings) {
             if (toPath === fromPath) continue;
-            const called = calledAt(toPath, member);
+            const called = calledAt(toPath, member, container === undefined);
             for (const { component: target, method } of called) {
               if (!DATA_COMPONENTS.has(target.componentType)) continue;
               if (method.effect !== 'write' && method.effect !== 'lifecycle') continue;
@@ -497,7 +552,7 @@ export const dependencyConformanceRule: SddRule = {
               ctx.addIssue(
                 'error',
                 'PORTAL_WRITE_SHORTCUT_IN_CODE',
-                `Portal "${portal.id}": ${call.where} in "${fromPath}" calls ${method.effect}-effect method ${target.id}.${method.name} directly (\`${call.written}(…)\`), which its design never narrates — the code twin of PORTAL_WRITE_SHORTCUT. A Portal may reach a data component for READS only: route the ${method.effect === 'write' ? 'write' : 'lifecycle change'} through an Orchestrator that owns the workflow.`,
+                `Portal "${portal.id}": ${call.where} in "${fromPath}" calls ${method.effect}-effect method ${target.id}.${method.name} directly (${call.written}), which its design never narrates — the code twin of PORTAL_WRITE_SHORTCUT. A Portal may reach a data component for READS only: route the ${method.effect === 'write' ? 'write' : 'lifecycle change'} through an Orchestrator that owns the workflow.`,
                 impl.id,
                 draftAt(fromPath) || draftAt(toPath),
                 undefined,
@@ -521,7 +576,7 @@ export const dependencyConformanceRule: SddRule = {
             ctx.addIssue(
               'warning',
               'UNDECLARED_DEPENDENCY',
-              `"${fromPath}" (realizing ${fromComponents.map(c => c.id).join(', ')}) calls ${called.map(c => `${c.component.id}.${c.method.name}`).join(', ')} (\`${call.written}(…)\`, as the type checker resolves it) in "${toPath}" (realizing ${toComponents.map(c => c.id).join(', ')}), but no declared dependsOn/owns edge justifies it — a call is runtime collaboration whatever the import's form. Declare the collaboration on the component that uses it, or route the cross-subsystem hop through the target's published surface.`,
+              `"${fromPath}" (realizing ${fromComponents.map(c => c.id).join(', ')}) calls ${called.map(c => `${c.component.id}.${c.method.name}`).join(', ')} (${call.written}, as the type checker resolves it) in "${toPath}" (realizing ${toComponents.map(c => c.id).join(', ')}), but no declared dependsOn/owns edge justifies it — a call is runtime collaboration whatever the import's form. Declare the collaboration on the component that uses it, or route the cross-subsystem hop through the target's published surface.`,
               realization.implementationsAt(fromPath)[0]?.id,
               draftAt(fromPath) || draftAt(toPath),
               undefined,

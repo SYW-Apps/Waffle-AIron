@@ -184,7 +184,7 @@ describe('OpenAPI codec — portal auth + honest multi-spec', () => {
     expect(doc.paths['/a'].get.security).toBeUndefined();
   });
 
-  it('toOpenApiSet emits ONE named spec per portal — never merged, each with its own servers + auth', () => {
+  it('toOpenApiSet emits ONE named spec per portal — never merged, each with its own basePath + auth', () => {
     const specs = toOpenApiSet(snap([
       { id: 'ext', name: 'External API', audience: 'external', type: 'REST', component: 'ext-portal',
         basePath: '/ext', auth: { scheme: 'apiKey', in: 'header', name: 'X-Key' }, methods: [httpMethod('pub', '/pub')] },
@@ -196,10 +196,10 @@ describe('OpenAPI codec — portal auth + honest multi-spec', () => {
     const ext = JSON.parse(specs[0].document);
     const int = JSON.parse(specs[1].document);
     // Each spec is scoped to its own portal — no cross-contamination of paths.
-    expect(Object.keys(ext.paths)).toEqual(['/pub']);
-    expect(Object.keys(int.paths)).toEqual(['/priv']);
-    expect(ext.servers).toEqual([{ url: '/ext' }]);
-    expect(int.servers).toEqual([{ url: '/int' }]);
+    expect(Object.keys(ext.paths)).toEqual(['/ext/pub']);
+    expect(Object.keys(int.paths)).toEqual(['/int/priv']);
+    expect(ext['x-wairon-base-path']).toBe('/ext');
+    expect(int['x-wairon-base-path']).toBe('/int');
     expect(ext.components.securitySchemes.ApiKeyAuth).toEqual({ type: 'apiKey', in: 'header', name: 'X-Key' });
     expect(int.components.securitySchemes.BearerAuth).toEqual({ type: 'http', scheme: 'bearer' });
   });

@@ -771,10 +771,15 @@ methods:
       - stepNumber: 10
         label: uncompared
         description: >-
-          Report one EXTERNAL_LIVE_UNCOMPARED (notice, advisory) naming why the live producer could
-          not be read — unreachable, unresolved, out of reach, or a git source not fetched offline —
-          and that `wairon externals status` compares it. Never a pass, never a failure of the owner
-          gate
+          Report one EXTERNAL_LIVE_UNCOMPARED (notice, advisory). A pinned, reachable external whose
+          only uncompared uses are used beyond its pin (each named `<public name>.<member>`, used
+          now but not in the lock) is said as exactly that: the live producer exports them, the pin
+          records nothing they are judged against, so `wairon lock` refuses and `wairon lock-check`
+          fails until it is re-pinned — the fix named — so a validate log never stays silent on what
+          the approval gates refuse; validate itself does not fail on it (the approval is
+          lock-check's to gate). Otherwise name why the live producer could not be read —
+          unreachable, unresolved, out of reach, or a git source not fetched offline — and that
+          `wairon externals status` compares it. Never a pass, never a failure of the owner gate
         type: local
       - stepNumber: 11
         description: Next external
@@ -967,4 +972,4 @@ methods:
         outcome: problem or null
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-07T19:08:48.042Z'
+updatedAt: '2026-10-07T22:19:00.773Z'

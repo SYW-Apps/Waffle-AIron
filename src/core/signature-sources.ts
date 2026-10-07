@@ -250,6 +250,10 @@ function resolveSourced(tables: ResolutionTables, intf: InterfaceSpec, stored: M
   // Step 7: the source's params and returns are in force.
   facts.sources.push({ ...base, form, target, outcome: 'resolved' });
   const resolved: MethodSignature = { ...stored, returns };
+  // Step 7, the effect: it travels with the signature from a method source (local
+  // or another project's export): a verb forwarding a pure method is itself
+  // pure unless it declares otherwise. A signature type carries no effect.
+  if (stored.effect === undefined && hit?.method.effect !== undefined) resolved.effect = hit.method.effect;
   if (params) resolved.params = params.map((p) => ({ ...p }));
   else delete resolved.params;
   // A prose source shows its own prose under this method's name.

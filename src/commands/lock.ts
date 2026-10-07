@@ -12,8 +12,12 @@ import {
   writeLockRecord,
   specPathsInScope,
   loadSystemSpec,
+  findOrphanedSpecFiles,
   loadComponentSpecs,
   loadSubsystemSpecs,
+  loadInterfaceSpecs,
+  loadImplementationSpecs,
+  loadTypeSpecs,
   readLockState,
   readLockRecord,
   reexpress,
@@ -32,6 +36,8 @@ import { getProjectRoot } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
 import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
 import { designOnly, memberPinOf, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
+import { ownGet } from '../utils/own.js';
+import { canonicalize } from '../utils/canonical-json.js';
 
 // ---------------------------------------------------------------------------
 // cli_lock_adapter — the core-side half of `wairon lock` (lockTree, realized
@@ -114,20 +120,44 @@ export interface ApprovalCheck {
 // reusable workflow without asking for `--strict`, cannot start failing on it.
 // ---------------------------------------------------------------------------
 
-export function checkApproval(strict: boolean): ApprovalCheck {
-  // A repository with no spec tree must be TOLD so. Judged as "never approved"
-  // it would fail every strict consumer that simply has no design yet, and the
-  // message would send them looking for a lock record instead of a tree.
-  if (!loadSystemSpec()) {
+/**
+ * cli_lock_adapter.treeVerdict — the verdict on a project whose specs folder
+ * holds no L0, or null when it holds one. A repository with no spec tree must
+ * be TOLD so: judged as "never approved" it would fail every strict consumer
+ * that simply has no design yet. But a specs folder whose L0 was deleted
+ * while spec files remain is no "no tree": its design is still there,
+ * unjudged, and passing it would turn a bad merge into a green gate — refused
+ * at every strictness.
+ */
+export function treeVerdict(strict: boolean): ApprovalCheck | null {
+  // Steps 1-2.
+  if (loadSystemSpec()) return null;
+  // Steps 3-5.
+  const orphaned = findOrphanedSpecFiles();
+  if (orphaned.length > 0) {
     return {
-      state: 'no-tree',
-      approved: !strict,
-      message: strict
-        ? 'No SDD spec tree here (.wai/specs) — and --strict asks for an approved design, so this is a failure. '
-          + 'Run `wairon init` to start one, or drop --strict.'
-        : 'No SDD spec tree here (.wai/specs) — there is no design to approve, so nothing is gated.',
+      state: 'unlocked',
+      approved: false,
+      message: `The L0 System spec (.wai/specs/.index.yaml) is missing, but ${orphaned.length} spec file(s) remain below it `
+        + `(${orphaned.slice(0, 3).join(', ')}${orphaned.length > 3 ? ', …' : ''}): the design is still there and cannot be judged, so it is not approved. `
+        + 'Fix: restore it from version control (`git checkout -- .wai/specs/.index.yaml`).',
     };
   }
+  // Step 6.
+  return {
+    state: 'no-tree',
+    approved: !strict,
+    message: strict
+      ? 'No SDD spec tree here (.wai/specs) — and --strict asks for an approved design, so this is a failure. '
+        + 'Run `wairon init` to start one, or drop --strict.'
+      : 'No SDD spec tree here (.wai/specs) — there is no design to approve, so nothing is gated.',
+  };
+}
+
+export function checkApproval(strict: boolean): ApprovalCheck {
+  // Steps 1-3: no L0 — no tree, or a tree whose root is gone.
+  const tree = treeVerdict(strict);
+  if (tree) return tree;
 
   const lock = readLockState(computeGateStateId());
   const record = lock.record;
@@ -407,12 +437,12 @@ function whatMoved(record: LockRecord, gateNow: StateId): string {
   // named as renamed, never as one added and one removed.
   const renamedFrom = new Map<string, string>();
   for (const m of added) {
-    const from = gone.find((alias) => !renamedFrom.has(alias) && m.projectId !== undefined && record.members?.[alias]?.project === m.projectId);
+    const from = gone.find((alias) => !renamedFrom.has(alias) && m.projectId !== undefined && ownGet(record.members, alias)?.project === m.projectId);
     if (from !== undefined) renamedFrom.set(m.alias ?? m.key, from);
   }
   const leftAdded = added.filter((m) => !renamedFrom.has(m.alias ?? m.key));
   const leftGone = gone.filter((alias) => ![...renamedFrom.values()].includes(alias));
-  if (leftAdded.length === 1 && leftGone.length === 1 && record.members?.[leftGone[0]]?.as !== 'part' && leftAdded[0].as !== 'part') {
+  if (leftAdded.length === 1 && leftGone.length === 1 && ownGet(record.members, leftGone[0])?.as !== 'part' && leftAdded[0].as !== 'part') {
     renamedFrom.set(leftAdded[0].alias ?? leftAdded[0].key, leftGone[0]);
   }
   for (const m of members) {
@@ -548,6 +578,31 @@ function inputsMoved(previous: LockRecord | null, captured: StateId, projectId: 
   return moved;
 }
 
+/**
+ * How many specs of every kind are still draft or design: subsystems,
+ * components, contracts, implementations and types — the lock's draft warning
+ * counts them all, never the components alone.
+ */
+function draftCounts(): { draft: number; total: number; byKind: string } {
+  const kinds: [string, { status?: string }[]][] = [
+    ['subsystem', loadSubsystemSpecs()],
+    ['component', loadComponentSpecs()],
+    ['contract', loadInterfaceSpecs()],
+    ['implementation', loadImplementationSpecs()],
+    ['type', loadTypeSpecs() as { status?: string }[]],
+  ];
+  let draft = 0;
+  let total = 0;
+  const parts: string[] = [];
+  for (const [noun, specs] of kinds) {
+    const open = specs.filter((s) => s.status === 'draft' || s.status === 'design').length;
+    total += specs.length;
+    draft += open;
+    if (open > 0) parts.push(`${open} ${noun}${open === 1 ? '' : 's'}`);
+  }
+  return { draft, total, byKind: parts.join(', ') };
+}
+
 /** Print what is being approved: the own spec diff, the code half, and each direct member. */
 function summarize(gate: ValidationResult, members: ProjectApproval[], captured: StateId, options: LockOptions): void {
   // Against the previous approval, not against each spec's stored status: the
@@ -578,7 +633,7 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
     if (moved.length > 0) {
       logger.info(`No spec changed since the last approval, but what the design is approved under did: ${moved.join('; ')}. This re-approves the unchanged design under it, and refreshes the generated outputs of this project.`);
     } else {
-      logger.info('Nothing has changed since the last approval — this re-records the approval and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
+      logger.info('Nothing has changed since the last approval — this re-records the approval only if something it records moved (an approval already on record as it would be written keeps its lockedAt, and .wai/lock.json is left untouched), and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
     }
   } else {
     logger.info(`${diffSize(diff)} spec(s) changed since the last approval:`);
@@ -597,9 +652,9 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
   }
   // Status is readiness, not approval — a draft design may be approved, and
   // the lock says plainly that is what it is doing.
-  const components = loadComponentSpecs();
-  if (components.length > 0 && components.every((c) => c.status === 'draft' || c.status === 'design')) {
-    logger.warn(`Every component (${components.length}) is still draft or design: this approves the design as it stands, drafts included. Status is readiness, never approval — mark specs complete when they are ready to implement.`);
+  const drafts = draftCounts();
+  if (drafts.draft > 0) {
+    logger.warn(`${drafts.draft} of ${drafts.total} spec(s) are still draft or design (${drafts.byKind}): this approves the design as it stands, drafts included. Status is readiness, never approval — mark specs complete when they are ready to implement.`);
   }
   logger.info(codeLine(gate.analysis));
   // A member's own edits never show up in this project's spec diff: what this
@@ -749,9 +804,21 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     members: memberPins(members),
     ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };
-  // Step 15: the only file this lock writes.
+  // Steps 24-25: the record on file in every field but lockedAt — nothing was
+  // approved anew, so the timestamp is kept and nothing is written (a rewrite
+  // would only leave .wai/lock.json modified with no change in it).
+  let onFile: LockRecord | null = null;
+  try { onFile = readLockRecord(); } catch { onFile = null; }
+  if (onFile && sameApproval(onFile, record)) return onFile;
+  // Step 26: the only file this lock writes.
   writeLockRecord(record);
   return record;
+}
+
+/** Whether two lock records are one approval: equal in every field but lockedAt. */
+function sameApproval(a: LockRecord, b: LockRecord): boolean {
+  const comparable = (r: LockRecord): string => canonicalize({ ...r, lockedAt: '' });
+  return comparable(a) === comparable(b);
 }
 
 /**

@@ -2,13 +2,15 @@ kind: value-object
 id: resolved_call_fact
 name: ResolvedCallFact
 description: >-
-  One call expression of a file as the TypeScript type checker resolved it: what was invoked, how it
-  was written, which body it sits in, and every place in this project it can land. Where
-  CallSiteFact records the SHAPE a pure model can follow, this records the checker's answer, so a
-  receiver reached through an alias, a field chain, an element access, a destructured method, a
-  factory's result, a barrel or a port interface lands where the checker says it lands, whatever its
-  spelling. A call whose callee the checker cannot resolve to any declaration because its receiver's
-  type is gone (any, unknown, untyped) is marked unresolved rather than dropped.
+  One call expression of a file as the TypeScript type checker resolved it — or one reference to a
+  function or method of this project the code takes as a value: what was invoked, how it was
+  written, which body it sits in, and every place in this project it can land. Where CallSiteFact
+  records the SHAPE a pure model can follow, this records the checker's answer, so a receiver
+  reached through an alias, a field chain, an element access, a destructured method, a factory's
+  result, a barrel or a port interface lands where the checker says it lands, whatever its spelling.
+  A call the code made unresolvable — a receiver typed any, unknown or not at all, a computed key
+  that names no member, a cast to an index-signature type — is marked unresolved rather than
+  dropped, with where its receiver's original type lands.
 subsystem: sdd_validator
 fields:
   - name: name
@@ -43,11 +45,30 @@ fields:
   - name: unresolved
     type: bool
     description: >-
-      True when the checker resolved the callee to no declaration at all because its receiver (or
-      the callee itself) is typed any, unknown or not at all — neither a landing nor its absence
-      means anything
+      True when the call lands nowhere this analysis can name and the CODE made it so: the checker
+      resolved the callee to no declaration because its receiver (or the callee itself) is typed
+      any, unknown or not at all; or it reaches no declaration of this project because a computed
+      key names no single member, or its receiver is cast to an index-signature type — neither a
+      landing nor its absence means anything
+    optional: true
+  - name: receivers
+    type: list<CallTargetFact>
+    description: >-
+      For an unresolved call, where its receiver's ORIGINAL type lands — the expression with every
+      cast, assertion, non-null mark and parenthesis taken off: each project class that type is, or
+      that realizes the interface or shape it is, as a target whose member is the call's name (empty
+      when a computed key names none). What tells a cast that hid a data component from a receiver
+      that never was one
+    optional: true
+  - name: reference
+    type: bool
+    description: >-
+      True when this is no call but a REFERENCE to a function or method of this project the code
+      takes as a value at this site — passes as an argument, assigns, returns, binds, or hands to
+      Reflect.apply — rather than invoking it where it is written. A use all the same: what the
+      reference lands on can be invoked anywhere the value travels
     optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-07T18:28:29.773Z'
-updatedAt: '2026-10-07T18:28:30.621Z'
+updatedAt: '2026-10-07T21:58:55.321Z'

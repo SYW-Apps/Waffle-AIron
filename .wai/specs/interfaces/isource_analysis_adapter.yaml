@@ -102,6 +102,19 @@ methods:
           answer
     guarantees:
       - idempotent
+  - name: compilerIdentity
+    description: >-
+      Which compiler an exact-grade analysis of this project would read it with — the project's own
+      when it ships the JavaScript compiler API, else wairon's own copy — with its version; none
+      when neither resolves. Resolved the same way buildCodeModel resolves it, so the line validate
+      prints names the compiler the analysis used. Read-only.
+    signature: 'compilerIdentity(projectRoot: string): compiler_identity?'
+    returns: compiler_identity?
+    params:
+      - name: projectRoot
+        type: string
+        description: The bound project's root
+    effect: io
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-10-04T10:19:35.941Z'
+updatedAt: '2026-10-07T21:50:13.355Z'

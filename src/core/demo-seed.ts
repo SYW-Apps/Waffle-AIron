@@ -4,7 +4,6 @@ import {
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
-  saveTypeSpec,
   invalidateSpecCache,
 } from './specs.js';
 import type {
@@ -22,7 +21,7 @@ import type {
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Demo project seeder (sdd_core)
+// Demo project seeder (sdd_core demo_orchestrator.seedTree)
 //
 // Writes a RICH, coherent, multi-layer example spec tree into the bound project
 // root so the architecture canvas has substantial content to render across all
@@ -239,8 +238,8 @@ export function seedDemoTree(): void {
 
   // catalog interfaces
   iface('icatalog-portal', 'ICatalogPortal', 'catalog-portal', [
-    { name: 'getProduct', description: 'Fetch one product by id.', returns: 'Product', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/catalog/products/{id}' } },
-    { name: 'listByCategory', description: 'List products in a category.', returns: 'Product[]', params: [{ name: 'categoryId', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/catalog/categories/{categoryId}/products' } },
+    { name: 'getProduct', description: 'Fetch one product by id.', returns: 'Product', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/products/{id}' } },
+    { name: 'listByCategory', description: 'List products in a category.', returns: 'Product[]', params: [{ name: 'categoryId', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/categories/{categoryId}/products' } },
   ]);
   iface('icatalog-orchestrator', 'ICatalogOrchestrator', 'catalog-orchestrator', [
     { name: 'fetchProduct', description: 'Load and validate a product.', returns: 'Product', params: [{ name: 'productId', type: 'string' }] },
@@ -268,7 +267,7 @@ export function seedDemoTree(): void {
 
   // payments interfaces
   iface('ipayments-portal', 'IPaymentsPortal', 'payments-portal', [
-    { name: 'charge', description: 'Charge an order.', returns: 'Payment', params: [{ name: 'orderId', type: 'string' }, { name: 'amount', type: 'Money' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/payments/charges' } },
+    { name: 'charge', description: 'Charge an order.', returns: 'Payment', params: [{ name: 'orderId', type: 'string' }, { name: 'amount', type: 'Money' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/charges' } },
   ]);
   iface('ipayments-orchestrator', 'IPaymentsOrchestrator', 'payments-orchestrator', [
     { name: 'settle', description: 'Authorize and record a charge for an order.', returns: 'Payment', params: [{ name: 'orderId', type: 'string' }, { name: 'amount', type: 'Money' }] },
@@ -295,8 +294,8 @@ export function seedDemoTree(): void {
 
   // ordering interfaces
   iface('iordering-portal', 'IOrderingPortal', 'ordering-portal', [
-    { name: 'placeOrder', description: 'Place a new order.', returns: 'Order', params: [{ name: 'customerId', type: 'string' }, { name: 'items', type: 'OrderLine[]' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/orders' } },
-    { name: 'getOrder', description: 'Fetch an order by id.', returns: 'Order', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/orders/{id}' } },
+    { name: 'placeOrder', description: 'Place a new order.', returns: 'Order', params: [{ name: 'customerId', type: 'string' }, { name: 'items', type: 'OrderLine[]' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/' } },
+    { name: 'getOrder', description: 'Fetch an order by id.', returns: 'Order', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/{id}' } },
   ]);
   iface('iordering-orchestrator', 'IOrderingOrchestrator', 'ordering-orchestrator', [
     { name: 'checkout', description: 'Validate, price, charge, and persist an order.', returns: 'Order', params: [{ name: 'customerId', type: 'string' }, { name: 'items', type: 'OrderLine[]' }] },
@@ -479,7 +478,7 @@ export function seedDemoTree(): void {
 
   // ── Types (entities + value objects) — ERD tables + FK reference edges ────────
   const type = (t: Omit<TypeSpec, 'createdAt' | 'updatedAt' | 'methods' | 'fields'> & Partial<Pick<TypeSpec, 'methods' | 'fields'>>): void =>
-    void saveTypeSpec({ methods: [], fields: [], ...base, ...t } as TypeSpec);
+    void saveSpec('type', { methods: [], fields: [], ...base, ...t } as TypeSpec);
 
   // Shared, system-level value object (no owning subsystem).
   type({

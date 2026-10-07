@@ -6,7 +6,7 @@ import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { AI_PATHS } from '../config/paths.js';
-import { DoctorOptionsError, ProjectNotInitializedError } from '../utils/errors.js';
+import { DoctorOptionsError, LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
 import {
   loadProjectConfig,
   projectConfigExists,
@@ -35,7 +35,6 @@ import {
   findChainingSubprojectsMissingConfig,
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
-  pinInstalledPacksAsSelections,
   // The family a --fix cascades into, and the plain report summarises per member.
   projectFamily,
 } from './adapters/core.js';
@@ -484,7 +483,16 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
           + 'Run `wairon lock` to approve the current design (`wairon status` names the specs that moved).');
         logger.blank();
       }
-    } catch { /* a health check must never break the health report */ }
+    } catch (e) {
+      // A health check never breaks the health report — but an approval
+      // record that cannot be read is the one failure it must name, never
+      // swallow: every gate refuses on it.
+      if (e instanceof LockRecordUnreadableError) {
+        console.log(chalk.bold('Lock'));
+        line(tally, 'error', e.message);
+        logger.blank();
+      }
+    }
   }
 
   // Approvals used to be kept outside every project, in ~/.wairon/baselines/.
@@ -526,7 +534,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
           line(tally, 'warn',
             `${packs.notApplied.length} installed pack(s) are NOT applied to this project: ${names}. `
             + 'Machine-wide packs no longer apply unless a project selects them, so if this project relied on them its gate is now weaker. '
-            + 'Run `wairon doctor --fix` to record them as explicit selections, or `wairon pack use <name>` for the ones you want.');
+            + 'Select the ones it needs with `wairon pack use <name>` — `wairon doctor --fix` never selects the packs of the machine it runs on into a project.');
         } else {
           line(tally, 'ok', `${packs.notApplied.length} installed pack(s) are available but deliberately not applied: ${names}.`);
         }
@@ -627,11 +635,11 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     console.log(`  ${icon('error')} Regeneration failed: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  // Migrate a project that never declared a position on machine-wide packs:
-  // record the installed packs it is no longer applying as explicit selections.
-  // Doctrine that governs a project must be declared BY that project, or a clone
-  // and CI enforce a different rule set and the difference is invisible.
-  pinPackSelections('');
+  // The packs installed on this machine are never recorded into the project:
+  // what happens to be in a developer's home store is not doctrine, and a
+  // selection written from it drifts an approved project and asks for a pack
+  // CI cannot obtain. The report names them; `wairon pack use <name>`
+  // selects one the project actually wants.
 
   // Migrate legacy spec filenames
   try {
@@ -725,32 +733,6 @@ function severityCounts(issues: { severity: string }[]): { errs: number; warns: 
 /** One enum proposal in a line: where, what is written, and the enum to define. */
 function describeEnumProposal(p: { kind: string; specId: string; path: string; written: string; enumId: string; values: string[]; optional: boolean }): string {
   return `${p.kind} ${p.specId} ${p.path}: "${p.written}" → enum ${p.enumId} (${p.values.join(', ')}), written as ${p.enumId}${p.optional ? '?' : ''} (proposed)`;
-}
-
-/**
- * Record the installed packs a project no longer applies as explicit
- * selections (one that never declared a position on machine-wide packs), and
- * name the remedy for each recorded selection CI could not obtain: no
- * fetchable source was recorded (a pack installed from a local path has
- * none), and it is not bundled.
- */
-function pinPackSelections(who: string): void {
-  try {
-    const pinned = pinInstalledPacksAsSelections();
-    if (pinned.length === 0) return;
-    console.log(`  ${icon('ok')} ${whoPrefix(who)}Recorded ${pinned.length} installed pack(s) as explicit selections: ${pinned.join(', ')}.`);
-    const pinnedNames = new Set(pinned.map((label) => label.replace(/@[^@]*$/, '')));
-    const unobtainable = (loadProjectConfig()?.extensions?.packs ?? [])
-      .filter((e): e is Exclude<typeof e, string> => typeof e !== 'string')
-      .filter((e) => pinnedNames.has(e.name) && !e.source && !e.bundle)
-      .map((e) => e.name);
-    if (unobtainable.length > 0) {
-      console.log(`  ${icon('warn')} ${whoPrefix(who)}${unobtainable.length} of them record no fetchable source (installed from a local path), so CI and a fresh clone cannot obtain them: ${unobtainable.join(', ')}. `
-        + 'Run `wairon pack bundle --all` to commit a copy the repository carries, or `wairon pack use <name> --source <url>` to record where `wairon pack sync` fetches each.');
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} ${whoPrefix(who)}Could not record pack selections: ${e instanceof Error ? e.message : String(e)}`);
-  }
 }
 
 /**
@@ -939,7 +921,6 @@ function repairMembers(): void {
     }
     runWithProjectRoot(member.directory, () => {
       if (!projectConfigExists()) return;
-      pinPackSelections(member.alias);
       repairProjectSpecs(member.alias);
     });
   }

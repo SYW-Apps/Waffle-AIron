@@ -4,10 +4,11 @@ description: >-
   The mechanical writes of sdd_core — the ones that change identity, placement or format rather than
   what a component owns, and so need no candidate judgement: renaming a component or a method,
   relocating, externalizing or internalizing a chained subproject, the doctor's repairs (retiring
-  Specialists, dropping step fields a step type cannot carry), importing an archived tree, and
-  provisioning a project. Kept apart from the raw store writes so the doors that legitimately
-  perform these (the CLI, the MCP server, the hosted server) are not handed the ungated save and
-  delete as well. In-process today: realized by src/core/index.ts alongside core's other portals.
+  Specialists, dropping step fields a step type cannot carry), importing an archived tree,
+  provisioning a project and seeding a demo project's example tree. Kept apart from the raw store
+  writes so the doors that legitimately perform these (the CLI, the MCP server, the hosted server)
+  are not handed the ungated save and delete as well. In-process today: realized by
+  src/core/index.ts alongside core's other portals.
 subsystem: sdd_core
 componentType: Portal
 owns: []
@@ -15,6 +16,7 @@ dependsOn:
   - core_orchestrator
   - tree_transfer_orchestrator
   - reachability_migration
+  - demo_orchestrator
 transport: InProcess
 invokedBy:
   kind: entry
@@ -24,4 +26,4 @@ invokedBy:
     repairs, tree import, provisioning) in their own process
 status: complete
 createdAt: '2026-09-25T17:32:49.056Z'
-updatedAt: '2026-10-06T19:13:28.631Z'
+updatedAt: '2026-10-07T22:40:29.864Z'

@@ -55,6 +55,25 @@ the same way, naming the file, the line and the key —
 diagnoses it too; no command runs on defaults instead. To report a bug, set
 `WAIRON_DEBUG=1` and the stack is printed after the line.
 
+#### Ids and names
+Every id and name the design holds follows one grammar, and every writer, the
+loader and the CLI judge it the same way. Spec ids (subsystems, components,
+interfaces, implementations, types), project ids, and member and external
+aliases, as well as method, parameter and field names, are never empty, at most
+64 characters, never start with `-` (no command line could name one), hold no
+control, NUL or zero-width character, and are never `__proto__`. Spec ids and
+aliases are `[a-z0-9-_]+`, project ids `[a-z0-9-_.]` starting and ending
+alphanumeric; these become folder and file names, so a name Windows reserves for
+a device (`con`, `aux`, `nul`, `com1`, …) is refused on every platform, and a
+project id or an alias is never `super`, the `::` grammar's namespace hop.
+Method, parameter and field names are ASCII identifiers that never start with a
+digit, and never a word the tree's `targetLanguage` reserves for that kind of
+identifier: TypeScript and JavaScript allow a keyword as a method or a field but
+not as a parameter, and no method named `constructor`; Rust, Python, Go, Java, C#,
+C and Kotlin refuse their keywords everywhere (`RESERVED_IDENTIFIER`, naming the
+language and an alternative). A display `name` is never blank and holds no
+invisible character.
+
 ### `wairon status [--subsystem <id>] [--no-recursive] [--all]`
 Print the SDD spec tree as a hierarchy. Its percentages measure **authoring
 progress** — 80% once a component's component, contract and implementation specs
@@ -83,6 +102,13 @@ warnings as errors (notices are printed and counted, never fatal).
 - The first 100 findings per severity are printed; the rest are counted ("N
   more not shown") and a per-code total follows. `--all` prints every finding.
 - `--subsystem <id>` validates one subsystem.
+- It ends with one **code-reading line**, the same sentence `sdd_validate_tree`
+  carries in its hint: the analysis grade the code was read at (the weakest any
+  file got — see `wairon lock` for the grades) and, at `exact`, the TypeScript
+  compiler that read it — `Code read at grade exact with TypeScript 5.9.3
+  (wairon's own copy)` on a project with TypeScript 7 or none, `(the project's
+  own)` on TypeScript 5 or 6 — or `Code: none read yet` before any file the design
+  names exists.
 - At a project that declares members, `validate` is the **family run**: every
   member's own gate, and this project's externals composed against their live
   producers. `--no-recursive` runs this project's gate alone; `--family` runs
@@ -143,13 +169,25 @@ warnings as errors (notices are printed and counted, never fatal).
   on the method the checker resolves it to, and a call through an interface or
   type — a port declared in the Portal's own contracts file included — lands on
   every class of the project that realizes it (the ones that say `implements`
-  when any does, else every class the checker finds assignable). A call the
-  checker cannot resolve because its receiver is typed `any` or `unknown`, cast
-  to either, or typed nothing, under the name of a data component's write, is
-  `PORTAL_CALL_UNRESOLVED` (a warning, so `--ci` fails): give the receiver its
-  type. An Orchestrator (or any component) whose code calls a write- or
-  lifecycle-effect method of another component that its narrative never
-  claims is `UNDECLARED_WRITE_CALL`. And a file importing a technology's package
+  when any does, else every class the checker finds assignable). Taking a
+  method as a value counts as using it (`Reflect.apply`, a `Function`-typed
+  variable, `.bind`, a callback), and code no component maps — a helper in a
+  module no spec names, or a function that is none of its file's components'
+  modelled methods — is read as if it were inlined where it is called; the
+  finding names the path. A call the checker cannot resolve because its
+  receiver is typed `any` or `unknown`, cast to either or to an index
+  signature, picked by a computed key, or typed nothing, under the name of a
+  data component's write (or with a computed key on a receiver that was a data
+  component before the cast), is `PORTAL_CALL_UNRESOLVED` (a warning, so `--ci`
+  fails): give the receiver its type. An Orchestrator (or any component) whose
+  code calls a write- or lifecycle-effect method of another component that its
+  narrative never claims is `UNDECLARED_WRITE_CALL`, and so is a Portal calling
+  a workflow verb its narrative never names whose effect is not declared `read`
+  or `none`; the same unclaimed write through a receiver the checker cannot
+  follow is `CALL_ORIGIN_UNRESOLVED` (a warning). The narrative↔code and
+  declared-edge checks read the checker too, so a type-only `ports.ts` barrel,
+  `export *`, a port declared in a shared module and a dependency object typed
+  inline realize the calls and edges they carry. And a file importing a technology's package
   outside the components that bind it is `TECH_LEAKAGE_IN_CODE`. A technology's
   packages are its declared tokens (its name, or its `matches`) plus the common
   packages wairon knows for it — see [Technologies and their
@@ -226,6 +264,12 @@ outputs (agent files only when `rules.materializeAgentFiles` is on).
 approval lives in `.wai/lock.json`. Implementation gates on that approval —
 `wairon lock-check` in CI, `sdd_get_status` for an AI tool — not on
 `status: complete`. Commit `.wai/lock.json` with the change it approves.
+When any spec is still `draft` or `design`, the lock says how many of how many,
+per kind (subsystems, components, contracts, implementations, types), and that
+it approves them as they stand. Re-running it when nothing it records moved
+keeps the record on file — its `lockedAt` included — so `.wai/lock.json` stays
+unmodified; a change of approver, verdict, member pin or wairon release writes
+a new record.
 
 **What it certifies is the design.** Only design findings can refuse a lock.
 Code-conformance findings (the code↔spec checks) are recorded **beside** the
@@ -717,9 +761,44 @@ keeps its place, type and description; its old name joins the field's rename
 trace (`previousNames`), which `wairon export` shows as `formerly`, so a
 consumer holding the old name reads a rename, not a removal and an addition.
 Traces and prose are never rewritten. It refuses, writing nothing, a type or
-field that does not exist, a name that is not an identifier, and a name another
-field of the type holds or retired. The MCP twin is `sdd_rename_field`. As with
+field that does not exist, a name that is not an identifier or that the target
+language reserves for a field (`fn` in Rust), and a name another field of the
+type holds or retired. The MCP twin is `sdd_rename_field`. As with
 any design edit, the next `wairon lock` approves it.
+
+### `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dirs...>] [--no-pin-symbol]`
+Renames a contract method and retargets every reference to it in the bound
+tree. The method moves on every interface of the component that declares it,
+and on the implementations of those contracts with its narrative, source path
+and symbol; call, register and dispatch steps, dispatch-table bindings,
+lifecycle entrypoints, the lint allows keyed on it and the debt register
+(`rules.conformance.carried`) follow. Its old name joins the method's rename
+trace (`previousNames`), which `wairon export` shows as `formerly`, so a
+consumer reads a rename, not a removal and an addition. Prose and a gRPC wire
+method are never rewritten; they are listed as mentions.
+
+- `--dry-run` prints what the rename would move, retarget and break — every
+  consumer that calls the method through an export, by project and spec — and
+  writes nothing. Run it first on a published verb.
+- `--search <dirs...>` also scans these folders for consumer checkouts outside
+  the family (for example the folder holding sibling checkouts), so the dry run
+  names a sibling project the rename breaks.
+- `--no-pin-symbol`: by default an implementation that declares no `symbol` is
+  pinned to the OLD name, so the function its code already holds keeps binding.
+  Pass it when the code is not written yet, or will be renamed with the
+  contract, so the implementation follows the new name.
+
+It refuses, writing nothing: a component that does not exist, one in another
+project (rename it from that project's root), a method the component does not
+declare, a name a moving contract already declares or retired, and a new name
+that is not an identifier in the tree's method casing (snake_case in a Rust or
+Python tree, camelCase in a TypeScript one), that is longer than 64 characters
+or starts with a digit, or that the target language reserves for a method
+(`constructor` in TypeScript, `fn` or `type` in Rust — the refusal names the
+language and offers an alternative). A contract that implements another
+project's extension point takes its method names from that producer, so its
+casing is not judged. The MCP twin is `sdd_rename_method` (with `dryRun`). The
+next `wairon lock` approves the rename.
 
 ### `wairon method rename-param <component> <method> <param> <new-name>`
 Renames a parameter of a contract method. The parameter moves on every
@@ -732,8 +811,9 @@ itself), and an HTTP endpoint path placeholder `{old}` on the method's own
 binding is respelled — the URL a caller sends is unchanged. Prose is never
 rewritten. It refuses, writing nothing, a component, method or parameter that
 does not exist (or a parameter the method takes from a `signatureFrom`), a name
-that is not an identifier, and a name another parameter of the method holds or
-retired. The MCP twin is `sdd_rename_param`. The next `wairon lock` approves it.
+that is not an identifier or that the target language reserves for a parameter
+(`class` in TypeScript, `type` in Rust), and a name another parameter of the
+method holds or retired. The MCP twin is `sdd_rename_param`. The next `wairon lock` approves it.
 
 ### `wairon network flows|policy|diagram|check|why|declare|undeclare`
 Networking derived from the design: the reach the validator already models
@@ -1114,7 +1194,7 @@ return the impact of every pack they applied in their results.
 | `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
 | `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
 | `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration, and an orphaned pin whose declaration is gone, are listed with their problem, never hidden |
-| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal — a `{name}` segment of an endpoint path is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH), import one, or list them. An unknown `--portal` is refused naming the portals the surface renders |
+| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal), import one, or list them. OpenAPI defaults to the `project` audience, so every HTTP Portal of the project's own is described — one its L0 export table never exports included (a wider `--audience` narrows to what the table shares there); the native snapshot defaults to `instance`. In the OpenAPI document a path placeholder — `{name}`, or the Express spelling `:name`, which is rewritten to `{name}` — is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH. The Portal's `basePath` is joined into every path (the document carries no `servers` entry: where it is served is deployment, not design). The parameter that carries the credential the Portal's `auth` binds (a bearer `token`, say) is left out of the parameters and the body — `security` describes it — and named under `x-wairon-credential-param` so a wairon reader can restore it. An unknown `--portal` is refused naming the portals the surface renders |
 | `wairon surface diff [--against <ref\|file>] [--json]` | The public-surface changelog: this project's export table now against the same table at its last **committed** approval (or at a git revision, or in a saved native snapshot from `surface export`) — every exported name and contract method `added`, `removed`, `renamed` (from its rename trace) or `changed` (signature or type shape), and how many a consumer may have to follow. What a producer writes release notes from before it re-locks; `wairon externals consumers --search <dir>` then says who uses what. Read-only. With no approval ever committed it says so (lock and commit first, or name `--against`). `sdd_surface_diff` is the same answer for an assistant |
 | `wairon produce <notion\|miro> [--page <id>] [--token <token>]` | Project the local spec tree to Notion or Miro (the token comes from `--token`, the environment, else a prompt; nothing is stored) |
 

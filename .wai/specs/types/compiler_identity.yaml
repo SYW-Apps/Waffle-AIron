@@ -1,0 +1,21 @@
+kind: value-object
+id: compiler_identity
+name: CompilerIdentity
+description: >-
+  Which compiler an exact-grade analysis reads a project with: the project's own when its installed
+  package ships the JavaScript compiler API, else the copy wairon itself depends on. What validate
+  names in its code-reading line, so a team whose own compiler cannot be read (a native release, or
+  none installed) sees which one judged its code.
+fields:
+  - name: version
+    type: string
+    description: The compiler's version, as its package states it
+    optional: false
+  - name: source
+    type: string
+    description: project when the project's own typescript package is read, wairon when wairon's own copy is
+    optional: false
+methods: []
+sourcePath: src/core/source-analysis.ts
+createdAt: '2026-10-07T21:49:55.468Z'
+updatedAt: '2026-10-07T21:50:08.988Z'

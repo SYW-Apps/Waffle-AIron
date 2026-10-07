@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { INVISIBLE_CHARACTERS, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 
 // ---------------------------------------------------------------------------
 // Common Identifier Schema
@@ -34,7 +35,38 @@ export const MAX_SPEC_ID_LENGTH = 64;
 export const SpecIdSchema = z.string()
   .regex(/^[a-z0-9-_]+$/, 'Identifier must be lowercase alphanumeric with dashes or underscores')
   .max(MAX_SPEC_ID_LENGTH, `Identifier is longer than ${MAX_SPEC_ID_LENGTH} characters: an id becomes a folder and a file name, and a longer one breaks the path limits of a Windows checkout`)
-  .regex(/^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)/, 'Identifier is a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9): no Windows checkout could hold its file, and `git add` fails for the whole repository — choose another id (e.g. "aux_store", "console")');
+  .regex(/^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)/, 'Identifier is a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9): no Windows checkout could hold its file, and `git add` fails for the whole repository — choose another id (e.g. "aux_store", "console")')
+  // identifier.problemAs spec-id: the floor every kind of id shares.
+  .regex(/^(?!-)/, 'Identifier starts with "-", which every command line reads as an option, so no CLI command could name it — start it with a letter or a digit')
+  .regex(/^(?!__proto__$)/, 'Identifier is "__proto__", the name JavaScript reserves for an object\'s prototype: the YAML and JSON readers drop a key of that name, so nothing keyed on it could be found — choose another id');
+
+/**
+ * A method, parameter or field name: identifier.problemAs method | param |
+ * field — an ASCII identifier (a letter or underscore, then letters, digits or
+ * underscores), at most 64 characters, never "__proto__". Whether the target
+ * language reserves it is the member-names rule's question (it needs the
+ * tree's targetLanguage, which a schema cannot see).
+ */
+function memberNameSchema(noun: string) {
+  return z.string()
+    .min(1, `${noun} is empty: it needs at least one character`)
+    .max(MAX_IDENTIFIER_LENGTH, `${noun} is longer than ${MAX_IDENTIFIER_LENGTH} characters: every kind of id and name stops at ${MAX_IDENTIFIER_LENGTH}, as a DNS label or a database identifier does`)
+    .regex(/^(?![0-9])/, `${noun} starts with a digit, which no programming language accepts at the start of an identifier`)
+    .regex(/^(?:[A-Za-z_][A-Za-z0-9_]*)?$/, `${noun} is not an identifier (a letter or underscore, then letters, digits or underscores)`)
+    .regex(/^(?!__proto__$)/, `${noun} is "__proto__", the name JavaScript reserves for an object's prototype: the YAML and JSON readers drop a key of that name — choose another`);
+}
+export const MethodNameSchema = memberNameSchema('Method name');
+export const ParamNameSchema = memberNameSchema('Parameter name');
+export const FieldNameSchema = memberNameSchema('Field name');
+
+/**
+ * A spec's human-readable `name`: display_name.problem — never empty or blank,
+ * and no control, NUL or zero-width character (invisible in every view, cut
+ * short by some tools, and a diagram holding one is a binary file).
+ */
+export const DisplayNameSchema = z.string()
+  .regex(/\S/, 'Name is empty: give it a readable name')
+  .regex(new RegExp(`^[^${INVISIBLE_CHARACTERS}]*$`), 'Name holds an invisible character (a control, NUL or zero-width character), which no view shows and some tools cut the text at — retype it');
 
 /**
  * Split a qualified id at its last `::` into the namespace prefix and the local
@@ -258,7 +290,7 @@ export type SystemPublicInterface = z.infer<typeof SystemPublicInterfaceSchema>;
 
 export const SystemSpecSchema = z.object({
   schemaVersion: z.string().default('1.0.0'),
-  name: z.string(),
+  name: DisplayNameSchema,
   vision: z.string(),
   boundaries: z.array(BoundaryItemSchema).default([]),
   globalRequirements: z.array(RequirementItemSchema).default([]),
@@ -449,7 +481,7 @@ export type LifecycleEntrypoint = z.infer<typeof LifecycleEntrypointSchema>;
 
 export const SubsystemSpecSchema = z.object({
   id: SpecIdSchema,
-  name: z.string(),
+  name: DisplayNameSchema,
   description: z.string(),
   parentSystem: z.string(), // References L0 System Name or file
   publicInterfaces: z.array(PublicInterfaceSchema).default([]),
@@ -717,7 +749,7 @@ export function specIndexRetiredBy(index: RenameTraceHolders, kind: string, id: 
 
 export const ComponentSpecSchema = z.object({
   id: SpecIdSchema,
-  name: z.string(),
+  name: DisplayNameSchema,
   description: z.string(),
   subsystem: z.string(), // References L1 Subsystem id
   componentType: ComponentTypeSchema,
@@ -933,7 +965,7 @@ export type Guarantee = z.infer<typeof GuaranteeSchema>;
  * class of false positives/negatives.
  */
 export const MethodParamSchema = z.object({
-  name: z.string(),
+  name: ParamNameSchema,
   /**
    * A type expression in the neutral type grammar (src/models/type-grammar.ts):
    * a primitive, a named type (`billing.Invoice`, `alias::name`), `list<T>`,
@@ -993,7 +1025,7 @@ export type MethodEffect = z.infer<typeof MethodEffectSchema>;
  * its shape can be read field by field (the MCP field-coverage suite does).
  */
 export const MethodSignatureSchema = z.object({
-  name: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Method name must be alphanumeric'),
+  name: MethodNameSchema,
   description: z.string(),
   signature: z.string().optional(), // e.g. "save(key: string, data: Buffer): Promise<void>"
   // A type expression in the neutral grammar, at the returns position — the only
@@ -1183,7 +1215,7 @@ export function passesIntentFloor(text: string | undefined, methodName: string):
 
 export const InterfaceSpecSchema = z.object({
   id: SpecIdSchema.regex(/^i[a-z0-9-_]+$/, 'Interface id must be prefixed with a lowercase "i"'),
-  name: z.string(),
+  name: DisplayNameSchema,
   description: z.string(),
   component: z.string(), // References L2 Component id
   methods: z.array(StoredMethodSignatureSchema).default([]),
@@ -1362,7 +1394,7 @@ export const ConformanceTierSchema = z.enum(['declared', 'anchored', 'off']);
 export type ConformanceTier = z.infer<typeof ConformanceTierSchema>;
 
 export const MethodImplementationSchema = z.object({
-  name: z.string(), // Must match a method name in the L3 interface contract
+  name: MethodNameSchema, // Must match a method name in the L3 interface contract
   /**
    * The source file realizing THIS method when it is not the implementation's
    * sourcePath, such as a command whose body lives in its own file; the
@@ -1491,7 +1523,7 @@ export function technologyTokens(tech: Technology): string[] {
 
 export const ImplementationSpecSchema = z.object({
   id: SpecIdSchema,
-  name: z.string(),
+  name: DisplayNameSchema,
   description: z.string(),
   contract: z.string(), // References L3 Interface id
   sourcePath: z.string().optional(), // Path to the concrete source code file (e.g. "src/storage/vfs.ts")
@@ -1695,7 +1727,7 @@ export const TypeKindSchema = z.enum(['entity', 'value-object', 'signature', 'en
 export type TypeKind = z.infer<typeof TypeKindSchema>;
 
 export const TypeFieldSchema = z.object({
-  name: z.string(),
+  name: FieldNameSchema,
   // A type expression in the neutral grammar (src/models/type-grammar.ts): a
   // primitive, a named type ("billing.Invoice"), list/set/map, `T?`, a union
   // of named types. Stored canonical.
@@ -1731,7 +1763,7 @@ export type TypeField = z.infer<typeof TypeFieldSchema>;
  * reaches no component, so it has no edge to take one along.
  */
 export const TypeMethodSchema = z.object({
-  name: z.string(),
+  name: MethodNameSchema,
   signature: z.string().optional(),
   /** Structured parameters in the contract method's param shape — authoritative for type checking when present. */
   params: z.array(MethodParamSchema).optional(),
@@ -1798,7 +1830,7 @@ export type EnumValue = z.infer<typeof EnumValueSchema>;
 export const TypeSpecSchema = z.object({
   kind: TypeKindSchema, // discriminator — entity | value-object | signature | enum
   id: SpecIdSchema,
-  name: z.string(),
+  name: DisplayNameSchema,
   description: z.string().optional(),
   /** Owning subsystem id (entities). Omit for system-level shared value objects. */
   subsystem: z.string().optional(),
@@ -2381,13 +2413,20 @@ export const SurfaceTypeDefSchema = z.object({
     type: z.string(),
     description: z.string().optional(),
     optional: z.boolean().optional(),
+    /**
+     * The field's rename trace as the producer recorded it (previousNames), so
+     * a consumer pinned to a former field name reads a rename, never an
+     * anonymous shape change. Provenance: it enters no digest.
+     */
+    formerly: z.array(z.string()).optional(),
   })).default([]),
-  /** A signature's parameters (name, type, optional, description) in declared order; only on kind signature. */
+  /** A signature's parameters (name, type, optional, description, rename trace) in declared order; only on kind signature. */
   params: z.array(z.object({
     name: z.string(),
     type: z.string(),
     description: z.string().optional(),
     optional: z.boolean().optional(),
+    formerly: z.array(z.string()).optional(),
   })).optional(),
   /** A signature's one output type; only on kind signature. */
   returns: z.string().optional(),
@@ -2452,7 +2491,7 @@ export const SurfaceContractEntrySchema = z.object({
   /** Projected copy of the backing Portal's auth (see PortalAuthSchema) — the codec
    *  emits it as OpenAPI securitySchemes/security. */
   auth: PortalAuthSchema.optional(),
-  /** The backing Portal's basePath — becomes the per-portal OpenAPI `servers` url. */
+  /** The backing Portal's basePath — joined before every endpoint path of the per-portal OpenAPI document. */
   basePath: z.string().optional(),
   /** Stereotype of the backing component; absent on snapshots written before exports carried it. */
   componentType: z.string().optional(),
@@ -2695,12 +2734,24 @@ export interface ExternalAddition {
  * declaration and its pin (lock entry and snapshot) went, or why nothing was
  * removed, in one sentence.
  */
+/** external_removal_plan — what removing one external takes out: its declaration, its pin, or both. */
+export interface ExternalRemovalPlan {
+  /** Whether the declaration in `.wai/project.yaml` goes. */
+  declaration: boolean;
+  /** Whether the lock entry and pinned snapshot go. */
+  pin: boolean;
+}
+
 export interface ExternalRemoval {
   alias: string;
   /** Whether this call took the declaration out of `.wai/project.yaml` (false on a refusal, a dry run, and an orphaned pin). */
   removed: boolean;
-  /** Whether the alias's lock entry and pinned snapshot were removed (or would be, on a dry run). */
+  /** Whether this call removed the alias's lock entry and pinned snapshot (false on a refusal and a dry run). */
   unpinned: boolean;
+  /** Present, true, on a dry run: nothing was written, and `wouldRemove` says what the real run removes. */
+  dryRun?: boolean;
+  /** On a dry run: what the real run would take out — the declaration, the pin, or both. */
+  wouldRemove?: ExternalRemovalPlan;
   /** Why nothing was removed: the alias is neither declared nor pinned. */
   refusal?: string;
 }

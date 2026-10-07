@@ -3,9 +3,11 @@ import type { WritableSpecKind } from '../core/specs.js';
 import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { EXTERNAL_ALIAS_RE, PROJECT_ID_RE, type ProjectConfig } from '../models/project.js';
+import { aliasGrammarProblem, EXTERNAL_ALIAS_RE, PROJECT_ID_RE, type ProjectConfig } from '../models/project.js';
+import { identifierProblem } from '../models/identifiers.js';
 import { familyNode, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // identity_migration — a project's id, or one alias of the bound project,
@@ -131,7 +133,7 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   // A completed rename plans nothing.
   if (target && target.id === newId) return plan;
   if (!plan.whole) refuse(plan, 'family-partial', '', 'the family\'s top is out of this request\'s reach, and a rename must reach every consumer — run it from the top project');
-  if (!PROJECT_ID_RE.test(newId)) refuse(plan, 'id-invalid', '', `"${newId}" is no project id: [a-z0-9-_.], starting and ending alphanumeric`);
+  if (!PROJECT_ID_RE.test(newId)) refuse(plan, 'id-invalid', '', identifierProblem(newId, 'project-id') ?? `"${newId}" is no project id: [a-z0-9-_.], starting and ending alphanumeric`);
   const taken = family.nodes.find((n) => n.id === newId || (n.namespace !== '' && n.namespace === newId));
   if (taken) refuse(plan, 'id-collision', taken.namespace, `${label(taken.namespace)} already answers to "${newId}"`);
   if (target && target.id === undefined) refuse(plan, 'id-moved', target.namespace, `${label(target.namespace)} has no id to move — declare one first`);
@@ -146,7 +148,7 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   // A reference that names the old id through no alias of its own binds by id: it follows too.
   for (const n of family.nodes) if (!n.aliases.has(oldId) && n.namespace !== target.namespace) respellThrough(plan, family, n.namespace, oldId, newId, target.namespace);
   // Step 7: the target's own id, and the notes.
-  edit(plan, target.namespace, 'id', `id: ${oldId} → ${newId} (${oldId} kept in previousIds)`, { root: target.directory, call: 'renameId', args: [oldId, newId] });
+  edit(plan, target.namespace, 'id', `${oldId} → ${newId} (${oldId} kept in previousIds)`, { root: target.directory, call: 'renameId', args: [oldId, newId] });
   for (const h of holders.filter((x) => x.external)) planPin(plan, h, oldId, newId);
   plan.notes.push(`Consumers outside the family that name "${oldId}" by path are not found by a rename: each must rewrite its own external (its next gate reports the id change).`);
   // The member's key follows the id when its alias was the old id: the deployment side names it by that key.
@@ -176,7 +178,7 @@ function holdersOf(family: ProjectFamily, target: ProjectNode): Holder[] {
     const config = configAt(node.directory);
     for (const [alias, key] of node.aliases) {
       if (key !== target.namespace) continue;
-      out.push({ node, alias, external: config?.externals?.[alias] !== undefined });
+      out.push({ node, alias, external: ownGet(config?.externals, alias) !== undefined });
     }
     for (const e of node.externals) {
       if (node.aliases.get(e.alias) === target.namespace || e.sourceKind !== 'path') continue;
@@ -203,7 +205,7 @@ function planHolder(plan: MigrationPlan, family: ProjectFamily, h: Holder, oldId
     edit(plan, h.node.namespace, h.external ? 'external' : 'member', `${h.external ? 'externals' : 'members'}: ${h.alias} → ${after}`, { root: h.node.directory, call: 'renameAlias', args: [h.alias, after] });
   }
   if (!h.external) return;
-  const declared = configAt(h.node.directory)?.externals?.[h.alias];
+  const declared = ownGet(configAt(h.node.directory)?.externals, h.alias);
   const wanted = after === newId ? null : newId;
   if ((declared?.project ?? null) === wanted) return;
   edit(plan, h.node.namespace, 'external', `externals: ${after} names ${newId}`, { root: h.node.directory, call: 'repointExternal', args: [after, wanted, declared?.source ?? null] });
@@ -226,19 +228,19 @@ export function planAliasRename(family: ProjectFamily, bound: string, request: M
   const next = request.newAlias ?? '';
   const node = familyNode(family, bound)!;
   const config = configAt(node.directory) ?? ({} as ProjectConfig);
-  const declared = (a: string): boolean => config.members?.[a] !== undefined || config.externals?.[a] !== undefined;
+  const declared = (a: string): boolean => ownGet(config.members, a) !== undefined || ownGet(config.externals, a) !== undefined;
   // A completed alias rename plans nothing.
   if (!declared(alias) && declared(next)) return plan;
   // Step 1.
   if (!declared(alias)) refuse(plan, 'not-a-member', bound, `${label(bound)} declares no member or external "${alias}"`);
-  if (!EXTERNAL_ALIAS_RE.test(next)) refuse(plan, 'alias-invalid', bound, `"${next}" is no alias: an alias must fit [a-z0-9-_]+`);
+  if (!EXTERNAL_ALIAS_RE.test(next)) refuse(plan, 'alias-invalid', bound, `"${next}" is no alias: ${aliasGrammarProblem(next)}`);
   else if (declared(next)) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${next}"`);
   // Steps 2-3.
   if (plan.refusals.length > 0) return plan;
   // Step 4: the bound project's edits only.
   respellThrough(plan, family, bound, alias, next);
   respellReExports(plan, node, alias, next);
-  const external = config.externals?.[alias];
+  const external = ownGet(config.externals, alias);
   edit(plan, bound, external ? 'external' : 'member', `${external ? 'externals' : 'members'}: ${alias} → ${next}`, { root: node.directory, call: 'renameAlias', args: [alias, next] });
   // An external whose alias WAS its producer id keeps naming that producer, now explicitly.
   if (external && external.project === undefined) {

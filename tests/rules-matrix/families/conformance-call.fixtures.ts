@@ -1061,13 +1061,14 @@ export default [
   // the CLASS was written in — never the module a method it INHERITS from a
   // base was written in, which is free to live anywhere. So the reading
   // reaches the derived class's file and stops there: what it cannot see
-  // stays a false NEGATIVE, and a possibility still never accuses.
+  // stays a false NEGATIVE, and a possibility still never accuses — for the
+  // shape tier: the type checker resolves the inherited method where it is.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'CALL_ORIGIN_UNRESOLVED',
-    severity: 'warning',
-    anchoredTo: 'entry_recorder_impl',
-    expectFire: true,
+    expectFire: false,
+    reason:
+      'Where the type checker read the file, the inherited append resolves to the declaration it IS — the general-ledger writer\'s own method, in the module the narrative names — so the step is realized: the limit of the constructed-class reading is the shape tier\'s alone.',
     scenario:
       'The entry recorder constructs the payroll journal writer and appends through it, but append is inherited from the general-ledger writer in another module, which is where the narrative\'s target is realized.',
     tree: ledgerJournalTree('ledger-writer'),
@@ -1189,9 +1190,9 @@ export default [
   }),
   defineRuleFixture({
     code: 'CALL_ORIGIN_UNRESOLVED',
-    severity: 'warning',
-    anchoredTo: 'payslip_repository_impl',
-    expectFire: true,
+    expectFire: false,
+    reason:
+      'The type checker infers what the unannotated binding holds — the payslip store the helper returns — so the append lands in the store module the narrative names and the step is realized; only a pure model cannot say.',
     scenario:
       'The payslip repository opens the store into an unannotated local binding, so store.append names a value the module never says the type of.',
     tree: payslipRepositoryTree([
@@ -1272,9 +1273,9 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'CALL_ORIGIN_UNRESOLVED',
-    severity: 'warning',
-    anchoredTo: 'payslip_repository_impl',
-    expectFire: true,
+    expectFire: false,
+    reason:
+      'Where no implements clause names the contract, the type checker lands the call on every class of the project it finds assignable to it — the store class answers the payslip-rows contract structurally — so the call is followed into the store module the narrative names.',
     scenario:
       'The payslip repository takes its store as the payslip-rows contract, which is declared in a module of its own, while the store class answers that contract only structurally, without an implements clause.',
     tree: payslipContractTree([

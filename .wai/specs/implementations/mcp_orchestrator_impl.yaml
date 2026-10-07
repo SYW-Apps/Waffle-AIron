@@ -230,7 +230,9 @@ methods:
           Shape the tool response from the report: the specs the method moved in (or would), the
           specs whose references were retargeted, the specs whose prose still names it, the pinned
           symbol when one was set, and `breaks` — every consumer read above whose specs reach the
-          old method on a public name the report says publishes it (external_consumer.reaches)
+          old method on a public name the report says publishes it (external_consumer.reaches), each
+          narrowed to what breaks (external_consumer.narrowedTo: those public names, with that one
+          method), as the CLI dry run names it
         type: return
         outcome: MethodRename
   - name: updateSpec
@@ -670,8 +672,9 @@ methods:
           totals counted from the findings listed under it) or the owner's gate's — split into
           errors, warnings and notices, the advisory findings among them marked advisory
           (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED: what moved live,
-          who uses it, the fix), which never make the tree invalid, with the run's hint and, at a
-          member's root, the member line `wairon validate` prints
+          who uses it, the fix), which never make the tree invalid, with the run's hint — which
+          carries the code-reading line `wairon validate` prints, word for word — and, at a member's
+          root, the member line `wairon validate` prints
         type: return
         outcome: ValidationResult
     symbol: sdd_validate_tree
@@ -767,4 +770,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-07T18:46:58.343Z'
+updatedAt: '2026-10-07T22:00:14.622Z'

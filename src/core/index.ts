@@ -109,6 +109,9 @@ export {
   // spec_maintenance_portal findLegacySpecFiles: what `doctor` and `validate`
   // report before a migration.
   findLegacySpecFiles,
+  // spec_maintenance_portal findOrphanedSpecFiles: the spec files a deleted L0
+  // left standing, which `validate` and `lock-check` refuse to read as empty.
+  findOrphanedSpecFiles,
   // spec_tree_portal signatureFacts: what the scan's signature resolution
   // recorded — a passthrough read of the spec repository (spec_loader).
   signatureFacts,
@@ -288,10 +291,10 @@ export { loadFor as loadExtensionsFor, manifestOf as packManifest } from './exte
 export type { ExtensionPack } from './extensions.js';
 
 // The pack sources and entries (extension_portal globalPacksDir …
-// pinInstalledPacksAsSelections): where machine-wide packs live, what a
+// diagnoseProjectPacks): where machine-wide packs live, what a
 // directory holds, a pack loaded on its own, a manifest judged as declarative,
 // what a configured entry resolves to and is called, and the doctor's pack
-// diagnosis and its one repair. The sdd_cli pack commands, `wairon doctor` and
+// diagnosis (a report only: --fix never selects a machine's packs into a project). The sdd_cli pack commands, `wairon doctor` and
 // sdd_host's pack plane all read these; before, each imported them straight out
 // of ./extensions.js.
 export {
@@ -305,7 +308,6 @@ export {
   packEntryLabel,
   globalPacksEnabled,
   diagnoseProjectPacks,
-  pinInstalledPacksAsSelections,
 } from './extensions.js';
 export type { LoadedExtensions, LoadedPackSkill, PackRef, PackScope, PackDiagnosis } from './extensions.js';
 
@@ -357,6 +359,9 @@ export type { GenerateOptions, GenerateSummary } from '../exporters/generate.js'
 // forwards to the tree transfer orchestrator, stated explicitly for the same
 // anchored conformance check.
 export { exportSpecTree, importSpecTree } from './treetransfer.js';
+// The demo project's example tree (spec_maintenance_portal seedDemoTree) — a 1:1
+// forward to the demo orchestrator.
+export { seedDemoTree } from './demo-seed.js';
 export type { TreeExportResult, TreeImportOptions, TreeImportResult } from './treetransfer.js';
 
 // The agent topology (agent_context_portal resolveDomains / addDomain / removeDomain) —

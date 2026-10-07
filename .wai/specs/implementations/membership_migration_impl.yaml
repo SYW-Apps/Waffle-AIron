@@ -18,11 +18,11 @@ methods:
         targetMethod: resolve
       - stepNumber: 2
         description: >-
-          Check the alias against the bound node's alias table (members and externals): one that
-          breaks the alias grammar [a-z0-9-_]+ is alias-invalid (as rename-alias names it); declared
-          is alias-taken; an external of the bound project whose source path resolves to this
-          directory is already-member, naming `member adopt`; a family node at this directory is
-          already-member
+          Check the alias against the bound node's alias table (members and externals): one the
+          identifier grammar refuses (identifier.problemAs alias) is alias-invalid, carrying its
+          reason (as rename-alias names it); declared is alias-taken; an external of the bound
+          project whose source path resolves to this directory is already-member, naming `member
+          adopt`; a family node at this directory is already-member
         type: local
       - stepNumber: 3
         description: Is there anything left to read?
@@ -296,4 +296,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-07T19:08:14.162Z'
+updatedAt: '2026-10-07T21:46:57.951Z'

@@ -901,38 +901,6 @@ export function diagnoseProjectPacks(): PackDiagnosis {
 }
 
 /**
- * Convert the implicitly-applied global packs into EXPLICIT selections and turn
- * global auto-load off, so this project's doctrine survives a change of default
- * and is visible in a diff. Returns the names recorded.
- */
-export function pinInstalledPacksAsSelections(): string[] {
-  const diagnosis = diagnoseProjectPacks();
-  // Only migrate a project that never decided. One that explicitly set
-  // useGlobalPacks, or that simply has packs installed it deliberately does not
-  // apply, must not have selections invented for it.
-  if (!diagnosis.globalsUndeclared || diagnosis.notApplied.length === 0) return [];
-
-  const added: string[] = [];
-  const selections: PackSelection[] = [];
-  for (const pack of diagnosis.notApplied) {
-    selections.push({
-      name: pack.name,
-      version: pack.version,
-      // Carry the origin so the selection can be obtained elsewhere; a local
-      // path is not fetchable, so it is deliberately not recorded as a source.
-      ...(pack.origin && /^[a-z][a-z0-9+.-]*:\/\//i.test(pack.origin) ? { source: pack.origin } : {}),
-    });
-    added.push(`${pack.name}@${pack.version}`);
-  }
-
-  // Append the selections and turn machine-wide loading off in ONE write through the
-  // repository. The doctrine governing this project is then declared by the project
-  // itself: visible in a diff, and reproducible for a clone.
-  projectConfigRepository.pinGlobalPacksAsSelections(selections);
-  return added;
-}
-
-/**
  * A stable human label for a config pack entry — the path for a legacy ref, or
  * `name[@version]` for a selection. For messages and listings, never for loading.
  */

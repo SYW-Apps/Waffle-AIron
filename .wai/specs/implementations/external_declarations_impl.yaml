@@ -3,7 +3,9 @@ name: External Declarations Implementation
 description: >-
   The declare, remove and use workflows: read the request, refuse in one sentence, check against the
   producer before anything is written, write, pin — or take a declaration and its pin out together,
-  or change its `use` imports.
+  or change its `use` imports. The alias is judged by identifier.problemAs alias (so "[a-z0-9-_]+"
+  below is that grammar in full: at most 64 characters, no leading "-", never a Windows device name
+  — it names its pin file — super or __proto__), and the declared maps are read by own key only.
 contract: iexternal_declarations
 sourcePath: src/core/external-declarations.ts
 methods:
@@ -160,9 +162,10 @@ methods:
         onFalseStep: 7
       - stepNumber: 6
         description: >-
-          Answer the dry run, writing nothing: `removed` is whether the declaration would be taken
-          out (it is declared) and `unpinned` whether the pin would go — exactly what the real run
-          then answers
+          Answer the dry run, writing nothing, and say it is one: `dryRun` true, `removed` and
+          `unpinned` false (this call removed nothing), and `wouldRemove` naming what the real run
+          then takes out — the declaration when declared, the pin when pinned — so the answer alone
+          tells a dry run from an apply
         type: return
         outcome: dry run
       - stepNumber: 7
@@ -279,4 +282,4 @@ methods:
         outcome: changed
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-10-07T18:51:22.642Z'
+updatedAt: '2026-10-07T22:05:36.367Z'

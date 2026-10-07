@@ -11,13 +11,13 @@ import { technologyName } from '../../../models/index.js';
  */
 
 /** Stereotypes that may legitimately bind a technology directly. */
-const DATA_LAYER = new Set(['Adapter', 'Store', 'Registry', 'Index']);
+const DATA_LAYER = new Set(['Adapter', 'Store', 'Registry', 'Index', 'Observer']);
 
 export const technologyBindingRule: SddRule = {
   name: 'technology-binding',
   judges: 'design',
   description:
-    'Only data-layer stereotypes (Adapter/Store/Registry/Index) should bind a technology directly: an L4 that declares `technologies` on logic has no swap seam. No hardcoded vendor lists — only declared tokens are policed, so the rule never fires on a tree that doesn\'t opt in.',
+    'Only the stereotypes that sit at a technology seam (Adapter/Store/Registry/Index, and Observer — the edge block that subscribes to a messaging technology) should bind a technology directly: an L4 that declares `technologies` on logic has no swap seam. No hardcoded vendor lists — only declared tokens are policed, so the rule never fires on a tree that doesn\'t opt in.',
   codes: [
     { code: 'TECH_ON_LOGIC_COMPONENT', defaultSeverity: 'warning', summary: 'Technology bound by a non-data-layer stereotype' },
   ],

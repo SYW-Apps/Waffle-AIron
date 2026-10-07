@@ -233,50 +233,6 @@ methods:
       it defaults the field — only an undeclared field marks a project that never decided and may
       therefore have depended on machine-wide doctrine. Swallows every failure into an empty
       diagnosis: a health check must never itself break.
-  - name: pinInstalledPacksAsSelections
-    narrative:
-      - stepNumber: 1
-        description: Run the pack diagnosis for this project.
-        type: local
-      - stepNumber: 2
-        description: >-
-          Only a project that never declared a position AND has installed packs it is not applying
-          has anything to migrate.
-        type: branch
-        condition: the project already declared a position, or has no unapplied installed packs
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Do nothing — a project that deliberately applies nothing must never be given selections it
-          did not ask for.
-        type: return
-        outcome: nothing migrated
-      - stepNumber: 4
-        description: >-
-          Compose a name+version selection for each unapplied pack, carrying its recorded origin as
-          the selection's source only when that origin is a fetchable URL (a local path cannot be
-          resolved by CI or a clone).
-        type: local
-      - stepNumber: 5
-        description: >-
-          Append those selections and turn machine-wide loading off in ONE write through the
-          repository, so the decision is explicit — the doctrine governing this project is now
-          declared BY the project, visible in a diff and reproducible for a clone.
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: pinGlobalPacksAsSelections
-      - stepNumber: 6
-        description: Return the names recorded.
-        type: return
-        outcome: the recorded selections
-    detail: full
-    intent: >-
-      Runs the diagnosis and does nothing unless the project never declared a position AND has
-      installed packs it is not applying — so a project that deliberately applies nothing is never
-      given selections it did not ask for. Otherwise composes a name+version selection per unapplied
-      pack, carrying its recorded origin as a source only when that origin is a fetchable URL, then
-      records them all and sets useGlobalPacks false in ONE project config repository write
-      (pinGlobalPacksAsSelections) to make the decision explicit, and returns the recorded names.
   - name: defaultPackSelections
     narrative:
       - stepNumber: 1
@@ -543,4 +499,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-10-06T19:08:46.162Z'
+updatedAt: '2026-10-07T21:49:58.377Z'

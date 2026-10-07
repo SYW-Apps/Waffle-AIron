@@ -13,6 +13,7 @@ import {
   memberLocationOf,
   requiredPolicies,
   EXTERNAL_ALIAS_RE,
+  aliasGrammarProblem,
   type ExternalDeclaration,
   type PackSelection,
   type ProjectConfig,
@@ -27,6 +28,7 @@ function externalSourceOf(declaration: { source?: unknown } | undefined): Extern
 
 import type { ResolvedExportTable } from '../models/exports.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // membership_migration — attach, detach and adopt: a project entering or
@@ -128,11 +130,11 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   // Step 2: the alias against the bound project's alias table.
   const config = configAt(node.directory) ?? ({} as ProjectConfig);
   // A completed attach plans nothing: the alias already declares this directory.
-  const held = config.members?.[alias];
+  const held = ownGet(config.members, alias);
   const heldPath = held !== undefined ? memberLocationOf(held) : undefined;
   if (dir !== null && heldPath !== undefined && path.resolve(node.directory, heldPath) === dir) return plan;
-  if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-invalid', bound, `"${alias}" is no alias: an alias must fit [a-z0-9-_]+`);
-  else if (config.members?.[alias] !== undefined || config.externals?.[alias] !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${alias}"`);
+  if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-invalid', bound, `"${alias}" is no alias: ${aliasGrammarProblem(alias)}`);
+  else if (ownGet(config.members, alias) !== undefined || ownGet(config.externals, alias) !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${alias}"`);
   if (dir !== null) {
     const external = Object.entries(config.externals ?? {}).find(([, e]) => externalSourceOf(e)?.path && path.resolve(node.directory, externalSourceOf(e)!.path!) === dir);
     if (external) refuse(plan, 'already-member', bound, `${label(bound)}'s external "${external[0]}" already names ${dir} — make it a member with \`wairon member adopt ${external[0]}\``);
@@ -205,7 +207,7 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   const plan = emptyPlan(family, request);
   const alias = request.alias ?? '';
   // A completed detach plans nothing: the alias is an external found by path.
-  const done = configAt(familyNode(family, bound)!.directory)?.externals?.[alias];
+  const done = ownGet(configAt(familyNode(family, bound)!.directory)?.externals, alias);
   if ((externalSourceOf(done)?.path || externalSourceOf(done)?.hosted) && !family.nodes.some((n) => n.parent === bound && n.mountAlias === alias)) return plan;
   // Step 1.
   const member = memberUnder(family, bound, alias, plan);
@@ -233,7 +235,7 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
   if (plan.refusals.length > 0) return plan;
   // Step 6: the member's declaration.
   const boundDir = familyNode(family, bound)!.directory;
-  const held = memberDeclarationOf(configAt(boundDir)?.members?.[alias] ?? posix(path.relative(boundDir, member.directory)));
+  const held = memberDeclarationOf(ownGet(configAt(boundDir)?.members, alias) ?? posix(path.relative(boundDir, member.directory)));
   const declared = { ...held, path: memberLocationOf(held) ?? posix(path.relative(boundDir, member.directory)) };
   // Step 7: the edits.
   detachEdits(plan, family, bound, member, alias, declared, consumers, outward);
@@ -324,7 +326,7 @@ function detachEdits(
   };
   edit(plan, bound, 'external', `externals: ${alias} → ${member.id ?? alias} at ${where(boundSource)}`, { root: boundDir, call: 'declareExternal', args: [alias, external] });
   for (const c of consumers) {
-    const held = configAt(c.node.directory)?.externals?.[c.alias];
+    const held = ownGet(configAt(c.node.directory)?.externals, c.alias);
     const source = sourceTo(c.node.directory, member);
     edit(plan, c.node.namespace, 'external', `externals: ${c.alias} found at ${where(source)} (it leaves the family)`, { root: c.node.directory, call: 'repointExternal', args: [c.alias, held?.project ?? null, source] });
   }
@@ -350,9 +352,9 @@ export function planAdopt(family: ProjectFamily, bound: string, request: Migrati
   const boundDir = familyNode(family, bound)!.directory;
   // Step 1: the external under the alias.
   const boundConfig = configAt(boundDir);
-  const external = boundConfig?.externals?.[alias];
+  const external = ownGet(boundConfig?.externals, alias);
   // A completed adopt plans nothing: the alias is a member again.
-  if (!external && boundConfig?.members?.[alias] !== undefined) return plan;
+  if (!external && ownGet(boundConfig?.members, alias) !== undefined) return plan;
   // Step 2: judge it.
   let dir: string | null = null;
   if (!external) refuse(plan, 'not-an-external', bound, `${label(bound)} declares no external "${alias}"`);

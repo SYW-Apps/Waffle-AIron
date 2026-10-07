@@ -813,7 +813,7 @@ methods:
         type: branch
         condition: >-
           impl.technologies is non-empty, comp resolves, and comp.componentType is not one of the
-          data-layer stereotypes (Adapter, Store, Registry, Index)
+          technology-seam stereotypes (Adapter, Store, Registry, Index, Observer)
         onFalseStep: 5
       - stepNumber: 4
         label: report_binding
@@ -940,11 +940,11 @@ methods:
         label: comp_leak_check
         description: >-
           When comp.id is outside home.scope, check its surfaces (id/name, description, dependsOn,
-          owns, basePath) for a match against home — the description only when comp is no data-layer
-          seam (Adapter, Store, Registry or Index): a seam's prose names a technology about its own
-          realization, which is no binding; when any surface matches, report TECH_LEAKAGE (warning;
-          draft context ctx.isComponentDraft(comp.id)) naming comp.id, home.label, the matched
-          surfaces and ownersDesc(home).
+          owns, basePath) for a match against home — the description only when comp is no technology
+          seam (Adapter, Store, Registry, Index or Observer): a seam's prose names a technology
+          about its own realization, which is no binding; when any surface matches, report
+          TECH_LEAKAGE (warning; draft context ctx.isComponentDraft(comp.id)) naming comp.id,
+          home.label, the matched surfaces and ownersDesc(home).
         type: local
       - stepNumber: 15
         label: leak_sub_loop
@@ -970,7 +970,7 @@ methods:
       - stepNumber: 18
         label: intf_leak_check
         description: >-
-          When intf.id is outside home.scope and intf.component is no data-layer seam, and home
+          When intf.id is outside home.scope and intf.component is no technology seam, and home
           matches the joined prose of intf.description and every method's description, report
           TECH_LEAKAGE (warning; draft context ctx.isComponentDraft(intf.component) or intf.status
           being 'draft' or 'design') naming intf.id, home.label and ownersDesc(home). Prose INSIDE
@@ -991,7 +991,7 @@ methods:
         description: >-
           When this implementation's id is outside home.scope, match home against
           implementationText(impl): its source files and, for every narrative step, its
-          targetComponent/targetMethod; and, unless the implementation realizes a data-layer seam's
+          targetComponent/targetMethod; and, unless the implementation realizes a technology seam's
           contract, its description, every method's intent and every step's
           description/condition/over/on/outcome/error with every case value / catch error. On a
           match, report TECH_LEAKAGE (warning; draft context ctx.isImplementationDraft(impl)) naming
@@ -1053,4 +1053,4 @@ methods:
     exportedVia: signatureSourceSuggestionsRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-07T18:28:20.643Z'
+updatedAt: '2026-10-07T21:45:05.936Z'

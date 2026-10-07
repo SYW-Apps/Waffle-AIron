@@ -14,18 +14,30 @@ fields:
   - name: removed
     type: bool
     description: >-
-      Whether this call took the declaration out of `.wai/project.yaml` — or, on a dry run, would
-      take it out (false on a refusal and an orphaned pin)
+      Whether this call took the declaration out of .wai/project.yaml (false on a refusal, a dry
+      run, and an orphaned pin).
     optional: false
   - name: unpinned
     type: bool
-    description: Whether the alias's lock entry and pinned snapshot were removed (or would be, on a dry run)
+    description: >-
+      Whether this call removed the alias's lock entry and pinned snapshot (false on a refusal and a
+      dry run).
     optional: false
   - name: refusal
     type: string
     description: 'Why nothing was removed: the alias is neither declared nor pinned'
     optional: true
+  - name: dryRun
+    type: bool
+    description: >-
+      Present, true, on a dry run: nothing was written, and wouldRemove says what the real run
+      removes — a dry run never reads like an apply.
+    optional: true
+  - name: wouldRemove
+    type: ExternalRemovalPlan
+    description: 'On a dry run: what the real run would take out.'
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-06T23:03:02.727Z'
-updatedAt: '2026-10-07T18:51:24.207Z'
+updatedAt: '2026-10-07T22:05:35.588Z'

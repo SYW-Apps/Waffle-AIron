@@ -7,8 +7,14 @@ methods:
   - name: read
     narrative: []
     intent: >-
-      Reads .wai/lock.json for the bound project and returns the parsed LockRecord, or null when the
-      file is absent or unreadable.
+      Reads .wai/lock.json for the bound project and returns the parsed LockRecord, or null ONLY
+      when the file is absent. A record that exists but cannot be read as one — empty (an editor's
+      BOM alone included), not JSON, JSON that is not a lock record object, no gate identity
+      (stateId {algorithm, digest}), a specs field that is no digest map, or a format newer than
+      this release reads — fails closed with LockRecordUnreadableError naming the file, what is
+      wrong and the two ways out (restore it from version control, or delete it and lock afresh): an
+      approval that cannot be read is never read as no approval. A BOM before a valid record is
+      tolerated.
     symbol: readLockRecord
   - name: write
     narrative:
@@ -28,10 +34,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read and parse the lock record under the given root, answering null when the file is
-          absent or unreadable — a missing approval is an answer, not a failure
+          Read and parse the lock record under the given root, answering null only when the file is
+          absent — a missing approval is an answer, not a failure — and failing closed with
+          LockRecordUnreadableError on one that exists but cannot be read as a lock record, exactly
+          as read does: a parent never reads a member's unreadable approval as none
         type: local
     symbol: readLockRecordAt
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-09-23T12:57:17.046Z'
+updatedAt: '2026-10-07T21:48:58.062Z'

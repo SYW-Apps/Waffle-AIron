@@ -332,7 +332,7 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
 
     const bad = await call('sdd_add_member', { alias: 'Bad Alias', source: 'x' });
     expect(bad.isError).toBe(true);
-    expect(textOf(bad)).toMatch(/^Error: .*an alias and a path are required/);
+    expect(textOf(bad)).toMatch(/^Error: .*Refusing to create the member "Bad Alias": the alias "Bad Alias" breaks/);
     const ghost = await call('sdd_move_member', { alias: 'ghost', newPath: 'x' });
     expect(ghost.isError).toBe(true);
     expect(textOf(ghost)).toMatch(/^Error: .*no member is declared under that alias/);

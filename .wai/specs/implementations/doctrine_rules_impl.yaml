@@ -1006,7 +1006,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 9
+        endStep: 12
       - stepNumber: 2
         description: >-
           Is this a Portal whose transport requires an endpoint on each verb? expected =
@@ -1030,7 +1030,7 @@ methods:
         type: loop
         loopKind: forEach
         over: each method m of each interface intf whose component is comp.id
-        endStep: 9
+        endStep: 12
       - stepNumber: 5
         description: Does the method lack an endpoint binding?
         type: branch
@@ -1051,7 +1051,7 @@ methods:
         description: Does the bound endpoint use another transport than the Portal's portalType expects?
         type: branch
         condition: m.endpoint.transport differs from expected
-        onFalseStep: 4
+        onFalseStep: 11
       - stepNumber: 9
         label: mismatch
         description: >-
@@ -1059,6 +1059,30 @@ methods:
           contradicting its Portal's transport is a contradiction, not unfinished work, so it prints
           at its registry severity on a draft too) naming the method, the interface, its declared
           transport, the Portal with its transport, and the expected transport
+        type: local
+      - stepNumber: 10
+        description: Continue with the next method
+        type: jump
+        toStep: 4
+      - stepNumber: 11
+        label: placeholders
+        description: >-
+          Does the HTTP endpoint's path bind its placeholders wrongly? Read every placeholder of the
+          path in order, in either spelling — `{name}`, or a `:name` segment, the same placeholder:
+          one left unclosed (a `{` with no `}`, or a stray `}`), one name appearing twice, or — when
+          the method states structured params — a name that is neither a parameter of the method nor
+          a field of a parameter's type (PUT /users/{id} with the user record as the body binds its
+          id). A method whose parameters exist in prose only is not judged on names
+        type: branch
+        condition: m.endpoint is HTTP and its path has an unclosed, repeated or unknown placeholder
+        onFalseStep: 4
+      - stepNumber: 12
+        label: placeholderReport
+        description: >-
+          Report ENDPOINT_PATH_PLACEHOLDER (error, on intf.id; draft context isDraftCtx ||
+          isIntfDraft) once per problem, naming the method, the path and the placeholder — for an
+          unknown one, the parameters the method has: a wire request could never bind it, and the
+          OpenAPI document would describe a parameter nobody sends
         type: local
     symbol: check
     exportedVia: portalsRule
@@ -1556,4 +1580,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-07T18:51:20.016Z'
+updatedAt: '2026-10-07T22:57:05.863Z'

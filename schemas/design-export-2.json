@@ -1109,6 +1109,12 @@
                         },
                         {
                           "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)"
+                        },
+                        {
+                          "pattern": "^(?!-)"
+                        },
+                        {
+                          "pattern": "^(?!__proto__$)"
                         }
                       ]
                     },

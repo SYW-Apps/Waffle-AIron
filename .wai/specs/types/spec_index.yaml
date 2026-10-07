@@ -33,7 +33,10 @@ fields:
     optional: false
   - name: paths
     type: map<string, map<string, string>>
-    description: Per kind, each spec id's absolute file path
+    description: >-
+      Per kind, each spec id's absolute file path. Each per-kind map has no prototype and is read by
+      own key only, so an id that is also a JavaScript prototype name (constructor) is a spec like
+      any other — never a duplicate of a built-in, never a function where a path belongs
     optional: false
   - name: signatures
     type: SignatureFacts
@@ -76,4 +79,4 @@ methods:
     symbol: specIndexRetiredBy
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-06T17:39:42.526Z'
+updatedAt: '2026-10-07T21:47:24.687Z'

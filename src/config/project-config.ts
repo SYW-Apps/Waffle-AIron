@@ -29,6 +29,8 @@ import {
   type PartOf,
   type NetworkDeclaration,
 } from '../models/project.js';
+import { identifierProblem } from '../models/identifiers.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // Project configuration Repository (sdd_core project_config_repository)
@@ -68,7 +70,6 @@ export interface ProjectConfigRepository {
   registerPackRef(ref: string): boolean;
   deregisterPackRef(ref: string): boolean;
   markSelectionsBundled(bundled: PackSelection[]): void;
-  pinGlobalPacksAsSelections(selections: PackSelection[]): void;
   rekeyCarried(rename: IdentityRename, dryRun?: boolean): CarriedRekey[];
   setId(id: string): boolean;
   declareExternal(alias: string, declaration: ExternalDeclaration): boolean;
@@ -1027,13 +1028,6 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       const config = current();
       save(withPacks(config, bundleInPlace(packsOf(config), bundled)));
     },
-    pinGlobalPacksAsSelections(selections) {
-      const config = current();
-      save({
-        ...config,
-        extensions: { ...config.extensions, packs: [...packsOf(config), ...selections], useGlobalPacks: false },
-      });
-    },
     rekeyCarried(rename, dryRun = false) {
       // The register as it is WRITTEN — before schema defaults — so every
       // index below is the index of the text the store edits.
@@ -1068,7 +1062,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     },
     setId(id) {
       if (!PROJECT_ID_RE.test(id)) {
-        throw new WaironError(`Refusing to declare the project id "${id}" at ${root}: it breaks the project-id grammar ([a-z0-9-_.], starting and ending alphanumeric).`);
+        throw new WaironError(`Refusing to declare the project id "${id}" at ${root}: it breaks the project-id grammar — ${identifierProblem(id, 'project-id')}.`);
       }
       const config = current();
       if (config.id === id) return false;
@@ -1089,7 +1083,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
         throw new WaironError(`Refusing to declare the external "${alias}" at ${root}: the producer id "${declaration.project}" breaks the project-id grammar.`);
       }
       const config = current();
-      const existing = config.externals?.[alias];
+      const existing = ownGet(config.externals, alias);
       if (existing !== undefined) {
         if (sameValue(heldBinding(existing, declaration), declaration)) return false;
         throw new WaironError(
@@ -1102,18 +1096,18 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     },
     declareMember(alias, declaration) {
       if (!EXTERNAL_ALIAS_RE.test(alias)) {
-        throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: an alias must fit [a-z0-9-_]+.`);
+        throw new WaironError(`Refusing to declare the member "${alias}" at ${root}: ${aliasGrammarProblem(alias)}.`);
       }
       assertMemberSource(alias, memberLocationOf(declaration), root);
       const config = current();
-      if (config.externals?.[alias] !== undefined) {
+      if (ownGet(config.externals, alias) !== undefined) {
         throw new WaironError(
           `Refusing to declare the member "${alias}" at ${root}: \`externals\` already declares "${alias}" as `
-          + `${JSON.stringify(config.externals[alias])}, and one alias names one project.`,
+          + `${JSON.stringify(ownGet(config.externals, alias))}, and one alias names one project.`,
         );
       }
       const written = memberValue(declaration);
-      const existing = config.members?.[alias];
+      const existing = ownGet(config.members, alias);
       if (existing !== undefined) {
         if (sameValue(memberValue(memberDeclarationOf(existing)), written)) return false;
         throw new WaironError(
@@ -1139,7 +1133,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     setMemberPath(alias, memberPath) {
       assertMemberSource(alias, memberPath, root);
       const config = current();
-      const existing = config.members?.[alias];
+      const existing = ownGet(config.members, alias);
       if (existing === undefined) {
         throw new WaironError(`Refusing to move the member "${alias}" at ${root}: \`members\` declares no "${alias}".`);
       }
@@ -1150,7 +1144,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     },
     updateMember(alias, changes) {
       const config = current();
-      const existing = config.members?.[alias];
+      const existing = ownGet(config.members, alias);
       if (existing === undefined) {
         throw new WaironError(`Refusing to update the member "${alias}" at ${root}: \`members\` declares no "${alias}".`);
       }
@@ -1199,7 +1193,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     removeMember(alias) {
       const config = current();
       const members = config.members;
-      if (members?.[alias] === undefined) return false;
+      if (!members || ownGet(members, alias) === undefined) return false;
       const rest = Object.fromEntries(Object.entries(members).filter(([key]) => key !== alias));
       const next: ProjectConfig = { ...config, members: rest };
       if (Object.keys(rest).length === 0) delete next.members;
@@ -1209,7 +1203,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     renameId(from, to) {
       // Refused before anything is read: a new id outside the grammar.
       if (!PROJECT_ID_RE.test(to)) {
-        throw new WaironError(`Refusing to rename the project at ${root} to "${to}": it breaks the project-id grammar ([a-z0-9-_.], starting and ending alphanumeric).`);
+        throw new WaironError(`Refusing to rename the project at ${root} to "${to}": it breaks the project-id grammar — ${identifierProblem(to, 'project-id')}.`);
       }
       const config = current();
       const previous = config.previousIds ?? [];
@@ -1225,10 +1219,10 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     },
     renameAlias(from, to) {
       if (!EXTERNAL_ALIAS_RE.test(to)) {
-        throw new WaironError(`Refusing to rename the alias "${from}" at ${root} to "${to}": an alias must fit [a-z0-9-_]+.`);
+        throw new WaironError(`Refusing to rename the alias "${from}" at ${root} to "${to}": ${aliasGrammarProblem(to)}.`);
       }
       const config = current();
-      const holds = (alias: string): boolean => config.members?.[alias] !== undefined || config.externals?.[alias] !== undefined;
+      const holds = (alias: string): boolean => ownGet(config.members, alias) !== undefined || ownGet(config.externals, alias) !== undefined;
       // Already done: the old alias gone and the new one declared.
       if (!holds(from) && holds(to)) return false;
       if (!holds(from)) {
@@ -1240,8 +1234,8 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       // The key renamed in place: the entry keeps its position and its value exactly as written.
       const rekey = <V>(map: Record<string, V>): Record<string, V> =>
         Object.fromEntries(Object.entries(map).map(([k, v]) => [k === from ? to : k, v]));
-      save(config.members?.[from] !== undefined
-        ? { ...config, members: rekey(config.members) }
+      save(ownGet(config.members, from) !== undefined
+        ? { ...config, members: rekey(config.members!) }
         : { ...config, externals: rekey(config.externals!) });
       return true;
     },
@@ -1250,7 +1244,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
         throw new WaironError(`Refusing to repoint the external "${alias}" at ${root}: the producer id "${project}" breaks the project-id grammar.`);
       }
       const config = current();
-      const existing = config.externals?.[alias];
+      const existing = ownGet(config.externals, alias);
       if (existing === undefined) {
         throw new WaironError(`Refusing to repoint the external "${alias}" at ${root}: \`externals\` declares no "${alias}".`);
       }
@@ -1266,7 +1260,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     removeExternal(alias) {
       const config = current();
       const externals = config.externals;
-      if (externals?.[alias] === undefined) return false;
+      if (!externals || ownGet(externals, alias) === undefined) return false;
       const rest = Object.fromEntries(Object.entries(externals).filter(([key]) => key !== alias));
       const next: ProjectConfig = { ...config, externals: rest };
       if (Object.keys(rest).length === 0) delete next.externals;
@@ -1345,16 +1339,16 @@ function assertUseEntries(alias: string, names: string[], root: string): void {
 
 /** The `use` an external or member under an alias holds now; refused for an alias neither declares. */
 function heldImports(config: ProjectConfig, alias: string, root: string): string[] {
-  const external = config.externals?.[alias];
+  const external = ownGet(config.externals, alias);
   if (external !== undefined) return external.use ?? [];
-  const member = config.members?.[alias];
+  const member = ownGet(config.members, alias);
   if (member !== undefined) return memberDeclarationOf(member).use ?? [];
   throw new WaironError(`Refusing to import through "${alias}" at ${root}: neither \`externals\` nor \`members\` declares "${alias}".`);
 }
 
 /** The configuration with the alias's `use` replaced; a shorthand member becomes its long form to hold it. */
 function withImports(config: ProjectConfig, alias: string, use: string[]): ProjectConfig {
-  const external = config.externals?.[alias];
+  const external = ownGet(config.externals, alias);
   if (external !== undefined) return { ...config, externals: { ...config.externals, [alias]: { ...external, use } } };
   return { ...config, members: { ...config.members, [alias]: memberValue({ ...memberDeclarationOf(config.members![alias]), use }) } };
 }
@@ -1446,7 +1440,6 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     registerPackRef(ref) { return registry.registerPackRef(ref); },
     deregisterPackRef(ref) { return registry.deregisterPackRef(ref); },
     markSelectionsBundled(bundled) { registry.markSelectionsBundled(bundled); },
-    pinGlobalPacksAsSelections(selections) { registry.pinGlobalPacksAsSelections(selections); },
     rekeyCarried(rename, dryRun) { return registry.rekeyCarried(rename, dryRun); },
     setId(id) { return registry.setId(id); },
     declareExternal(alias, declaration) { return registry.declareExternal(alias, declaration); },
@@ -1495,7 +1488,6 @@ export const projectConfigRepository: ProjectConfigRepository = {
   registerPackRef(ref) { return bound().registerPackRef(ref); },
   deregisterPackRef(ref) { return bound().deregisterPackRef(ref); },
   markSelectionsBundled(bundled) { bound().markSelectionsBundled(bundled); },
-  pinGlobalPacksAsSelections(selections) { bound().pinGlobalPacksAsSelections(selections); },
   rekeyCarried(rename, dryRun) { return bound().rekeyCarried(rename, dryRun); },
   setId(id) { return bound().setId(id); },
   declareExternal(alias, declaration) { return bound().declareExternal(alias, declaration); },

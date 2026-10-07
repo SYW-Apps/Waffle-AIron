@@ -235,6 +235,12 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   let implementations = loadImplementationSpecs();
 
   if (options.subsystem) {
+    // A subsystem the tree does not hold is refused, naming the ones it does:
+    // an empty dashboard for a typo would read like a subsystem with nothing in it.
+    if (!subsystems.some(s => s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`))) {
+      const known = subsystems.map(s => s.id);
+      return { text: `No subsystem "${options.subsystem}" in this tree — ${known.length ? `it holds ${known.join(', ')}` : 'it holds none yet'}.`, failed: true };
+    }
     subsystems = subsystems.filter(s => s.id === options.subsystem || s.id.startsWith(`${options.subsystem}::`));
     components = components.filter(c => c.subsystem === options.subsystem || c.subsystem.startsWith(`${options.subsystem}::`));
     interfaces = interfaces.filter(i => {

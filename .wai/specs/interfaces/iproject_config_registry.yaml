@@ -111,16 +111,6 @@ methods:
         type: list<PackSelection>
     guarantees:
       - idempotent
-  - name: pinGlobalPacksAsSelections
-    description: >-
-      Turn the packs a project applied implicitly from the machine-wide store into explicit
-      selections: append them and set `extensions.useGlobalPacks` to false, in one write. Covers
-      `doctor --fix`.
-    signature: 'pinGlobalPacksAsSelections(selections: list<PackSelection>): void'
-    returns: void
-    params:
-      - name: selections
-        type: list<PackSelection>
   - name: rekeyCarried
     description: >-
       Rekey the debt register (rules.conformance.carried) for an identity move: every carried
@@ -384,4 +374,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-07T18:29:50.567Z'
+updatedAt: '2026-10-07T21:50:14.939Z'

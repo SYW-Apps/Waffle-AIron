@@ -71,6 +71,24 @@ methods:
       producer that renaming that method breaks this consumer. Pure.
     sourcePath: src/models/project-family.ts
     symbol: consumerReaches
+  - name: narrowedTo
+    signature: 'narrowedTo(publicNames: list<string>, member: string): ExternalConsumer'
+    params:
+      - name: publicNames
+        type: list<string>
+        description: The public names that publish the member
+      - name: member
+        type: string
+        description: The contract method a rename breaks
+    returns: ExternalConsumer
+    description: >-
+      This consumer as a rename of `member` on one of `publicNames` breaks it: only those public
+      names, each with that one member, its names narrowed alike, so a rename dry run
+      (sdd_rename_method's `breaks`) names what breaks — as the CLI dry run's "N consumer(s) call
+      <method>" does — rather than the consumer's whole use of the producer. Its specs stay the ones
+      that reach the public name. Pure.
+    sourcePath: src/models/project-family.ts
+    symbol: narrowedToMember
 sourcePath: src/models/project-family.ts
 createdAt: '2026-10-06T23:03:22.646Z'
-updatedAt: '2026-10-07T18:41:08.171Z'
+updatedAt: '2026-10-07T21:59:47.153Z'

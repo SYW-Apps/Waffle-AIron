@@ -58,15 +58,12 @@ fields:
   - name: id
     type: string
     description: >-
-      The project's stable identity: a slug of [a-z0-9-_.] that starts and ends alphanumeric. When
-      absent, the effective id is `name` slugified (see effectiveId) and no save writes it in,
-      because the default can be wrong: an existing chained child answers to its mount's subsystem
-      id, which a plain save cannot know. Only deliberate writers set it: init and provisioning
-      write it from the name, hosted creation writes the hosted project id, and a chained child is
-      created (or repaired by doctor) with its mount's subsystem id. Changing it is the rename
-      migration (`wairon project rename`), which moves the old id into `previousIds`: a lock records
-      the id it approved, and a later mismatch is PROJECT_ID_CHANGED unless the approved id is one
-      of `previousIds` (PROJECT_ID_RENAMED, a notice until the re-lock).
+      The project's stable identity: a slug of [a-z0-9-_.] that starts and ends alphanumeric, judged
+      by identifier.problemAs project-id — at most 64 characters, never a Windows device name and
+      never super, which every consumer would write as a namespace hop. When absent, the effective
+      id is `name` slugified (see effectiveId) and no save writes it in, because the default can be
+      wrong: an existing chained child answers to its mount's subsystem id, which a plain save
+      cannot know. Only deliberate writers set it: init and provisioning
     optional: true
     key: primary
   - name: externals
@@ -191,9 +188,11 @@ methods:
       the project graph included, so a project answers to one id wherever it is read (a chained
       child that declares none is not given its mount's subsystem id here: PROJECT_ID_DEFAULTED
       names that id as the one to declare, and 2c's doctor --fix writes it). Slugifying lower-cases
-      the name, collapses each run of characters outside [a-z0-9-_.] to one '-', and trims the
-      result until it starts and ends alphanumeric. Returns null when no declared id exists and no
-      slug can be made; it never invents a fallback.
+      the name, collapses each run of characters outside [a-z0-9-_.] to one '-', cuts it to 64
+      characters and trims the result until it starts and ends alphanumeric. Returns null when no
+      declared id exists and no slug can be made — a slug the project-id grammar still refuses (a
+      Windows device name, super) included: it never invents a fallback, and the identity reports
+      the missing id.
     symbol: effectiveProjectId
   - name: identity
     signature: 'identity(lockedProjectId?: string): ProjectIdentity'
@@ -201,7 +200,8 @@ methods:
     description: >-
       Resolve the effective id against the id a lock approved, naming every problem with it:
       defaulted when no id is declared and the name yields one; ambiguous when no id is declared and
-      the name yields no slug, or when a declared id breaks the grammar; renamed when a
+      the name yields no slug, or when a declared id breaks the project-id grammar
+      (identifier.problemAs project-id, whose sentence the problem carries); renamed when a
       lockedProjectId is given, the effective id differs from it and it is one of `previousIds` (the
       rename migration moved it, and only the re-lock is owed); changed when a lockedProjectId is
       given and the effective id differs from it otherwise (an effective id of none included).
@@ -259,4 +259,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T12:54:45.360Z'
+updatedAt: '2026-10-07T21:44:04.175Z'

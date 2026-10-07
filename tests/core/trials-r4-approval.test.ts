@@ -405,10 +405,10 @@ describe('8 — implements, alias forms, dry runs, duplicated statuses', () => {
     expect(issues.filter((i) => i.code === 'DEPRECATED_REFERENCE_FORM')).toEqual([]);
   });
 
-  it('`sdd_remove_external` dry run answers removed: true for a declared external, as the real run then does', () => {
+  it('`sdd_remove_external` dry run answers what the real run removes, marked as a dry run (platform R5: it read like an apply)', () => {
     pinnedPair(tileStudio());
     const dry = remove('geo', true);
-    expect(dry).toEqual({ alias: 'geo', removed: true, unpinned: true });
+    expect(dry).toEqual({ alias: 'geo', removed: false, unpinned: false, dryRun: true, wouldRemove: { declaration: true, pin: true } });
     expect(fs.existsSync(path.join(process.cwd(), 'never'))).toBe(false);
   });
 

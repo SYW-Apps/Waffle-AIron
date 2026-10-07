@@ -454,7 +454,7 @@ program
   .description('Generate architecture diagrams from the spec tree — interactive canvas by default; Mermaid / draw.io / Excalidraw via --format')
   .option('--subsystem <id>', 'scope the component diagram to one subsystem (plus its external neighbors)')
   .option('--sequence <component:method>', 'emit a sequence diagram derived from the method\'s L5 narrative')
-  .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v) => parseInt(v, 10))
+  .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v: string) => (/^\d+$/.test(v) ? parseInt(v, 10) : v))
   .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, and the interactive canvas')
   .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
   .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')

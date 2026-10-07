@@ -11,6 +11,7 @@ import {
   type ExternalSource,
   type ProjectConfig,
 } from '../models/project.js';
+import { identifierProblem } from '../models/identifiers.js';
 import {
   SURFACE_AUDIENCES,
   type ExternalAddition,
@@ -38,6 +39,7 @@ import {
 // listing a removal reads, and the unpin it is followed by.
 import { listExternals, pinExternals } from './surfaces.js';
 import { unpin } from './externals.js';
+import { ownGet } from '../utils/own.js';
 
 /** Ascending reach rank of an audience level; an unknown level ranks as 'instance'. */
 function audienceRank(audience: string | undefined): number {
@@ -81,10 +83,10 @@ function refused(alias: string, why: string): ExternalAddition {
 /** The request's own problems, before anything is read or written; null when it can be declared. */
 function requestProblem(request: ExternalRequest, config: ProjectConfig | null, source: ExternalSource | undefined, sourceProblem: string | undefined): string | null {
   const { alias } = request;
-  if (!EXTERNAL_ALIAS_RE.test(alias) && /^[a-z0-9_-]+$/.test(alias)) return `${aliasGrammarProblem(alias)}: it would be the name of its pin file`;
+  if (!EXTERNAL_ALIAS_RE.test(alias) && /^[a-z0-9_-]+$/.test(alias)) return `${aliasGrammarProblem(alias)}${/Windows/.test(aliasGrammarProblem(alias)) ? ': it would be the name of its pin file' : ''}`;
   if (!EXTERNAL_ALIAS_RE.test(alias)) return `an alias is [a-z0-9-_]+, and "${alias}" is not — choose one specs can write as \`${alias.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}::name\``;
-  if (config?.members?.[alias] !== undefined) return `"${alias}" is already declared under \`members\` — one alias names one project, so choose another alias`;
-  if (config?.externals?.[alias] !== undefined) return `"${alias}" is already declared under \`externals\` — choose another alias, change its imports with \`wairon externals use ${alias} --add <names>\` (sdd_update_external), or remove it first with \`wairon externals remove ${alias}\``;
+  if (ownGet(config?.members, alias) !== undefined) return `"${alias}" is already declared under \`members\` — one alias names one project, so choose another alias`;
+  if (ownGet(config?.externals, alias) !== undefined) return `"${alias}" is already declared under \`externals\` — choose another alias, change its imports with \`wairon externals use ${alias} --add <names>\` (sdd_update_external), or remove it first with \`wairon externals remove ${alias}\``;
   if (request.source !== undefined && NOT_A_LOCATION.test(request.source.trim())) {
     return `the source "${request.source}" is not a location (accepted: ${LOCATION_FORMS})`;
   }
@@ -96,7 +98,7 @@ function requestProblem(request: ExternalRequest, config: ProjectConfig | null, 
   if (git && request.ref !== undefined && source?.ref !== undefined && request.ref !== source.ref) {
     return `the source fixes the ref at "${source.ref}" (its \`#<commit>\`), but \`ref\` says "${request.ref}" — give one of them`;
   }
-  if (request.project !== undefined && !PROJECT_ID_RE.test(request.project)) return `the producer id "${request.project}" breaks the project-id grammar ([a-z0-9] with . _ - inside)`;
+  if (request.project !== undefined && !PROJECT_ID_RE.test(request.project)) return `the producer id "${request.project}" breaks the project-id grammar — ${identifierProblem(request.project, 'project-id')}`;
   const bad = (request.use ?? []).find((u) => !USE_ENTRY_RE.test(u));
   if (bad !== undefined) return `the \`use\` entry "${bad}" is neither \`*\` nor a public name ([a-z0-9-_]+)`;
   return null;
@@ -280,7 +282,7 @@ export function declare(request: ExternalRequest): ExternalAddition {
 export function remove(alias: string, dryRun?: boolean): ExternalRemoval {
   // Step 1: the configuration's externals.
   const config = loadProjectConfig();
-  const declared = config?.externals?.[alias] !== undefined;
+  const declared = ownGet(config?.externals, alias) !== undefined;
   // Step 2: the externals with their lock entries, orphaned pins included —
   // read only when the answer depends on it (an undeclared alias, a dry run),
   // since listing binds every declared producer.
@@ -294,8 +296,9 @@ export function remove(alias: string, dryRun?: boolean): ExternalRemoval {
       refusal: `The external "${alias}" was not removed: it is neither declared nor pinned here — ${known.length ? `this project's externals are ${known.join(', ')}` : 'this project declares no externals'}.`,
     };
   }
-  // Steps 5-6: a dry run writes nothing.
-  if (dryRun) return { alias, removed: declared, unpinned: pinned };
+  // Steps 5-6: a dry run writes nothing, and says so: nothing was removed,
+  // and what the real run would take out is answered apart, never as if done.
+  if (dryRun) return { alias, removed: false, unpinned: false, dryRun: true, wouldRemove: { declaration: declared, pin: pinned } };
   // Step 7: the declaration, when declared.
   const removed = declared ? removeExternal(alias) : false;
   // Step 8: the pin with it.
@@ -326,7 +329,7 @@ export function updateUse(request: ExternalUseRequest): ExternalUseChange {
   const { alias } = request;
   // Step 1: the configuration, for the declaration and its current `use`.
   const config = loadProjectConfig();
-  const existing = config?.externals?.[alias];
+  const existing = ownGet(config?.externals, alias);
   const current = currentUse(existing);
   // Steps 2-4: the request's own problems.
   if (existing === undefined) {

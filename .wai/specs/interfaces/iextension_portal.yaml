@@ -163,14 +163,6 @@ methods:
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
     params: []
-  - name: pinInstalledPacksAsSelections
-    description: >-
-      Published write: for a project that never declared a position on machine-wide packs, record
-      the installed-but-unapplied packs as explicit selections and turn machine-wide loading off;
-      answers the names recorded. Forwarded to the extension orchestrator.
-    signature: 'pinInstalledPacksAsSelections(): list<string>'
-    returns: list<string>
-    params: []
   - name: loadProjectVariants
     description: >-
       Published read: the component-variant registry governing the current project. Forwarded to the
@@ -243,4 +235,4 @@ lint:
         no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-10-04T10:27:31.813Z'
+updatedAt: '2026-10-07T21:49:52.812Z'

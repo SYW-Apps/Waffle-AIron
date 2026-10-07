@@ -75,17 +75,6 @@ methods:
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
     params: []
-  - name: pinInstalledPacksAsSelections
-    description: >-
-      The migration action behind `wairon doctor --fix`: for a project that never declared a
-      position on machine-wide packs, record the installed-but-unapplied packs as explicit
-      name+version selections (carrying a fetchable origin as their source) and turn machine-wide
-      loading off. Doctrine that governs a project becomes declared BY that project, visible in a
-      diff and reproducible for a clone. Returns the names recorded; does nothing for a project that
-      already decided, so selections are never invented for one that deliberately applies nothing.
-    signature: 'pinInstalledPacksAsSelections(): list<string>'
-    returns: list<string>
-    params: []
   - name: defaultPackSelections
     description: >-
       The store packs whose manifests declare `applyByDefault: true`, shaped as selections ready to
@@ -264,4 +253,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-10-06T18:55:13.829Z'
+updatedAt: '2026-10-07T21:50:00.273Z'

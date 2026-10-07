@@ -43,7 +43,7 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /landscape/projects/{id}/public-surface/refresh
+      path: /landscape/projects/{projectId}/public-surface/refresh
   - name: upsertRelation
     description: Create or update one cross-project relation targeting a system public interface snapshot.
     signature: 'upsertRelation(credential: string, relation: ProjectRelationRecord): ProjectRelationRecord'
@@ -114,7 +114,7 @@ methods:
     endpoint:
       transport: HTTP
       method: GET
-      path: /landscape/projects/{id}/visible-surfaces
+      path: /landscape/projects/{currentProjectId}/visible-surfaces
   - name: exportProjectSurface
     description: >-
       Generate-and-download one project's surface artifact (native snapshot YAML or OpenAPI 3.1
@@ -141,7 +141,7 @@ methods:
     endpoint:
       transport: HTTP
       method: GET
-      path: /landscape/projects/{id}/surface
+      path: /landscape/projects/{projectId}/surface
 status: complete
 createdAt: '2026-07-08T21:13:58.131Z'
-updatedAt: '2026-10-04T10:18:58.130Z'
+updatedAt: '2026-10-07T22:29:28.866Z'

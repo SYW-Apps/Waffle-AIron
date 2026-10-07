@@ -1,0 +1,85 @@
+kind: value-object
+id: identifier
+name: Identifier
+description: >-
+  One identifier as written — a spec id, a project id, a member or external alias, or a method,
+  parameter or field name — and the one grammar every writer, loader and rule judges it by. The
+  schema refines spec ids and member names with problemAs, the project-configuration setters, the
+  rename migrations, init's id derivation and the member and external declarations ask the same
+  question, so no tool accepts a name another refuses. The target language's reserved words are a
+  separate question (reservedIn), because only the tree's targetLanguage can answer it. A record
+  keyed by identifiers is read by own key only (entryIn, heldBy): an identifier that is also a
+  JavaScript prototype name (constructor, toString) is a key like any other, never an inherited
+  property.
+fields: []
+methods:
+  - name: problemAs
+    signature: 'problemAs(kind: identifier_kind): string?'
+    params:
+      - name: kind
+        type: identifier_kind
+        description: What the identifier names
+    returns: string?
+    description: >-
+      Why the text is no identifier of this kind, as one sentence a refusal can carry, or none when
+      it is one. Judged in order: empty; a control, NUL or zero-width character (named by its code
+      point); longer than 64 characters (a spec id becomes a folder and a file name under Windows'
+      path limits, and the cap is the same for every kind — a DNS label stops at 63); a leading "-"
+      (every command line reads it as an option, so no CLI command could name it); "__proto__"
+      (JavaScript's prototype accessor: the YAML and JSON readers drop a key of that name, so
+      nothing keyed on it could be found); for a method, parameter or field a leading digit; the
+      kind's character grammar; for a spec id, a project id or an alias a name Windows reserves for
+      a device (con, prn, aux, nul, com0-9, lpt0-9); for a project id or an alias the reserved
+      namespace keyword super, which the :: grammar consumes as a hop. Pure
+    symbol: identifierProblem
+  - name: reservedIn
+    signature: 'reservedIn(kind: identifier_kind, targetLanguage: string?, casing: string?): string?'
+    params:
+      - name: kind
+        type: identifier_kind
+        description: method, param or field; any other kind is never reserved
+      - name: targetLanguage
+        type: string?
+        description: >-
+          The effective targetLanguage of the spec holding the name, lowercased; none when the tree
+          declares none
+      - name: casing
+        type: string?
+        description: >-
+          The method casing of the tree (naming_rule_config.methodCasingFor), so the alternative
+          offered fits it
+    returns: string?
+    description: >-
+      Why the target language cannot use the text as this kind of identifier, naming the language
+      and offering an alternative that fits the casing, or none. Small per-language tables, each
+      applied only where the language forbids the word: TypeScript and JavaScript allow a keyword as
+      a method or a field (obj.delete()), never as a parameter, and never constructor as a method;
+      Ruby likewise refuses keywords as parameters only; Rust, Python, Go, Java, C#, C and Kotlin
+      refuse their keywords as every kind. A language without a table reserves nothing. Pure
+    symbol: reservedWordProblem
+  - name: entryIn
+    signature: 'entryIn(record: map<string, any>): any'
+    params:
+      - name: record
+        type: map<string, any>
+        description: A record keyed by identifiers
+    returns: any
+    description: >-
+      The record's entry under this identifier when the record holds it as its OWN key, else none —
+      never a property every object inherits (constructor answering function Object()). Pure
+    sourcePath: src/utils/own.ts
+    symbol: ownGet
+  - name: heldBy
+    signature: 'heldBy(record: map<string, any>): bool'
+    params:
+      - name: record
+        type: map<string, any>
+        description: A record keyed by identifiers
+    returns: bool
+    description: Whether the record holds this identifier as its own key. Pure
+    sourcePath: src/utils/own.ts
+    symbol: ownHas
+sourcePath: src/models/identifiers.ts
+holds: string
+createdAt: '2026-10-07T21:43:22.463Z'
+updatedAt: '2026-10-07T22:27:52.297Z'

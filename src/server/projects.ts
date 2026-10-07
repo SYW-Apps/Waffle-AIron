@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
+import { ownGet } from '../utils/own.js';
 import { listFilesRecursive, runWithProjectRoot } from '../utils/fs.js';
 import { resolveContainedProjectPath, loadProjectConfig, loadSubsystemSpecs } from './adapters/core.js';
 import { declaredMembers, effectiveProjectId } from '../models/project.js';
@@ -452,7 +453,7 @@ function memberDeclarationsOn(root: string): MemberDeclaration[] {
     const pp = (raw as { projectPath?: unknown }).projectPath;
     if (typeof alias !== 'string' || typeof pp !== 'string' || pp.trim() === '') continue;
     if (out.some((m) => m.alias === alias)) continue;
-    out.push(externals?.[alias] !== undefined
+    out.push(ownGet(externals, alias) !== undefined
       ? { alias, refused: `the alias "${alias}" is also declared under \`externals\` — one alias names one project` }
       : { alias, path: pp });
   }

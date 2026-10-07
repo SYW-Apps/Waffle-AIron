@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized } from '../config/paths.js';
+import { LockRecordUnreadableError } from '../utils/errors.js';
 // Both sdd_core reads cross the subsystem boundary through cli_core_adapter,
 // the one component whose whole job is that crossing. This command used to
 // reach past it — straight into ../core/specs.js for the tree and
@@ -116,7 +117,10 @@ export async function runStatus(options: StatusOptions = {}, listAll = false): P
   let approvals;
   try {
     approvals = familyApprovals(options.memberDepth);
-  } catch {
+  } catch (e) {
+    // An approval record that cannot be read is never shown as no approval:
+    // the dashboard fails closed on it, as every gate does.
+    if (e instanceof LockRecordUnreadableError) throw e;
     approvals = undefined;
   }
 

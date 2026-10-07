@@ -592,11 +592,32 @@ export interface ResolvedCallFact {
   /** Every place in this project's own code the call can land; empty for a call into a dependency or the language library. */
   targets: CallTargetFact[];
   /**
-   * True when the checker resolved the callee to no declaration at all
-   * because its receiver (or the callee itself) is typed any, unknown or not
-   * at all — neither a landing nor its absence means anything.
+   * True when the call lands nowhere this analysis can name and the CODE made
+   * it so: the checker resolved the callee to no declaration because its
+   * receiver (or the callee itself) is typed any, unknown or not at all; or
+   * the call reaches no declaration of this project because its member is
+   * chosen by a computed key that names no single member, or its receiver is
+   * cast to an index-signature type — neither a landing nor its absence means
+   * anything.
    */
   unresolved?: boolean;
+  /**
+   * For an unresolved call, where its receiver's ORIGINAL type lands — the
+   * expression with every cast, assertion, non-null mark and parenthesis
+   * taken off: each project class that type is, or that realizes the
+   * interface or shape it is, as a target whose member is the call's name
+   * (empty when a computed key names none). What tells a cast that hid a data
+   * component from a receiver that never was one.
+   */
+  receivers?: CallTargetFact[];
+  /**
+   * True when this is no call but a REFERENCE to a function or method of this
+   * project the code takes as a value at this site — passes as an argument,
+   * assigns, returns, binds, or hands to Reflect.apply — rather than invoking
+   * it where it is written. A use all the same: what the reference lands on
+   * can be invoked anywhere the value travels.
+   */
+  reference?: boolean;
 }
 
 export interface CodeModel {
@@ -622,6 +643,14 @@ export interface CodeModel {
    * nothing. Absent or empty when the repository declares no packages.
    */
   packages?: Record<string, string>;
+  /**
+   * The resolved calls of the project's own source files that no facts entry
+   * holds but a resolved call or reference of the run reaches — a helper
+   * module no spec names and no source-root walk found — keyed by canonical
+   * path. What lets a rule read unowned code as part of whoever calls it.
+   * Absent where no type checker was loaded.
+   */
+  reachedCalls?: Record<string, ResolvedCallFact[]>;
 }
 
 /**

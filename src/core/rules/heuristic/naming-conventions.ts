@@ -1,5 +1,6 @@
 import { isDraftSubsystem, methodCasingFor } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { ownGet } from '../../../utils/own.js';
 
 const casingPatterns: Record<string, RegExp> = {
   camelCase: /^[a-z][a-zA-Z0-9]*$/,
@@ -10,7 +11,7 @@ const casingPatterns: Record<string, RegExp> = {
 };
 
 function compilePattern(patternOrCasing: string): RegExp | null {
-  if (casingPatterns[patternOrCasing]) return casingPatterns[patternOrCasing];
+  if (ownGet(casingPatterns, patternOrCasing)) return ownGet(casingPatterns, patternOrCasing)!;
   try {
     return new RegExp(patternOrCasing);
   } catch {

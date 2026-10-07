@@ -108,6 +108,18 @@ function canvasRelations(options: DiagramOptions): ProjectRelations[] | undefine
 export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
   assertProjectInitialized();
   const formatted = applyFormat(options);
+  // Step 1: a --depth or a --subsystem that names nothing is refused before
+  // anything is rendered, instead of being drawn as if it were the answer.
+  const depth = formatted.depth as unknown;
+  if (depth !== undefined && !(typeof depth === 'number' && Number.isInteger(depth) && depth >= 1)) {
+    throw new WaironError(`--depth takes a whole number of at least 1, and "${String(depth)}" is not one. Nothing was written.`);
+  }
+  if (formatted.subsystem !== undefined) {
+    const known = loadSpecGraph().subsystems.map((s) => s.id);
+    if (!known.some((id) => id === formatted.subsystem || id.startsWith(`${formatted.subsystem}::`))) {
+      throw new WaironError(`No subsystem "${formatted.subsystem}" in this tree — ${known.length ? `it holds ${known.join(', ')}` : 'it holds none yet'}. Nothing was written.`);
+    }
+  }
 
   // Step 1: render the requested format through the core client adapter.
   // Step 2: write the artifact where it was asked for and say where it landed.

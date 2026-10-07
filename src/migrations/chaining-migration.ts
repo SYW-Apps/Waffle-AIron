@@ -9,7 +9,7 @@ import { ChainingMigrationRefusedError } from '../utils/errors.js';
 // namespace so each call names the contract method it reaches.
 import * as position from './position-migration.js';
 import type { PlannedImport, PlannedMember, PlannedRewrite } from './position-migration.js';
-import { EXTERNAL_ALIAS_RE, PROJECT_ID_RE } from '../models/project.js';
+import { aliasGrammarProblem, EXTERNAL_ALIAS_RE, PROJECT_ID_RE } from '../models/project.js';
 import { declares, familyNode, type CrossProjectReference, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { exportTargetKey, type ResolvedExport, type ResolvedExportTable } from '../models/exports.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec } from '../models/specs.js';
@@ -543,7 +543,7 @@ function planExternal(ctx: Planning, consumer: ProjectNode, producer: string, re
     return undefined;
   };
   if (alias === undefined) return refuse('alias-invalid', `${label(producer)} has no id to declare it under — declare its id first`);
-  if (!EXTERNAL_ALIAS_RE.test(alias)) return refuse('alias-invalid', `"${alias}" is not an alias ([a-z0-9-_]+) — declare ${label(producer)} under an alias a person chooses`);
+  if (!EXTERNAL_ALIAS_RE.test(alias)) return refuse('alias-invalid', `"${alias}" is not an alias (${aliasGrammarProblem(alias)}) — declare ${label(producer)} under an alias a person chooses`);
   const existing = consumer.externals.find((e) => e.alias === alias);
   if (existing && existing.project === alias) return { alias, planned: true };
   const mounted = consumer.members.some((m) => familyNode(ctx.family, m)?.mountAlias === alias);

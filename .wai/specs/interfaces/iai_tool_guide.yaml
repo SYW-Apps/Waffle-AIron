@@ -95,7 +95,12 @@ methods:
     description: >-
       The wairon guide body for a scope: the global body for a user-level guide file, the local body
       for a project's own. The same body inject writes between the guide markers, so a renderer that
-      embeds the guide shows exactly what an injected file holds.
+      embeds the guide shows exactly what an injected file holds. Both bodies state the approval
+      doctrine an assistant acts on: approval is the lock, not a status; prose is design and linkage
+      is not — an L4/L5 prose change re-opens the approval, so `wairon lock` is owed before code is
+      implemented against it, while code linkage costs no re-lock — because the global body is also
+      what .wai/context/wairon-guide.md carries to every AI tool that reads the context copy
+      instead.
     signature: 'body(scope: GuideScope): string'
     returns: string
     params:
@@ -118,4 +123,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-10-07T06:21:26.008Z'
+updatedAt: '2026-10-07T21:51:11.989Z'

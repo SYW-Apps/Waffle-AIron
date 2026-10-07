@@ -331,7 +331,10 @@ describe('`fn().method()` and `this.method()` — followed only where the code s
     } finally { proj.cleanup(); }
   });
 
-  it('stays silent when the return is not settled: an unannotated variable, or an interface with no body', () => {
+  // The shape tier cannot settle these two returns, and once could only say
+  // "not checked". The type checker settles both — the variable's inferred
+  // class, and the class realizing the interface — so the claim is realized.
+  it('a return the shape tier cannot settle (an unannotated variable, an interface with no body) is the type checker\'s to settle', () => {
     for (const current of [
       'const shared = new Snapshots();\nexport function current() { return shared; }\n',
       'export interface Listing { listSnapshots(): string[] }\nexport function current(): Listing { return new Snapshots(); }\n',
@@ -342,8 +345,7 @@ describe('`fn().method()` and `this.method()` — followed only where the code s
       proj.activate();
       try {
         const res = validateProject();
-        expect(byCode(res, 'CALL_ORIGIN_UNRESOLVED')).toHaveLength(1);
-        expect(byCode(res, 'CALL_ORIGIN_UNRESOLVED')[0].message).toContain('current(…).listSnapshots(…)');
+        expect(byCode(res, 'CALL_ORIGIN_UNRESOLVED')).toEqual([]);
         expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
       } finally { proj.cleanup(); }
     }

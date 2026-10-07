@@ -33,7 +33,7 @@ methods:
     endpoint:
       transport: HTTP
       method: DELETE
-      path: /identity/tokens/{id}
+      path: /identity/tokens/{tokenId}
   - name: listUsers
     description: List hosted users or service principals, optionally filtered by project.
     signature: 'listUsers(credential: string, project?: string): list<HostedUserRecord>'
@@ -99,7 +99,7 @@ methods:
     endpoint:
       transport: HTTP
       method: PUT
-      path: /identity/users/{id}/status
+      path: /identity/users/{userId}/status
   - name: startSsoLogin
     description: >-
       Begin a headless SSO login for one provider and return the provider authorization URL.
@@ -186,4 +186,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-10-04T10:32:05.266Z'
+updatedAt: '2026-10-07T22:29:26.497Z'

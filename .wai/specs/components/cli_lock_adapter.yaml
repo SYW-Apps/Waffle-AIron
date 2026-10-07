@@ -16,8 +16,9 @@ owns: []
 dependsOn:
   - validator_portal
   - spec_tree_portal
+  - spec_maintenance_portal
   - approval_portal
   - project_config_portal
 status: complete
 createdAt: '2026-07-24T18:05:06.885Z'
-updatedAt: '2026-09-30T05:55:17.369Z'
+updatedAt: '2026-10-07T21:48:38.248Z'

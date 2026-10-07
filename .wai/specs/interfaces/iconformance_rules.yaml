@@ -147,7 +147,14 @@ methods:
       reported for the reason CONFORMANCE_DEGRADED is: a silently degraded gate is worse than a
       degraded one. A finding names a landing only from the PROVEN tier so that widening what a call
       reached can accept a claim but never accuse one, and a target that names no file of its own
-      falls back to name membership. N:1 identity — a caller that IS the target — is judged on the
+      falls back to name membership. Where a type checker read the file, a claim is also realized by
+      any call or reference in the bodies the function reaches — and in the unowned code they call —
+      that the checker lands on the target: its file under a name it is realized by, a class
+      realizing the port the call was typed by, or what the target forwards to by identity —
+      whatever the receiver's spelling (a type-only or `export *` barrel, a port declared in a
+      shared module, a dependency bag typed inline); a claim it does not land keeps the shape tier's
+      answer, since the checker's landing on a declaration says what a receiver is TYPED as, never
+      where the call went instead. N:1 identity — a caller that IS the target — is judged on the
       body, the same anchor in the same file, never on a shared name: a Portal method forwarding to
       a same-named Orchestrator method elsewhere must make that call. Converse: a call that resolves
       to a modelled method of ANOTHER component in the SAME file crosses a component boundary while
@@ -155,16 +162,28 @@ methods:
       (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper
       is no modelled method and is never reported; a function forwarding by identity to a modelled
       method written in another file IS that method, so what it calls is that method's subject. And
-      a call the TypeScript type checker resolves into ANOTHER file, onto a write- or
-      lifecycle-effect contract method of another component, that the method claims nowhere is a
-      mutation the design says the method never makes (UNDECLARED_WRITE_CALL): narrate it, declare
-      it in `calls`, or remove it — judged in the bodies the method's function reaches, never for a
-      Portal's call into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE's subject), and only where
-      a type checker was loaded. A method that claims nothing at all is judged in neither direction:
-      what it leaves unsaid is UNUSED_*'s subject. Order, arguments and conditions stay unverified,
-      dispatch steps (runtime-table routed) are no claim about a call site, a malformed declared
-      reference is MALFORMED_DECLARED_CALL's finding and names no target here, the conformance dial
-      (off) skips, and weaker analysis grades never guess.
+      a call — or a reference the code takes as a value — that the TypeScript type checker resolves
+      into ANOTHER file, onto a write- or lifecycle-effect contract method of another component, or,
+      from a Portal method whose body is its own, onto a verb of an Orchestrator, Supervisor or
+      Actor whose effect is not declared read or none (a Portal changes state only by dispatching to
+      such a verb, so its narrative is the list of those it may reach), that the method claims
+      nowhere is a mutation the design says the method never makes (UNDECLARED_WRITE_CALL): narrate
+      it, declare it in `calls`, or remove it — judged in the bodies the method's function reaches
+      and in the UNOWNED code they call (a function in a file no component realizes, or one that is
+      none of its file's components' modelled methods, read as if inlined at the call site,
+      transitively to a bounded depth, the finding naming the hops), never for a Portal's call into
+      a data component (PORTAL_WRITE_SHORTCUT_IN_CODE's subject), and only where a type checker was
+      loaded. A call there the checker cannot follow — its receiver typed any or unknown, cast to
+      either or to an index signature, or its member picked by a computed key — under the name of
+      such a write the method claims nowhere (where the checker recorded the receiver's original
+      type, a write of the component that type lands on, any of its writes when a computed key names
+      none; else a write of that name in the method's own subsystem or one its component depends
+      into) fails closed as CALL_ORIGIN_UNRESOLVED: neither proven an unnarrated write nor cleared.
+      A method that claims nothing at all is judged in neither direction: what it leaves unsaid is
+      UNUSED_*'s subject. Order, arguments and conditions stay unverified, dispatch steps
+      (runtime-table routed) are no claim about a call site, a malformed declared reference is
+      MALFORMED_DECLARED_CALL's finding and names no target here, the conformance dial (off) skips,
+      and weaker analysis grades never guess.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -182,15 +201,18 @@ methods:
         summary: >-
           Narrative call step or declared call whose target name IS called, but only from call sites
           written in a shape this analysis cannot resolve to a file — the claim was not checked, and
-          is neither proven realized nor accused. What resolves is a name bound to a module of THIS
-          project: a bare or namespaced call through such an import binding, a this.<field> receiver
-          whose declared type names one, a receiver chain (this.<field>.<property>,
-          <name>.<property>) each of whose links the code declares a type for, a new Class(…)
-          receiver whose class does, a receiver name the file annotates with such a type, a fn(…)
-          receiver whose return the code settles, and this inside a class's own method — a declared
-          type read through Pick/Omit/Partial/Required/Readonly and one alias hop. What does not: a
-          third-party package import, a value the module assembled, and a receiver the file declares
-          nothing for
+          is neither proven realized nor accused; or, the fail-closed half of UNDECLARED_WRITE_CALL,
+          a call through a receiver the analysis cannot follow (typed any or unknown, cast to either
+          or to an index signature, a computed key) under the name of a write the method claims
+          nowhere. Where a type checker read the file, whatever the checker resolves; without one,
+          what resolves is a name bound to a module of THIS project: a bare or namespaced call
+          through such an import binding, a this.<field> receiver whose declared type names one, a
+          receiver chain (this.<field>.<property>, <name>.<property>) each of whose links the code
+          declares a type for, a new Class(…) receiver whose class does, a receiver name the file
+          annotates with such a type, a fn(…) receiver whose return the code settles, and this
+          inside a class's own method — a declared type read through
+          Pick/Omit/Partial/Required/Readonly and one alias hop. What does not: a third-party
+          package import, a value the module assembled, and a receiver the file declares nothing for
       - code: UNDECLARED_COLOCATED_CALL
         severity: warning
         summary: >-
@@ -199,9 +221,10 @@ methods:
       - code: UNDECLARED_WRITE_CALL
         severity: warning
         summary: >-
-          The realized function calls a write- or lifecycle-effect method of another component in
-          another file, as the type checker resolves it, and neither a narrative step nor a declared
-          call names it — an unnarrated mutation
+          The realized function, or unowned code it calls, calls or takes as a value a write- or
+          lifecycle-effect method of another component in another file — or, from a Portal, a
+          workflow verb not declared read or none — as the type checker resolves it, and neither a
+          narrative step nor a declared call names it — an unnarrated mutation
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -237,33 +260,43 @@ methods:
       whose declared type comes from another component's file is runtime collaboration whatever the
       import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge).
       Conversely, a declared dependsOn/owns edge between components realized in different files
-      should be visible as an import between any file of the source and any file of the target
-      (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning); a type-only import
-      realizes it, since `import type` is what dependency injection writes down. An Adapter's edge
-      to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link
-      the design models: the Adapter's transport client realizes it, never an import, so it is never
-      UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would
-      couple two deployables' builds. Two twins of design rules are judged on the same code: a
-      Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store
-      or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless
-      the Portal's own narrative already claims that call (the design rule's finding then)
-      (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal's calls are resolved by the TypeScript type checker:
-      every call written in a file realizing only Portals — in a file shared with other components,
-      every call in a body the Portal's own methods reach — lands on the declaration its signature
-      resolves to, whatever the receiver's spelling, and a declaration in an interface or type
-      shape, a port the Portal declares for itself included, lands on each class of the project that
-      realizes it (the classes whose implements clause names it when any does, else every class the
-      checker finds assignable to it); such a landing on a component the file neither imports at
-      runtime nor is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker
-      could be loaded, the receiver is followed through the shape facts instead: a non-null
-      assertion, parentheses, `satisfies`, a cast to a named type and a local alias or destructuring
-      of a field exactly as through the field itself. A call in a Portal's own file the analysis
-      cannot resolve at all — its receiver typed any or unknown, cast to either, or typed nothing —
-      under the name of a write- or lifecycle-effect method of a data component in the Portal's own
-      subsystem or one it depends into, which the Portal does not already claim, fails closed: it is
-      neither proven a shortcut nor cleared, and it is a warning, so a CI gate never passes what it
-      could not read (PORTAL_CALL_UNRESOLVED). And a file importing a technology's package while no
-      component it realizes is that technology's home is the leak TECH_LEAKAGE refuses in the design
+      should be visible as an import between any file of the source and any file of the target, or —
+      where the type checker read a file of the source — as a call or reference the checker lands in
+      a file of the target, through every barrel, port declaration, dependency bag and unowned
+      helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading, hence warning);
+      a type-only import realizes it, since `import type` is what dependency injection writes down.
+      An Adapter's edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a
+      CLI…) is the link the design models: the Adapter's transport client realizes it, never an
+      import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that
+      boundary, which would couple two deployables' builds. Two twins of design rules are judged on
+      the same code: a Portal file calling a write- or lifecycle-effect contract method of a
+      Repository, Index, Store or Registry is the persistence shortcut the design rule
+      PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own narrative already claims that call (the
+      design rule's finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal's calls are resolved by
+      the TypeScript type checker: every call written in a file realizing only Portals — in a file
+      shared with other components, every call in a body the Portal's own methods reach — and every
+      reference there to a function or method the code takes as a value (passed as an argument,
+      assigned, returned, bound, handed to Reflect.apply), together with every call the UNOWNED code
+      they reach makes (a function in a file no component realizes, or one that is none of its
+      file's components' modelled methods, read as if inlined at the call site, transitively to a
+      bounded depth, the finding naming the hops), lands on the declaration its signature resolves
+      to, whatever the receiver's spelling, and a declaration in an interface or type shape, a port
+      the Portal declares for itself included, lands on each class of the project that realizes it
+      (the classes whose implements clause names it when any does, else every class the checker
+      finds assignable to it); such a landing on a component the file neither imports at runtime nor
+      is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker could be
+      loaded, the receiver is followed through the shape facts instead: a non-null assertion,
+      parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field
+      exactly as through the field itself. A call in a Portal's own code the analysis cannot resolve
+      at all — its receiver typed any or unknown, cast to either or to an index signature, its
+      member picked by a computed key, or typed nothing — under the name of a write- or
+      lifecycle-effect method of a data component (where the checker recorded the receiver's
+      ORIGINAL type, before any cast, a write of the data component that type lands on — any of its
+      writes when a computed key names none; else one in the Portal's own subsystem or one it
+      depends into), which the Portal does not already claim, fails closed: it is neither proven a
+      shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read
+      (PORTAL_CALL_UNRESOLVED). And a file importing a technology's package while no component it
+      realizes is that technology's home is the leak TECH_LEAKAGE refuses in the design
       (TECH_LEAKAGE_IN_CODE): a technology's packages are its declared tokens (its name, or its
       `matches`), the curated built-in table of the common packages its name is known by (postgres:
       pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis,
@@ -291,13 +324,13 @@ methods:
         severity: warning
         summary: >-
           A declared dependsOn/owns edge between components in different files is realized by no
-          import between any of their files
+          import between any of their files, nor by any call the type checker lands across it
       - code: PORTAL_WRITE_SHORTCUT_IN_CODE
         severity: error
         summary: >-
-          A Portal's code calls a write- or lifecycle-effect method of a data component (Repository,
-          Index, Store, Registry) directly — the code twin of PORTAL_WRITE_SHORTCUT: mutations route
-          through an Orchestrator
+          A Portal's code calls, or takes as a value, a write- or lifecycle-effect method of a data
+          component (Repository, Index, Store, Registry) — directly or through unowned code it calls
+          — the code twin of PORTAL_WRITE_SHORTCUT: mutations route through an Orchestrator
       - code: TECH_LEAKAGE_IN_CODE
         severity: warning
         summary: >-
@@ -306,10 +339,12 @@ methods:
       - code: PORTAL_CALL_UNRESOLVED
         severity: warning
         summary: >-
-          A call in a Portal's own file, under the name of a data component's write- or
-          lifecycle-effect method, goes through a receiver the analysis cannot resolve (typed any or
-          unknown, cast to either, or typed nothing) — neither proven a shortcut nor cleared, so it
-          fails closed until the receiver carries its type
+          A call in a Portal's own code, under the name of a data component's write- or
+          lifecycle-effect method — or with its member picked by a computed key on a receiver that
+          was a data component before a cast — goes through a receiver the analysis cannot resolve
+          (typed any or unknown, cast to either or to an index signature, or typed nothing) —
+          neither proven a shortcut nor cleared, so it fails closed until the receiver carries its
+          type
   - name: integrationSimDeclaration
     description: >-
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
@@ -566,16 +601,17 @@ methods:
       eventually breaks at a call site and a type spec that lies is only ever read by humans and
       agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists — a
       class's constructor parameter properties (`constructor(public readonly amount: number)`) among
-      them, the language's shorthand for a field declaration — and a DERIVED one, an alias followed
-      one hop to the object literal its schema is built from, where the keys are the members — and
-      on through a composition the same file writes out (`Base.extend({…})` on a schema constant it
-      declares), the extension's keys laid over the base's. A shape that extends another is judged
-      on what it shows and never on what it omits, since its inherited members are not in this file
-      to count. A NAMED SCALAR (a value-object declaring `holds`) has no field list: its shape is
-      the primitive it holds, compared with the right side of the type alias the file declares under
-      its name, read through the file's dialect (`type PackPath = string` agrees with holds string);
-      an object shape under that name, or an alias the dialect does not read as that primitive, is
-      TYPE_HOLDS_MISMATCH.
+      them, the language's shorthand for a field declaration, while a PRIVATE field a getter of the
+      same class reads is that getter's backing storage, implementation rather than the type's data,
+      and is no member — and a DERIVED one, an alias followed one hop to the object literal its
+      schema is built from, where the keys are the members — and on through a composition the same
+      file writes out (`Base.extend({…})` on a schema constant it declares), the extension's keys
+      laid over the base's. A shape that extends another is judged on what it shows and never on
+      what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a
+      value-object declaring `holds`) has no field list: its shape is the primitive it holds,
+      compared with the right side of the type alias the file declares under its name, read through
+      the file's dialect (`type PackPath = string` agrees with holds string); an object shape under
+      that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -619,7 +655,10 @@ methods:
       when the code's annotation, read through the dialect of the language the file was analyzed as
       (type_dialect.agrees), is the contract's canonical type — so `string[]` in the code agrees
       with `list<string>` in the contract, TypeScript's `number` with int and float alike, and an
-      annotation the dialect cannot read agrees with nothing. What a realization takes BEFORE the
+      annotation the dialect cannot read agrees with nothing. Where the code takes more parameters
+      than the contract declares and its TRAILING ones carry the contract's names one for one while
+      its leading ones do not, the leading surplus is what is undeclared — an inserted first
+      argument is named, never the declared one it pushed along. What a realization takes BEFORE the
       contract's own parameters is wiring, and it is declared on the implementation as
       `injectedParams` rather than inferred, because an inferred prefix cannot be told from a
       renamed first argument. A method the named file only CALLS is left to `methodRealization`,
@@ -762,4 +801,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-07T19:22:20.564Z'
+updatedAt: '2026-10-07T22:20:20.367Z'

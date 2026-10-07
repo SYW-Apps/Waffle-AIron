@@ -15,6 +15,8 @@ export {
   composeAgentBrief,
   exportSpecTree,
   importSpecTree,
+  // `wairon host demo` (spec_maintenance_portal seedDemoTree).
+  seedDemoTree,
   loadProjectConfig,
   createProjectConfig,
   setExecutionTier,
@@ -60,7 +62,6 @@ export {
   findChainingSubprojectsMissingConfig,
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
-  pinInstalledPacksAsSelections,
   // The upgrade report's reads (the chaining migration and its writes moved to
   // sdd_migrations in stage 6, behind migration_core_adapter).
   resolveChainingParent,
