@@ -52,14 +52,14 @@ export function check(options: ValidationOptions, observedPath: string, bindings
   // Steps 2-3: the bindings, only when the observed names follow them.
   let bindings: NetworkBindings | null = null;
   if (bindingsPath) bindings = readBindings(bindingsPath);
-  const model = reachModel(options); // Step 4
-  const matrix = project(model); // Step 5
-  return checkFlows(matrix, observed, bindings); // Steps 6-7
+  const model = reachModel(options); // Step 4: judged, its gate findings ride on it
+  const matrix = project(model); // Step 5: each flow marked with the findings on it
+  return checkFlows(matrix, observed, bindings, model); // Steps 6-7
 }
 
 /** inetwork_orchestrator.why — why one party may reach another, from the design. */
 export function why(options: ValidationOptions, from: string, to: string): FlowExplanation {
-  const model = reachModel(options); // Step 1
-  const matrix = project(model); // Step 2
-  return explain(matrix, from, to); // Steps 3-4
+  const model = reachModel(options); // Step 1: judged, its gate findings ride on it
+  const matrix = project(model); // Step 2: each flow marked with the findings on it
+  return explain(matrix, from, to, model); // Steps 3-4
 }

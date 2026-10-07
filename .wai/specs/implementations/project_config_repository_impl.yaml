@@ -236,6 +236,14 @@ methods:
           index, writes to the registry, both over that root
         type: local
     symbol: projectConfigRepositoryAt
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Forward to the registry
+        type: call
+        targetComponent: project_config_registry
+        targetMethod: setNetwork
+    exportedVia: projectConfigRepository
 lint:
   allow:
     - code: FACADE_FORWARDING
@@ -248,4 +256,4 @@ lint:
         and this allow is held to `at` alone.
 status: complete
 createdAt: '2026-09-13T11:19:36.287Z'
-updatedAt: '2026-10-03T18:11:44.087Z'
+updatedAt: '2026-10-06T23:05:31.555Z'

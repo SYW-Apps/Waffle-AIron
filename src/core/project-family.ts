@@ -1,5 +1,6 @@
 import * as path from 'path';
 import {
+  bindDeclaredExternal,
   declaredExternals,
   declaredMembers,
   effectiveProjectId,
@@ -48,12 +49,6 @@ import {
 
 /** The graph a scan projected, dropped with the scan's root list. */
 const memo = new WeakMap<ScannedProjectRoot[], ProjectFamily>();
-
-/** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */
-function dirKey(dir: string): string {
-  const resolved = path.resolve(dir);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
 
 /** One node per root: id from project_config.effectiveId(), members and alias table from the scan. */
 function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
@@ -123,19 +118,6 @@ function identityProblems(nodes: ProjectNode[]): ProjectFamilyProblem[] {
   return problems;
 }
 
-/** How a family producer stands to its consumer. */
-function relationOf(consumer: ProjectNode, producer: ProjectNode): ResolvedExternal['relation'] {
-  if (consumer.parent === producer.namespace) return 'parent';
-  if (producer.parent === consumer.namespace) return 'member';
-  if (consumer.parent !== undefined && consumer.parent === producer.parent) return 'sibling';
-  return 'family';
-}
-
-/** A family producer: the consumer sees `project`. */
-function familyExternal(alias: string, project: string, consumer: ProjectNode, producer: ProjectNode): ResolvedExternal {
-  return { alias, project, sourceKind: 'family', relation: relationOf(consumer, producer), producer: producer.namespace, directory: producer.directory, audience: 'project', role: 'external' };
-}
-
 /**
  * Bind each of the node's declared externals to its producer (role external),
  * then each of its referenced project members (role member, stage 8) exactly
@@ -143,7 +125,7 @@ function familyExternal(alias: string, project: string, consumer: ProjectNode, p
  */
 function bindExternals(node: ProjectNode, root: ScannedProjectRoot, nodes: ProjectNode[]): ResolvedExternal[] {
   if (!root.config) return [];
-  return [...declaredExternals(root.config).map((decl) => bindExternal(decl, node, nodes)), ...bindReferencedMembers(node, root)];
+  return [...declaredExternals(root.config).map((decl) => bindDeclaredExternal(decl, node, nodes)), ...bindReferencedMembers(node, root)];
 }
 
 /**
@@ -174,29 +156,6 @@ function bindReferencedMembers(node: ProjectNode, root: ScannedProjectRoot): Res
     });
   }
   return out;
-}
-
-/** One declared external bound to its producer. */
-function bindExternal(decl: ReturnType<typeof declaredExternals>[number], node: ProjectNode, nodes: ProjectNode[]): ResolvedExternal {
-  const unresolved = (problem: string): ResolvedExternal => ({ alias: decl.alias, project: decl.project, sourceKind: 'unresolved', audience: 'instance', problem, role: 'external' });
-  if (decl.problem) return unresolved(decl.problem);
-  // A hosted record id is resolved by external_producers through the hosting server's record lookup.
-  if (decl.sourceHosted !== undefined) return { alias: decl.alias, project: decl.project, sourceKind: 'hosted', hosted: decl.sourceHosted, audience: 'instance', role: 'external' };
-  // A git producer (stage 8): external_producers resolves its ref and materializes it.
-  if (decl.sourceGit !== undefined) return { alias: decl.alias, project: decl.project, sourceKind: 'git', audience: 'instance', role: 'external' };
-  if (decl.sourcePath !== undefined) {
-    const directory = path.resolve(node.directory, decl.sourcePath);
-    const found = nodes.find((n) => dirKey(n.directory) === dirKey(directory));
-    if (!found) return { alias: decl.alias, project: decl.project, sourceKind: 'path', directory, audience: 'instance', role: 'external' };
-    if (found.id !== decl.project) {
-      return unresolved(`the family project at source.path "${decl.sourcePath}" answers to ${found.id === undefined ? 'no id' : `"${found.id}"`}, not "${decl.project}"`);
-    }
-    return familyExternal(decl.alias, decl.project, node, found);
-  }
-  const holders = nodes.filter((n) => n.id === decl.project && n !== node);
-  if (holders.length === 0) return unresolved(`no project of the family answers to "${decl.project}", and no source.path says where to find it`);
-  if (holders.length > 1) return unresolved(`${holders.length} projects of the family answer to "${decl.project}" (${holders.map((n) => `"${n.namespace || '(the bound root)'}"`).join(', ')}), so the declaration could mean either`);
-  return familyExternal(decl.alias, decl.project, node, holders[0]);
 }
 
 /** The specs a reference collection reads, loaded once. */

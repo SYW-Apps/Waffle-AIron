@@ -18,13 +18,16 @@ methods:
       code, and their tuning, are left out, so neither an analyzer upgrade nor a code-severity
       change ever stales a lock. Agent-facing prose (skills, instructions) is left out, so a
       documentation edit never does either. From format 3 the content is the DESIGN identity
-      (state_hash.ownDesign), so code linkage never does. A project that declares no network digests
-      exactly as before, so no existing lock stales. The algorithm marker follows the content
-      identity it is given: `sha256+design+doctrine+inputs+members` for a design identity
-      (`sha256-design`), and the previous `sha256+content+doctrine+inputs+members` for a
-      full-content identity (`sha256`), which is how the same pure function recomputes a format-2
-      lock's identity exactly as it was taken. A member's specs are never hashed here: the member's
-      RECORDED subject stands for them. Pure: the same inputs always give the same identity.
+      (state_hash.ownDesign), so code linkage never does, and neither does a status (readiness left
+      the design view). A project that declares no network digests exactly as before, so no existing
+      lock stales. The algorithm marker follows the content identity it is given:
+      `sha256+design-2+doctrine+inputs+members` for a design identity (`sha256-design-2`), the
+      earlier `sha256+design+doctrine+inputs+members` for an earlier-reading design identity
+      (`sha256-design`, status still in), and the previous `sha256+content+doctrine+inputs+members`
+      for a full-content identity (`sha256`), which is how the same pure function recomputes an
+      earlier lock's identity exactly as it was taken. A member's specs are never hashed here: the
+      member's RECORDED subject stands for them. Pure: the same inputs always give the same
+      identity.
     signature: >-
       compute(content: StateId, doctrine: LoadedExtensions, builtinRules: list<SddRule>, inputs:
       list<string>, gate: GateConfig, members: map<string, string>): StateId
@@ -77,4 +80,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-10-06T13:05:42.599Z'
+updatedAt: '2026-10-06T23:05:38.681Z'

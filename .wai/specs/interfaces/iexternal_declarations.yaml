@@ -8,16 +8,19 @@ methods:
   - name: declare
     description: >-
       Declare one external: refuse, writing nothing, an alias that is malformed or already a member
-      or external, a location the grammar refuses (an absolute path, an inner `..`, an empty
-      source), a `ref` beside a non-git source, or a `#<commit>` that is not a full commit — each
-      with one sentence naming the accepted form. Otherwise write the normalized declaration (object
-      form: path | hosted | git with ref and dir), resolve it, and when its producer is readable
-      confirm that it answers to the declared id and exports every `use` name to this project; a
-      contradiction takes the declaration back out and refuses, naming the id it answers to or the
-      closest exported names. A producer that cannot be read (a sibling not checked out, a remote
-      offline) leaves the declaration written and says so: it reads unavailable — never a pass —
-      until pinned. Pins it when asked and the producer was read. A dry run answers the same verdict
-      and writes nothing. Never touches the spec tree.
+      or external, a location the grammar refuses (an absolute path, an inner `..`, an empty source,
+      or text that is no location at all — braces, quotes, whitespace), a `ref` beside a non-git
+      source, or a `#<commit>` that is not a full commit — each with one sentence naming the
+      accepted form. Otherwise bind the declaration to its producer BEFORE writing it (the core's
+      candidate binding, the one the written declaration will get) and, when the producer is
+      readable, confirm that it answers to the declared id and exports every `use` name to this
+      project; a contradiction refuses, writing nothing, naming the id it answers to, the closest
+      exported names — or, when the name is exported only to a narrower audience than this project
+      is read at, that audience, this project's and the ranking (project < department < instance <
+      partner < external). A dry run answers that same verdict, the producer read, and writes
+      nothing. A producer that cannot be read (a sibling not checked out, a remote offline) leaves
+      the declaration written and says so: it reads unavailable — never a pass — until pinned. Pins
+      it when asked and the producer was read. Never touches the spec tree.
     signature: 'declare(request: ExternalRequest): ExternalAddition'
     returns: ExternalAddition
     params:
@@ -26,6 +29,39 @@ methods:
         description: >-
           The alias, the location in the one location grammar, and optionally the producer id, ref,
           dir, `use`, description, whether to pin (default yes) and whether this is a dry run
+  - name: remove
+    description: >-
+      Remove one external of the bound project: its declaration taken out of `.wai/project.yaml` and
+      its pin — the lock entry and the pinned snapshot — with it, so no orphaned pin is ever left
+      behind. An alias that is pinned but no longer declared (a hand-removed declaration) has its
+      orphaned pin removed. Refused, writing nothing, when the alias is neither declared nor pinned,
+      naming the aliases that are. A dry run answers the same and writes nothing. Never touches the
+      spec tree: references to the alias are the validator's to report.
+    signature: 'remove(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+  - name: updateUse
+    description: >-
+      Change one declared external's `use` imports: add public names (or `*`) and remove names, so a
+      project imports a producer's names bare without hand-editing `.wai/project.yaml`. Refused,
+      writing nothing, when the alias is not a declared external, when an entry is neither `*` nor a
+      public name, or — when the producer can be read — when an added name is not exported to this
+      project (naming the closest exported names, or the audience it is exported to). A dry run
+      answers the resulting list and writes nothing; a change that changes nothing writes nothing.
+      The pin is untouched: `use` decides how names are spelled, never what is pinned.
+    signature: 'updateUse(request: ExternalUseRequest): ExternalUseChange'
+    returns: ExternalUseChange
+    params:
+      - name: request
+        type: ExternalUseRequest
+        description: The alias, the names to add and remove, and whether this is a dry run
 status: complete
 createdAt: '2026-10-06T10:13:59.636Z'
-updatedAt: '2026-10-06T10:14:00.259Z'
+updatedAt: '2026-10-06T23:05:10.108Z'

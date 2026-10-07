@@ -5,7 +5,7 @@ import { pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
-import { loadProjectConfig, loadRegistry, findLegacySpecFiles, resolveChainingParent } from '../core/index.js';
+import { loadProjectConfig, loadRegistry, findLegacySpecFiles, resolveChainingParent, loadSubsystemSpecs } from '../core/index.js';
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -197,6 +197,8 @@ interface SpecTally {
   fatalWarnings: boolean;
   waived: number;
   notices: number;
+  /** Every warning printed, draft-waivable ones included: what the closing line counts. */
+  warnings: number;
 }
 
 /**
@@ -205,7 +207,7 @@ interface SpecTally {
  * per-project verdicts after them — and the one-line hint, when there is one.
  */
 export function renderSpecFindings(result: ValidationResult, all = false): SpecTally {
-  const tally: SpecTally = { errors: false, fatalWarnings: false, waived: 0, notices: 0 };
+  const tally: SpecTally = { errors: false, fatalWarnings: false, waived: 0, notices: 0, warnings: 0 };
   if (result.issues.length === 0) {
     logger.success('Spec tree is valid and component type boundaries are enforced.');
   }
@@ -219,8 +221,8 @@ export function renderSpecFindings(result: ValidationResult, all = false): SpecT
     const line = `${prefix}[${issue.code}] ${issue.message}`;
     if (issue.severity === 'error') tally.errors = true;
     else if (issue.severity === 'notice') tally.notices++;
-    else if (isCiDraftWaivable(issue)) tally.waived++;
-    else tally.fatalWarnings = true;
+    else if (isCiDraftWaivable(issue)) { tally.waived++; tally.warnings++; }
+    else { tally.fatalWarnings = true; tally.warnings++; }
     if (printed[issue.severity] >= MAX_PRINT) {
       skipped[issue.severity]++;
       continue;
@@ -286,6 +288,11 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   let waivedWarnings = 0;
   // Notices: printed and counted, never part of the failure decision.
   let noticeTotal = 0;
+  // Every warning printed: plain validate passes with them, and says so.
+  let warningTotal = 0;
+  // Whether there was a design to check at all: an empty tree passes, but
+  // "all checks passed" over nothing would claim more than was checked.
+  let treeChecked = false;
 
   // --- Legacy spec filenames check ---
   const legacySpecs = findLegacySpecFiles();
@@ -313,6 +320,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       } else {
         logger.warn(`[${issue.code}] ${issue.message}`);
         hasFatalWarnings = true;
+        warningTotal++;
       }
     }
   }
@@ -336,6 +344,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       } else {
         logger.warn(`${prefix}[${issue.code}] ${issue.message}`);
         hasFatalWarnings = true;
+        warningTotal++;
       }
     }
   }
@@ -368,12 +377,20 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     hasFatalWarnings ||= tally.fatalWarnings;
     waivedWarnings += tally.waived;
     noticeTotal += tally.notices;
+    warningTotal += tally.warnings;
+    treeChecked = part || loadSubsystemSpecs().length > 0;
+    if (!treeChecked) logger.info(chalk.gray('The spec tree holds the L0 and nothing below it yet: no subsystem, component or contract to check.'));
     renderAdvisory(advised);
     // A member judged here is judged by its own gate only: its `network`
     // entries count as declared. The proofs that need the whole family run
     // at the root, so a green member run is never read as a proven one.
     const parent = resolveChainingParent();
     if (parent) logger.info(chalk.gray(memberNetworkLine(parent.alias, parent.parentRoot)));
+  }
+
+  else {
+    logger.header('SDD Architectural Specs');
+    logger.info(chalk.gray('No spec tree yet (.wai/specs holds no L0): there is no design to check. Start one with the sdd-architect skill.'));
   }
 
   // The conformance debt register, said out loud on every run. A suppression
@@ -413,8 +430,12 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     }
     process.exit(1);
   } else {
-    if (options.ci) {
+    if (!treeChecked) {
+      logger.success('Nothing to check yet: the spec tree is empty, and the project configuration is valid.');
+    } else if (options.ci) {
       logger.success('All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted; notices never fail).');
+    } else if (warningTotal > 0) {
+      logger.warn(`Passed with ${warningTotal} warning(s) — not a failure here, but \`wairon validate --ci\` fails on them${waivedWarnings > 0 ? ` (except the ${waivedWarnings} draft-related one(s))` : ''}.`);
     } else {
       logger.success('All checks passed.');
     }

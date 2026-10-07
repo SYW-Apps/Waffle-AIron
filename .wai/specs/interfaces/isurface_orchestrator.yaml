@@ -110,7 +110,8 @@ methods:
     description: >-
       The `wairon externals list` read: each declared external with how it resolves (family and its
       relation, path, or unresolved with the reason), the audience the consumer sees, and the lock's
-      entry when pinned. No live comparison.
+      entry when pinned — and each orphaned pin (a lock entry whose alias is no longer declared)
+      listed with that problem, never hidden. No live comparison.
     signature: 'listExternals(): list<ExternalListing>'
     returns: list<ExternalListing>
     params: []
@@ -232,8 +233,17 @@ methods:
           The lock-check state the caller decided against the gate identity; omitted, the export
           says unjudged
         optional: true
+  - name: listConsumers
+    description: >-
+      The family projects in reach that consume the bound project — each with the alias and section
+      it declares the bound project under and the public names its specs use — so a producer sees
+      who breaks before it changes its surface. Read-only; a consumer outside the family read
+      declares its dependency on its own side and is never listed.
+    signature: 'listConsumers(): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params: []
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-06T10:13:13.543Z'
+updatedAt: '2026-10-06T23:15:27.312Z'

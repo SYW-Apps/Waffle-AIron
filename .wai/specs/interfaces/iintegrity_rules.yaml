@@ -244,17 +244,21 @@ methods:
       warning for a wildcard cycle, which resolves to its union. Every entry names a source and an
       item that exist, that the source exports and, for an own type, that the level owns (a
       subsystem-owned type at L1, a project-level type with no subsystem for an L0 `{ typeDef }`
-      without `from`), under a public name of [a-z0-9-_]+ (EXPORT_INVALID). Every exported component
-      can serve what its role promises (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports): an entry
-      consumers call must be a Portal (a gateway being a Portal variant) or an Observer for events,
-      and an entry consumers implement (role implement, an extension point) may also be an Adapter
-      whose realization consumers supply. An L0 entry that re-exports a member's or an external's
-      export never declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a
-      re-export can narrow reach, never widen it. An entry's export kind is derived from its backing
-      Portal's transport and no longer authored, so no rule compares an authored kind with the
-      stereotype; the retired public-surface-declared-type rule and its codes are gone. The rule
-      judges the facts the export resolver recorded in the scan, for the bound root's table and
-      every contained member's, and resolves nothing itself.
+      without `from`), under a public name of [a-z0-9-_]+ (EXPORT_INVALID) — a named re-export whose
+      source renamed the item names the new name. Every exported component can serve what its role
+      promises (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports): an entry consumers call must be a
+      Portal (a gateway being a Portal variant) or an Observer for events, and an entry consumers
+      implement (role implement, an extension point) may also be an Adapter whose realization
+      consumers supply. An L0 entry that re-exports a member's or an external's export never
+      declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a re-export can
+      narrow reach, never widen it. An own L0 entry exported to `department` is a notice
+      (EXPORT_AUDIENCE_NARROW): outside a hosted instance only the project's family sees it, and a
+      sibling checkout or git consumer — read at `instance` — is refused; whether its consumers are
+      hosted cannot be told from the tree, so it never fails the gate. An entry's export kind is
+      derived from its backing Portal's transport and no longer authored, so no rule compares an
+      authored kind with the stereotype; the retired public-surface-declared-type rule and its codes
+      are gone. The rule judges the facts the export resolver recorded in the scan, for the bound
+      root's table and every contained member's, and resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -285,6 +289,11 @@ methods:
       - code: EXPORT_WIDENS_AUDIENCE
         severity: error
         summary: An L0 entry declares a wider audience than the member or external export it re-exports
+      - code: EXPORT_AUDIENCE_NARROW
+        severity: notice
+        summary: >-
+          An L0 entry is exported to `department`: outside a hosted instance only this project's
+          family sees it, and a path or git consumer is refused
   - name: referenceForms
     description: >-
       Rule reference-forms. A cross-project reference is `alias::name` (or a bare name a `use`
@@ -624,10 +633,11 @@ methods:
       Rule implements-contracts. An interface that declares `implements: alias::name` realizes
       another project's extension point, so it must declare every method of that contract with the
       same params and returns, read from the export the reference resolves to (a contained member's
-      live table, or a declared external's pin). Whether the reference resolves and names an entry
-      exported with role implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule
-      judges the shape once it resolves. Extra methods are the implementer's own and are not
-      reported.
+      live table, or a declared external's pin). Types are compared semantically, never by spelling:
+      the producer's own bare name and the consumer's `alias::name` (or the bare name its `use`
+      imports) are one type. Whether the reference resolves and names an entry exported with role
+      implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape
+      once it resolves. Extra methods are the implementer's own and are not reported.
     signature: 'implementsContracts(ctx: RuleContext): void'
     returns: void
     params:
@@ -642,4 +652,4 @@ methods:
           with different params or returns
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-06T18:32:13.853Z'
+updatedAt: '2026-10-06T23:08:09.342Z'

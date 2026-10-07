@@ -34,7 +34,8 @@ import {
 } from './specs.js';
 import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec } from '../models/specs.js';
 import { languageOfSourcePath } from '../models/code-model.js';
-import { typeDialectFor } from '../models/type-dialects.js';
+import { typeMappingFor } from '../models/type-dialects.js';
+import { readYamlFile } from '../utils/yaml.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
 
 // Cache for project files relative to the system root
@@ -642,16 +643,25 @@ export function composeAgentBrief(agentId: string): AgentBrief {
 
   // Step 13 (part): the code write fence — where this agent may write CODE —
   // ahead of the user's own guidance, which stays the last word.
-  const codeFence = codeFenceOf(record);
+  const ownFence = codeFenceOf(record);
+  // A subsystem owner also owns what the whole project shares and no
+  // component claims — the manifest, the compiler settings, the crate or
+  // package root, the files of system-level types — so setup work has an owner.
+  const shared = ownFence && isSubsystemOwner(record) ? sharedProjectFiles(ownFence) : [];
+  const codeFence = ownFence ? [...ownFence, ...shared] : ownFence;
   if (codeFence) {
     // A planned file (named, not on disk yet) is marked, so the implementer
     // writes it rather than looks for it.
     const shown = (p: string): string => (/[*?]/.test(p) || fs.existsSync(path.resolve(getProjectRoot(), p))
       ? `- \`${p}\``
       : `- \`${p}\` (planned — create it)`);
-    instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${codeFence.length > 0
-      ? `Write code only here (and tests beside it, as the project lays tests out):\n\n${codeFence.map(shown).join('\n')}\n`
-      : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n'}`;
+    const own = ownFence ?? [];
+    const sharedSection = shared.length > 0
+      ? `\nShared with the other subsystem owners (the project's setup and shared code; coordinate edits):\n\n${shared.map(shown).join('\n')}\n`
+      : '';
+    instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${own.length > 0
+      ? `Write code only here (and tests beside it, as the project lays tests out):\n\n${own.map(shown).join('\n')}\n`
+      : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n'}${sharedSection}`;
   }
 
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
@@ -666,10 +676,20 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   // the language this agent's implementations are written in, so an
   // implementer maps list<T>, T?, async T and an enum by rule, not by guess.
   const language = implementationLanguage(record);
-  const dialect = language ? typeDialectFor(language) : null;
-  const typeMapping = dialect ? dialect.mappingLines() : undefined;
+  const typeMapping = (language ? typeMappingFor(language) : null) ?? undefined;
   if (typeMapping) {
     instructions = `${instructions.trimEnd()}\n\n## Types in ${language}\n\nContracts speak wairon's neutral type grammar; write each type in ${language} as:\n\n${typeMapping.map((line) => `- ${line}`).join('\n')}\n`;
+  }
+
+  // The externals a consumer codes against: each other project this record's
+  // components reach, the names they use, the producer's transport and abi
+  // where the pin records them, and the pinned snapshot — the contract the
+  // consumer codes against — which joins the read list.
+  const externals = externalsUsedBy(record);
+  let readPaths = record.readPaths;
+  if (externals.length > 0) {
+    instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot, never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n`;
+    readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
   }
 
   // The resource axis, resolved from the same live topology as the rest of the
@@ -684,7 +704,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     template: record.template,
     domainRoot: record.domainRoot,
     ownedPaths: record.ownedPaths,
-    readPaths: record.readPaths,
+    readPaths,
     instructions,
     variantGuidance: record.variantGuidance || undefined,
     ...(typeMapping ? { typeMapping } : {}),
@@ -758,7 +778,7 @@ function implementationLanguage(record: AgentRecord): string | undefined {
   for (const impl of implementations) {
     for (const technology of impl.technologies ?? []) {
       const name = typeof technology === 'string' ? technology : technology.name;
-      if (typeDialectFor(name)) return name.toLowerCase();
+      if (typeMappingFor(name)) return name.toLowerCase();
     }
   }
   for (const impl of implementations) {
@@ -773,7 +793,17 @@ function implementationLanguage(record: AgentRecord): string | undefined {
     const language = languageOfSourcePath(file);
     if (language) return language;
   }
-  return undefined;
+  // Else the language the design declares: a subsystem's own targetLanguage
+  // for its owner, then the L0's — a design with no code yet still says it.
+  if (!implementsComponents(record)) return undefined;
+  const subsystem = loadSubsystemSpecs().find((s) => record.ownedPaths.some((p) => p.includes(`/${s.id}/`) || p.endsWith(`/${s.id}.yaml`)));
+  const declared = subsystem?.targetLanguage ?? loadSystemSpec()?.targetLanguage;
+  return declared ? declared.toLowerCase() : undefined;
+}
+
+/** Whether a record implements components (an implementer, or a subsystem owner inferred from an L1). */
+function implementsComponents(record: AgentRecord): boolean {
+  return record.template === 'implementer' || isSubsystemOwner(record);
 }
 
 /** A qualified id's first hop: the direct member its alias names, and the rest of the id. */
@@ -818,4 +848,127 @@ export function loadRegistry(): Registry {
     agents: resolveAgentTopology(),
     updatedAt: new Date().toISOString(),
   };
+}
+
+/** Whether a record is a subsystem's owner, inferred from an L1 — the one that implements the subsystem's components. */
+function isSubsystemOwner(record: AgentRecord): boolean {
+  return record.template === 'domain-owner' && record.creationReason.startsWith('Automatically inferred from L1');
+}
+
+/** The project setup files a subsystem owner shares with the others when they exist: manifests, lockfiles, compiler settings. */
+const SHARED_SETUP_FILES = [
+  'package.json', 'package-lock.json', 'tsconfig.json', 'Cargo.toml', 'Cargo.lock',
+  'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', 'go.mod',
+];
+
+/** The crate or package roots a project's components are reached through, when they exist. */
+const SHARED_ROOT_FILES = ['src/lib.rs', 'src/main.rs', 'src/index.ts', 'src/__init__.py'];
+
+/**
+ * The files the whole project shares and no component claims: the setup files
+ * and the crate or package root that exist, and the files of system-level
+ * types (planned or written) — each one no implementation names and the
+ * owner's own fence does not already hold.
+ */
+function sharedProjectFiles(fence: string[]): string[] {
+  const root = getProjectRoot();
+  const claimed = new Set<string>(fence);
+  for (const impl of loadImplementationSpecs()) for (const file of implementationSourceFiles(impl)) claimed.add(file);
+  const out: string[] = [];
+  const add = (file: string): void => {
+    if (!claimed.has(file) && !out.includes(file)) out.push(file);
+  };
+  for (const file of [...SHARED_SETUP_FILES, ...SHARED_ROOT_FILES]) {
+    if (fs.existsSync(path.join(root, file))) add(file);
+  }
+  for (const type of loadTypeSpecs()) {
+    if (type.subsystem) continue;
+    for (const file of typeSourceFiles(type)) add(file);
+  }
+  return out;
+}
+
+/** One other project a record's components reach: its alias, the names used, the pin and what it records of each. */
+interface ExternalUse {
+  alias: string;
+  names: string[];
+  /** The pinned snapshot, project-relative. */
+  pin: string;
+  /** Whether the pin is on disk. */
+  pinned: boolean;
+  /** The producer Portal's transport and abi per used name, where the pin records them. */
+  bindings: Map<string, { transport?: string; abi?: string }>;
+}
+
+/** The components a record implements: those whose implementations name a file it owns, or the one its id names. */
+function implementedComponents(record: AgentRecord): ComponentSpec[] {
+  const owned = new Set(record.ownedPaths);
+  const components = loadComponentSpecs();
+  const contractOwner = new Map(loadInterfaceSpecs().map((i) => [i.id, i.component]));
+  const ids = new Set<string>();
+  for (const impl of loadImplementationSpecs()) {
+    if (!implementationSourceFiles(impl).some((file) => owned.has(file))) continue;
+    const component = contractOwner.get(impl.contract);
+    if (component) ids.add(component);
+  }
+  if (record.id.endsWith('-implementer')) ids.add(record.id.slice(0, -'-implementer'.length));
+  return components.filter((c) => ids.has(c.id));
+}
+
+/**
+ * Every other project the record's components reach through `alias::name` —
+ * a dependsOn or owns, a narrative call or declared call, a contract's
+ * `implements` — with what the alias's pinned snapshot records of each name.
+ */
+function externalsUsedBy(record: AgentRecord): ExternalUse[] {
+  const components = implementedComponents(record);
+  if (components.length === 0) return [];
+  const ids = new Set(components.map((c) => c.id));
+  const refs: string[] = [];
+  for (const c of components) refs.push(...c.dependsOn, ...(c.owns ?? []));
+  const contracts = loadInterfaceSpecs().filter((i) => ids.has(i.component));
+  for (const contract of contracts) if (contract.implements) refs.push(contract.implements);
+  const contractIds = new Set(contracts.map((i) => i.id));
+  for (const impl of loadImplementationSpecs()) {
+    if (!contractIds.has(impl.contract)) continue;
+    for (const method of impl.methods) {
+      for (const step of method.narrative) if (step.targetComponent) refs.push(step.targetComponent);
+      for (const call of method.calls ?? []) refs.push(call.slice(0, call.lastIndexOf('.')));
+    }
+  }
+  const byAlias = new Map<string, Set<string>>();
+  for (const ref of refs) {
+    const cut = ref.indexOf('::');
+    if (cut <= 0) continue;
+    const alias = ref.slice(0, cut);
+    const names = byAlias.get(alias) ?? new Set<string>();
+    names.add(ref.slice(cut + 2));
+    byAlias.set(alias, names);
+  }
+  const root = getProjectRoot();
+  const out: ExternalUse[] = [];
+  for (const [alias, names] of [...byAlias].sort(([a], [b]) => a.localeCompare(b))) {
+    const pin = `.wai/externals/${alias}.yaml`;
+    const bindings = new Map<string, { transport?: string; abi?: string }>();
+    let pinned = false;
+    try {
+      const doc = readYamlFile(path.join(root, pin)) as { interfaces?: Array<{ id?: string; transport?: string; abi?: string }> } | null;
+      pinned = !!doc;
+      for (const entry of doc?.interfaces ?? []) {
+        if (entry.id && names.has(entry.id)) bindings.set(entry.id, { transport: entry.transport, abi: entry.abi });
+      }
+    } catch { /* no pin on disk: named as unpinned */ }
+    out.push({ alias, names: [...names].sort(), pin, pinned, bindings });
+  }
+  return out;
+}
+
+/** One external as the brief's section lists it. */
+function describeExternal(use: ExternalUse): string {
+  const names = use.names.map((name) => {
+    const binding = use.bindings.get(name);
+    const how = [binding?.transport ? `transport ${binding.transport}` : '', binding?.abi ? `abi ${binding.abi}` : ''].filter(Boolean).join(', ');
+    return `\`${use.alias}::${name}\`${how ? ` (${how})` : ''}`;
+  });
+  return `- **${use.alias}** — uses ${names.join(', ')}; pinned snapshot \`${use.pin}\`${use.pinned ? '' : ' (not pinned yet — run `wairon externals pin` before coding against it)'}`;
 }

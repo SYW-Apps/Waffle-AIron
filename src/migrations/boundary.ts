@@ -672,6 +672,14 @@ function recordCrossing(plan: MigrationPlan, bound: string, member: string, resu
   for (const line of crossed.exported) plan.edits.push({ project: bound, kind: 'export', detail: `export ${line}` });
   for (const line of crossed.imported) plan.edits.push({ project: bound, kind: 'external', detail: `import: ${line}` });
   for (const line of crossed.consumersDropped) plan.edits.push({ project: bound, kind: 'reference', detail: `consumers across the boundary to ${member} dropped: ${line}` });
+  // The entries the new boundary made necessary: its callers stayed in the parent.
+  for (const line of crossed.entriesDeclared ?? []) plan.edits.push({ project: member, kind: 'reference', detail: `entry declared for the callers left across the boundary — ${line}` });
+  // The topics it now separates from their pair: the family run pairs them, the new project's own gate alone does not.
+  const topics = crossed.topicsCrossing ?? [];
+  if (topics.length > 0) {
+    plan.notes.push(`${topics.length} topic(s) now cross the boundary to "${member}"; the family run (\`wairon validate\` at ${label(bound)}) pairs them, while "${member}" validated alone reports them:`);
+    for (const line of topics) plan.notes.push(`  ${line}`);
+  }
 }
 
 /** One planned write under its owner's rehearsal root; answers what the core answered. */

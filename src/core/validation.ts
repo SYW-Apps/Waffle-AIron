@@ -20,6 +20,8 @@ import {
   loadProjectConfig,
   computeOwnStateId,
   computeOwnDesignId,
+  computeOwnDesignIdAsRecorded,
+  approvedStatuses,
   consumedContractInputs,
   settledSpecPaths,
   readLockRecord,
@@ -762,7 +764,7 @@ function runOwnersGate(
  */
 export function ownReachModel(options?: ValidationOptions): ReachModel {
   return runOwnersGate(options ?? {}, options?.projectType ?? 'backend', true).reach
-    ?? { scope: 'own', networks: [], verbs: [], calls: [] };
+    ?? { scope: 'own', networks: [], verbs: [], calls: [], placements: [], topics: [] };
 }
 
 /**
@@ -1175,7 +1177,15 @@ export function computeGateStateId(): StateId {
   const record = approvalRecord(getProjectRoot());
   if (!record?.stateId || record.stateId.algorithm === current.algorithm) return current;
   const asRecorded = computeGateIdentity(computeOwnStateId(), extensions, builtin, inputs, gate, members);
-  return record.stateId.algorithm === asRecorded.algorithm ? { ...current, asRecorded } : current;
+  if (record.stateId.algorithm === asRecorded.algorithm) return { ...current, asRecorded };
+  // Steps 18-21: a lock taken in the earlier design reading (status still in
+  // the view) is judged as it was taken too, each spec's status put back as
+  // the approval recorded it — so a tree in which nothing but a status moved
+  // still matches it.
+  const asApproved = computeGateIdentity(
+    computeOwnDesignIdAsRecorded(approvedStatuses(record)), extensions, builtin, inputs, gate, members,
+  );
+  return record.stateId.algorithm === asApproved.algorithm ? { ...current, asRecorded: asApproved } : current;
 }
 
 /** The subject recorded for a member with no lock (or no project on disk). */

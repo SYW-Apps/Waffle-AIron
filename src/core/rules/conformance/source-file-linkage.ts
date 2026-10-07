@@ -80,7 +80,7 @@ export const sourceFileLinkageRule: SddRule = {
       ctx.addIssue(
         'warning',
         'CONFORMANCE_DEGRADED',
-        `${degradedTsFiles.length} TypeScript/JavaScript source file(s) were analyzed below exact grade — the TypeScript compiler could not be resolved from the analyzed project or the wairon installation. Structural findings carry their grade, but dependency conformance skips these files. Install "typescript" in the analyzed project to restore exact analysis.`,
+        `${degradedTsFiles.length} TypeScript/JavaScript source file(s) were analyzed below exact grade — no TypeScript compiler API could be loaded from the analyzed project or the wairon installation: either no \`typescript\` package is installed there, or the installed one ships no JavaScript compiler API (TypeScript 7's native compiler has none; this analyzer reads the TypeScript 5.x API). Structural findings carry their grade, but dependency conformance skips these files. To restore exact analysis, make a TypeScript 5.x package resolvable from the analyzed project (\`npm i -D typescript@5\`) — on TypeScript 7, check \`node -e "console.log(typeof require('typescript').createSourceFile)"\` prints function.`,
       );
     }
 

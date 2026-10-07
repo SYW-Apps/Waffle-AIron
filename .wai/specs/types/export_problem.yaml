@@ -29,7 +29,19 @@ fields:
     type: string
     description: What is wrong, in words a finding can quote.
     optional: false
+  - name: renamedTo
+    type: string
+    description: >-
+      On an invalid named re-export whose item its source no longer exports: the public name the
+      source's rename trace carries that item to (a renamed component, interface or type keeps its
+      former names), so the finding and every consumer of the re-export can say "renamed to" instead
+      of "gone". Absent when the source records no such rename.
+    optional: true
+  - name: source
+    type: string
+    description: 'On an invalid named re-export: the `from` it names, as written.'
+    optional: true
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T16:07:57.678Z'
-updatedAt: '2026-10-04T23:39:34.477Z'
+updatedAt: '2026-10-06T23:03:50.667Z'

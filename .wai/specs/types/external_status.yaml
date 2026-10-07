@@ -66,6 +66,16 @@ fields:
       The producer's commit as the lock recorded it (ExternalLockEntry.commit) — only for a producer
       in another git repository than the consumer; absent otherwise. Provenance only.
     optional: true
+  - name: staleFacts
+    type: list<string>
+    description: >-
+      The carried facts the pinned snapshot no longer matches in the live producer, each named where
+      it sits (`abi of distance`, `transport of tiles`, `targetLanguage`, `rename trace of
+      tiles.tile_at`) — facts no digest reads, which the rules judge from the snapshot (a library's
+      abi, an entry's role and transport). Non-empty means the snapshot is stale and a re-pin
+      refreshes it: the relation reads drifted, never ok. Absent when the producer was not read or
+      nothing carried moved.
+    optional: true
 methods:
   - name: health
     signature: 'health(): string'
@@ -76,11 +86,13 @@ methods:
       removed or was renamed (stale) — exit 1; else `unavailable` when anything could not be
       compared — the producer unreachable or out of reach, or any use unavailable or unlocked (used
       now, not in the lock) — exit 2, never a pass; else `drifted` when the producer's content moved
-      since the pin while nothing used changed; else `ok` — only when the producer was read and
-      every use compared unchanged (drifted and ok exit 0). A known break outranks the unknown, and
-      the unknown outranks a benign change, so nothing that could not be checked ever reads as ok.
-      Pure: over the status's own fields.
+      since the pin while nothing used changed, or the pinned snapshot is stale (staleFacts: a
+      carried fact such as an abi, a transport or a role moved, which no digest reads); else `ok` —
+      only when the producer was read, every use compared unchanged and the snapshot carries what
+      the producer says now (drifted and ok exit 0). A known break outranks the unknown, and the
+      unknown outranks a benign change, so nothing that could not be checked ever reads as ok. Pure:
+      over the status's own fields.
     symbol: relationHealth
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:47:16.586Z'
-updatedAt: '2026-10-06T10:07:35.296Z'
+updatedAt: '2026-10-06T23:03:34.311Z'

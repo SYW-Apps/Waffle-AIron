@@ -1,6 +1,6 @@
 id: mcp_network_orchestrator_impl
 name: MCP Network Orchestrator Implementation
-description: The network read tools' workflows, beside the externals workflows.
+description: The network tools' workflows, beside the externals workflows.
 contract: imcp_network_orchestrator
 sourcePath: src/mcp/network.ts
 methods:
@@ -31,6 +31,20 @@ methods:
         description: Answer the explanation, as text and structured content
         type: return
         outcome: FlowExplanation
+  - name: declare
+    narrative:
+      - stepNumber: 1
+        description: 'The declaration: a NetworkDeclaration with the description when declared, else none'
+        type: local
+      - stepNumber: 2
+        description: Write it through the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: setNetwork
+      - stepNumber: 3
+        description: Answer whether it wrote
+        type: return
+        outcome: bool
 status: complete
 createdAt: '2026-10-06T13:15:29.445Z'
-updatedAt: '2026-10-06T13:15:30.089Z'
+updatedAt: '2026-10-06T23:09:13.473Z'

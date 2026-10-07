@@ -337,6 +337,9 @@ methods:
       and implementation routers, retired invokedBy kinds, authored export types, in-process Custom
       endpoints, retired lint allows). Without apply nothing is written.
     signatureFrom: reachability_migration.migrate
+  - name: renameField
+    description: 'Forward to core_orchestrator.renameField: rename a field of a type and every reference to it'
+    signatureFrom: core_orchestrator.renameField
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-06T13:07:39.340Z'
+updatedAt: '2026-10-06T23:07:21.108Z'

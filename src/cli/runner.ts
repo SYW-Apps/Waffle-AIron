@@ -36,7 +36,7 @@ import {
   lockAttached,
   storedCredentialFor,
 } from '../commands/remote.js';
-import { composeAgentBrief, loadProjectConfig, resolveAgentTopology } from '../commands/adapters/core.js';
+import { composeAgentBrief, loadProjectConfig, resolveAgentTopology, setNetwork } from '../commands/adapters/core.js';
 import { summarize } from '../models/execution.js';
 import { NetworkOptionsError } from '../utils/errors.js';
 import type { NetworkCommandOptions } from '../commands/network.js';
@@ -47,6 +47,7 @@ import {
   check as networkCheck,
   why as networkWhy,
   type FlowCheckReport,
+  type FlowExplanation,
   type NetworkDocument,
   type NetworkOutputFormat,
   type ObservedFlow,
@@ -140,13 +141,9 @@ async function runLock(options: LockOptions): Promise<void> {
   for (const [alias, pin] of Object.entries(record.members ?? {})) {
     logger.info(`  member ${alias}: ${pin.state}${pin.subject ? ` (${pin.subject.slice(0, 26)}…)` : ''}`);
   }
-  // Printed plainly, on its own line, so an approval taken over failing code is
-  // never mistaken for clean code.
-  const code = record.code;
-  logger.info(code
-    ? `code: ${code.errors} error(s), ${code.warnings} warning(s) recorded beside the claim `
-      + `(analyzer ${code.analyzer.validatorVersion}, grade ${code.analyzer.grade}) — CI enforces them, not the lock`
-    : 'code: no code analysis recorded');
+  // The code half was printed once, plainly, in the summary the lock showed
+  // before it wrote (so an approval taken over failing code is never mistaken
+  // for clean code); printing it again here only doubled the line.
   logger.info(
     'Live agent briefs (sdd_get_agent_brief / wairon-agent://) ' +
       'are composed per call and already current — no session restart needed.',
@@ -459,13 +456,30 @@ function emitNetworkDocument(doc: NetworkDocument, out: string | undefined): voi
   logger.success(`Wrote ${doc.format} to ${out}`);
 }
 
+/**
+ * Print the gate findings a derived output was judged against, on stderr so a
+ * piped document stays clean: what refused rows (and so is never allowed) and
+ * what marked them.
+ */
+function reportGateFindings(doc: NetworkDocument, what: string): void {
+  if (doc.gateFindings.length === 0) return;
+  if (doc.refused) {
+    logger.error(`The design fails the gate: ${what}. Run \`wairon validate\` and fix the design first.`);
+  }
+  for (const line of doc.gateFindings) {
+    if (line.includes(' (error): ')) logger.error(`  ${line}`);
+    else logger.warn(`  ${line}`);
+  }
+}
+
 /** cli_runner.runNetworkFlows — print (or write) the allowed-flows matrix. */
 export async function runNetworkFlows(options: NetworkCommandOptions): Promise<void> {
   assertProjectInitialized();
   // Step 1: the matrix in the asked format, the family unless --no-recursive.
   const doc = networkFlows(networkSelection(options), networkFormat(options.format, 'json', ['json', 'csv', 'markdown']));
-  // Step 2.
+  // Step 2: printed, then every gate finding that refused or marked a row.
   emitNetworkDocument(doc, options.out);
+  reportGateFindings(doc, 'the rows marked REFUSED are refused by the gate, not allowed');
 }
 
 /** cli_runner.runNetworkPolicy — generate network policy from the matrix and the team's bindings. */
@@ -486,6 +500,9 @@ export async function runNetworkPolicy(options: NetworkCommandOptions): Promise<
       ? 'unbound: outside — the bindings name no `outside:` blocks, so nothing from outside is admitted'
       : `unbound: ${name} — selected by the placeholder label wairon.dev/workload, which matches no pod until it is bound`);
   }
+  // A design that fails the gate has no policy to commit: the refused flows are left out, and the run fails.
+  reportGateFindings(doc, 'the flows it refuses were left out of the policy (the file\'s head names them)');
+  if (doc.refused) process.exitCode = 1;
 }
 
 /** cli_runner.runNetworkDiagram — print (or write) the network picture as Mermaid. */
@@ -503,10 +520,16 @@ function observedLine(o: ObservedFlow): string {
   return `${o.source} -> ${o.destination}${o.transport ? ` [${o.transport}]` : ''}${l7}${o.count !== undefined ? ` (seen ${o.count}x)` : ''}`;
 }
 
-/** The check report, unexpected first, then unknown verbs, then unexercised. */
+/** The check report: the gate's findings, then unexpected, disallowed, unknown verbs, unexercised. */
 function printFlowCheck(report: FlowCheckReport): void {
+  if (report.gateFindings.length > 0) {
+    logger.header(`Gate findings (${report.gateFindings.length}) — the design was judged first; a flow an error sits on allows nothing`);
+    for (const line of report.gateFindings) console.log(`  ${line}`);
+  }
   logger.header(`Unexpected flows (${report.unexpected.length}) — observed, but the design allows none`);
   for (const o of report.unexpected) console.log(`  ${observedLine(o)}`);
+  logger.header(`Disallowed flows (${report.disallowed.length}) — a verb the design declares, but not allowed from this source (or refused by the gate)`);
+  for (const o of report.disallowed) console.log(`  ${observedLine(o)}`);
   logger.header(`Unknown verbs (${report.unknownVerbs.length}) — an allowed pair, but no declared verb has this method and path`);
   for (const o of report.unknownVerbs) console.log(`  ${observedLine(o)}`);
   logger.header(`Unexercised flows (${report.unexercised.length}) — allowed, never observed in the window`);
@@ -530,7 +553,7 @@ export async function runNetworkCheck(options: NetworkCommandOptions): Promise<v
   if (options.format === 'json') process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   else printFlowCheck(report);
   // Step 4: an unexercised flow is a review item, not a failure.
-  if (report.unexpected.length > 0 || report.unknownVerbs.length > 0) process.exitCode = 1;
+  if (report.unexpected.length > 0 || report.disallowed.length > 0 || report.unknownVerbs.length > 0) process.exitCode = 1;
 }
 
 /** cli_runner.runNetworkWhy — why one party may reach another; non-zero when nothing allows it. */
@@ -543,8 +566,50 @@ export async function runNetworkWhy(options: NetworkCommandOptions): Promise<voi
   if (options.format === 'json') {
     process.stdout.write(JSON.stringify(explanation, null, 2) + '\n');
   } else {
-    logger.header(explanation.allowed ? `${options.from} may reach ${options.to}` : `${options.from} may NOT reach ${options.to}`);
+    logger.header(whyHeading(explanation, options.from, options.to));
     for (const line of explanation.chain) console.log(`  ${line}`);
   }
-  if (!explanation.allowed) process.exitCode = 1;
+  // In-process is an answer, not a refusal; every other "not allowed" fails.
+  if (!explanation.allowed && !explanation.inProcess) process.exitCode = 1;
+}
+
+/** The one-line verdict `network why` prints, said as what it is. */
+function whyHeading(explanation: FlowExplanation, from: string, to: string): string {
+  if (explanation.allowed) return `${from} may reach ${to}`;
+  if (explanation.unknown?.length) return `unknown party: ${explanation.unknown.map((n) => `"${n}"`).join(', ')}`;
+  if (explanation.refusedBy?.length) return `${from} may NOT reach ${to}: the design names the flow, but the gate refuses it`;
+  if (explanation.inProcess) return `${to} is reached in-process: never a network flow`;
+  return `${from} may NOT reach ${to}`;
+}
+
+/**
+ * cli_runner.runNetworkDeclare — `wairon network declare [--description]`:
+ * declare this project's network in .wai/project.yaml, no hand edit.
+ */
+export async function runNetworkDeclare(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: through the core adapter.
+  const wrote = setNetwork(options.description !== undefined ? { description: options.description } : {});
+  // Step 2: what was written, and what it changes.
+  if (!wrote) {
+    logger.info('This project already declares that network: nothing was written.');
+    return;
+  }
+  logger.success(`Declared this project's network in .wai/project.yaml${options.description ? ` ("${options.description}")` : ''}: it and every member below it form one isolated network boundary.`);
+  logger.info('The network rules now judge the design (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...): run `wairon validate`. The declaration is part of the gate identity — re-lock (`wairon lock`) once it validates.');
+}
+
+/** cli_runner.runNetworkUndeclare — `wairon network undeclare`: remove this project's network declaration. */
+export async function runNetworkUndeclare(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  void options; // undeclare takes no flags of its own
+  // Step 1: through the core adapter.
+  const wrote = setNetwork(null);
+  // Step 2.
+  if (!wrote) {
+    logger.info('This project declares no network: nothing was removed.');
+    return;
+  }
+  logger.success('Removed this project\'s network declaration from .wai/project.yaml.');
+  logger.info('The network rules no longer judge this boundary: run `wairon validate`, then re-lock (`wairon lock`).');
 }

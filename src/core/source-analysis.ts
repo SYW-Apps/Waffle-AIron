@@ -317,11 +317,17 @@ function resolveTypeScript(projectRoot: string): TsModule | null {
   }
   let ts: TsModule | null = null;
   // The analyzed project's own compiler first, wairon's installation second.
+  // A `typescript` that loads but carries no JavaScript compiler API (the
+  // native TypeScript 7 compiler ships none) is passed over like an absent
+  // one, so a project on TypeScript 7 still reads at exact grade wherever a
+  // usable compiler can be found.
   const bases = [path.join(projectRoot, 'package.json'), __filename];
   for (const base of bases) {
     try {
       const req = createRequire(base);
-      ts = req('typescript') as TsModule;
+      const candidate = req('typescript') as TsModule;
+      if (typeof candidate?.createSourceFile !== 'function') continue;
+      ts = candidate;
       break;
     } catch {
       // keep trying — absence is a supported state, not an error

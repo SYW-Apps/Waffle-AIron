@@ -1,13 +1,15 @@
 // ---------------------------------------------------------------------------
-// mcp_network_orchestrator — the read-only network tools' workflows: the
-// allowed-flows matrix (optionally filtered to the flows into one project,
-// Portal or verb) and the explanation of one flow, both through the network
-// client adapter. The tool handlers in server.ts answer them as text and
+// mcp_network_orchestrator — the network tools' workflows: the allowed-flows
+// matrix (optionally filtered to the flows into one project, Portal or verb)
+// and the explanation of one flow, both read through the network client
+// adapter, and the one write — the project's network declaration, through the
+// core client adapter. The tool handlers in server.ts answer them as text and
 // structured content. The selection is the request's: the family at a
 // project that declares members, within the binding's reach.
 // ---------------------------------------------------------------------------
 
 import { flows as matrix, why } from './adapters/network.js';
+import { setNetwork } from './adapters/core.js';
 import type { FlowExplanation, NetworkFlow } from './adapters/network.js';
 
 /** Whether a flow lands in the named project, Portal or portal.verb. */
@@ -30,4 +32,16 @@ export function flows(to: string | null): NetworkFlow[] {
 export function explain(from: string, to: string): FlowExplanation {
   // Steps 1-2.
   return why({}, from, to);
+}
+
+/**
+ * imcp_network_orchestrator.declare — the sdd_set_network workflow: declare
+ * (with its description) or remove the bound project's network. Returns
+ * whether it wrote.
+ */
+export function declare(declared: boolean, description: string | null): boolean {
+  // Step 1: the declaration, or none.
+  const network = declared ? (description ? { description } : {}) : null;
+  // Steps 2-3: written through the core client adapter.
+  return setNetwork(network);
 }

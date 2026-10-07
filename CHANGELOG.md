@@ -628,6 +628,91 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 - A custom theme builder.
 - `WAIRON_AUDIT_POLICY` and `WAIRON_QUOTA_POLICY` set the audit and quota policies.
 
+**Approval and upgrades.**
+
+- A spec's `status` (draft, design, complete) is readiness, not design: it is left
+  out of the approval, so promoting a spec after the lock never reopens it. A lock
+  taken while status was still part of the approval keeps passing when only a
+  status moved, and `wairon doctor --fix` carries it into the current reading.
+- `wairon doctor --fix` re-expresses an older lock record before any repair touches
+  a spec, so an unchanged tree is carried into the current format even when the
+  rules it was judged under moved. A lock whose specs are unchanged but that no
+  longer matches now says why: the gate moved (a newer release's rules, the rule
+  tuning, composition, network, consumed contracts or a member's approval), never
+  the design.
+
+**Code conformance.**
+
+- A call through an injected collaborator whose type comes from a component the
+  caller never declared is an undeclared dependency even when the type is imported
+  type-only. A Portal calling a write or lifecycle method of a data component that
+  way is `PORTAL_WRITE_SHORTCUT_IN_CODE`, the code twin of `PORTAL_WRITE_SHORTCUT`.
+- Importing a technology's package (one of its declared tokens) from a component
+  that does not bind that technology is `TECH_LEAKAGE_IN_CODE`.
+- An Adapter's call step to a verb of a Portal on an out-of-process transport is
+  the link the design models: it is no longer resolved to the remote file, so it no
+  longer reads as an unresolved call. The call to the Adapter is still checked.
+- `CONFORMANCE_DEGRADED` says what is missing: no TypeScript installed, or one that
+  ships no JavaScript compiler API (TypeScript 7). A project's TypeScript 7 is
+  passed over for a usable compiler where one can be found.
+
+**Authoring.**
+
+- `wairon type rename-field` and `sdd_rename_field` rename a type's field and
+  respell its references. The old name stays on the field (`previousNames`) and
+  shows as `formerly` in the design export.
+- A key a spec's schema does not know (for example `exports:` in the L0, whose
+  export table is `publicInterfaces`) is reported as `UNKNOWN_SPEC_KEY`, and an
+  unknown setting in `project.yaml` as `UNKNOWN_CONFIG_KEY`. The docs show how to
+  author the L0 export table.
+- The architect skill and guide aim for the smallest sound design: one standalone
+  Store for simple state, and the Repository pattern only for real lookup needs.
+
+**Briefs.**
+
+- Rust and Python briefs carry a type mapping table, marked as mapping only (no
+  analyzer reads those languages yet). A design with no code yet takes its language
+  from `targetLanguage`.
+- A consumer's brief lists the externals it uses (names, transport, abi) and adds
+  the pinned snapshot to its read paths.
+- A subsystem owner's fence includes the project's shared setup files (manifest,
+  compiler settings, crate or package root, system-level type files).
+
+**Externals.**
+
+- `wairon externals use` changes an external's imports, `wairon externals remove`
+  removes a declaration with its pin, and `wairon externals consumers` lists the
+  family projects that consume this one. MCP: `sdd_update_external` and
+  `sdd_remove_external`.
+- A re-pin refreshes every fact the snapshot carries (abi, transport, role,
+  renames), and a stale snapshot reads as drifted, never ok.
+- Export audiences: a name exported to a narrower audience than the consumer's is
+  refused with both audiences named; a `department` export is noted
+  (`EXPORT_AUDIENCE_NARROW`), and a re-export cannot widen an audience.
+- Implementing another project's trait: the producer's bare type names and
+  `alias::name` compare as one type, and a cross-project `signatureFrom` resolves
+  from the pin.
+
+**Networks.**
+
+- The network commands judge the design through the validator first. A flow a gate
+  error sits on is refused: marked in the matrix (a `gate` column), left out of
+  every policy (and `policy` exits 1), explained by `why`, and filed as disallowed
+  by `check`. `why` also says when a callee is reached in-process (never a network
+  flow) and when a name is unknown.
+- Bindings include the Portal's `basePath`, so live checks match real paths, and
+  `check` reports disallowed flows apart from unknown ones.
+- A caller is named by its workload (its subsystem) across a project boundary.
+- An Adapter may state its transport, which must match its target Portal's
+  (`ADAPTER_TRANSPORT_MISMATCH`).
+- `wairon network declare | undeclare` and `sdd_set_network` write the network
+  declaration.
+- Migrations: promoting a member (or externalizing a subsystem into a project)
+  declares an entry on each verb the parent calls and names the topics that cross
+  the new boundary, which the family run pairs; externalizing re-roots moved types'
+  source paths; demoting removes the setup a promote wrote. `sdd_update_spec`
+  refuses a member project's spec from the root and names the member's folder.
+
 **CLI.**
 
 - `wairon diagram` draws relation health (`--no-health` skips it).
@@ -637,6 +722,14 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 
 ### Fixes
 
+- **Wording.** Plain `validate` ends with "Passed with N warning(s)" when it printed
+  warnings, and says there is nothing to check on an empty tree. `status` marks a
+  file not written yet as planned, and its percentages read files the same way the
+  lines do. `INVOKED_BY_UNDESCRIBED` states its threshold. `lock` prints the code
+  line once. `sdd_get_status` with no project says that no project binds the
+  folder.
+- **CLI.** `-y` is accepted wherever `--yes` is. `init` takes the project name from
+  `package.json` (or `Cargo.toml`) when there is one.
 - **Reachability.** No Portal is exempt from the unused findings by a field the
   authoring tool wrote for it. A library no longer needs invented `Custom`
   endpoint addresses to satisfy `MISSING_ENDPOINT`, and a library's consumers no

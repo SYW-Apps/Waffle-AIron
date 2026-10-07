@@ -356,6 +356,30 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: resolveExternalCandidate
+    description: >-
+      One external declaration the bound project does not hold yet, bound to its producer exactly as
+      the written one will be (see external_producers.resolveCandidate), so a declaration is checked
+      against its producer before anything is written. Read-only; the caller's binding is restored
+      before it answers.
+    signature: 'resolveExternalCandidate(alias: string, declaration: ExternalDeclaration): ExternalBinding'
+    returns: ExternalBinding
+    params:
+      - name: alias
+        type: string
+        description: The alias the declaration would be written under
+      - name: declaration
+        type: ExternalDeclaration
+        description: The normalized declaration
+  - name: listExternalConsumers
+    description: >-
+      The family projects in reach that consume the bound project, each with the alias and section
+      it declares it under and the public names its specs use (see
+      external_producers.listConsumers). Read-only; the caller's binding is restored before it
+      answers.
+    signature: 'listExternalConsumers(): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T18:01:23.861Z'
+updatedAt: '2026-10-06T23:04:45.835Z'

@@ -145,6 +145,12 @@ export function resolveSignatures(
 // each bound to its producer — a dispatch to the external-producers workflow.
 export { resolveDeclared as resolveExternals } from './external-producers.js';
 
+// spec_tree_portal resolveExternalCandidate / listExternalConsumers: one
+// declaration not yet written bound as the written one will be, and the family
+// projects in reach that consume the bound project — dispatches to the
+// external-producers workflow.
+export { resolveCandidate as resolveExternalCandidate, listConsumers as listExternalConsumers } from './external-producers.js';
+
 // spec_tree_portal excerptParent (stage 8): with a part's root bound, the
 // excerpt of its parent it can be judged against alone — a dispatch to the
 // part-context read.
@@ -201,6 +207,10 @@ export { computeStateId, computeOwnStateId } from './statehash.js';
 // from lock format 3 on. computeOwnStateId above stays as the content reading
 // a format-2 lock was taken in.
 export { computeOwnDesignStateId as computeOwnDesignId } from './statehash.js';
+// approval_portal computeOwnDesignIdAsRecorded — the own design identity in the
+// earlier design reading (status still in the view), statuses put back as
+// approved: how a lock taken in that reading is judged as it was taken.
+export { computeOwnDesignStateIdAsRecorded as computeOwnDesignIdAsRecorded } from './statehash.js';
 export type { StateId } from './statehash.js';
 
 // The lock record itself (approval_portal readLockRecord / writeLockRecord).
@@ -384,7 +394,8 @@ export function removeDomain(id: string): void {
 // (spec_maintenance_portal renameComponent / renameMethod / renameType / retireSpecialists) — pure 1:1
 // forwards to the core orchestrator, stated explicitly for the same anchored
 // conformance check.
-export { renameComponent, renameMethod, renameType } from './provision.js';
+export { renameComponent, renameMethod, renameType, renameField } from './provision.js';
+export type { FieldRename } from './provision.js';
 export type { ComponentRename, MethodRename, TypeRename } from './provision.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
@@ -440,6 +451,9 @@ export {
   // reading when its own identity, recomputed, proves the design unchanged; a
   // read, the caller writes the answer through writeLockRecord.
   reexpress,
+  // approval_portal approvedStatuses — each own spec's status as a
+  // design-reading record approved it, for recomputing an earlier-reading lock.
+  approvedStatuses,
 } from './approval.js';
 export type { ApprovalDiff, ApprovalVerdict } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved
@@ -475,6 +489,7 @@ export {
   markSelectionsBundled,
   setProjectType,
   describeProject,
+  setNetwork,
   recordProfileSelection,
   setExecutionTier,
   // project_config_portal setId / declareExternal: the deliberate identity and

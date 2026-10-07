@@ -278,6 +278,20 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: retiredReachFacts
+  - name: resolveExternalCandidate
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow, passing the alias and the declaration through
+        type: call
+        targetComponent: external_producers
+        targetMethod: resolveCandidate
+  - name: listExternalConsumers
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow
+        type: call
+        targetComponent: external_producers
+        targetMethod: listConsumers
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T18:01:25.148Z'
+updatedAt: '2026-10-06T23:04:47.024Z'

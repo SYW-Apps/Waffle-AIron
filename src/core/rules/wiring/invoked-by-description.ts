@@ -10,6 +10,12 @@ import { passesIntentFloor } from '../../../models/index.js';
  * A prose check over the declaration itself: it neither walks the narrative
  * graph nor reads what the declaration makes reachable.
  */
+/** The intent floor said as a reader can check it: the length it asks for, and the length the prose has. */
+function floorNote(caller: string | undefined): string {
+  const length = (caller ?? '').trim().length;
+  return ` (the floor: at least 40 characters once trimmed, and more than the method's own name — this caller has ${length})`;
+}
+
 export const invokedByDescriptionRule: SddRule = {
   name: 'invoked-by-description',
   judges: 'design',
@@ -32,7 +38,7 @@ export const invokedByDescriptionRule: SddRule = {
         ctx.addIssue(
           'warning',
           'INVOKED_BY_UNDESCRIBED',
-          `Method "${m.name}" on component "${intf.component}" declares invokedBy (${m.invokedBy.kind}) but its "caller" prose is missing or placeholder-thin — state WHO invokes it and when, so the entrypoint claim stays reviewable.`,
+          `Method "${m.name}" on component "${intf.component}" declares invokedBy (${m.invokedBy.kind}) but its "caller" prose is missing or placeholder-thin${floorNote(m.invokedBy.caller)} — state WHO invokes it and when, so the entrypoint claim stays reviewable.`,
           intf.id,
           isDraftCtx,
         );
@@ -45,7 +51,7 @@ export const invokedByDescriptionRule: SddRule = {
       ctx.addIssue(
         'warning',
         'INVOKED_BY_UNDESCRIBED',
-        `Portal "${comp.id}" declares invokedBy (${comp.invokedBy.kind}) for every verb, but its "caller" prose is missing or placeholder-thin — state WHO reaches the Portal and how, so the entry claim stays reviewable.`,
+        `Portal "${comp.id}" declares invokedBy (${comp.invokedBy.kind}) for every verb, but its "caller" prose is missing or placeholder-thin${floorNote(comp.invokedBy.caller)} — state WHO reaches the Portal and how, so the entry claim stays reviewable.`,
         comp.id,
         ctx.isComponentDraft(comp.id),
       );

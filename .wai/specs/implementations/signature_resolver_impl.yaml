@@ -24,13 +24,15 @@ methods:
         description: >-
           Read the value both ways: as a method source — split at the last dot, the head a component
           key in the owning interface's namespace (local first, or an `alias::` key the scan already
-          bound) and the tail a method on any of its contracts — and as a type reference matched
-          against the types as every type reference is matched (type_spec.matchesRef), only a type
-          of kind signature counting; a value carrying `::` is first looked up among the references
-          handed in (the one recorded for the owning interface at a type position with this text),
-          and when the scan bound it, the type reading lands on that bound key — so an alias that
-          differs from the producer's project id resolves as every other `alias::` type reference
-          does
+          bound) and the tail a method on any of its contracts; when no component answers, the
+          export methods handed in, keyed by the owning interface's namespace and the value
+          (`alias::name.method`: another project's export entry, its types already spelled as the
+          referrer spells them), form `export` — and as a type reference matched against the types
+          as every type reference is matched (type_spec.matchesRef), only a type of kind signature
+          counting; a value carrying `::` is first looked up among the references handed in (the one
+          recorded for the owning interface at a type position with this text), and when the scan
+          bound it, the type reading lands on that bound key — so an alias that differs from the
+          producer's project id resolves as every other `alias::` type reference does
         type: local
       - stepNumber: 4
         description: Does exactly one reading resolve?
@@ -93,4 +95,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-03T19:32:24.468Z'
-updatedAt: '2026-10-03T20:54:42.201Z'
+updatedAt: '2026-10-06T23:08:38.449Z'

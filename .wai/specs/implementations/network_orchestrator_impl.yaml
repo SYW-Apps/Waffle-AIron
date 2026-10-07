@@ -8,12 +8,12 @@ methods:
   - name: flows
     narrative:
       - stepNumber: 1
-        description: Read the reach model of the selection
+        description: 'Read the reach model of the selection, judged: its gate findings ride on it'
         type: call
         targetComponent: network_validator_adapter
         targetMethod: reachModel
       - stepNumber: 2
-        description: Derive the matrix
+        description: Derive the matrix, each flow marked with the findings that sit on it
         type: call
         targetComponent: flow_matrix_projector
         targetMethod: project
@@ -34,12 +34,12 @@ methods:
         targetComponent: network_file_adapter
         targetMethod: readBindings
       - stepNumber: 2
-        description: Read the reach model of the selection
+        description: 'Read the reach model of the selection, judged: its gate findings ride on it'
         type: call
         targetComponent: network_validator_adapter
         targetMethod: reachModel
       - stepNumber: 3
-        description: Derive the matrix
+        description: Derive the matrix, each flow marked with the findings that sit on it
         type: call
         targetComponent: flow_matrix_projector
         targetMethod: project
@@ -117,7 +117,7 @@ methods:
         targetComponent: network_file_adapter
         targetMethod: readBindings
       - stepNumber: 4
-        description: Read the reach model of the selection
+        description: 'Read the reach model of the selection, judged: its gate findings ride on it'
         type: call
         targetComponent: network_validator_adapter
         targetMethod: reachModel
@@ -127,7 +127,9 @@ methods:
         targetComponent: flow_matrix_projector
         targetMethod: project
       - stepNumber: 6
-        description: Judge the observed flows against it
+        description: >-
+          Judge the observed flows against it and the model (the verbs each destination declares,
+          and what the gate refused)
         type: call
         targetComponent: flow_check_arbiter
         targetMethod: check
@@ -138,7 +140,7 @@ methods:
   - name: why
     narrative:
       - stepNumber: 1
-        description: Read the reach model of the selection
+        description: 'Read the reach model of the selection, judged: its gate findings ride on it'
         type: call
         targetComponent: network_validator_adapter
         targetMethod: reachModel
@@ -148,7 +150,9 @@ methods:
         targetComponent: flow_matrix_projector
         targetMethod: project
       - stepNumber: 3
-        description: Explain the asked pair from it
+        description: >-
+          Explain the asked pair from the matrix and the model (whose placements and verbs name the
+          parties)
         type: call
         targetComponent: flow_matrix_projector
         targetMethod: explain
@@ -158,4 +162,4 @@ methods:
         outcome: FlowExplanation
 status: complete
 createdAt: '2026-10-06T13:11:35.270Z'
-updatedAt: '2026-10-06T19:44:43.934Z'
+updatedAt: '2026-10-06T23:04:53.899Z'

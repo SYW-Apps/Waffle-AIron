@@ -312,9 +312,12 @@ methods:
         description: >-
           The design, or something it was approved under, moved past the approval: refuse at every
           strictness, naming what moved — the count of own spec files changed, each direct member
-          whose pin moved or that is no longer approved, and, when neither moved, that the doctrine,
-          the declared inputs or `composition` did — and the remedy: re-run the lock and commit the
-          updated record.
+          whose pin moved or that is no longer approved, each member added or removed since the
+          approval — and a member whose alias was renamed (a current alias the record does not hold,
+          carrying the project id, or a former id, of an alias the record holds that is gone) named
+          as renamed from its old alias, never as one added and one removed — and, when none of
+          those moved, that the doctrine, the declared inputs or `composition` did; and the remedy:
+          re-run the lock and commit the updated record.
         type: return
         outcome: stale
       - stepNumber: 21
@@ -368,4 +371,4 @@ methods:
     symbol: reexpressLock
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-06T19:12:43.224Z'
+updatedAt: '2026-10-06T23:09:35.168Z'

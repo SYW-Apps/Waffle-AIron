@@ -237,7 +237,7 @@ updatedAt: '2026-06-10T22:00:00Z'
       // Proof (revert): removing the method-listing loop in getStatusReport
       // makes this assertion fail because the method line is never printed.
       expect(report).toContain('method execute -> src/execute.ts');
-      expect(report).not.toContain('method execute -> src/execute.ts (File Missing!)');
+      expect(report).not.toContain('method execute -> src/execute.ts (planned — not written yet)');
     } finally {
       proj.cleanup();
     }
@@ -314,9 +314,9 @@ updatedAt: '2026-06-10T22:00:00Z'
     try {
       await runStatus();
       const loggedLines = logSpy.mock.calls.map(call => call.join(' ')).join('\n');
-      // Proof (revert): dropping the ` (File Missing!)` suffix on a missing
+      // Proof (revert): dropping the ` (planned — not written yet)` suffix on a missing
       // method file makes this assertion fail.
-      expect(loggedLines).toContain('method execute -> src/missing-execute.ts (File Missing!)');
+      expect(loggedLines).toContain('method execute -> src/missing-execute.ts (planned — not written yet)');
     } finally {
       logSpy.mockRestore();
       proj.cleanup();
@@ -760,7 +760,7 @@ const PLAIN_FIXTURE_REPORT = [
   '│   │   └── Implementation: im1-full -> src/one.ts',
   '│   ├── [Component: Store] c2-gone (50%)',
   '│   │   ├── Interface: ic2-gone [draft] (1 methods)',
-  '│   │   └── Implementation: im2-gone -> src/gone.ts (File Missing!)',
+  '│   │   └── Implementation: im2-gone -> src/gone.ts (planned — not written yet)',
   '│   ├── [Component: Adapter] c3-bare [draft] (20%)',
   '│   │   └── Interface: Missing (-30%)',
   '│   │   └── Implementation: Missing (-30%)',
@@ -771,7 +771,7 @@ const PLAIN_FIXTURE_REPORT = [
   '│       ├── Interface: ic5-methods (2 methods)',
   '│       └── Implementation: im5-methods',
   '│           ├── method alpha -> src/m-here.ts',
-  '│           └── method beta -> src/m-gone.ts (File Missing!)',
+  '│           └── method beta -> src/m-gone.ts (planned — not written yet)',
   '└── [Subsystem] sub-b [draft] (0%)',
   '',
 ].join('\n');
@@ -834,12 +834,12 @@ describe('the report renders once and the caller decides how it looks', () => {
       // line covering the whole run of it rather than one per box character.
       expect(report).toContain('«s:├── »«l/subsystem:[Subsystem] sub-a»');
       expect(report).toContain('«s:│   ├── »«l/component:[Component: Orchestrator] c1-full»');
-      expect(report).toContain('«s:│           └── »«m:method beta -> src/m-gone.ts (File Missing!)»');
+      expect(report).toContain('«s:│           └── »«d:method beta -> src/m-gone.ts (planned — not written yet)»');
 
       // A source file that is there is `present`; one a spec names and does not
       // have is `missing`, which is also what an unwritten layer is.
       expect(report).toContain('«p: -> src/one.ts»');
-      expect(report).toContain('«m: -> src/gone.ts (File Missing!)»');
+      expect(report).toContain('«d: -> src/gone.ts (planned — not written yet)»');
       expect(report).toContain('«p:method alpha -> src/m-here.ts»');
       expect(report).toContain('«m:Interface: Missing (-30%)»');
       expect(report).toContain('«m:Implementation: Missing (-30%)»');
@@ -918,11 +918,11 @@ describe('wairon status keeps the colours it has always had', () => {
         `${gray('│   │   └── ')}${colour(32, 'Implementation: im1-full')}${colour(32, ' -> src/one.ts')}`,
       );
       // A file the spec names and the tree does not have is red.
-      expect(printed).toContain(colour(31, ' -> src/gone.ts (File Missing!)'));
+      expect(printed).toContain(colour(33, ' -> src/gone.ts (planned — not written yet)'));
       expect(printed).toContain(colour(31, 'Interface: Missing (-30%)'));
       // A missing method file is red; one that is there is green.
       expect(printed).toContain(colour(32, 'method alpha -> src/m-here.ts'));
-      expect(printed).toContain(colour(31, 'method beta -> src/m-gone.ts (File Missing!)'));
+      expect(printed).toContain(colour(33, 'method beta -> src/m-gone.ts (planned — not written yet)'));
       // "no source path" recedes into gray rather than reading as an error.
       expect(printed).toContain(`${colour(32, 'Implementation: im4-nopath')}${gray(' (No source path)')}`);
       // A score of 100 is green.
@@ -959,7 +959,7 @@ describe('wairon status keeps the colours it has always had', () => {
 // ---------------------------------------------------------------------------
 
 /** The sentence the report answers when there is no L0 system, in one place. */
-const NO_SYSTEM_SENTENCE = 'L0 System specification (system.yaml) is missing.';
+const NO_SYSTEM_SENTENCE = 'This project has no L0 System spec yet (.wai/specs/.index.yaml): its design has not been started.';
 
 /** A minimal L0 so the parse-failure case is reached on its own merits. */
 const MINIMAL_SYSTEM = `

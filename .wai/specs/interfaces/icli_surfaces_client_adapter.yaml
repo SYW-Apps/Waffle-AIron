@@ -80,6 +80,37 @@ methods:
         description: >-
           The alias, the location, and the optional producer id, ref, dir, use, description, pin and
           dryRun
+  - name: removeExternal
+    description: >-
+      Forward to surface_portal.removeExternal: remove one external and its pin (`wairon externals
+      remove`).
+    signature: 'removeExternal(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+  - name: updateExternalUse
+    description: >-
+      Forward to surface_portal.updateExternalUse: add and remove `use` imports of one external
+      (`wairon externals use`).
+    signature: 'updateExternalUse(request: ExternalUseRequest): ExternalUseChange'
+    returns: ExternalUseChange
+    params:
+      - name: request
+        type: ExternalUseRequest
+        description: The alias, the names to add and remove, and dryRun
+  - name: listConsumers
+    description: >-
+      Forward to surface_portal.listConsumers: the family projects in reach that consume this
+      project (`wairon externals consumers`).
+    signature: 'listConsumers(): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params: []
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-10-06T10:18:11.010Z'
+updatedAt: '2026-10-06T23:06:33.042Z'

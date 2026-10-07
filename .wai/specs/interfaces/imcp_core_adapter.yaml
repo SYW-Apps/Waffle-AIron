@@ -230,6 +230,29 @@ methods:
       - name: newId
         type: string
         description: Its new id
+  - name: setNetwork
+    description: >-
+      Calls setNetwork on the core portal: declare or remove the bound project's network (the
+      sdd_set_network tool).
+    signatureFrom: project_config_portal.setNetwork
+    guarantees:
+      - idempotent
+  - name: renameField
+    description: >-
+      Forward to spec_maintenance_portal.renameField: rename a field of a type and every reference
+      to it
+    signature: 'renameField(typeId: string, field: string, newName: string): FieldRename'
+    returns: FieldRename
+    params:
+      - name: typeId
+        type: string
+        description: The type whose field is renamed
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T18:55:14.453Z'
+updatedAt: '2026-10-06T23:07:24.173Z'

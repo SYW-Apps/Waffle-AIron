@@ -95,60 +95,6 @@ methods:
           note: The resolved bearer credential; gated on project:write over the bound project.
 lint:
   allow:
-    - code: CALL_STEP_UNREALIZED
-      at: exportRemoteTree
-      covers:
-        - 1:host_http_portal.handleMcpRequest
-      reason: >-
-        Step 1 is an HTTP request to a REMOTE deployment (fetch POST <instance>/mcp), not an
-        in-process call: the call-graph analyzer matches callees by name within one build, so a hop
-        across a process boundary can never be realized as a named callee — by construction, not by
-        omission. The edge is real: endpoint, method and payload are exactly host_http_portal's
-        declared /mcp contract, and tests/commands/remote.test.ts exercises it against a real
-        server.
-    - code: CALL_STEP_UNREALIZED
-      at: importRemoteTree
-      covers:
-        - 1:host_http_portal.handleMcpRequest
-      reason: >-
-        Same network hop as exportRemoteTree: step 1 POSTs the import tool call to <instance>/mcp
-        over HTTP, which a within-build call-graph analyzer cannot follow. The /mcp contract is the
-        portal's own, exercised end to end by tests/commands/remote.test.ts.
-    - code: CALL_STEP_UNREALIZED
-      at: validateRemoteTree
-      covers:
-        - 1:host_http_portal.handleMcpRequest
-      reason: >-
-        Same network hop as exportRemoteTree: step 1 POSTs the validate tool call to <instance>/mcp
-        over HTTP, which a within-build call-graph analyzer cannot follow. The /mcp contract is the
-        portal's own, exercised end to end by tests/commands/remote.test.ts.
-    - code: CALL_STEP_UNREALIZED
-      at: getRemoteStatus
-      covers:
-        - 1:host_http_portal.handleMcpRequest
-      reason: >-
-        Same network hop as exportRemoteTree: step 1 POSTs the status tool call to <instance>/mcp
-        over HTTP, which a within-build call-graph analyzer cannot follow. The /mcp contract is the
-        portal's own, exercised end to end by tests/commands/remote.test.ts.
-    - code: CALL_STEP_UNREALIZED
-      at: lockRemoteProject
-      covers:
-        - 1:host_http_portal.handleMcpRequest
-      reason: >-
-        Same network hop as exportRemoteTree: step 1 POSTs the lock tool call to <instance>/mcp over
-        HTTP, which a within-build call-graph analyzer cannot follow. The /mcp contract is the
-        portal's own, exercised end to end by tests/commands/remote.test.ts.
-    - code: CALL_STEP_UNREALIZED
-      at: initializeRemoteProject
-      covers:
-        - 1:web_portal.projectCreate
-      reason: >-
-        Same network hop, the OTHER plane — and the site the old spec-wide allow silenced while
-        naming only handleMcpRequest. Step 1 POSTs to <instance>/web/projects, not /mcp: /mcp binds
-        one project and resolves that binding before dispatching any tool, so a project that does
-        not exist yet can never be addressed there, while the web plane's project route is
-        instance-scoped and takes the same bearer credential. An HTTP request is not a named callee
-        in this build, by construction.
     - code: UNREALIZED_DEPENDENCY
       at: cli_remote_adapter -> host_http_portal
       reason: >-
@@ -166,4 +112,4 @@ lint:
         resolves import graphs within a single build.
 status: complete
 createdAt: '2026-08-12T18:32:35.043Z'
-updatedAt: '2026-09-29T13:55:00.785Z'
+updatedAt: '2026-10-07T00:09:12.089Z'

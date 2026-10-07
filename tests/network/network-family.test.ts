@@ -71,9 +71,9 @@ describe('network_portal.flows (sim:network_portal.flows)', () => {
 
   it('answers CSV and Markdown with every fact of every flow', () => {
     const csv = flows({}, 'csv').content.trim().split('\n');
-    expect(csv[0]).toBe('"from","to","transport","binding","crosses","via","evidence"');
+    expect(csv[0]).toBe('"from","to","transport","binding","crosses","via","evidence","gate"');
     expect(csv).toHaveLength(8);
-    expect(csv).toContain('"orders::billing_client","billing::billing_api.charge","HTTP","POST /charges","billing","billing::billing_api","call orders::billing_client_impl (call billing::billing)"');
+    expect(csv).toContain('"orders::billing_client","billing::billing_api.charge","HTTP","POST /charges","billing","billing::billing_api","call orders::billing_client_impl (call billing::billing)",""');
     const md = flows({}, 'markdown').content;
     expect(md).toContain('| orders_client | orders::orders_api.create | HTTP | POST /orders |');
   });
@@ -117,8 +117,9 @@ describe('network_portal.policy (sim:network_portal.policy)', () => {
   it('never guesses a selector: an unbound name gets the placeholder label and is listed in the document and its head', () => {
     const doc = policy({}, write('partial.yaml', 'workloads:\n  orders: { selector: { app: orders } }\n'), 'kubernetes-network-policy');
     // An unbound callee falls back to its default workload: the root's gateway to its subsystem, edge.
-    expect(doc.unbound).toEqual(['billing', 'edge', 'network', 'orders_client', 'outside']);
-    expect(doc.content).toContain('# UNBOUND: billing, edge, network, orders_client, outside');
+    // A caller is named by its workload: orders_client runs in the bound orders subsystem.
+    expect(doc.unbound).toEqual(['billing', 'edge', 'network', 'outside']);
+    expect(doc.content).toContain('# UNBOUND: billing, edge, network, outside');
     const objects = parseAllDocuments(doc.content).map((d) => d.toJS()).filter(Boolean) as Record<string, any>[];
     const gateway = objects.find((o) => o.metadata.name === 'wairon-allow-edge')!;
     expect(gateway.spec.podSelector.matchLabels).toEqual({ 'wairon.dev/workload': 'edge' });

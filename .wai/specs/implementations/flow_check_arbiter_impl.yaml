@@ -17,31 +17,57 @@ methods:
         type: loop
         loopKind: forEach
         over: the observed flows
-        endStep: 5
+        endStep: 8
       - stepNumber: 3
-        description: Is there a flow from its source to its destination?
-        type: branch
-        condition: no flow's caller lies within the source and callee within the destination
-        onFalseStep: 5
+        description: >-
+          The admitted flows on its pair: a caller within the source, a callee within the
+          destination, and no refusal (refusedBy) on it
+        type: local
       - stepNumber: 4
-        description: Record it as unexpected and go on
+        description: >-
+          Does the observation match a verb the destination declares (at L7, a verb of model.verbs
+          within the destination whose binding matches the method and path, a template segment
+          matching any value), and is it admitted on the pair?
+        type: switch
+        'on': admitted flows on the pair, and a declared verb matching it
+        cases:
+          - value: no admitted flow, a declared verb matches or a refused flow joins the pair
+            step: 5
+          - value: no admitted flow, nothing declared matches
+            step: 6
+        defaultStep: 7
+      - stepNumber: 5
+        label: disallowed
+        description: >-
+          Record it as disallowed: a known verb (or a flow the gate refuses), but not from this
+          source
         type: jump
         toStep: 2
-      - stepNumber: 5
-        label: observedEnd
-        description: >-
-          At L7 (a method and path observed), record it as an unknown verb when no allowed flow's
-          binding on that pair matches the method and path (a template segment matching any value);
-          mark every matching flow exercised
-        type: local
       - stepNumber: 6
-        description: Record every flow never marked exercised as unexercised
-        type: local
+        label: unexpected
+        description: 'Record it as unexpected: nothing allows the pair'
+        type: jump
+        toStep: 2
       - stepNumber: 7
+        label: admitted
+        description: >-
+          At L7, the admitted flows whose binding matches the method and path; none matching is
+          disallowed when another declared verb of the destination matches, else an unknown verb
+        type: local
+      - stepNumber: 8
+        label: observedEnd
+        description: Mark every matching admitted flow exercised
+        type: local
+      - stepNumber: 9
+        description: >-
+          Record every admitted flow never marked exercised as unexercised (a refused flow is no
+          allowance to exercise), and carry the model's gate findings
+        type: local
+      - stepNumber: 10
         description: Answer the report
         type: return
         outcome: FlowCheckReport
     detail: full
 status: complete
 createdAt: '2026-10-06T13:12:14.092Z'
-updatedAt: '2026-10-06T13:12:14.716Z'
+updatedAt: '2026-10-06T23:04:32.744Z'

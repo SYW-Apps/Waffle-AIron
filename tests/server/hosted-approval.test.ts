@@ -155,7 +155,7 @@ describe('hosted lock — format 2', () => {
     expect(record.code!.analyzer.doctrineDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(record.code!.codes).toBeUndefined();
     expect(record.validationResult).toMatchObject({ valid: true, errors: 0 });
-    expect(record.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
+    expect(record.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     // What was written is what was returned, and it carries no `children`.
     expect(readLockRecordAt(fam.top)).toMatchObject({ format: 3, stateId: record.stateId });
     expect(fs.readFileSync(lockFile(fam.top), 'utf8')).not.toContain('"children"');

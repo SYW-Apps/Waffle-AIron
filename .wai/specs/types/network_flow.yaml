@@ -40,7 +40,20 @@ fields:
       On an aggregated edge of the network view: each verb it carries, as portal.verb with its
       binding
     optional: true
+  - name: refusedBy
+    type: list<string>
+    description: >-
+      The gate's error findings that sit on this flow, each as `CODE: message`: the design refuses
+      it, so no output admits it — the matrix marks it, a policy leaves it out, why and check never
+      count it as allowed
+    optional: true
+  - name: flaggedBy
+    type: list<string>
+    description: >-
+      The gate's warnings and notices that sit on this flow (ENTRY_UNPROVEN, ...), each as `CODE:
+      message`: allowed, but marked
+    optional: true
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:30.619Z'
-updatedAt: '2026-10-06T19:24:48.854Z'
+updatedAt: '2026-10-06T23:02:39.152Z'

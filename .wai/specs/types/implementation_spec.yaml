@@ -49,7 +49,9 @@ fields:
     optional: false
   - name: status
     type: SpecStatus
-    description: How far it is through design (an omitted status is parsed as complete)
+    description: >-
+      How far it is through design (an omitted status is parsed as complete). Readiness only: it
+      never enters the approval (designView leaves it out)
     optional: false
   - name: conformance
     type: ConformanceTier
@@ -138,16 +140,18 @@ methods:
     params: []
     returns: ImplementationSpec
     description: >-
-      This implementation as the approval sees it: the design it states with its CODE LINKAGE and
-      its volatile metadata left out. Linkage is every field that says where or how the design is
-      realized in code rather than what the design is — its own sourcePath and simPath, its router,
-      its injectedParams, its spec-level conformance tier, and on each method the method's
-      sourcePath, symbol, exportedVia and conformance tier — and the volatile metadata is createdAt
-      and updatedAt. Everything else stays: the contract, technologies (the vendor binding is
-      design: TECH_LEAKAGE judges it), the detail dial, each method's narrative, intent and declared
-      calls, the rename trace, lint, ext and status. Pure: over the spec's own fields; the same spec
-      always gives the same view, so a sourcePath added, moved or removed never changes it.
+      This implementation as the approval sees it: the design it states with its CODE LINKAGE, its
+      readiness and its volatile metadata left out. Linkage is every field that says where or how
+      the design is realized in code rather than what the design is — its own sourcePath and
+      simPath, its router, its injectedParams, its spec-level conformance tier, and on each method
+      the method's sourcePath, symbol, exportedVia and conformance tier; readiness is its status
+      (draft/design/complete says how far authoring is, never what the design says); the volatile
+      metadata is createdAt and updatedAt. Everything else stays: the contract, technologies (the
+      vendor binding is design: TECH_LEAKAGE judges it), the detail dial, each method's narrative,
+      intent and declared calls, the rename trace, lint and ext. Pure: over the spec's own fields;
+      the same spec always gives the same view, so a sourcePath added, moved or removed, or a status
+      promoted, never changes it.
     symbol: implementationDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T12:54:35.370Z'
+updatedAt: '2026-10-06T23:03:28.099Z'

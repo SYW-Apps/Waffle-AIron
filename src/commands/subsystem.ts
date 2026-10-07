@@ -17,6 +17,8 @@ import * as migrations from './adapters/migrations.js';
 import { runGenerate } from './generate.js';
 import { runMcpInstall } from './mcp.js';
 import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
+import * as fs from 'fs';
+import { listSkillNames } from './adapters/skills.js';
 import type { MemberCreation } from '../core/index.js';
 import type { InternalizeDestination } from '../models/project.js';
 import type { FamilyMigrationReport, MigrationPlan, MigrationRequest } from '../migrations/types.js';
@@ -250,6 +252,99 @@ export async function runMigration(request: MigrationRequest, options: Migration
   printOutcome(report);
   // Steps 12-15: a project made for a team is usable by that team's session.
   if (report.applied) await provisionMadeProjects(request);
+  // Step 16: a demoted member's folder is a part, no project root — its session scaffold goes.
+  if (report.applied && request.verb === 'demote') removeDemotedScaffold(request.alias ?? '');
+}
+
+/** The markers around the wairon guide section of a guide file (as `wairon generate` writes them). */
+const GUIDE_START = '<!-- wairon-guide-start -->';
+const GUIDE_END = '<!-- wairon-guide-end -->';
+
+/** A guide file's text without its wairon section. */
+function withoutGuideSection(content: string): string {
+  const start = content.indexOf(GUIDE_START);
+  const end = content.indexOf(GUIDE_END);
+  return start === -1 || end === -1 ? content : content.slice(0, start) + content.slice(end + GUIDE_END.length);
+}
+
+/** The root pointer `wairon generate` writes for claude, as a template to recognise it by (CLAUDE.md). */
+const CLAUDE_POINTER_HEAD = '@.claude/CLAUDE.md';
+
+/** A file's text with its line endings normalized and trailing space trimmed. */
+function normalizedText(file: string): string {
+  return fs.readFileSync(file, 'utf-8').replace(/\r\n/g, '\n').trim();
+}
+
+/**
+ * Step 16 of runMigration: after an applied demote, remove the session
+ * scaffold a promote gave the member's folder — the wairon entry of its
+ * .mcp.json, the wairon guide and skills under .claude/, and the root pointer
+ * CLAUDE.md — deleting a file only when nothing but wairon's own content is
+ * left in it. Each removal and each kept file (with why) is printed.
+ */
+function removeDemotedScaffold(alias: string): void {
+  const dir = projectFamily().nodes.find((n) => n.namespace === '')?.parts.find((p) => p.alias === alias)?.directory;
+  if (dir === undefined || nodePath.resolve(dir) === nodePath.resolve(getProjectRoot())) return;
+  const shown = (file: string): string => shownDir(file);
+  const removed: string[] = [];
+  const kept: string[] = [];
+  // .mcp.json: the wairon server entry goes; the file only when nothing else is in it.
+  const mcpJson = nodePath.join(dir, '.mcp.json');
+  if (pathExists(mcpJson)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(mcpJson, 'utf-8')) as { mcpServers?: Record<string, unknown> } & Record<string, unknown>;
+      if (parsed.mcpServers && 'wairon' in parsed.mcpServers) {
+        delete parsed.mcpServers.wairon;
+        const otherKeys = Object.keys(parsed).filter((k) => k !== 'mcpServers');
+        if (Object.keys(parsed.mcpServers).length === 0 && otherKeys.length === 0) {
+          fs.rmSync(mcpJson);
+          removed.push(shown(mcpJson));
+        } else {
+          fs.writeFileSync(mcpJson, JSON.stringify(parsed, null, 2) + '\n');
+          kept.push(`${shown(mcpJson)} (its wairon entry removed; other servers are configured there)`);
+        }
+      }
+    } catch {
+      kept.push(`${shown(mcpJson)} (not JSON wairon can read: left as it is)`);
+    }
+  }
+  // .claude/CLAUDE.md: the wairon guide section goes; the file only when nothing else is in it.
+  const guide = nodePath.join(dir, '.claude', 'CLAUDE.md');
+  if (pathExists(guide)) {
+    const rest = withoutGuideSection(fs.readFileSync(guide, 'utf-8'));
+    if (rest.trim() === '') {
+      fs.rmSync(guide);
+      removed.push(shown(guide));
+    } else {
+      fs.writeFileSync(guide, rest.trimEnd() + '\n');
+      kept.push(`${shown(guide)} (the wairon guide removed; someone else's text is in it)`);
+    }
+  }
+  // The skills wairon installs.
+  for (const name of listSkillNames()) {
+    const skill = nodePath.join(dir, '.claude', 'skills', name);
+    if (!pathExists(skill)) continue;
+    fs.rmSync(skill, { recursive: true, force: true });
+    removed.push(shown(skill));
+  }
+  for (const empty of [nodePath.join(dir, '.claude', 'skills'), nodePath.join(dir, '.claude')]) {
+    if (pathExists(empty) && fs.readdirSync(empty).length === 0) fs.rmdirSync(empty);
+  }
+  // CLAUDE.md: the root pointer generate writes — removed only when it is exactly that.
+  const pointer = nodePath.join(dir, 'CLAUDE.md');
+  if (pathExists(pointer)) {
+    const text = normalizedText(pointer);
+    if (text.startsWith(CLAUDE_POINTER_HEAD) && text.includes('# Wairon SDD Project') && text.split('\n').length <= 12) {
+      fs.rmSync(pointer);
+      removed.push(shown(pointer));
+    } else if (text.includes(CLAUDE_POINTER_HEAD)) {
+      kept.push(`${shown(pointer)} (it points at the wairon guide, but someone else's text is in it — remove the pointer by hand)`);
+    }
+  }
+  if (removed.length === 0 && kept.length === 0) return;
+  logger.info(`"${alias}" is a part now, not a project root: the session scaffold its promote wrote goes with the boundary.`);
+  for (const file of removed) logger.info(`  removed ${file}`);
+  for (const file of kept) logger.warn(`  kept ${file}`);
 }
 
 /**

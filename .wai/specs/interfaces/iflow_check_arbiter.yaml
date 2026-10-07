@@ -1,16 +1,19 @@
 id: iflow_check_arbiter
 name: Flow Check Arbiter Interface
-description: Observed live flows judged against the allowed matrix.
+description: Observed live flows judged against the allowed matrix and the gate's verdict on it.
 component: flow_check_arbiter
 methods:
   - name: check
     description: >-
       Compare observed flows with the matrix, matching parties through the bindings: unexpected
-      flows (observed, not allowed), unexercised flows (allowed, not observed) and unknown verbs
-      (observed at L7 on an allowed pair, matching no verb). Pure.
+      flows (observed, no flow allows the pair), disallowed flows (observed on a verb the design
+      declares — its method and path match one of the destination's verbs — that no admitted flow
+      allows from this source), unexercised flows (allowed, not observed) and unknown verbs
+      (observed at L7 on an allowed pair, matching no verb the destination declares). A flow the
+      gate refuses (refusedBy) allows nothing; the report carries the model's gate findings. Pure.
     signature: >-
-      check(flows: list<NetworkFlow>, observed: list<ObservedFlow>, bindings: NetworkBindings?):
-      FlowCheckReport
+      check(flows: list<NetworkFlow>, observed: list<ObservedFlow>, bindings: NetworkBindings?,
+      model: ReachModel): FlowCheckReport
     returns: FlowCheckReport
     params:
       - name: flows
@@ -20,8 +23,13 @@ methods:
       - name: bindings
         type: NetworkBindings?
         description: The bindings the observed names follow; none when they are design names already
+      - name: model
+        type: ReachModel
+        description: >-
+          The reach model the matrix was derived from: its verbs say which method and path a
+          destination declares, and its findings what the gate refused
     guarantees:
       - idempotent
 status: complete
 createdAt: '2026-10-06T13:10:59.911Z'
-updatedAt: '2026-10-06T13:11:00.516Z'
+updatedAt: '2026-10-06T23:04:02.433Z'

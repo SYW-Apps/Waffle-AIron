@@ -69,6 +69,33 @@ methods:
       strongly connected set of two or more projects is answered once, as the project keys along one
       loop in walk order, the first key repeated at the end. A member is not an edge to its parent
       or from it: containment is not dependency. Empty for an acyclic family.
+  - name: bindExternal
+    signature: >-
+      bindExternal(declared: DeclaredExternal, consumer: ProjectNode, nodes: list<ProjectNode>):
+      ResolvedExternal
+    params:
+      - name: declared
+        type: DeclaredExternal
+        description: >-
+          One external declaration as the configuration reads it (declaredExternals), written or
+          only asked for
+      - name: consumer
+        type: ProjectNode
+        description: The declaring project's node
+      - name: nodes
+        type: list<ProjectNode>
+        description: Every node of the family read so far
+    returns: ResolvedExternal
+    description: >-
+      One external declaration bound to its producer the way the graph binds every declared
+      external: its declaration's own problem, else a hosted record id (resolved later through the
+      hosting server's lookup), a git source (resolved later through the fetch cache), a source.path
+      landing on a family project (which must answer to the declared id) or on a directory outside
+      the family (audience instance), else the one family project answering to the declared id
+      (audience project) — none or several being the problem, saying which. Pure, so a declaration
+      not yet written (a dry run of `externals add`) is bound exactly as the written one will be.
+    sourcePath: src/models/project-family.ts
+    symbol: bindDeclaredExternal
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:40:06.197Z'
-updatedAt: '2026-10-04T10:20:49.920Z'
+updatedAt: '2026-10-06T23:04:03.712Z'

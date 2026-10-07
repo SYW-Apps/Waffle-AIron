@@ -1,0 +1,39 @@
+kind: value-object
+id: external_use_change
+name: ExternalUseChange
+description: >-
+  The answer to changing one external's `use` imports: the list as it stands after the change (or
+  would, on a dry run), what was added and removed — or why nothing was written, as one sentence
+  naming the accepted form or the closest exported names.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias asked for
+    optional: false
+  - name: written
+    type: bool
+    description: >-
+      Whether `.wai/project.yaml` now carries the changed `use` (false on a refusal, on a dry run
+      and when nothing changed)
+    optional: false
+  - name: use
+    type: list<string>
+    description: The `use` list after the change, in order
+    optional: false
+  - name: added
+    type: list<string>
+    description: The names this change imports that were not imported before
+    optional: false
+  - name: removed
+    type: list<string>
+    description: The names this change stops importing
+    optional: false
+  - name: refusal
+    type: string
+    description: Why nothing was written, in one sentence
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-06T23:03:09.747Z'
+updatedAt: '2026-10-06T23:03:10.483Z'

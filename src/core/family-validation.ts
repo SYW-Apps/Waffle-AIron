@@ -36,7 +36,7 @@ import type { IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { PinState, ProjectApproval } from '../models/lock.js';
 import type { NetworkDeclaration } from '../models/project.js';
-import type { ReachModel } from '../models/reach.js';
+import type { ReachFinding, ReachModel } from '../models/reach.js';
 // reach_model_projector and network_arbiter: the family's reach model and its
 // network verdicts — pure, over the models each project's own gate projected.
 import { compose as composeReach } from './rules/reach-model-projector.js';
@@ -355,7 +355,10 @@ export function run(options: ValidationOptions): ValidationResult {
     issues.push(...judged.own.issues.map((i) => ({ ...i, project: ref.key })), ...judged.composed.findings);
     projects.push(verdictOf({ namespace: ref.key, directory: ref.directory! } as ProjectNode, judged.own));
   }
-  // Step 9: the family checks over the root's graph, narrowed to the selection.
+  // Step 10: topics paired across the family — a topic a sibling consumes goes somewhere.
+  const paired = pairTopicsAcrossFamily(issues, models);
+  issues.splice(0, issues.length, ...paired);
+  // Step 11: the family checks over the root's graph, narrowed to the selection.
   issues.push(...within(root, ceiling, () => checkMembers(narrowed(family, selected))));
   // Step 10: the governance checks — each requiring project's requirements against the members below it.
   issues.push(...within(root, ceiling, () => checkPolicies(narrowed(family, selected))));
@@ -399,7 +402,15 @@ function howMoved(use: ExternalStatus['uses'][number]): string {
     const changed = use.detail?.includes('signature changed') ? ' (and its signature changed)' : '';
     return `was renamed to "${use.renamedTo}"${changed}, per the producer's rename trace`;
   }
-  return 'is gone from the producer\'s live export table';
+  return `is gone from the producer's live export table${use.detail ? ` (${use.detail})` : ''}`;
+}
+
+/** What a stale pinned snapshot no longer matches, as a sentence tail; '' when nothing. */
+function staleTail(status: ExternalStatus): string {
+  const facts = status.staleFacts ?? [];
+  return facts.length
+    ? ` Its pinned snapshot is stale: ${facts.join(', ')} changed in the producer, and the rules judge the pin (a library's abi, an entry's transport or role) — re-pinning refreshes it.`
+    : '';
 }
 
 /** Step 7 of compose: one external's status as findings on the consumer. */
@@ -413,9 +424,9 @@ function judgeExternal(status: ExternalStatus, project: string, config: ProjectC
       `${named(project)} uses ${useName(use)} of ${who}, which ${howMoved(use)}. ${fix}, then re-pin (\`wairon externals pin ${status.alias}\`).`,
       project));
   }
-  if (broken.length === 0 && status.drifted) {
+  if (broken.length === 0 && (status.drifted || (status.staleFacts?.length ?? 0) > 0)) {
     out.push(finding(config, 'EXTERNAL_DRIFTED',
-      `The producer of ${who} changed since ${named(project)} pinned it, but nothing ${named(project)} uses changed. Re-pin when convenient (\`wairon externals pin ${status.alias}\`).`,
+      `The producer of ${who} changed since ${named(project)} pinned it, but nothing ${named(project)} uses changed.${staleTail(status)} Re-pin when convenient (\`wairon externals pin ${status.alias}\`).`,
       project));
   }
   for (const use of status.uses.filter((u) => u.state === 'unavailable' || u.state === 'unlocked')) {
@@ -518,7 +529,7 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
     case 'drifted':
       // Step 8.
       return advisory(config, 'EXTERNAL_DRIFTED',
-        `The live producer of ${who} moved since it was pinned, but nothing this project uses changed. Re-pin when convenient (${repin(status.alias)}).`);
+        `The live producer of ${who} moved since it was pinned, but nothing this project uses changed.${staleTail(status)} Re-pin when convenient (${repin(status.alias)}).`);
     case 'unavailable': {
       // Step 10: never a pass, never a failure of the owner's gate.
       const reason = uncomparedReason(status);
@@ -1302,7 +1313,71 @@ export function reachModel(options: ValidationOptions): ReachModel {
   for (const { node } of selected) {
     models.set(node.namespace, within(node.directory, ceiling, () => ownReachOf(options)));
   }
-  // Steps 5-6: composed.
+  // Step 5: composed.
   const scoped = narrowed(family, selected);
-  return within(root, ceiling, () => composeReach(models, scoped, networksOf(scoped)));
+  return within(root, ceiling, () => {
+    const model = composeReach(models, scoped, networksOf(scoped));
+    // Steps 6-7: judged, so no derived output trusts a design that fails the
+    // gate: each finding tuned by the severity of the project whose spec it
+    // sits on, and dropped when a lint.allow there covers it at its site (an
+    // error is never allowed, so a refused flow stays refused).
+    return { ...model, findings: judgedFindings(model, scoped) };
+  });
+}
+
+/** Steps 6-7 of reachModel: the composed model's network findings, tuned and lint-allow filtered. */
+function judgedFindings(model: ReachModel, family: ProjectFamily): ReachFinding[] {
+  const nodeOf = new Map(family.nodes.map((n) => [n.namespace, n] as const));
+  const configs = new Map<string, ProjectConfig | null>();
+  const allows = new Map<string, { specId: string; code: string; at?: string }[]>();
+  const out: ReachFinding[] = [];
+  for (const f of judgeNetwork(model)) {
+    const project = projectOfFinding(model, f);
+    const node = nodeOf.get(project);
+    if (!configs.has(project)) configs.set(project, node ? runWithProjectRoot(node.directory, configOrNull) : null);
+    if (!allows.has(project)) allows.set(project, node ? runWithProjectRoot(node.directory, lintAllows) : []);
+    const local = f.specId !== undefined ? localKey(project, f.specId) : undefined;
+    const tuned = finding(configs.get(project) ?? null, f.code, f.message, project, f.specId);
+    if (!tuned) continue;
+    const allowed = tuned.severity !== 'error' && local !== undefined && (allows.get(project) ?? []).some((a) =>
+      a.specId === local && a.code === f.code && (a.at ?? undefined) === (f.at ?? undefined));
+    if (allowed) continue;
+    out.push({
+      severity: tuned.severity,
+      code: f.code,
+      message: f.message,
+      ...(f.specId !== undefined ? { specId: f.specId } : {}),
+      ...(f.at !== undefined ? { at: f.at } : {}),
+    });
+  }
+  return out;
+}
+
+// ---- topics across the family -----------------------------------------------
+
+/**
+ * Step 10 of run: pair topics across the family. A selected project's
+ * UNCONSUMED_TOPIC (or UNSOURCED_SUBSCRIPTION) on a component is dropped when
+ * every topic that component leaves unpaired inside its own project is
+ * subscribed (or emitted) by another selected project — a topic a sibling
+ * consumes goes somewhere. Read from the topic ends of the projects' own reach
+ * models, never from a finding's message. The project's own gate, run alone,
+ * still reports it.
+ */
+function pairTopicsAcrossFamily(issues: ValidationIssue[], models: Map<string, ReachModel>): ValidationIssue[] {
+  const ends = [...models.entries()].flatMap(([project, m]) => (m.topics ?? []).map((t) => ({ ...t, project })));
+  if (ends.length === 0) return [...issues];
+  /** Whether a component's unpaired topics on one side are all paired by another project. */
+  const pairedElsewhere = (project: string, component: string, emits: boolean): boolean => {
+    const own = ends.filter((e) => e.project === project);
+    const mine = own.filter((e) => e.component === component && e.emits === emits).map((e) => e.topic);
+    const unpaired = mine.filter((t) => !own.some((o) => o.topic === t && o.emits !== emits));
+    if (unpaired.length === 0) return false;
+    return unpaired.every((t) => ends.some((o) => o.project !== project && o.topic === t && o.emits !== emits));
+  };
+  return issues.filter((i) => {
+    if (i.code !== 'UNCONSUMED_TOPIC' && i.code !== 'UNSOURCED_SUBSCRIPTION') return true;
+    if (i.project === undefined || i.specId === undefined) return true;
+    return !pairedElsewhere(i.project, i.specId, i.code === 'UNCONSUMED_TOPIC');
+  });
 }

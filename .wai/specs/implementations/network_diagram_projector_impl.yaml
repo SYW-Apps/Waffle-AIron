@@ -16,8 +16,9 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Aggregate the flows per caller workload, callee workload and transport, merging evidence
-          and counting verbs
+          Aggregate the flows per caller workload, callee workload, transport and verdict, merging
+          evidence and counting verbs: a flow the gate refuses joins a refused edge of its own
+          carrying the findings, so it is never drawn as allowed
         type: local
       - stepNumber: 4
         description: Answer the view model
@@ -35,7 +36,9 @@ methods:
         description: Write the outside node when the view has one
         type: local
       - stepNumber: 3
-        description: Write each aggregated edge, labelled with its transport and verb count, in a stable order
+        description: >-
+          Write each aggregated edge, labelled with its transport and verb count, in a stable order;
+          a refused edge dashed and labelled REFUSED with its codes
         type: local
       - stepNumber: 4
         description: Answer the Mermaid document
@@ -44,4 +47,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T13:12:08.707Z'
-updatedAt: '2026-10-06T13:12:09.354Z'
+updatedAt: '2026-10-06T23:09:23.925Z'

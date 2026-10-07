@@ -135,6 +135,23 @@ methods:
       sdd_add_external) — refused in one sentence naming the accepted form, checked against the
       producer it reaches, pinned when asked. Dispatched to the external-declarations workflow.
     signatureFrom: external_declarations.declare
+  - name: removeExternal
+    description: >-
+      Published: remove one external of the bound project (`wairon externals remove`,
+      sdd_remove_external) — its declaration and its pin together, so no orphaned pin is left; an
+      orphaned pin alone is removed too. Dispatched to the external-declarations workflow.
+    signatureFrom: external_declarations.remove
+  - name: updateExternalUse
+    description: >-
+      Published: add and remove `use` imports of one declared external (`wairon externals use`,
+      sdd_update_external) — refused in one sentence, an added name checked against what the
+      producer exports to this project. Dispatched to the external-declarations workflow.
+    signatureFrom: external_declarations.updateUse
+  - name: listConsumers
+    description: >-
+      Published: the family projects in reach that consume the bound project, with the names each
+      uses (`wairon externals consumers`). Read-only. Forwarded to the surface orchestrator.
+    signatureFrom: surface_orchestrator.listConsumers
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-06T10:14:45.303Z'
+updatedAt: '2026-10-06T23:06:18.336Z'

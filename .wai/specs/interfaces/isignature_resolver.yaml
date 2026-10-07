@@ -10,23 +10,27 @@ methods:
       Resolve every signature of one scan. For each contract method naming a signatureFrom, the
       value is read BOTH ways: as a method source (split at the last dot, the head a component of
       the index — keyed as the scan keys it, local first, `alias::component` bound already — and the
-      tail a method on any of its contracts) and as a type reference (matched as every type
-      reference is, and only a type of kind signature counts; an `alias::name` value lands on the
-      key the scan bound that reference to — the AuthoredReference recorded for the method's
-      interface at a type position — exactly as every other `alias::` type reference does, so an
-      alias that differs from the producer's project id resolves too). Exactly one reading resolving
-      binds it; both resolving is ambiguous and neither is unresolved, and either leaves the method
-      without params and with returns `unknown`, as does a chained source (one that itself names a
-      signatureFrom), which is never followed. A resolved source puts its params and returns on the
-      method, whatever the stored method stated — a stored method that also states them is restated,
-      differing or not. Then every contract method and type method with params gets
-      method_signature.derivedSignature() as its signature, recording a stale text where the stored
-      one differed. A signature type is answered as it is: its text is never stored, and is derived
-      where it is shown (type_spec.derivedSignature). Answers the resolved specs and the facts; the
-      specs it is handed are not mutated.
+      tail a method on any of its contracts; failing that, an `alias::name.method` that names a
+      method of another project's export entry the scan handed in — a declared external's pin, a
+      contained member's live table — resolves as form `export`, its types written as the referrer
+      spells them) and as a type reference (matched as every type reference is, and only a type of
+      kind signature counts; an `alias::name` value lands on the key the scan bound that reference
+      to — the AuthoredReference recorded for the method's interface at a type position — exactly as
+      every other `alias::` type reference does, so an alias that differs from the producer's
+      project id resolves too). Exactly one reading resolving binds it; both resolving is ambiguous
+      and neither is unresolved, and either leaves the method without params and with returns
+      `unknown`, as does a chained source (one that itself names a signatureFrom), which is never
+      followed. A resolved source puts its params and returns on the method, whatever the stored
+      method stated — a stored method that also states them is restated, differing or not. Then
+      every contract method and type method with params gets method_signature.derivedSignature() as
+      its signature, recording a stale text where the stored one differed. A signature type is
+      answered as it is: its text is never stored, and is derived where it is shown
+      (type_spec.derivedSignature). Answers the resolved specs and the facts; the specs it is handed
+      are not mutated.
     signature: >-
       resolveTree(interfaces: list<InterfaceSpec>, components: list<ComponentSpec>, types:
-      list<TypeSpec>, references?: list<AuthoredReference>): SignatureResolution
+      list<TypeSpec>, references?: list<AuthoredReference>, exportMethods?: map<string,
+      MethodSignature>): SignatureResolution
     returns: SignatureResolution
     params:
       - name: interfaces
@@ -44,6 +48,15 @@ methods:
           The references the scan bound as written (every root's authored references): where an
           `alias::name` type reading lands. Omitted, a qualified type reading is matched as written
         optional: true
+      - name: exportMethods
+        type: map<string, MethodSignature>
+        description: >-
+          The contract methods of other projects' export entries a signatureFrom may name, keyed
+          `<referring namespace>|<alias>::<public name>.<method>`: a declared external's pinned
+          entries and a contained member's live L0 entries, each method's named types already
+          written as the referring project spells them (`<alias>::<public name>`). A value no index
+          component answers is read against these — the third reading, form `export`.
+        optional: true
 status: complete
 createdAt: '2026-10-03T19:32:09.206Z'
-updatedAt: '2026-10-04T10:19:32.956Z'
+updatedAt: '2026-10-06T23:08:35.562Z'

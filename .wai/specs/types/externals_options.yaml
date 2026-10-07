@@ -34,9 +34,19 @@ fields:
     optional: true
   - name: dryRun
     type: bool
-    description: 'add: say what would be declared, write nothing (--dry-run)'
+    description: >-
+      add, use, remove: say what would change, write nothing (--dry-run); add still reads the
+      producer
+    optional: true
+  - name: add
+    type: list<string>
+    description: 'use: public names to import bare, comma-separated (--add a,b or --add ''*'')'
+    optional: true
+  - name: remove
+    type: list<string>
+    description: 'use: names to stop importing, comma-separated (--remove a,b)'
     optional: true
 methods: []
 sourcePath: src/commands/externals.ts
 createdAt: '2026-10-03T17:11:27.059Z'
-updatedAt: '2026-10-06T10:16:22.391Z'
+updatedAt: '2026-10-06T23:03:54.791Z'

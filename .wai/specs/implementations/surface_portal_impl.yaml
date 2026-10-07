@@ -90,6 +90,27 @@ methods:
         type: call
         targetComponent: external_declarations
         targetMethod: declare
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the removal to the external-declarations workflow
+        type: call
+        targetComponent: external_declarations
+        targetMethod: remove
+  - name: updateExternalUse
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the `use` change to the external-declarations workflow
+        type: call
+        targetComponent: external_declarations
+        targetMethod: updateUse
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listConsumers
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-06T10:14:59.050Z'
+updatedAt: '2026-10-06T23:06:20.595Z'

@@ -22,10 +22,11 @@ methods:
         description: >-
           For each contract method of each of its interfaces (ctx.interfacesByComponent), add a
           VerbReach: the project key, the Portal, the verb, the Portal's transport, the endpoint as
-          one line (none for InProcess), the own network when there is one, whether the variant is
-          gateway, comp.entryFor(the method's own invokedBy), and the widest audience among the L0
-          export entries whose backing component (and narrowed interface, when it narrows) is this
-          Portal
+          one line (none for InProcess; an HTTP path joined under the Portal's basePath, so the
+          binding is the path a cluster sees: POST /v1/orders), the own network when there is one,
+          whether the variant is gateway, comp.entryFor(the method's own invokedBy), and the widest
+          audience among the L0 export entries whose backing component (and narrowed interface, when
+          it narrows) is this Portal
         type: local
       - stepNumber: 4
         label: portalsEnd
@@ -39,6 +40,17 @@ methods:
           the caller's network and its evidence
         type: local
       - stepNumber: 6
+        description: >-
+          Place every own component: a ComponentPlacement with the project key, its subsystem and
+          its block, so a party is known and a caller is named by its workload
+        type: local
+      - stepNumber: 7
+        description: >-
+          Collect every own end of the pub/sub graph as a TopicEnd: each component's emits and
+          subscribesTo declarations and each MessageBus publish or subscribe endpoint on its
+          interfaces, one end per component and topic and side
+        type: local
+      - stepNumber: 8
         description: Answer the ReachModel with scope own, every list in a stable order
         type: return
         outcome: the project's own reach model
@@ -58,18 +70,19 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
-          Carry every verb and every call of each project's own model, re-placed in that project's
-          innermost network, and gather each network's gateways from its projects' outside-entered
-          gateway Portals
+          Carry every verb, call, placement and topic end of each project's own model, re-placed in
+          that project's innermost network with its keys qualified into the root's key space, and
+          gather each network's gateways from its projects' outside-entered gateway Portals
         type: local
       - stepNumber: 4
         description: >-
           Add the cross-project calls: every reference in family.references at position call, calls,
           register or dispatch that names a method on a Portal of another project, as a ModelledCall
           from the reference's caller (the component whose implementation writes the step, never a
-          guess from a matching dependsOn; the referring spec when the reference records none),
-          placed in the consumer's innermost network, to the producer's verb, with the referring
-          spec as its evidence
+          guess from a matching dependsOn; the referring spec when the reference records none) with
+          the caller's subsystem read from the consumer's placements — so the caller is named by its
+          workload, as it was before the callee became a project — placed in the consumer's
+          innermost network, to the producer's verb, with the referring spec as its evidence
         type: local
       - stepNumber: 5
         description: Answer the ReachModel with scope family, every list in a stable order
@@ -78,4 +91,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T12:58:16.938Z'
-updatedAt: '2026-10-06T18:31:09.578Z'
+updatedAt: '2026-10-06T23:02:57.466Z'

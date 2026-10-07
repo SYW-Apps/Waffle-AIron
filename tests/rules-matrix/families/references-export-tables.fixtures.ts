@@ -265,6 +265,33 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // EXPORT_AUDIENCE_NARROW
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'EXPORT_AUDIENCE_NARROW',
+    severity: 'notice',
+    expectFire: true,
+    scenario:
+      'ParcelHub exports its price quotes to `department`, so a partner shop integrating from its own checkout (read at instance) is refused them.',
+    tree: {
+      system: { ...SYSTEM, publicInterfaces: [{ from: 'pricing', component: 'quote-portal', audience: 'department' }] },
+      subsystems: [{ ...PRICING, publicInterfaces: [QUOTES] }],
+      components: [QUOTE_PORTAL],
+    },
+  }),
+  defineRuleFixture({
+    code: 'EXPORT_AUDIENCE_NARROW',
+    expectFire: false,
+    reason: 'The quotes are exported to `instance`, the audience every path, git or hosted consumer is read at.',
+    scenario: 'ParcelHub exports its price quotes to the whole instance.',
+    tree: {
+      system: { ...SYSTEM, publicInterfaces: [{ from: 'pricing', component: 'quote-portal', audience: 'instance' }] },
+      subsystems: [{ ...PRICING, publicInterfaces: [QUOTES] }],
+      components: [QUOTE_PORTAL],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
   // A re-export is not an own item
   // -------------------------------------------------------------------------
   defineRuleFixture({

@@ -26,6 +26,7 @@ import {
   effectiveProjectId,
   withPack,
   type PartOf,
+  type NetworkDeclaration,
 } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,7 @@ export interface ProjectConfigRepository {
   setMemberPath(alias: string, path: string): boolean;
   updateMember(alias: string, changes: MemberDeclaration): boolean;
   setPartOf(partOf: PartOf | null): boolean;
+  setNetwork(network: NetworkDeclaration | null): boolean;
   removeMember(alias: string): boolean;
   importNames(alias: string, names: string[]): boolean;
   renameId(from: string, to: string): boolean;
@@ -948,6 +950,17 @@ function withPacks(config: ProjectConfig, packs: PackEntry[]): ProjectConfig {
   return { ...config, extensions: { ...config.extensions, packs, useGlobalPacks: effectiveUseGlobalPacks(config) } };
 }
 
+/** Whether a stored network declaration already reads as a value (none as null, else the same description). */
+function networkReads(stored: NetworkDeclaration | undefined, value: NetworkDeclaration | null): boolean {
+  if (value === null || stored === undefined) return value === null && stored === undefined;
+  return (stored.description ?? '') === (value.description ?? '');
+}
+
+/** A network declaration as written: the short form `true` when it has no description. */
+function networkValue(network: NetworkDeclaration): NetworkDeclaration {
+  return (network.description ? { description: network.description } : true) as unknown as NetworkDeclaration;
+}
+
 function registryOver(store: ProjectConfigStore, root: string): ProjectConfigRegistry {
   /** The configuration to change; a project with none is refused. */
   const current = (): ProjectConfig => {
@@ -1168,6 +1181,18 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
         return true;
       }
       store.write(partConfig(partOf, config));
+      return true;
+    },
+    setNetwork(network) {
+      const config = current();
+      if (config.partOf !== undefined) {
+        throw new WaironError(
+          `Refusing to declare a network at ${root}: it is a part of "${config.partOf.project}", and a part declares no network — the project that declares one encloses it. Declare it on that project.`,
+        );
+      }
+      if (networkReads(config.network, network)) return false;
+      const { network: _dropped, ...rest } = config;
+      save(network === null ? rest as ProjectConfig : { ...rest, network: networkValue(network) } as ProjectConfig);
       return true;
     },
     removeMember(alias) {
@@ -1428,6 +1453,7 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     setMemberPath(alias, memberPath) { return registry.setMemberPath(alias, memberPath); },
     updateMember(alias, changes) { return registry.updateMember(alias, changes); },
     setPartOf(partOf) { return registry.setPartOf(partOf); },
+    setNetwork(network) { return registry.setNetwork(network); },
     removeMember(alias) { return registry.removeMember(alias); },
     importNames(alias, names) { return registry.importNames(alias, names); },
     renameId(from, to) { return registry.renameId(from, to); },
@@ -1476,6 +1502,7 @@ export const projectConfigRepository: ProjectConfigRepository = {
   setMemberPath(alias, memberPath) { return bound().setMemberPath(alias, memberPath); },
   updateMember(alias, changes) { return bound().updateMember(alias, changes); },
   setPartOf(partOf) { return bound().setPartOf(partOf); },
+  setNetwork(network) { return bound().setNetwork(network); },
   removeMember(alias) { return bound().removeMember(alias); },
   importNames(alias, names) { return bound().importNames(alias, names); },
   renameId(from, to) { return bound().renameId(from, to); },

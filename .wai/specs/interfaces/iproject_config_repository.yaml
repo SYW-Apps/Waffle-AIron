@@ -191,6 +191,13 @@ methods:
       - name: rootDir
         type: string
         description: The project root whose .wai/project.yaml the answer reads and writes.
+  - name: setNetwork
+    description: >-
+      Declare or remove the bound project's network (forwarded to the registry). Returns whether it
+      wrote.
+    signatureFrom: project_config_registry.setNetwork
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-04T10:19:19.621Z'
+updatedAt: '2026-10-06T23:05:23.977Z'

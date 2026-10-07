@@ -1623,24 +1623,35 @@ methods:
         onFalseStep: 52
       - stepNumber: 15
         description: >-
+          Carry an earlier approval into the current reading BEFORE any repair or migration touches
+          a spec, so the tree it is compared with is the tree it approved: when its own identity,
+          recomputed, still matches, the whole record (no review, the approval stays the approver's,
+          the record says it was re-expressed); when only the gate it was judged under moved but no
+          spec file did, its reading alone, leaving the lock stale for that stated cause until one
+          `wairon lock`; otherwise nothing, and the report names the cause
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: reexpressApproval
+      - stepNumber: 16
+        description: >-
           Rebuild the derived context documents through the core adapter, each written only if it
           changed
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 16
+      - stepNumber: 17
         description: Re-export the SDD skills for the active targets
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Re-inject the local AI guides for the active targets through the core adapter, recording
           which files were written so the report can name them
         type: call
         targetComponent: cli_core_adapter
         targetMethod: reinjectLocalGuides
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           Pin the installed-but-unapplied packs as explicit selections for a project that never
           declared a position on machine-wide packs, and print the names recorded — each with the
@@ -1651,21 +1662,21 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: pinInstalledPacksAsSelections
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           List the spec files stored under a legacy name and rename each to the name the current
           layout expects
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Write a project configuration for each chained subproject with specs but none, and print
           the directories repaired
         type: call
         targetComponent: cli_core_adapter
         targetMethod: backfillChainedSubprojectConfigs
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Retire the Specialists with apply true: each becomes an Orchestrator with the
           dependencyClass its dependencies decide, and each Specialist-based variant rebases onto
@@ -1674,7 +1685,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Repair the narrative steps carrying a field their own type cannot have, with apply true:
           each foreign field is dropped and nothing else about the step changes; print what was
@@ -1682,7 +1693,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Regenerate the stored signatures with apply true: every stored text its params contradict
           is rewritten derived, and every restatement equal to its method's signature source is
@@ -1691,7 +1702,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
-      - stepNumber: 24
+      - stepNumber: 25
         description: >-
           Rewrite the stored type spellings with apply true: every type position that is an alias is
           re-saved in its canonical spelling, and the derived signature texts follow; print what was
@@ -1701,7 +1712,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairTypeSpellings
-      - stepNumber: 25
+      - stepNumber: 26
         description: >-
           Migrate onto the reachability model with apply true: portalType becomes transport,
           listener mounts become Portal-level entries on the listener and the Portals it mounted
@@ -1715,15 +1726,6 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: migrateReachability
-      - stepNumber: 26
-        description: >-
-          Carry a format-2 approval into the design reading when it still provably covers the tree
-          (its own identity, recomputed, matches) — no review, the approval stays the approver's and
-          the record says it was re-expressed; when it no longer matches, report that one `wairon
-          lock` is needed and that afterwards code linkage never drifts it again
-        type: call
-        targetComponent: cli_lock_adapter
-        targetMethod: reexpressApproval
       - stepNumber: 27
         label: chaining
         description: >-
@@ -3174,7 +3176,13 @@ methods:
             step: 6
           - value: list
             step: 8
-        defaultStep: 10
+          - value: remove
+            step: 10
+          - value: use
+            step: 12
+          - value: consumers
+            step: 14
+        defaultStep: 16
       - stepNumber: 2
         label: add
         description: >-
@@ -3187,9 +3195,11 @@ methods:
       - stepNumber: 3
         description: >-
           Print what was declared (the normalized declaration, the producer id it answers to, the
-          pin) or what a dry run would declare; on a refusal print its one sentence naming the
-          accepted form and exit 1; when the producer could not be read print that it is declared
-          but unpinned and why — or the JSON answer
+          pin) or what a dry run would declare — the producer checked in both; on a refusal print
+          its one sentence naming the accepted form (or the audience that keeps a name from this
+          project) and exit 1; when the producer could not be read print that it is declared but
+          unpinned and why, and exit 2 (nothing was pinned — never a success a script reads as done)
+          — or the JSON answer
         type: return
         outcome: added
       - stepNumber: 4
@@ -3218,8 +3228,9 @@ methods:
       - stepNumber: 7
         description: >-
           Print the status table — per alias: source, pinned, reachable, then its health
-          (incompatible | not compared | drifted | ok — never `current` beside `unreachable`), then
-          each used member's state, a renamed one with the name it was renamed to, with
+          (incompatible | not compared | drifted | ok — never `current` beside `unreachable`), the
+          carried facts a stale snapshot no longer matches (re-pin to refresh them), then each used
+          member's state, a renamed one with the name it was renamed to, with
           EXTERNAL_CHECK_UNAVAILABLE and its reason on what could not be compared — then one legend
           defining every word it used and which fix each asks for (incompatible: adapt the uses,
           then re-pin; drifted: re-pin when convenient; not compared: make the producer reachable) —
@@ -3242,8 +3253,50 @@ methods:
         type: return
         outcome: listed
       - stepNumber: 10
+        label: remove
+        description: >-
+          Remove the external named by the first argument — its declaration and its pin together
+          (--dry-run writes nothing)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: removeExternal
+      - stepNumber: 11
+        description: >-
+          Print what was removed (the declaration, the pin) or the one-sentence refusal, exiting 1 —
+          or the JSON answer
+        type: return
+        outcome: removed
+      - stepNumber: 12
+        label: use
+        description: >-
+          Change the `use` imports of the external named by the first argument: --add and --remove
+          (comma-separated), --dry-run writes nothing
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: updateExternalUse
+      - stepNumber: 13
+        description: >-
+          Print the resulting `use` list and what moved, or the one-sentence refusal, exiting 1 — or
+          the JSON answer
+        type: return
+        outcome: use changed
+      - stepNumber: 14
+        label: consumers
+        description: List the family projects in reach that consume this project
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 15
+        description: >-
+          Print one line per consumer — its project, the alias and section it declares this project
+          under, the names it uses — then that a consumer outside the family read (a sibling
+          checkout, a git or hosted consumer) declares its dependency on its own side and is not
+          listed; or the JSON answer
+        type: return
+        outcome: consumers listed
+      - stepNumber: 16
         label: unknown
-        description: 'Unknown externals action (supported: add, pin, status, list)'
+        description: 'Unknown externals action (supported: add, pin, status, list, remove, use, consumers)'
         type: throw
         error: UnknownExternalsActionError
     detail: full
@@ -3341,6 +3394,15 @@ methods:
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
       - stepNumber: 16
+        label: demoted-scaffold
+        description: >-
+          After an applied demote the member's folder is a part, no project root: remove the session
+          scaffold a promote gave it — the wairon entry of its .mcp.json, the wairon guide and
+          skills under .claude/ and the wairon block of its CLAUDE.md root pointer — deleting a file
+          only when nothing but wairon's own content is left in it, and print each file removed and
+          each kept with why (someone else's content is in it)
+        type: local
+      - stepNumber: 17
         description: Done, exiting non-zero when the migration failed
         type: return
         outcome: applied or failed
@@ -3658,7 +3720,9 @@ methods:
         targetComponent: cli_network_adapter
         targetMethod: flows
       - stepNumber: 2
-        description: Print it, or write it to --out
+        description: >-
+          Print it, or write it to --out, then print each gate finding that refused or marked a row
+          (a refused row is never allowed)
         type: local
   - name: runNetworkPolicy
     narrative:
@@ -3675,7 +3739,8 @@ methods:
       - stepNumber: 3
         description: >-
           Print it or write it to --out, then list each unbound design name with the placeholder
-          label it was given
+          label it was given, and each gate finding; when the gate refused a flow, say it was left
+          out and exit non-zero
         type: return
         outcome: policy written
       - stepNumber: 4
@@ -3708,13 +3773,14 @@ methods:
         targetMethod: check
       - stepNumber: 3
         description: >-
-          Print the unexpected flows first, then the unknown verbs, then the unexercised flows, each
-          with its count
+          Print the gate findings when there are any, then the unexpected flows, the disallowed
+          flows (a declared verb, not allowed from that source), the unknown verbs, then the
+          unexercised flows, each with its count
         type: local
       - stepNumber: 4
         description: >-
-          Exit non-zero when anything unexpected or unknown was seen, zero otherwise: an unexercised
-          flow is a review item, not a failure
+          Exit non-zero when anything unexpected, disallowed or unknown was seen, zero otherwise: an
+          unexercised flow is a review item, not a failure
         type: return
         outcome: check reported
       - stepNumber: 5
@@ -3730,8 +3796,52 @@ methods:
         targetMethod: why
       - stepNumber: 2
         description: >-
-          Print each allowing flow with its chain, or that nothing allows it with the nearest
-          allowed flows; exit non-zero when nothing does
+          Print each allowing flow with its chain; or say plainly why not: an unknown party name, a
+          flow the gate refuses (with its findings), a collaborator reached in-process (never a
+          network flow — exit zero), or that nothing allows it with the nearest allowed flows; exit
+          non-zero for every answer but allowed and in-process
+        type: local
+  - name: runNetworkDeclare
+    narrative:
+      - stepNumber: 1
+        description: Declare the network, with --description when given, through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setNetwork
+      - stepNumber: 2
+        description: >-
+          Say what was written (or that it already was), that the network rules now judge the
+          design, and to re-lock
+        type: local
+  - name: runNetworkUndeclare
+    narrative:
+      - stepNumber: 1
+        description: Remove the declaration through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setNetwork
+      - stepNumber: 2
+        description: Say what was removed (or that none was declared), and to re-lock
+        type: local
+  - name: runTypeRenameField
+    sourcePath: src/commands/type.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Rename the field through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renameField
+      - stepNumber: 3
+        description: >-
+          Print the move, the specs rewritten, and that the approval reads the renamed type as
+          changed until the next `wairon lock`
         type: local
 lint:
   allow:
@@ -3748,4 +3858,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T19:54:58.903Z'
+updatedAt: '2026-10-06T23:08:57.220Z'

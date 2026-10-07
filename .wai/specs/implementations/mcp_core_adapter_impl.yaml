@@ -169,7 +169,21 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: renameType
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Forward the network declaration to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: setNetwork
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: Call renameField on the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameField
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-04T13:57:08.481Z'
+updatedAt: '2026-10-06T23:07:27.031Z'

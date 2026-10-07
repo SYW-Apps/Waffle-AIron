@@ -129,15 +129,48 @@ methods:
         description: The normalized declaration (object form) to write under it
   - name: removeExternal
     description: >-
-      Forward to project_config_portal.removeExternal: take one external declaration back out — the
-      compensation when a just-written declaration turns out to name a producer that answers to
-      another id or does not export a `use` name. Returns whether it removed.
+      Forward to project_config_portal.removeExternal: take one external declaration out of the
+      configuration — `externals remove`, and the restatement half of a `use` change that drops
+      names. Returns whether it removed.
     signature: 'removeExternal(alias: string): bool'
     returns: bool
     params:
       - name: alias
         type: string
         description: The external's alias
+  - name: resolveExternalCandidate
+    description: >-
+      Forward to the core portal: one external declaration not yet written, bound to its producer as
+      the written one will be — what `externals add` checks before it writes, dry run included.
+    signature: 'resolveExternalCandidate(alias: string, declaration: ExternalDeclaration): ExternalBinding'
+    returns: ExternalBinding
+    params:
+      - name: alias
+        type: string
+        description: The alias the declaration would be written under
+      - name: declaration
+        type: ExternalDeclaration
+        description: The normalized declaration
+  - name: listExternalConsumers
+    description: >-
+      Forward to the core portal: the family projects in reach that consume the bound project, with
+      the names each uses. The surfaces plane never walks the family itself.
+    signature: 'listExternalConsumers(): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params: []
+  - name: importNames
+    description: >-
+      Forward to project_config_portal.importNames: add public names to one external's `use`,
+      append-only and idempotent (`*` already imports them all). Returns whether it wrote.
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: names
+        type: list<string>
+        description: The public names to import
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-06T10:13:12.356Z'
+updatedAt: '2026-10-06T23:04:51.832Z'

@@ -479,6 +479,9 @@ function typeSection(t: TypeSpec, keys: KeyTable): DesignType {
       ...(f.description !== undefined ? { description: f.description } : {}),
       ...(f.key !== undefined ? { key: f.key } : {}),
       ...(f.references !== undefined ? { references: keys.typeFieldRef(f.references, owner) } : {}),
+      // The field's rename trace, only when it was renamed: an export of a
+      // never-renamed field reads exactly as before.
+      ...(f.previousNames && f.previousNames.length > 0 ? { formerly: [...f.previousNames] } : {}),
     })),
     methods: t.methods.map((m) => ({
       key: `${key}.${m.name}`,

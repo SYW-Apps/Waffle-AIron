@@ -472,10 +472,14 @@ methods:
         description: >-
           Once every reference of the family is bound, resolve the index's signatures, handing over
           every root's authored references so an `alias::` signature type lands where the scan bound
-          it: each signatureFrom read with its source's params and returns, each params-bearing
-          contract method and type method given its derived text (a signature type's text is derived
-          on display, never stored); the resolved interfaces and types replace the index's, and the
-          facts are kept on the index as its signatures
+          it, and the methods of other projects' export entries a signatureFrom may name — each
+          root's declared externals' pinned entries (read from its own .wai/externals snapshots) and
+          its contained members' live L0 entries, keyed `<namespace>|<alias>::<public
+          name>.<method>`, their named types respelled `<alias>::<public name>` as the referrer
+          writes them: each signatureFrom read with its source's params and returns, each
+          params-bearing contract method and type method given its derived text (a signature type's
+          text is derived on display, never stored); the resolved interfaces and types replace the
+          index's, and the facts are kept on the index as its signatures
         type: call
         targetComponent: signature_resolver
         targetMethod: resolveTree
@@ -577,4 +581,4 @@ methods:
         outcome: list<RetiredReachFact>
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-06T13:06:54.820Z'
+updatedAt: '2026-10-06T23:09:59.474Z'

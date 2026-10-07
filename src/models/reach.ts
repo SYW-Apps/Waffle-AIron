@@ -63,7 +63,7 @@ export interface ModelledCall {
   fromProject: string;
   /** The calling component's key (the bridging Adapter, or any component for a library call). */
   fromComponent: string;
-  /** The calling component's subsystem key, qualified like the component in a family-scoped model; absent when the reference that records a cross-project call does not say. */
+  /** The calling component's subsystem key, qualified like the component in a family-scoped model; for a cross-project call, read from the consumer's placements. */
   fromSubsystem?: string;
   /** The innermost declared network the caller sits inside; absent when none encloses it. */
   fromNetwork?: string;
@@ -89,6 +89,52 @@ export interface ReachModel {
   verbs: VerbReach[];
   /** Every modelled call into a Portal verb that crosses a subsystem or project boundary. */
   calls: ModelledCall[];
+  /** Every component in scope, with its project and subsystem: how a party is known, and how a caller is named by its workload. */
+  placements: ComponentPlacement[];
+  /** Every end of the pub/sub graph in scope, which the family run pairs across projects. */
+  topics: TopicEnd[];
+  /** The model's network findings, judged and lint-allow filtered, when it was read for the derived networking outputs. */
+  findings?: ReachFinding[];
+}
+
+/**
+ * component_placement — where one component of a reach model sits: its
+ * project, its subsystem (the unit a deployment usually runs as one workload)
+ * and its block.
+ */
+export interface ComponentPlacement {
+  /** The key of the project holding it ('' for the bound root). */
+  project: string;
+  /** Its component key, qualified like the verbs in a family-scoped model. */
+  component: string;
+  /** Its subsystem key, qualified like the component. */
+  subsystem?: string;
+  /** Its building block or pattern. */
+  componentType: string;
+}
+
+/** topic_end — one end of the pub/sub graph: a component emitting or subscribing to one topic. */
+export interface TopicEnd {
+  /** The component key, as the model names its components. */
+  component: string;
+  /** The topic, exactly as used on the bus. */
+  topic: string;
+  /** True on the publishing end, false on the subscribing end. */
+  emits: boolean;
+}
+
+/**
+ * reach_finding — one network finding of a judged reach model: an error
+ * refuses the flows it sits on, a warning or notice marks them.
+ */
+export interface ReachFinding {
+  severity: 'error' | 'warning' | 'notice';
+  code: string;
+  message: string;
+  /** The spec it sits on: the verb's Portal, or the call's calling component (family keys). */
+  specId?: string;
+  /** The site inside that spec: the verb, or the call's evidence. */
+  at?: string;
 }
 
 /**

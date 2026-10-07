@@ -26,6 +26,10 @@ export {
   // half from lock format 3 on (computeOwnStateId is kept to judge a format-2
   // lock under its own algorithm).
   computeOwnDesignId,
+  // The earlier design reading's identity and the statuses an approval
+  // recorded, to judge a lock taken in that reading as it was taken.
+  computeOwnDesignIdAsRecorded,
+  approvedStatuses,
   approvalRecord,
   consumedContractInputs,
   settledSpecPaths,

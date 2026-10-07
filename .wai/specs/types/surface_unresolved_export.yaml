@@ -1,0 +1,26 @@
+kind: value-object
+id: surface_unresolved_export
+name: SurfaceUnresolvedExport
+description: >-
+  A public name the producer's L0 still declares but no longer resolves — a named re-export whose
+  source dropped the item — carried in a snapshot so a consumer that used the name is told why it is
+  gone, and where the rename trace of the re-exported source leads. Provenance, never contract: no
+  digest reads it.
+subsystem: sdd_surfaces
+fields:
+  - name: id
+    type: string
+    description: The public name the entry declares
+    optional: false
+  - name: source
+    type: string
+    description: 'Where it re-exports from: the subsystem, member or external the entry names in `from`'
+    optional: false
+  - name: renamedTo
+    type: string
+    description: The name the source's rename trace carries the item to, when it records one
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-06T23:03:42.409Z'
+updatedAt: '2026-10-06T23:03:43.276Z'

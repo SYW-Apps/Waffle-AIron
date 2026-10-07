@@ -18,6 +18,8 @@ export interface NetworkCommandOptions {
   from?: string;
   /** why: the callee, a project, project::portal or project::portal.verb. */
   to?: string;
+  /** declare --description: what the network encloses, in the project's words; shown on the network diagram. */
+  description?: string;
   /** --no-recursive: the bound project alone instead of its family. */
   recursive?: boolean;
 }

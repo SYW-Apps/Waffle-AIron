@@ -44,6 +44,33 @@ methods:
         description: >-
           The alias, the location in the one location grammar, and optionally the producer id, ref,
           dir, `use`, description, pin and dryRun
+  - name: remove
+    description: >-
+      The sdd_remove_external tool workflow: remove one external of the bound project — its
+      declaration and its pin — through the surfaces adapter and shape the tool response: the
+      removal as structured content, a refusal as one sentence. A tree-scoped write.
+    signature: 'remove(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+  - name: updateUse
+    description: >-
+      The sdd_update_external tool workflow: add and remove `use` imports of one declared external
+      through the surfaces adapter and shape the tool response — the change as structured content, a
+      refusal as one sentence naming the closest exported names — so an assistant never hand-edits
+      .wai/project.yaml to import a producer's names bare. A tree-scoped write.
+    signature: 'updateUse(request: ExternalUseRequest): ExternalUseChange'
+    returns: ExternalUseChange
+    params:
+      - name: request
+        type: ExternalUseRequest
+        description: The alias, the names to add and remove, and dryRun
 status: complete
 createdAt: '2026-09-26T17:50:42.455Z'
-updatedAt: '2026-10-06T10:17:18.706Z'
+updatedAt: '2026-10-06T23:06:47.694Z'

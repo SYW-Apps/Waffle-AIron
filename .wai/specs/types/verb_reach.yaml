@@ -24,8 +24,8 @@ fields:
   - name: binding
     type: string
     description: >-
-      The endpoint as one line (POST /orders, orders.v1.Orders/Create, topic orders.created); absent
-      for InProcess
+      The endpoint as one line, an HTTP path under the Portal's basePath (POST /v1/orders),
+      orders.v1.Orders/Create, topic orders.created; absent for InProcess
     optional: true
   - name: network
     type: string
@@ -52,4 +52,4 @@ fields:
 methods: []
 sourcePath: src/models/reach.ts
 createdAt: '2026-10-06T12:57:11.849Z'
-updatedAt: '2026-10-06T19:24:43.922Z'
+updatedAt: '2026-10-06T23:02:44.500Z'

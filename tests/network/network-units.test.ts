@@ -62,7 +62,8 @@ describe('flow_party', () => {
 
 describe('flow_matrix_projector.explain', () => {
   it('answers not allowed with an empty flow list when nothing reaches the callee', () => {
-    expect(explain([], 'outside', 'api')).toEqual({ allowed: false, flows: [], chain: ['nothing in the design allows outside to reach api', 'no flow reaches api at all'] });
+    const model: ReachModel = { scope: 'own', networks: [], verbs: [verb({ portal: 'api', verb: 'get', binding: 'GET /x' })], calls: [], placements: [], topics: [] };
+    expect(explain([], 'outside', 'api', model)).toEqual({ allowed: false, flows: [], chain: ['nothing in the design allows outside to reach api', 'no flow reaches api at all'] });
   });
 });
 
@@ -74,7 +75,7 @@ describe('network_codec', () => {
   });
 
   it('quotes CSV cells and escapes Markdown pipes', () => {
-    expect(encodeFlows(flows, 'csv').content.split('\n')[1]).toBe('"outside","api.get","HTTP","GET /a|b","","","entry (outside): Says ""hi"", twice"');
+    expect(encodeFlows(flows, 'csv').content.split('\n')[1]).toBe('"outside","api.get","HTTP","GET /a|b","","","entry (outside): Says ""hi"", twice",""');
     expect(encodeFlows(flows, 'markdown').content).toContain('GET /a\\|b');
     expect(encodeFlows([], 'markdown').content).toContain('No network-transport flows');
   });
@@ -114,8 +115,8 @@ describe('network_diagram_projector', () => {
 });
 
 describe('flow_check_arbiter.check', () => {
-  const flows = project({
-    scope: 'family', networks: [],
+  const checked: ReachModel = {
+    scope: 'family', networks: [], placements: [], topics: [],
     verbs: [
       verb({ project: 'orders', portal: 'orders::api', verb: 'get', binding: 'GET /orders/{id}' }),
       verb({ project: 'orders', portal: 'orders::rpc', verb: 'Create', transport: 'gRPC', binding: 'orders.v1.Orders/Create' }),
@@ -124,22 +125,23 @@ describe('flow_check_arbiter.check', () => {
       { fromProject: 'shop', fromComponent: 'shop::client', toPortal: 'orders::api', verb: 'get', evidence: 'a#1' },
       { fromProject: 'shop', fromComponent: 'shop::client', toPortal: 'orders::rpc', verb: 'Create', evidence: 'b#1' },
     ],
-  });
+  };
+  const flows = project(checked);
 
   it('matches path templates and gRPC paths at L7', () => {
     const report = check(flows, [
       { source: 'shop', destination: 'orders', method: 'GET', path: '/orders/42?x=1' },
       { source: 'shop', destination: 'orders', method: 'POST', path: '/orders.v1.Orders/Create' },
       { source: 'shop', destination: 'orders', method: 'PUT', path: '/orders/42' },
-    ], null);
+    ], null, checked);
     expect(report.unexercised).toEqual([]);
     expect(report.unknownVerbs.map((o) => o.method)).toEqual(['PUT']);
     expect(report.unexpected).toEqual([]);
   });
 
   it('marks every flow of a pair exercised from an L4 observation', () => {
-    const report = check(flows, [{ source: 'shop::client', destination: 'orders' }], null);
+    const report = check(flows, [{ source: 'shop::client', destination: 'orders' }], null, checked);
     expect(report.unexercised).toEqual([]);
-    expect(check(flows, [{ source: 'outside', destination: 'orders' }], null).unexpected).toHaveLength(1);
+    expect(check(flows, [{ source: 'outside', destination: 'orders' }], null, checked).unexpected).toHaveLength(1);
   });
 });

@@ -356,6 +356,22 @@ methods:
       - name: newId
         type: string
         description: Its new id
+  - name: renameField
+    description: >-
+      Resolve the type id, qualified by its owner if needed, against the bound tree, then rename the
+      field through the core adapter
+    signature: 'renameField(id: string, field: string, newName: string): FieldRename'
+    returns: FieldRename
+    params:
+      - name: id
+        type: string
+        description: The type whose field is renamed
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-06T13:15:17.566Z'
+updatedAt: '2026-10-06T23:07:29.112Z'

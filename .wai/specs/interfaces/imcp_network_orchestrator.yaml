@@ -1,6 +1,6 @@
 id: imcp_network_orchestrator
 name: MCP Network Orchestrator Interface
-description: The network read tools' workflows.
+description: 'The network tools'' workflows: two reads and the network declaration.'
 component: mcp_network_orchestrator
 methods:
   - name: flows
@@ -21,10 +21,28 @@ methods:
     params:
       - name: from
         type: string
-        description: A project, a project::component, or outside
+        description: A project, a subsystem, a component, outside or network[:<id>]
       - name: to
         type: string
-        description: A project, a project::portal or a project::portal.verb
+        description: A project, a subsystem, a portal or a portal.verb
+  - name: declare
+    description: >-
+      The sdd_set_network workflow: declare (with its description) or remove the bound project's
+      network in .wai/project.yaml, through the core client adapter, so the assistant can make the
+      design-level fact the network rules read without a hand edit. Returns whether it wrote.
+    signature: 'declare(declared: bool, description: string?): bool'
+    returns: bool
+    params:
+      - name: declared
+        type: bool
+        description: true declares the network, false removes the declaration
+      - name: description
+        type: string?
+        description: What the network encloses, in the project's words; only with declared
+    guarantees:
+      - idempotent
+    previousNames:
+      - imcp_network_orchestrator.setNetwork
 status: complete
 createdAt: '2026-10-06T13:15:25.991Z'
-updatedAt: '2026-10-06T13:15:26.598Z'
+updatedAt: '2026-10-06T23:09:12.685Z'

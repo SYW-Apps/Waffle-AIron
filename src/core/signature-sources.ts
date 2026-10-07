@@ -29,8 +29,12 @@ import type { TypedSpecKind } from '../models/type-grammar.js';
 // resolved, so these facts are the one place the stored form stays visible.
 // ---------------------------------------------------------------------------
 
-/** Which reading of a signatureFrom resolved: a contract method, or a signature type. */
-export type SignatureSourceForm = 'method' | 'signature';
+/**
+ * Which reading of a signatureFrom resolved: a contract method, a signature
+ * type, or a contract method of another project's export entry
+ * (`alias::name.method`, its types spelled as the referrer spells them).
+ */
+export type SignatureSourceForm = 'method' | 'signature' | 'export';
 
 /** What resolving one signatureFrom found. */
 export type SignatureSourceOutcome = 'resolved' | 'unresolved' | 'ambiguous' | 'chained' | 'restated';
@@ -105,6 +109,8 @@ interface ResolutionTables {
   types: TypeSpec[];
   /** `<interface key>|<authored text>` → the key the scan bound that type reference to. */
   boundTypes: Map<string, string>;
+  /** `<referring namespace>|<alias>::<public name>.<method>` → that export entry's method, spelled as the referrer writes it. */
+  exportMethods: ReadonlyMap<string, MethodSignature>;
 }
 
 /** The namespace a keyed id sits in: everything before its last `::` ('' at the bound root). */
@@ -137,6 +143,7 @@ function tablesOf(
   components: ComponentSpec[],
   types: TypeSpec[],
   references: ReadonlyArray<AuthoredReference>,
+  exportMethods: ReadonlyMap<string, MethodSignature> = new Map(),
 ): ResolutionTables {
   const methodsOf = new Map<string, MethodSignature[]>();
   for (const intf of interfaces) methodsOf.set(intf.component, [...(methodsOf.get(intf.component) ?? []), ...intf.methods]);
@@ -145,7 +152,7 @@ function tablesOf(
     if (ref.position !== 'type' || ref.binding === 'outside' || ref.binding === 'unresolved') continue;
     boundTypes.set(`${ref.specId}|${ref.authored}`, ref.resolved);
   }
-  return { methodsOf, componentKeys: new Set(components.map((c) => c.id)), types, boundTypes };
+  return { methodsOf, componentKeys: new Set(components.map((c) => c.id)), types, boundTypes, exportMethods };
 }
 
 /** Step 3, the method reading: the head a component in the owning interface's namespace, the tail a method on its contracts. */
@@ -162,6 +169,18 @@ function methodReading(tables: ResolutionTables, intf: InterfaceSpec, value: str
     if (method) return { target: `${key}.${tail}`, method };
   }
   return null;
+}
+
+/**
+ * Step 3, the export reading: no component of the scan answers, and the value
+ * names a method of another project's export entry the scan handed in
+ * (`alias::name.method` — a declared external's pin, a contained member's live
+ * table), keyed by the owning interface's namespace.
+ */
+function exportReading(tables: ResolutionTables, intf: InterfaceSpec, value: string): MethodHit | null {
+  if (!value.includes('::')) return null;
+  const method = tables.exportMethods.get(`${namespaceOf(intf.id)}|${value}`);
+  return method ? { target: value, method } : null;
 }
 
 /**
@@ -203,7 +222,9 @@ function restatedFact(base: Omit<SignatureSourceFact, 'outcome'>, stored: Method
 function resolveSourced(tables: ResolutionTables, intf: InterfaceSpec, stored: MethodSignature, facts: SignatureFacts): MethodSignature {
   const source = stored.signatureFrom!;
   const base = { interfaceId: intf.id, component: intf.component, method: stored.name, source };
-  const hit = methodReading(tables, intf, source);
+  const local = methodReading(tables, intf, source);
+  const external = local ? null : exportReading(tables, intf, source);
+  const hit = local ?? external;
   const { signature, other } = typeReading(tables, intf, source);
   // Step 4: exactly one reading resolves?
   if (hit && signature) {
@@ -219,7 +240,7 @@ function resolveSourced(tables: ResolutionTables, intf: InterfaceSpec, stored: M
     facts.sources.push({ ...base, form: 'method', target: hit.target, outcome: 'chained', detail: hit.method.signatureFrom });
     return unresolvedMethod(stored);
   }
-  const form = hit ? 'method' : 'signature';
+  const form: SignatureSourceForm = external ? 'export' : hit ? 'method' : 'signature';
   const target = hit ? hit.target : typeTarget(signature!);
   const params = hit ? hit.method.params : signature!.params;
   const returns = hit ? hit.method.returns : (signature!.returns ?? 'unknown');
@@ -265,11 +286,12 @@ export function resolveTree(
   components: ReadonlyArray<ComponentSpec>,
   types: ReadonlyArray<TypeSpec | StoredTypeSpec>,
   references: ReadonlyArray<AuthoredReference> = [],
+  exportMethods: ReadonlyMap<string, MethodSignature> = new Map(),
 ): SignatureResolution {
   // Step 1: copies, so nothing the caller holds is mutated, and the lookups over them.
   const intfs = interfaces.map((i) => ({ ...i, methods: i.methods.map((m) => ({ ...m })) })) as InterfaceSpec[];
   const typeCopies = types.map((t) => ({ ...t, methods: t.methods.map((m) => ({ ...m })) })) as TypeSpec[];
-  const tables = tablesOf(intfs, [...components], typeCopies, references);
+  const tables = tablesOf(intfs, [...components], typeCopies, references, exportMethods);
   const facts = emptySignatureFacts();
   // Steps 2-12: every contract method naming a signatureFrom.
   const sourced = intfs.map((intf) => ({

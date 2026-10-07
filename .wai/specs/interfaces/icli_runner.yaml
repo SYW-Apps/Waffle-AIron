@@ -792,10 +792,9 @@ methods:
         narrative steps into it.
   - name: runNetworkFlows
     description: >-
-      `wairon network flows`: print (or with --out write) the allowed-flows matrix of the project,
-      its family at a project that declares members, as JSON, CSV or Markdown. A team reviews it in
-      a pull request as the authoritative who-talks-to-whom: a design change that adds a dependency
-      shows up as a new row before any code or firewall change exists.
+      `wairon network flows [--format json|csv|markdown]`: print the allowed-flows matrix. When the
+      design fails the gate, every refused row is marked REFUSED with its findings, each finding is
+      printed to stderr, and no refused row reads as allowed.
     signature: 'runNetworkFlows(options: NetworkCommandOptions): async void'
     returns: async void
     params:
@@ -803,11 +802,11 @@ methods:
         type: NetworkCommandOptions
   - name: runNetworkPolicy
     description: >-
-      `wairon network policy --bindings <file>`: generate network policy (Kubernetes NetworkPolicy)
-      from the matrix and the team's bindings file, kept outside .wai/; print or write it, and list
-      every design name the bindings did not map (each given a placeholder label, never silently
-      opened). Committed to the deployment repository and diffed in CI, it turns a design change
-      into a policy diff the security reviewer reads in the same pull request.
+      `wairon network policy --bindings <file>`: generate Kubernetes NetworkPolicy from the
+      allowed-flows matrix and the team's bindings file. A flow the gate refuses (GATEWAY_BYPASSED,
+      ...) is never admitted: it is left out, the file's head names it with its findings, each
+      finding is printed, and the command exits non-zero, because a design that fails the gate has
+      no policy to commit.
     signature: 'runNetworkPolicy(options: NetworkCommandOptions): async void'
     returns: async void
     params:
@@ -844,6 +843,45 @@ methods:
     params:
       - name: options
         type: NetworkCommandOptions
+  - name: runNetworkDeclare
+    description: >-
+      `wairon network declare [--description <text>]`: declare that this project and every member
+      below it form one isolated network boundary, in .wai/project.yaml, through the core adapter —
+      no hand edit. It changes which rules fire (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so the next
+      `wairon validate` judges the design as it will run, and the change is part of the gate
+      identity: re-lock afterwards.
+    signature: 'runNetworkDeclare(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkUndeclare
+    description: >-
+      `wairon network undeclare`: remove this project's network declaration from .wai/project.yaml,
+      through the core adapter. Re-lock afterwards.
+    signature: 'runNetworkUndeclare(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runTypeRenameField
+    description: >-
+      `wairon type rename-field <type> <field> <new-name>`: rename a field of a type and respell
+      every reference to it, the old name kept in the field's rename trace (previousNames,
+      `formerly` in the design export). Prints the specs rewritten and that a lock goes stale as
+      with any edit; a refusal prints its reason and exits non-zero.
+    signature: 'runTypeRenameField(typeId: string, field: string, newName: string): async void'
+    returns: async void
+    params:
+      - name: typeId
+        type: string
+        description: The type whose field is renamed
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T18:33:30.585Z'
+updatedAt: '2026-10-06T23:08:01.267Z'

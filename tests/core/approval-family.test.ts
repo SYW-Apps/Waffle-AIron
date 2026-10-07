@@ -107,7 +107,7 @@ describe('stage 5 — the lock record, format 2', () => {
     expect(record.code!.analyzer.grade).toBe('none');
     expect(record.code!.codes).toBeUndefined();
     expect(record.validationResult.valid).toBe(true);
-    expect(record.stateId.algorithm).toBe('sha256+design+doctrine+inputs+members');
+    expect(record.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     expect(fs.readFileSync(path.join(fam.top, '.wai', 'lock.json'), 'utf8')).not.toContain('"children"');
   });
 
@@ -145,6 +145,8 @@ describe('property: parent-lock-writes-nothing-below', () => {
     const { stdout } = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'lock', '--yes'], { cwd: fam.top, timeout: 180_000 });
 
     expect(stdout).toContain('recorded beside the claim');
+    // Printed once — in the summary before the write — never repeated after it.
+    expect(stdout.split('recorded beside the claim').length - 1).toBe(1);
     expect(stdout).toMatch(/member mid: approved/);
     expect(fs.existsSync(path.join(fam.top, '.wai', 'lock.json'))).toBe(true);
     expect({ mid: dirHash(fam.mid), sib: dirHash(fam.sib) }).toEqual(before);
@@ -388,11 +390,11 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     const check = checkApproval(false);
     expect(check.state).toBe('stale');
     expect(check.approved).toBe(false);
-    expect(check.message).toContain('was taken under an earlier gate identity (written by wairon ');
-    expect(check.message).toContain("Since wairon 6.0.0 the gate identity also covers members' composition subjects and `composition`, and code conformance is recorded beside the claim.");
+    // Nothing in the tree moved: the cause stated is the gate, never the design.
+    expect(check.message).toContain('taken by wairon ');
+    expect(check.message).toContain('what moved is the gate it was judged under');
     expect(check.message).not.toMatch(/stage \d/);
-    expect(check.message).toContain('No own spec file has changed since the approval.');
-    expect(check.message).toContain('re-lock once');
+    expect(check.message).toContain('re-approves the unchanged design');
 
     fam.touch(fam.sib, 'edited');
     bind(fam.sib);

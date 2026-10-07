@@ -147,7 +147,7 @@ const NOT_A_REFERENCE: Record<string, string> = {
   'implementation.methods.narrative.catches.error': 'an error name', 'implementation.methods.narrative.branches.name': 'a branch name',
   'implementation.methods.narrative.outcome': 'prose', 'implementation.methods.narrative.error': 'an error name',
   'implementation.methods.intent': 'prose', 'implementation.methods.exportedVia': 'a code-level export name',
-  'type.fields.name': 'a field name', 'type.fields.description': 'prose',
+  'type.fields.name': 'a field name', 'type.fields.description': 'prose', 'type.fields.previousNames': 'a field rename trace, carried verbatim',
   'type.fields.references': 'an ERD foreign-key hint (`table.field`), never bound by the loader',
   'type.methods.params.name': 'a parameter name', 'type.methods.params.description': 'prose',
   'type.componentClass': 'matched by name within its own project and never qualified: it cannot name across a boundary',

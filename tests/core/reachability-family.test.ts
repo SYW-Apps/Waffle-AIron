@@ -311,7 +311,7 @@ describe('surface_projector.projectOwnSurface (transport, abi, role, targetLangu
     const snapshot = projectOwnSurface('project');
     expect(snapshot.targetLanguage).toBe('rust');
     const tiles = snapshot.interfaces.find((e) => e.id === 'tiles')!;
-    expect(tiles).toMatchObject({ transport: 'InProcess', abi: 'c', type: 'Custom' });
+    expect(tiles).toMatchObject({ transport: 'InProcess', abi: 'c', type: 'InProcess' });
     expect(tiles.role).toBeUndefined();
     expect(snapshot.interfaces.find((e) => e.id === 'tile-source')!.role).toBe('implement');
   });

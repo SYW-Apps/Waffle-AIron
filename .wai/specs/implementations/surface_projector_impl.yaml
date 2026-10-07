@@ -54,9 +54,12 @@ methods:
           each surface contract entry: set the entry's `auth` to the portal's projected PortalAuth
           (its security scheme, or none), its `basePath` to the portal's basePath, so the codec can
           emit per-portal OpenAPI servers and securitySchemes, its `transport` and `abi` so a
-          consumer can tell a library from a network surface, its `type` to the transport's derived
-          export kind, and its `role` to the export entry's role. Stamp the snapshot with the
-          producer's targetLanguage
+          consumer can tell a library from a network surface, its `type` to the entry's derived
+          export kind (InProcess for a library, never the free-form Custom), and its `role` to the
+          export entry's role. Stamp the snapshot with the producer's targetLanguage, and with the
+          table's unresolved named re-exports (each invalid problem naming a public name: its source
+          and the name the source's rename trace carries it to) as `unresolvedExports` — provenance
+          outside every digest, so a consumer that used the name is told where it went
         type: local
       - stepNumber: 9
         description: >-
@@ -92,4 +95,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-10-06T13:01:55.363Z'
+updatedAt: '2026-10-06T23:09:21.897Z'

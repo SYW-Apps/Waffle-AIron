@@ -1307,9 +1307,12 @@ methods:
         description: >-
           Report EXTERNAL_NOT_EXPORTED (error) on the referring spec, in its draft context, carrying
           the resolution: the reference as written, the target and the producer, whether the table
-          read was a contained member's live one or the external's pin (with its digest), and the
-          remedy — export it from the producer's L0 (a project-level type takes one own `{ typeDef
-          }` entry) and re-pin, or reach it by a name the producer exports
+          read was a contained member's live one or the external's pin (with its digest), a "did you
+          mean" — the public name the producer's rename trace carries the written name to when it
+          records one (a renamed type, component or interface keeps its former ids), else the
+          closest public names it exports — and the remedy: export it from the producer's L0 (a
+          project-level type takes one own `{ typeDef }` entry) and re-pin, or reach it by a name
+          the producer exports
         type: local
       - stepNumber: 10
         description: Next reference
@@ -1536,4 +1539,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-06T13:21:10.003Z'
+updatedAt: '2026-10-06T23:08:17.783Z'

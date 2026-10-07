@@ -1,5 +1,6 @@
 import { componentEntryFor, parseDeclaredCall, SURFACE_AUDIENCES } from '../../models/index.js';
 import type {
+  ComponentPlacement,
   ComponentSpec,
   DeclaredInvocation,
   Endpoint,
@@ -8,6 +9,7 @@ import type {
   NetworkDeclaration,
   ProjectFamily,
   ReachModel,
+  TopicEnd,
   VerbReach,
 } from '../../models/index.js';
 import type { RuleContext } from './types.js';
@@ -27,11 +29,25 @@ import type { RuleContext } from './types.js';
 // reaches what. It mirrors the narrative graph projector beside it.
 // ---------------------------------------------------------------------------
 
-/** One endpoint as one line: `POST /orders`, `orders.v1.Orders/Create`, `topic orders.created`. */
-function bindingLine(endpoint: Endpoint | undefined): string | undefined {
+/** A Portal's basePath joined with an endpoint path: `/v1` + `/orders` is `/v1/orders`. */
+function underBase(basePath: string | undefined, path: string): string {
+  const base = (basePath ?? '').trim().replace(/\/+$/, '');
+  if (base === '' || base === '/') return path;
+  const head = base.startsWith('/') ? base : `/${base}`;
+  // A path already written under the base is not prefixed twice.
+  if (path === head || path.startsWith(`${head}/`)) return path;
+  return `${head}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+/**
+ * One endpoint as one line: `POST /v1/orders` (an HTTP path under the
+ * Portal's basePath, the path a cluster sees), `orders.v1.Orders/Create`,
+ * `topic orders.created`.
+ */
+function bindingLine(endpoint: Endpoint | undefined, basePath?: string): string | undefined {
   if (!endpoint) return undefined;
   switch (endpoint.transport) {
-    case 'HTTP': return `${endpoint.method} ${endpoint.path}`;
+    case 'HTTP': return `${endpoint.method} ${underBase(basePath, endpoint.path)}`;
     case 'gRPC': return `${endpoint.service}/${endpoint.method}`;
     case 'GraphQL': return `${endpoint.operation} ${endpoint.field}`;
     case 'MessageBus': return `${endpoint.direction} topic ${endpoint.topic} (${endpoint.event})`;
@@ -72,6 +88,12 @@ function widestAudience(ctx: RuleContext, portal: string, interfaceId: string): 
 function byVerb(a: VerbReach, b: VerbReach): number {
   return a.project.localeCompare(b.project) || a.portal.localeCompare(b.portal) || a.verb.localeCompare(b.verb);
 }
+function byPlacement(a: ComponentPlacement, b: ComponentPlacement): number {
+  return a.project.localeCompare(b.project) || a.component.localeCompare(b.component);
+}
+function byTopic(a: TopicEnd, b: TopicEnd): number {
+  return a.component.localeCompare(b.component) || a.topic.localeCompare(b.topic) || Number(a.emits) - Number(b.emits);
+}
 function byCall(a: ModelledCall, b: ModelledCall): number {
   return a.fromProject.localeCompare(b.fromProject) || a.fromComponent.localeCompare(b.fromComponent)
     || a.toPortal.localeCompare(b.toPortal) || a.verb.localeCompare(b.verb) || a.evidence.localeCompare(b.evidence);
@@ -100,7 +122,7 @@ export function project(ctx: RuleContext, network: NetworkDeclaration | undefine
       for (const m of intf.methods) {
         const entry = componentEntryFor(comp, m.invokedBy);
         if (isOutsideEntry(entry)) outsideEntered = true;
-        const binding = comp.transport === 'InProcess' ? undefined : bindingLine(m.endpoint);
+        const binding = comp.transport === 'InProcess' ? undefined : bindingLine(m.endpoint, comp.basePath);
         const audience = widestAudience(ctx, comp.id, intf.id);
         verbs.push({
           project: '',
@@ -153,12 +175,37 @@ export function project(ctx: RuleContext, network: NetworkDeclaration | undefine
     }
   }
 
-  // Step 6.
+  // Step 6: every own component placed, so a party is known and a caller is named by its workload.
+  const placements: ComponentPlacement[] = ctx.components.filter(isOwn).map((c) => ({
+    project: '',
+    component: c.id,
+    ...(c.subsystem !== undefined ? { subsystem: c.subsystem } : {}),
+    componentType: c.componentType,
+  }));
+
+  // Step 7: every own end of the pub/sub graph, one per component, topic and side.
+  const topics: TopicEnd[] = [];
+  const addEnd = (component: string, topic: string, emits: boolean): void => {
+    if (!topics.some((t) => t.component === component && t.topic === topic && t.emits === emits)) topics.push({ component, topic, emits });
+  };
+  for (const comp of ctx.components.filter(isOwn)) {
+    for (const e of comp.emits ?? []) addEnd(comp.id, e.topic, true);
+    for (const e of comp.subscribesTo ?? []) addEnd(comp.id, e.topic, false);
+    for (const intf of ctx.interfacesByComponent.get(comp.id) ?? []) {
+      for (const m of intf.methods) {
+        if (m.endpoint?.transport === 'MessageBus') addEnd(comp.id, m.endpoint.topic, m.endpoint.direction === 'publish');
+      }
+    }
+  }
+
+  // Step 8.
   return {
     scope: 'own',
     networks: ownNetwork ? [{ ...ownNetwork, gateways: [...ownNetwork.gateways].sort() }] : [],
     verbs: verbs.sort(byVerb),
     calls: calls.sort(byCall),
+    placements: placements.sort(byPlacement),
+    topics: topics.sort(byTopic),
   };
 }
 
@@ -211,7 +258,18 @@ export function compose(
   // Steps 2-3: each project's verbs and calls, re-placed in its innermost network.
   const verbs: VerbReach[] = [];
   const calls: ModelledCall[] = [];
+  const placements: ComponentPlacement[] = [];
+  const topics: TopicEnd[] = [];
   for (const [key, model] of models) {
+    for (const p of model.placements ?? []) {
+      placements.push({
+        ...p,
+        project: key,
+        component: qualify(key, p.component),
+        ...(p.subsystem !== undefined ? { subsystem: qualify(key, p.subsystem) } : {}),
+      });
+    }
+    for (const t of model.topics ?? []) topics.push({ ...t, component: qualify(key, t.component) });
     const net = innermost(key);
     for (const v of model.verbs) {
       const { network: _own, ...rest } = v;
@@ -243,15 +301,20 @@ export function compose(
 
   // Step 4: the cross-project calls the family's references record.
   const portals = new Set(verbs.map((v) => v.portal));
+  const placed = new Map(placements.map((p) => [p.component, p] as const));
   for (const ref of family.references) {
     if (!['call', 'calls', 'register', 'dispatch'].includes(ref.position) || ref.member === undefined) continue;
     if (!portals.has(ref.target)) continue;
     const net = innermost(ref.consumer);
+    // The component whose implementation writes the call, as the reference
+    // recorded it — never guessed from a matching dependsOn — named by its
+    // workload (its subsystem) through the consumer's placements.
+    const caller = ref.caller ?? ref.specId;
+    const subsystem = placed.get(caller)?.subsystem;
     calls.push({
       fromProject: ref.consumer,
-      // The component whose implementation writes the call, as the
-      // reference recorded it — never guessed from a matching dependsOn.
-      fromComponent: ref.caller ?? ref.specId,
+      fromComponent: caller,
+      ...(subsystem !== undefined ? { fromSubsystem: subsystem } : {}),
       ...(net !== undefined ? { fromNetwork: net } : {}),
       toPortal: ref.target,
       verb: ref.member,
@@ -267,5 +330,7 @@ export function compose(
       .sort((a, b) => depth(a.id) - depth(b.id) || a.id.localeCompare(b.id)),
     verbs: verbs.sort(byVerb),
     calls: calls.sort(byCall),
+    placements: placements.sort(byPlacement),
+    topics: topics.sort(byTopic),
   };
 }

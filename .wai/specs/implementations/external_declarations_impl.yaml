@@ -1,8 +1,9 @@
 id: external_declarations_impl
 name: External Declarations Implementation
 description: >-
-  The declare workflow: read the request, refuse in one sentence, write, check against the producer,
-  compensate, pin.
+  The declare, remove and use workflows: read the request, refuse in one sentence, check against the
+  producer before anything is written, write, pin — or take a declaration and its pin out together,
+  or change its `use` imports.
 contract: iexternal_declarations
 sourcePath: src/core/external-declarations.ts
 methods:
@@ -20,11 +21,12 @@ methods:
           Read the request: the alias against [a-z0-9-_]+ and against every alias already declared;
           the source through the one location grammar (member_source parsed: `hosted:<id>`, a git
           URL with an optional `#<full commit>`, a leading-`../` sibling or a contained path;
-          refused: empty, absolute, an inner `..`) — a git `#<commit>` becoming the declaration's
-          ref, which the pin then follows fixed at that commit; `ref` and `dir` only beside a git
-          source; the producer id against the project-id grammar; each `use` entry `*` or a public
-          name. Build the normalized declaration in object form, or the one-sentence refusal naming
-          the accepted form
+          refused: empty, absolute, an inner `..`, and text that is no location at all — braces,
+          quotes, whitespace, the YAML of an object pasted as a string) — a git `#<commit>` becoming
+          the declaration's ref, which the pin then follows fixed at that commit; `ref` and `dir`
+          only beside a git source; the producer id against the project-id grammar; each `use` entry
+          `*` or a public name. Build the normalized declaration in object form, or the one-sentence
+          refusal naming the accepted form
         type: local
       - stepNumber: 3
         description: Anything refused?
@@ -36,36 +38,15 @@ methods:
         type: return
         outcome: refused
       - stepNumber: 5
-        label: dry
+        label: candidate
         description: >-
-          A dry run stops here: the producer is read through the declaration, so it is not consulted
-          before anything is written
-        type: branch
-        condition: request.dryRun
-        onFalseStep: 7
+          Bind the normalized declaration to its producer BEFORE writing it, through the core's
+          candidate binding — the binding the written declaration will get (a git producer fetched;
+          one that cannot be reached is bound with its problem, so declaring still works offline)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternalCandidate
       - stepNumber: 6
-        description: >-
-          Answer what would be written (written false, the normalized declaration) and that the
-          producer is checked on the real run
-        type: return
-        outcome: dry run
-      - stepNumber: 7
-        label: write
-        description: >-
-          Write the normalized declaration into `.wai/project.yaml` through the core's configuration
-          portal
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: declareExternal
-      - stepNumber: 8
-        description: >-
-          Resolve the declared externals to read the new alias's binding: its producer and where it
-          is (a git producer fetched; one that cannot be reached is bound with its problem, so
-          declaring still works offline)
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveExternals
-      - stepNumber: 9
         label: producer-id
         description: >-
           When the binding has a root, read the producer's configuration with that root bound
@@ -73,15 +54,17 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 10
+      - stepNumber: 7
         label: producer-exports
         description: >-
-          With the producer's root bound the same way, read its resolved export table, for the
-          public names it exports at this project's audience
+          With the producer's root bound the same way, read its resolved export table: the public
+          names it exports at this project's audience, and every public name with the audience it is
+          exported to, so a name kept from this project by its audience is told apart from one that
+          does not exist
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 11
+      - stepNumber: 8
         description: >-
           Does the producer contradict the declaration — answering to another id than declared (read
           from its configuration, or named by the family's own resolution of the alias), or, once
@@ -90,43 +73,207 @@ methods:
         condition: >-
           the producer answers to another id than the declared one, or it was read and a `use` name
           is not in its export table at this project's audience
-        onFalseStep: 14
-      - stepNumber: 12
+        onFalseStep: 10
+      - stepNumber: 9
         description: >-
-          Take the declaration back out, so a contradicted declaration never lingers in the
-          configuration
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: removeExternal
-      - stepNumber: 13
-        description: >-
-          Answer the refusal naming what the producer contradicted: the id it answers to (declare
-          `project:` or use that alias), or each unexported `use` name with the closest names it
-          does export
+          Answer the refusal naming what the producer contradicted, writing nothing: the id it
+          answers to (declare `project:` or use that alias); each unexported `use` name with the
+          closest names it does export; or, for a name exported only to a narrower audience, that
+          audience, the one this project is read at (a family project at project, a path, git or
+          hosted consumer at instance) and the ranking project < department < instance < partner <
+          external
         type: return
         outcome: refused by the producer
-      - stepNumber: 14
+      - stepNumber: 10
+        label: dry
+        description: A dry run stops here, the producer already checked
+        type: branch
+        condition: request.dryRun
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Answer what would be written (written false, the normalized declaration, the id the
+          producer answers to) and, when the producer could not be read, why — nothing is written
+        type: return
+        outcome: dry run
+      - stepNumber: 12
+        label: write
+        description: >-
+          Write the normalized declaration into `.wai/project.yaml` through the core's configuration
+          portal
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: declareExternal
+      - stepNumber: 13
         label: kept
         description: >-
           Pin it now when asked (the default) and the producer was read; an unreadable producer
           leaves it declared and unpinned, with the reason carried as `unreachable`
         type: branch
         condition: request.pin is not false and the producer was read
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Pin the new alias — its snapshot and lock entry — so its uses are judged against a
           reproducible pin from the first validate
         type: call
         targetComponent: surface_orchestrator
         targetMethod: pinExternals
-      - stepNumber: 16
+      - stepNumber: 15
         label: answer
         description: >-
           Answer the addition: written, the declaration, the producer id it answers to, the pin when
           taken, and `unreachable` with the reason when the producer could not be read
         type: return
         outcome: declared
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Read the bound project's configuration through the core, for the externals it declares
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          List the bound project's externals — the declared ones with their lock entries, and every
+          orphaned pin (a lock entry whose alias is no longer declared) — for whether the alias
+          holds a pin
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listExternals
+      - stepNumber: 3
+        description: Neither declared nor pinned?
+        type: branch
+        condition: the alias is neither a declared external nor a pinned one
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer the refusal naming the externals that are declared or pinned, writing nothing
+        type: return
+        outcome: refused
+      - stepNumber: 5
+        label: dry
+        description: >-
+          A dry run answers what would be removed — the declaration when declared, the pin when
+          pinned
+        type: branch
+        condition: dryRun
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Answer the dry run, writing nothing
+        type: return
+        outcome: dry run
+      - stepNumber: 7
+        label: declaration
+        description: >-
+          Take the declaration out of `.wai/project.yaml` through the core's configuration portal,
+          when it is declared
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: removeExternal
+      - stepNumber: 8
+        description: >-
+          Remove the alias's pin — its lock entry and its pinned snapshot — so nothing orphaned is
+          left
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: unpin
+      - stepNumber: 9
+        description: 'Answer the removal: whether the declaration and the pin went'
+        type: return
+        outcome: removed
+  - name: updateUse
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core, for the external's declaration
+          and its current `use`
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Read the request: the alias must be a declared external; every added and removed entry `*`
+          or a public name ([a-z0-9-_]+). Compute the resulting list: the current names in order,
+          minus the removed, plus each added name not already there (`*` covers every name)
+        type: local
+      - stepNumber: 3
+        description: Anything refused?
+        type: branch
+        condition: the request was refused
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer the refusal in one sentence, writing nothing
+        type: return
+        outcome: refused
+      - stepNumber: 5
+        label: binding
+        description: >-
+          When names are added, resolve the declared externals to read this alias's binding — its
+          producer and where it is — offline, no producer fetched over the network
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 6
+        label: producer-exports
+        description: >-
+          When the binding has a root, read the producer's resolved export table with that root
+          bound read-only, for the public names it exports at this project's audience (and the
+          audience of every other)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 7
+        description: An added name the producer does not export to this project?
+        type: branch
+        condition: the producer was read and an added name is not exported to this project
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Answer the refusal naming the closest exported names, or the narrower audience the name is
+          exported to, writing nothing
+        type: return
+        outcome: refused by the producer
+      - stepNumber: 9
+        label: dry
+        description: A dry run, or a change that changes nothing, writes nothing
+        type: branch
+        condition: dryRun, or the resulting list equals the current one
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Answer the resulting list, written false
+        type: return
+        outcome: unchanged or dry run
+      - stepNumber: 11
+        label: drop
+        description: >-
+          Names removed? The configuration portal only appends imports, so a removal restates the
+          declaration: take it out and write it back with the resulting `use` — restoring the
+          original declaration if the restatement is refused
+        type: branch
+        condition: the change removes a name
+        onFalseStep: 14
+      - stepNumber: 12
+        description: Take the declaration out
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: removeExternal
+      - stepNumber: 13
+        description: Write it back with the resulting `use`, every other field kept as written
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: declareExternal
+      - stepNumber: 14
+        label: append
+        description: >-
+          Import the added names (append-only and idempotent; after a restatement nothing is left to
+          add)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: importNames
+      - stepNumber: 15
+        description: 'Answer the change: written, the resulting list, what was added and removed'
+        type: return
+        outcome: changed
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-10-06T11:12:46.745Z'
+updatedAt: '2026-10-06T23:15:28.798Z'

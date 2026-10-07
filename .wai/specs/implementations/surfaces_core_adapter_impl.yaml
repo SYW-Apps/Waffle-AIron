@@ -115,6 +115,27 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: removeExternal
+  - name: resolveExternalCandidate
+    narrative:
+      - stepNumber: 1
+        description: Forward the candidate binding to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveExternalCandidate
+  - name: listExternalConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward the consumer listing to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: listExternalConsumers
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Forward the import to the core subsystem's published configuration portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: importNames
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-06T10:14:22.819Z'
+updatedAt: '2026-10-06T23:04:56.307Z'

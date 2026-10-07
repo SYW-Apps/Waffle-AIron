@@ -37,9 +37,12 @@ methods:
     description: >-
       What differs between the tree as it stands and the approval on record, compared in the reading
       the record names: design digests for a record with specsReading `design`, raw-content digests
-      (line endings normalized) for an earlier record — never one against the other. Which specs
-      were added, which changed, which were removed, and which are untouched. Null when the project
-      has no record at all — never approved is not the same as approved and drifted.
+      (line endings normalized) for an earlier record — never one against the other. A
+      design-reading spec whose digest differs only because its status moved still matches: status
+      is readiness, not design, and a digest taken while the view still carried it is compared with
+      every status a spec can have. Which specs were added, which changed, which were removed, and
+      which are untouched. Null when the project has no record at all — never approved is not the
+      same as approved and drifted.
     signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
     returns: ApprovalDiff?
     params:
@@ -100,16 +103,22 @@ methods:
   - name: reexpress
     description: >-
       The record on file carried into the current reading WITHOUT a new approval, when that is
-      provably sound: the record is a format-2 one (full-content gate algorithm, content-reading
-      digests) and its stateId equals gate.asRecorded — the identity it certified, recomputed over
-      the tree as it stands, so nothing it covered moved. The answer keeps lockedAt, lockedBy, the
-      validation and code results and the members' pins exactly, and replaces stateId with gate
-      (asRecorded dropped), specs with the design-reading capture, specsReading with `design`,
-      format with 3, and adds `reexpressed` (when, from which algorithm and reading, by which
-      command). Null when there is nothing to carry (no record, or already format 3) or it cannot be
-      proven (the old identity no longer matches: something it covered moved — perhaps only linkage,
-      but that is no longer provable, so it takes one re-lock). Writes nothing; the caller writes
-      the answer through the approval portal.
+      provably sound. Two cases. (1) The identity it certified still holds: a format-2 record
+      (full-content gate algorithm) or a record in the earlier design reading (status still in the
+      view) whose stateId equals gate.asRecorded — that identity recomputed over the tree as it
+      stands. The answer keeps lockedAt, lockedBy, the validation and code results and the members'
+      pins exactly, and replaces stateId with gate (asRecorded dropped), specs with the current
+      design-reading capture, specsReading with `design`, format with 3, and adds `reexpressed`
+      (when, from which algorithm and reading, by which command). (2) A format-2 record whose
+      identity no longer holds, but whose every own spec file still matches its raw-content digest —
+      no file added, changed or removed, not even in code linkage: what moved is the gate the design
+      was judged under (wairon's design rules, the project's rule tuning, composition, network
+      declaration, consumed contracts or a member's approval), never the tree. Its reading is
+      carried exactly as in (1) but its stateId stays the identity it certified, so the lock still
+      reads stale, now for that stated cause, and one `wairon lock` re-approves it under the current
+      gate. Null when there is nothing to carry (no record, a format-3 record in the current
+      reading) or nothing proves the tree unchanged. Writes nothing; the caller writes the answer
+      through the approval portal.
     signature: 'reexpress(gate: StateId): LockRecord?'
     returns: LockRecord?
     params:
@@ -120,6 +129,27 @@ methods:
           asRecorded when the record on disk is a format-2 one
     guarantees:
       - idempotent
+  - name: approvedStatuses
+    description: >-
+      The status each own spec had when the approval on record was taken, keyed `<kind>:<id>`,
+      recovered from a design-reading record's per-spec digests: a spec whose design digest WITH a
+      candidate status (none, draft, design, complete) equals the recorded digest was approved with
+      that status (none reads as complete, as the loader parses it). A spec whose digest matches no
+      candidate moved in its design and is left out, as is every spec of a record in another
+      reading. What state_hash.ownDesignAsRecorded recomputes an earlier-reading identity with. Pure
+      over the record and the tree; writes nothing.
+    signature: 'approvedStatuses(record: LockRecord, root?: string): map<string, SpecStatus>'
+    returns: map<string, SpecStatus>
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval record whose statuses to recover
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-10-06T10:09:58.468Z'
+updatedAt: '2026-10-06T23:04:14.432Z'
