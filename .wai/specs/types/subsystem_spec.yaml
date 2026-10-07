@@ -5,7 +5,9 @@ description: L1 Subsystem specification
 fields:
   - name: id
     type: string
-    description: Stable subsystem identifier
+    description: >-
+      Stable subsystem identifier, in the spec-id grammar (see component_spec.id: [a-z0-9-_]+, at
+      most 64 characters, never a Windows device name)
     optional: false
     key: primary
   - name: name
@@ -102,4 +104,4 @@ methods:
     symbol: subsystemDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T23:03:29.929Z'
+updatedAt: '2026-10-07T18:29:36.630Z'

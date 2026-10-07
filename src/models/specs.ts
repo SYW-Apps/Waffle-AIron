@@ -3,7 +3,38 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 // Common Identifier Schema
 // ---------------------------------------------------------------------------
-export const SpecIdSchema = z.string().regex(/^[a-z0-9-_]+$/, 'Identifier must be lowercase alphanumeric with dashes or underscores');
+/**
+ * The names Windows reserves for devices: `con`, `prn`, `aux`, `nul`,
+ * `com0`-`com9` and `lpt0`-`lpt9`, in any case and with any extension-like
+ * suffix (`aux.yaml` is the device too). A file or folder of that name cannot
+ * be created, checked out or `git add`-ed on Windows, so an id that becomes a
+ * path segment must never be one — refused on EVERY platform, because a tree
+ * written on Linux is checked out on Windows. (`com0`/`lpt0` are listed by
+ * Microsoft's own naming rules beside 1-9.)
+ */
+export const WINDOWS_RESERVED_NAME_RE = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i;
+
+/** Whether a path segment is a name Windows reserves for a device (see WINDOWS_RESERVED_NAME_RE). */
+export function isWindowsReservedName(name: string): boolean {
+  return WINDOWS_RESERVED_NAME_RE.test(name);
+}
+
+/**
+ * The longest spec id. An id is a folder and a file name under `.wai/specs/`
+ * (`<subsystem>/<component>/.implementation.yaml`, a generated agent file),
+ * and git for Windows refuses paths over 260 characters by default
+ * (core.longpaths off), while NTFS refuses a single segment over 255 — the
+ * 270-character id of the round-4 trial died on a raw ENOENT. 64 keeps two
+ * nested ids plus the file name near 150 characters, leaving the rest of the
+ * 260 for the checkout's own path, and is no real constraint on a name (a
+ * DNS label or a Kubernetes name stops at 63).
+ */
+export const MAX_SPEC_ID_LENGTH = 64;
+
+export const SpecIdSchema = z.string()
+  .regex(/^[a-z0-9-_]+$/, 'Identifier must be lowercase alphanumeric with dashes or underscores')
+  .max(MAX_SPEC_ID_LENGTH, `Identifier is longer than ${MAX_SPEC_ID_LENGTH} characters: an id becomes a folder and a file name, and a longer one breaks the path limits of a Windows checkout`)
+  .regex(/^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)/, 'Identifier is a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9): no Windows checkout could hold its file, and `git add` fails for the whole repository — choose another id (e.g. "aux_store", "console")');
 
 /**
  * Split a qualified id at its last `::` into the namespace prefix and the local

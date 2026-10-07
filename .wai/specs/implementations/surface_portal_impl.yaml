@@ -118,6 +118,13 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: diff
+  - name: unrecordedUses
+    narrative:
+      - stepNumber: 1
+        description: Forward unrecordedUses to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: unrecordedUses
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-07T10:55:52.834Z'
+updatedAt: '2026-10-07T18:32:51.760Z'

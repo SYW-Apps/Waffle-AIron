@@ -48,7 +48,7 @@ import {
   scanAllSpecs,
   updateSpec,
 } from './adapters/authoring-core.js';
-import { validateComponentCandidate, findTestsReferencing } from './adapters/authoring-validator.js';
+import { validateComponentCandidate, findTestsReferencing, implementsProblem } from './adapters/authoring-validator.js';
 import type { TestsToRevisit } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from '../models/candidate.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -1072,7 +1072,14 @@ export function updateSpecGated(
     report.notices.push(...adapterTransportImpact(id, delta.transport));
   }
 
-  // Step 6: did this write invalidate any test?
+  // Step 6: a contract's `implements` the delta writes — a dry run included,
+  // before anything is written — says what validate will say of it.
+  if (kind === 'interface' && typeof delta?.implements === 'string') {
+    const problem = implementsProblem(delta.implements);
+    if (problem) report.notices.push(`${problem} (validate reports it once this is written)`);
+  }
+
+  // Step 7: did this write invalidate any test?
   const changed = changedMethods(report);
   if (changed.length > 0 && testRoots.length > 0) {
     // Steps 6-7: search them by the code name and the file realizing each.

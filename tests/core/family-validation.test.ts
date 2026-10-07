@@ -114,10 +114,11 @@ describe('the family run — what it carries', () => {
       expect(carried).toEqual(own.issues.filter((i) => i.specId !== undefined).map(line).sort());
       // …including the ones that name no spec (the run adds its own beside them).
       expect(of(run, key)).toEqual(expect.arrayContaining(own.issues.map(line)));
-      // …and its totals are its own gate's.
+      // …and its totals count what is listed under its key: its own gate's
+      // findings and the family's beside them (round 4: "warnings: 0" while it listed 4).
       const verdict = run.projects!.find((p) => p.key === key)!;
       expect([verdict.errors, verdict.warnings, verdict.notices]).toEqual(
-        ['error', 'warning', 'notice'].map((s) => own.issues.filter((i) => i.severity === s).length));
+        ['error', 'warning', 'notice'].map((s) => run.issues.filter((i) => i.project === key && i.severity === s).length));
     }
     // The root's own gate is carried too.
     const rootOwn = ownGate(f.top);

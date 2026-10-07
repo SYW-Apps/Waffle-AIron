@@ -263,8 +263,13 @@ methods:
     description: >-
       Tool: rename a contract method and retarget every reference to it; the method moves on the
       component's interfaces and their implementations, carrying its narrative and bindings. Reports
-      the specs moved, the specs retargeted, and the specs whose prose still names it.
-    signature: 'renameMethod(id: string, method: string, newName: string, pinSymbol?: bool): MethodRename'
+      the specs moved, the specs retargeted, the specs whose prose still names it, and every
+      consumer of an export publishing the method whose specs call it (breaks) — the family in reach
+      and, with search, the consumer checkouts in the named folders. dryRun answers all of it and
+      writes nothing.
+    signature: >-
+      renameMethod(id: string, method: string, newName: string, pinSymbol?: bool, dryRun?: bool,
+      search?: list<string>): MethodRename
     returns: MethodRename
     params:
       - name: id
@@ -285,6 +290,16 @@ methods:
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name so its
           function still binds; true when omitted
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, retarget and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling
+          checkouts)
         optional: true
     endpoint:
       transport: JSONRPC
@@ -1124,4 +1139,4 @@ methods:
       method: tools/call sdd_surface_diff
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T11:00:35.239Z'
+updatedAt: '2026-10-07T18:41:18.226Z'

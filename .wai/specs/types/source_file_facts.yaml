@@ -258,6 +258,15 @@ fields:
       contracts file be followed to the class that implements it, wherever that class lives — a
       possible origin, never a proven one, like every declared type
     optional: true
+  - name: resolvedCalls
+    type: list<ResolvedCallFact>
+    description: >-
+      Every call expression of the file as the TypeScript type checker resolved it (see
+      ResolvedCallFact), in source order; exact grade only, and only where a compiler with a type
+      checker was loaded. What the Portal write-shortcut twin and the unnarrated-write check read
+      first: the checker follows every spelling of a receiver to the declaration, where the shape
+      facts follow the spellings they know
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -376,4 +385,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-07T06:22:33.635Z'
+updatedAt: '2026-10-07T18:28:33.720Z'

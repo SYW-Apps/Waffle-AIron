@@ -13,6 +13,7 @@ import {
   ProjectConfigSchema,
   PROJECT_ID_RE,
   EXTERNAL_ALIAS_RE,
+  aliasGrammarProblem,
   USE_ENTRY_RE,
   type ProjectConfig,
   type PackSelection,
@@ -1082,7 +1083,7 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
     },
     declareExternal(alias, declaration) {
       if (!EXTERNAL_ALIAS_RE.test(alias)) {
-        throw new WaironError(`Refusing to declare the external "${alias}" at ${root}: an alias must fit [a-z0-9-_]+.`);
+        throw new WaironError(`Refusing to declare the external "${alias}" at ${root}: ${aliasGrammarProblem(alias)}.`);
       }
       if (declaration.project !== undefined && !PROJECT_ID_RE.test(declaration.project)) {
         throw new WaironError(`Refusing to declare the external "${alias}" at ${root}: the producer id "${declaration.project}" breaks the project-id grammar.`);

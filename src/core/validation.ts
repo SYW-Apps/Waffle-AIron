@@ -215,8 +215,8 @@ export interface ValidationResult {
   issues: ValidationIssue[];
   /**
    * One line, never a finding. The owner's gate: present when the project
-   * declares externals, saying that `validate --family` composes them against
-   * their live producers. A family run: present when externals were left out
+   * declares externals, saying they were judged against their pins and the
+   * advisory live comparison reads their live producers. A family run: present when externals were left out
    * because their producers lie outside the run's reach.
    */
   hint?: string;
@@ -738,7 +738,7 @@ function runOwnersGate(
     // finding: it never changes the verdict.
     const count = pinnedExternals.length;
     const hint = count > 0
-      ? `${count} external${count === 1 ? ' was' : 's were'} judged against ${count === 1 ? 'its pin' : 'their pins'} alone; \`wairon validate --family\` composes ${count === 1 ? 'it' : 'them'} against the live producer${count === 1 ? '' : 's'}.`
+      ? `${count} external${count === 1 ? ' was' : 's were'} judged against ${count === 1 ? 'its pin' : 'their pins'} alone; the advisory live comparison reads ${count === 1 ? 'its live producer' : 'their live producers'} (offline), and \`wairon externals status\` is the live gate.`
       : undefined;
 
     // Step 39: the project's verdict — the same from every root.
@@ -1251,6 +1251,27 @@ export function familyRelations(): ProjectRelations[] {
  */
 export function unpinnedExternals(): string[] {
   return familyValidator.unpinned();
+}
+
+/**
+ * ivalidator_portal.unrecordedExternalUses — the uses of each pinned external
+ * of the bound project that its pin does not record ("used now, but not in
+ * the lock"), keyed by alias (family_validator.unrecorded): what `wairon lock`
+ * refuses to approve over, exactly as it refuses a never-pinned external.
+ * Writes nothing.
+ */
+export function unrecordedExternalUses(): Record<string, string[]> {
+  return familyValidator.unrecorded();
+}
+
+/**
+ * ivalidator_portal.implementsProblem — what `validate` would say of a
+ * contract declaring `implements: <ref>`, without writing it (one sentence
+ * prefixed with its code, or null): what sdd_update_spec reports on a write,
+ * a dry run included, that sets `implements`. Writes nothing.
+ */
+export function implementsProblem(ref: string): string | null {
+  return familyValidator.implementsProblem(ref);
 }
 
 /**

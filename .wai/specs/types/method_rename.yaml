@@ -57,7 +57,21 @@ fields:
       member removed and one added. Reported, never prevented — no mainstream export mechanism
       aliases a single member. Empty when the contract is not exported.
     optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when this report is a dry run: it names everything the rename WOULD move, retarget and
+      leave, and nothing was written
+    optional: true
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers of an export publishing the method whose specs call it by its old name — the
+      family's projects in reach and the consumer checkouts found in the searched folders: each
+      breaks until it follows the rename (the consumer's own gate then names the new name from this
+      method's rename trace). Absent when the method is published nowhere or nobody calls it
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-17T19:21:55.866Z'
-updatedAt: '2026-10-04T13:52:04.769Z'
+updatedAt: '2026-10-07T18:41:09.735Z'

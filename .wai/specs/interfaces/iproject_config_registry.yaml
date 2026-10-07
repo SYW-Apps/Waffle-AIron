@@ -158,12 +158,14 @@ methods:
       - idempotent
   - name: declareExternal
     description: >-
-      Declare one external under an alias in `externals`. Refuses an alias outside [a-z0-9-_]+ and a
-      declaration whose producer id breaks the project-id grammar; refuses when the alias is already
-      declared with a DIFFERENT declaration, so a declaration a person wrote is never overwritten.
-      The same declaration again writes nothing — and a declaration that states no `use` is the same
-      as a held one that differs only in its `use` imports (importNames' state, which it leaves
-      alone). Covers `doctor --fix`'s chaining migration. Returns whether it wrote.
+      Declare one external under an alias in `externals`. Refuses an alias outside [a-z0-9-_]+ or
+      one Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9: the alias names its pin
+      file, which no Windows checkout could hold) and a declaration whose producer id breaks the
+      project-id grammar; refuses when the alias is already declared with a DIFFERENT declaration,
+      so a declaration a person wrote is never overwritten. The same declaration again writes
+      nothing — and a declaration that states no `use` is the same as a held one that differs only
+      in its `use` imports (importNames' state, which it leaves alone). Covers `doctor --fix`'s
+      chaining migration. Returns whether it wrote.
     signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
     returns: bool
     params:
@@ -382,4 +384,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-06T23:05:20.489Z'
+updatedAt: '2026-10-07T18:29:50.567Z'

@@ -322,6 +322,65 @@ function shownSignature(method: MethodSignature): string {
   return method.signature || `${method.name}(${(method.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${method.returns}`;
 }
 
+/** The facts of a contract entry a consumer's pin carries beside its digests, as (label, before, after). */
+function entryFacts(before: SurfaceContractEntry, after: SurfaceContractEntry): [string, unknown, unknown][] {
+  return [
+    ['export kind', before.type, after.type],
+    ['transport', before.transport, after.transport],
+    ['abi', before.abi, after.abi],
+    ['role', before.role, after.role],
+    ['stereotype', before.componentType, after.componentType],
+    ['basePath', before.basePath, after.basePath],
+    ['auth', before.auth?.scheme, after.auth?.scheme],
+  ];
+}
+
+/** A carried fact as a changelog shows it: its value, or none. */
+function shownFact(value: unknown): string {
+  return value === undefined || value === null || value === '' ? 'none' : typeof value === 'string' ? value : canonicalize(value);
+}
+
+/** A type's own methods as a pin compares them: names, param types and optionality, returns. */
+function typeMethods(def: SurfaceTypeDef): unknown {
+  return def.methods?.length ? def.methods.map((m) => ({ name: m.name, params: (m.params ?? []).map((p) => ({ type: p.type, optional: p.optional === true })), returns: m.returns })) : undefined;
+}
+
+/** The type ids a method's signature reaches, its closure included. */
+function closureIds(snapshot: SurfaceSnapshot, method: MethodSignature): string[] {
+  const byId = new Map(snapshot.types.map((def) => [def.id, def] as const));
+  const seen = new Set<string>();
+  const queue = methodTypeRefs(method).flatMap((expr) => extractTypeIdentifiers(canonicalTypeRef(snapshot, expr)));
+  while (queue.length) {
+    const def = byId.get(queue.shift()!);
+    if (!def || seen.has(def.id)) continue;
+    seen.add(def.id);
+    for (const expr of typeDefExprs(def)) queue.push(...extractTypeIdentifiers(canonicalTypeRef(snapshot, expr)));
+  }
+  return [...seen].sort();
+}
+
+/**
+ * How a method whose digest moved changed: its signature, when it reads
+ * differently; else the types it names whose shape moved — null when every one
+ * of them is an exported type whose own shape change the changelog lists.
+ */
+function signatureChange(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: MethodSignature, now: MethodSignature): string | null {
+  if (shownSignature(was) !== shownSignature(now)) return `signature ${shownSignature(was)} → ${shownSignature(now)}`;
+  const oldDefs = new Map(older.types.map((d) => [d.id, d] as const));
+  const newDefs = new Map(newer.types.map((d) => [d.id, d] as const));
+  const ids = [...new Set([...closureIds(older, was), ...closureIds(newer, now)])].sort();
+  const moved = ids.filter((id) => {
+    const a = oldDefs.get(id);
+    const b = newDefs.get(id);
+    return !a || !b || canonicalize(typeShape(older, a)) !== canonicalize(typeShape(newer, b));
+  });
+  const exported = new Set([...(newer.exportedTypes ?? []), ...(older.exportedTypes ?? [])].map((t) => t.type));
+  const unlisted = moved.filter((id) => !exported.has(id));
+  if (moved.length > 0 && unlisted.length === 0) return null;
+  const named = (unlisted.length > 0 ? unlisted : moved).map((id) => `"${id}"`).join(', ');
+  return named ? `signature reads the same, but a type it names changed shape: ${named}` : 'signature reads the same, but a type it names changed shape';
+}
+
 /**
  * surface_snapshot.changesSince — what one producer's public surface changed
  * from an older snapshot of it to this one: each public name (contract entry
@@ -352,6 +411,10 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       out.push({ kind: 'renamed', name: entry.id, from, detail: `renamed from "${from}"` });
     }
     if (before.audience !== entry.audience) out.push({ kind: 'changed', name: entry.id, detail: `audience ${before.audience} → ${entry.audience}` });
+    // Every other fact a consumer's pin carries and is drifted by.
+    for (const [label, was, now] of entryFacts(before, entry)) {
+      if (factValue(was) !== factValue(now)) out.push({ kind: 'changed', name: entry.id, detail: `${label} ${shownFact(was)} → ${shownFact(now)}` });
+    }
     const oldMethods = new Map(before.methods.map((m) => [m.name, m] as const));
     const usedOld = new Set<string>();
     for (const method of entry.methods) {
@@ -370,7 +433,13 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       const b = memberDigest(newer, entry.id, method.name);
       // A rename alone moves the digest's name; compare the shape under one name.
       const sameShape = a === b || memberDigest({ ...newer, interfaces: newer.interfaces.map((e) => (e !== entry ? e : { ...e, id: before!.id, methods: e.methods.map((m) => (m === method ? { ...m, name: was!.name } : m)) })) }, before.id, was.name) === a;
-      if (!sameShape) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `signature ${shownSignature(was)} → ${shownSignature(method)}` });
+      if (!sameShape) {
+        const changed = signatureChange(older, newer, was, method);
+        if (changed !== null) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: changed });
+      }
+      if (factValue(was.effect) !== factValue(method.effect)) {
+        out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `effect ${shownFact(was.effect)} → ${shownFact(method.effect)}` });
+      }
     }
     for (const m of before.methods) {
       if (!usedOld.has(m.name)) out.push({ kind: 'removed', name: entry.id, member: m.name, detail: `method removed: ${shownSignature(m)}` });
@@ -394,6 +463,14 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     const a = memberDigest(older, before.id, 'type');
     const b = memberDigest(newer, t.id, 'type');
     if (a !== b && before.id === t.id) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
+    // A type's own methods are carried for bindings, never digested: a change drifts a pin.
+    const oldDef = older.types.find((d) => d.id === before!.type);
+    const newDef = newer.types.find((d) => d.id === t.type);
+    if (oldDef && newDef && factValue(typeMethods(oldDef)) !== factValue(typeMethods(newDef))) out.push({ kind: 'changed', name: t.id, detail: 'type methods changed (a method added, removed, or its params or returns)' });
+  }
+  // The producer's targetLanguage: what a consumer in another language bridges to.
+  if (factValue(older.targetLanguage) !== factValue(newer.targetLanguage)) {
+    out.push({ kind: 'changed', name: newer.projectId ?? newer.projectName, detail: `targetLanguage ${shownFact(older.targetLanguage)} → ${shownFact(newer.targetLanguage)}` });
   }
   // Whatever the older surface had that the newer neither keeps nor renamed.
   for (const e of older.interfaces) {

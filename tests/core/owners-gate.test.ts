@@ -132,7 +132,7 @@ describe('the owner\'s gate — references into other projects', () => {
     pinExternals();
     const pinned = validateAt(f.app);
     expect(codes(pinned, 'EXTERNAL_CHECK_UNAVAILABLE', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
-    expect(pinned.hint).toMatch(/1 external was judged against its pin alone; `wairon validate --family`/);
+    expect(pinned.hint).toMatch(/1 external was judged against its pin alone; the advisory live comparison reads its live producer/);
   });
 });
 

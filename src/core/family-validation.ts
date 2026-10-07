@@ -29,9 +29,9 @@ import {
   resolveChainingParent,
   resolveProjectExports,
 } from './adapters/validator-core.js';
-import { getExternalsStatus, listPinnedExternals } from './adapters/validator-surfaces.js';
+import { getExternalsStatus, listPinnedExternals, unrecordedUses } from './adapters/validator-surfaces.js';
 import { dependencyCycles, declaredExternals, declaredMembers, familyNode, keyIn, relationHealth, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
-import { admits, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { admits, projectIdentity, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
@@ -368,8 +368,23 @@ export function run(options: ValidationOptions): ValidationResult {
   issues.push(...within(root, ceiling, () => checkMembers(narrowed(family, selected))));
   // Step 10: the governance checks — each requiring project's requirements against the members below it.
   issues.push(...within(root, ceiling, () => checkPolicies(narrowed(family, selected))));
-  // Step 12: the reachability and network checks only the family can make.
-  issues.push(...within(root, ceiling, () => checkReach(narrowed(family, selected), models)));
+  // Step 12: the reachability and network checks only the family can make. At
+  // a member's own root inside a family in reach, they are the enclosing
+  // family's — judged at its top root and narrowed to this member — since this
+  // root's graph holds neither the family's network nor its callers.
+  const enclosing = enclosingFamilyModel(options);
+  issues.push(...(enclosing
+    ? memberReachFindings(enclosing, issues)
+    : within(root, ceiling, () => checkReach(narrowed(family, selected), models))));
+  // Step 15: every project's totals counted from the findings listed under it,
+  // its own gate's and the family's alike, so a count never disagrees with the list.
+  for (const p of projects) {
+    const mine = issues.filter((i) => (i.project ?? '') === p.key);
+    p.errors = mine.filter((i) => i.severity === 'error').length;
+    p.warnings = mine.filter((i) => i.severity === 'warning').length;
+    p.notices = mine.filter((i) => i.severity === 'notice').length;
+    p.valid = p.errors === 0;
+  }
   // Step 11: the externals the reach left out.
   const hint = notSelectedHint(left);
   // Step 12: the family verdict, with the bound project's externals the run
@@ -493,6 +508,57 @@ export function unpinned(): string[] {
   const parts = new Set(projectFamily().nodes.find((n) => n.namespace === '')?.parts.map((p) => p.alias) ?? []);
   // Steps 2-3: every declared alias without a lock entry.
   return listPinnedExternals().filter((p) => !parts.has(p.alias) && p.entry === undefined).map((p) => p.alias);
+}
+
+/**
+ * ifamily_validator.unrecorded — the uses of each pinned external of the bound
+ * project that its pin does not record, keyed by alias (`<name>` or
+ * `<name>.<method>`), counted offline. Writes nothing.
+ */
+export function unrecorded(): Record<string, string[]> {
+  // Steps 1-2.
+  return unrecordedUses();
+}
+
+/**
+ * ifamily_validator.implementsProblem — what `validate` would say of a
+ * contract declaring `implements: <ref>`, read without writing it: an
+ * undeclared alias, a name the producer's table (a member's live one, or the
+ * external's pin) does not export, or one exported for calling rather than
+ * with role implement — one sentence prefixed with its code; null when it
+ * names an extension point or cannot be judged here (no pin yet).
+ */
+export function implementsProblem(ref: string): string | null {
+  // Step 1: alias and public name.
+  const [alias, name] = ref.split('::');
+  if (name === undefined || ref.split('::').length !== 2) return null;
+  // Step 2: the member aliases.
+  const root = projectFamily().nodes.find((n) => n.namespace === '');
+  const memberKey = root?.aliases.get(alias);
+  // Step 3: the pinned externals.
+  const pinned = listPinnedExternals().find((p) => p.alias === alias);
+  let role: string | undefined;
+  let found = false;
+  if (pinned?.snapshot) {
+    const entry = pinned.snapshot.interfaces.find((e) => e.id === name);
+    found = entry !== undefined || (pinned.snapshot.exportedTypes ?? []).some((t) => t.id === name);
+    role = entry ? (entry.role ?? 'call') : undefined;
+  } else if (memberKey !== undefined) {
+    // Step 4: a member's live table.
+    const entry = resolveProjectExports(memberKey || undefined).entries.find((e) => e.publicName === name);
+    found = entry !== undefined;
+    role = entry?.kind === 'component' ? (entry.role ?? 'call') : undefined;
+  } else if (pinned) {
+    // Declared, never pinned: nothing to judge against yet.
+    return null;
+  } else {
+    // Step 5: no member, no external.
+    return `EXTERNAL_UNDECLARED: "${alias}" is none of this project's members or externals — declare the project it means, then write \`${alias}::${name}\`.`;
+  }
+  if (!found) return `EXTERNAL_NOT_EXPORTED: "${alias}" exports no public name "${name}" this project may see — implement a name it exports with role implement.`;
+  if (role !== 'implement') return `EXTERNAL_NOT_EXPORTED: "${ref}" is exported for consumers to call (role ${role ?? 'type'}), not as an extension point — \`implements\` names an entry exported with role implement.`;
+  // Step 6.
+  return null;
 }
 
 // ---- the advisory live comparison ------------------------------------------
@@ -669,6 +735,11 @@ function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): 
       `The member ${named(entry.key)} was approved under an earlier gate identity — the gate identity gained inputs in this release (members' composition subjects, \`composition\`; code conformance moved beside the claim), which says nothing about its design. Re-lock it once at its own root (\`wairon lock\`).`,
       entry.key);
   }
+  if (entry.state === 'drifted' && entry.owed !== undefined) {
+    return finding(config, 'MEMBER_DRIFTED',
+      `The member ${named(entry.key)} is not covered by its approval: ${entry.owed}. Its own \`wairon lock-check\` fails until it is cleared at its own root (\`wairon lock\` there${/never pinned|beyond its pin/.test(entry.owed) ? ', after `wairon externals pin`' : ''}).`,
+      entry.key);
+  }
   if (entry.state === 'drifted') {
     return finding(config, 'MEMBER_DRIFTED',
       `The member ${named(entry.key)} changed since it was approved: its lock no longer matches its own gate identity. Re-lock it at its own root (\`wairon lock\`).`,
@@ -799,13 +870,41 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
     if (!record) return base;
     const same = (id: StateId | undefined): boolean => !!id && record.stateId.algorithm === id.algorithm && record.stateId.digest === id.digest;
     const matches = same(current) || same(current.asRecorded);
+    // Steps 8-11: what the approval still owes although its identity may
+    // match — a moved id, an external never pinned or used beyond its pin.
+    const owed = owedBy(record);
     return {
       ...base,
-      state: matches ? 'approved' : 'drifted',
+      state: matches && owed === undefined ? 'approved' : 'drifted',
       subject: subjectOf(record),
       ...(!matches && record.stateId.algorithm !== current.algorithm ? { upgraded: true } : {}),
+      ...(owed !== undefined ? { owed } : {}),
     };
   });
+}
+
+/**
+ * Steps 8-11 of approvals at the bound root: what the approval on record owes
+ * that its gate identity does not cover — the project id moved since it
+ * (project_config.identity, the resolution the project-identity rule and
+ * `lock-check` judge by), a declared external never pinned, or a use its pin
+ * does not record — as one sentence; undefined when nothing is owed.
+ */
+function owedBy(record: LockRecord): string | undefined {
+  const reasons: string[] = [];
+  const config = configOrNull();
+  if (config && record.projectId !== undefined) {
+    const identity = projectIdentity(config, record.projectId);
+    const now = identity.id === undefined ? 'no id at all' : identity.id;
+    if (identity.problems.some((p) => p.kind === 'renamed')) reasons.push(`the project was renamed since the approval (${record.projectId} → ${now}), and the approval still names the former id`);
+    else if (identity.problems.some((p) => p.kind === 'changed')) reasons.push(`the project id changed since the approval (${record.projectId} → ${now})`);
+  }
+  const never = unpinned();
+  if (never.length > 0) reasons.push(`declared external(s) never pinned — ${never.map((a) => `"${a}"`).join(', ')}`);
+  for (const [alias, uses] of Object.entries(unrecorded())) {
+    reasons.push(`external "${alias}" is used beyond its pin: ${uses.join(', ')} (used now, but not in the lock)`);
+  }
+  return reasons.length > 0 ? reasons.join('; ') : undefined;
 }
 
 /**
@@ -1279,6 +1378,29 @@ function networksOf(family: ProjectFamily): Map<string, NetworkDeclaration> {
 }
 
 /** A spec key qualified into the family root's key space, back to the owning project's local key. */
+/**
+ * Step 12 of run at a member's own root: the enclosing family's network
+ * findings (judged, tuned and lint-allow filtered at its top root) on the
+ * bound project and its own members, re-keyed relative to the bound root — one
+ * the selected projects' own gates already carried is not repeated.
+ */
+function memberReachFindings(enclosing: ReachModel, already: ValidationIssue[]): ValidationIssue[] {
+  const focus = enclosing.focus ?? '';
+  const seen = new Set(already.map((i) => `${i.project ?? ''}\u0000${i.code}\u0000${i.specId ?? ''}\u0000${i.message}`));
+  const out: ValidationIssue[] = [];
+  for (const f of enclosing.findings ?? []) {
+    const at = projectOfFinding(enclosing, f);
+    if (at !== focus && !at.startsWith(`${focus}::`)) continue;
+    const project = at === focus ? '' : at.slice(focus.length + 2);
+    const specId = f.specId !== undefined ? localKey(focus, f.specId) : undefined;
+    const key = `${project}\u0000${f.code}\u0000${specId ?? ''}\u0000${f.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ severity: f.severity, code: f.code, message: f.message, project, ...(specId !== undefined ? { specId } : {}) } as ValidationIssue);
+  }
+  return out;
+}
+
 function localKey(project: string, key: string): string {
   return project !== '' && key.startsWith(`${project}::`) ? key.slice(project.length + 2) : key;
 }

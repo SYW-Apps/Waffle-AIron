@@ -160,11 +160,17 @@ methods:
     description: >-
       What this producer's public surface changed from an older snapshot of it: each public name
       (contract entry or exported type) added, removed, renamed per this snapshot's rename trace
-      (`formerly`), or changed — its audience, or a type's shape — and inside each contract kept,
-      each method added, removed, renamed per its trace, or changed in signature (memberDigest).
-      Prose and provenance are never a change. Sorted by name, then member. Pure.
+      (`formerly`), or changed — its audience, a type's shape, or any other fact a consumer's pin
+      carries and is drifted by: a contract entry's export kind, transport, abi, role, stereotype,
+      basePath or auth scheme, a method's effect, an exported type's own methods, and the surface's
+      targetLanguage — and inside each contract kept, each method added, removed, renamed per its
+      trace, or changed in signature (memberDigest). A signature row is written only when the
+      signature reads differently; a method whose signature reads the same but whose digest moved
+      because a type it names changed shape says exactly that, naming the type, and is left out when
+      every such type is an exported name whose own shape change is already listed. Prose, rename
+      traces and provenance are never a change. Sorted by name, then member. Pure.
     sourcePath: src/models/surface-references.ts
     symbol: surfaceChanges
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-07T10:55:58.455Z'
+updatedAt: '2026-10-07T18:38:17.590Z'

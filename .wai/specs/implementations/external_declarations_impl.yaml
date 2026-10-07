@@ -159,7 +159,10 @@ methods:
         condition: dryRun
         onFalseStep: 7
       - stepNumber: 6
-        description: Answer the dry run, writing nothing
+        description: >-
+          Answer the dry run, writing nothing: `removed` is whether the declaration would be taken
+          out (it is declared) and `unpinned` whether the pin would go — exactly what the real run
+          then answers
         type: return
         outcome: dry run
       - stepNumber: 7
@@ -276,4 +279,4 @@ methods:
         outcome: changed
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-10-06T23:15:28.798Z'
+updatedAt: '2026-10-07T18:51:22.642Z'

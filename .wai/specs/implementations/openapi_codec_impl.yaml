@@ -70,20 +70,21 @@ methods:
       - stepNumber: 4
         description: >-
           Render this partition as a standalone OpenAPI 3.1 document over only its own entries: map
-          each contract method to an operation (endpoint method+path, params to
-          parameters/requestBody, returns to responses, guarantees and effect noted as extensions),
-          each param and return type parsed (type_expression.parse) and rendered from its canonical
-          expression — `async T` as T, `T?` admitting null, collections, primitives and formats as
-          the contract lists them; render the embedded type closure as JSON-Schema components (an
-          enum a string component with its values as `enum`; a named scalar the schema of the
-          primitive it holds, titled with its name; a signature type a component with no type
-          constraint, a description saying it is a function type with no JSON form, and an
-          x-wairon-signature extension holding its params and returns); derive
-          components.securitySchemes from the entries' projected auth (deduplicating structurally
-          identical schemes, attaching each matching requirement — with oauth2 scopes — to its
-          operations; no auth or scheme 'none' emits neither); set `servers` from the partition's
-          basePath, and the info block from the portal's name, the project's version or StateId and
-          generatedAt.
+          each contract method to an operation (endpoint method+path; each param named by a `{name}`
+          segment of the path a parameter in: path, required, and the rest parameters in: query on a
+          verb without a body or requestBody properties on POST/PUT/PATCH; returns to responses,
+          guarantees and effect noted as extensions), each param and return type parsed
+          (type_expression.parse) and rendered from its canonical expression — `async T` as T, `T?`
+          admitting null, collections, primitives and formats as the contract lists them; render the
+          embedded type closure as JSON-Schema components (an enum a string component with its
+          values as `enum`; a named scalar the schema of the primitive it holds, titled with its
+          name; a signature type a component with no type constraint, a description saying it is a
+          function type with no JSON form, and an x-wairon-signature extension holding its params
+          and returns); derive components.securitySchemes from the entries' projected auth
+          (deduplicating structurally identical schemes, attaching each matching requirement — with
+          oauth2 scopes — to its operations; no auth or scheme 'none' emits neither); set `servers`
+          from the partition's basePath, and the info block from the portal's name, the project's
+          version or StateId and generatedAt.
         type: local
       - stepNumber: 5
         description: >-
@@ -108,4 +109,4 @@ methods:
     symbol: isOpenApiDocument
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-06T19:09:10.953Z'
+updatedAt: '2026-10-07T18:28:35.229Z'

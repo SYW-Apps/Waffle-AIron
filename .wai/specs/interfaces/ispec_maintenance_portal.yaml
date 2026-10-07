@@ -115,8 +115,8 @@ methods:
   - name: renameMethod
     description: 'Forward to core_orchestrator.renameMethod: rename a contract method and every reference to it'
     signature: >-
-      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool):
-      MethodRename
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
     returns: MethodRename
     params:
       - name: componentId
@@ -135,6 +135,10 @@ methods:
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name; true when
           omitted
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
         optional: true
   - name: repairForeignStepFields
     description: >-
@@ -347,4 +351,4 @@ methods:
     signatureFrom: core_orchestrator.renameParam
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-07T06:25:13.137Z'
+updatedAt: '2026-10-07T18:41:12.753Z'

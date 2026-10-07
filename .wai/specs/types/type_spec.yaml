@@ -30,7 +30,9 @@ fields:
     optional: false
   - name: id
     type: string
-    description: Stable type identifier
+    description: >-
+      Stable type identifier, in the spec-id grammar (see component_spec.id: [a-z0-9-_]+, at most 64
+      characters, never a Windows device name)
     optional: false
   - name: name
     type: string
@@ -233,4 +235,4 @@ methods:
     symbol: typeDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-06T23:08:16.731Z'
+updatedAt: '2026-10-07T18:29:33.656Z'

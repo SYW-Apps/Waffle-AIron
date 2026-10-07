@@ -25,10 +25,12 @@ fields:
     type: string
     description: >-
       Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+ (a dotted
-      producer id declared without an explicit alias lands here), a producer id outside the
-      project-id grammar, a `use` entry that is neither `*` nor a public name of [a-z0-9-_]+, a
-      source naming more or fewer than one of `path`, `hosted` and `git`, or a `commit` on an
-      external's source (an external's commit is the pin's, recorded in the externals lock).
+      producer id declared without an explicit alias lands here) or one Windows reserves for a
+      device (con, prn, aux, nul, com0-9, lpt0-9 — the alias names its pin file), a producer id
+      outside the project-id grammar, a `use` entry that is neither `*` nor a public name of
+      [a-z0-9-_]+, a source naming more or fewer than one of `path`, `hosted` and `git`, or a
+      `commit` on an external's source (an external's commit is the pin's, recorded in the externals
+      lock).
     optional: true
   - name: use
     type: list<string>
@@ -59,4 +61,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-26T17:39:19.261Z'
-updatedAt: '2026-10-04T10:20:01.159Z'
+updatedAt: '2026-10-07T18:29:37.509Z'

@@ -30,7 +30,7 @@ import { effectiveProjectId, projectIdentity } from '../models/project.js';
 import { describeApprover } from '../models/lock.js';
 import { getProjectRoot } from '../utils/fs.js';
 import { WaironError } from '../utils/errors.js';
-import { computeGateStateId, familyApprovals, unpinnedExternals, type ValidationResult } from '../core/validation.js';
+import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
 import { designOnly, memberPinOf, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,9 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   // identity reads each member's RECORDED approval, never its tree, so a
   // member's unapproved edits are invisible to it — this read is what keeps
   // the merge gate from going green over them.
-  const members = familyApprovals().filter((a) => a.key !== '' && a.as !== 'part');
+  const approvals = familyApprovals();
+  const ownEntry = approvals.find((a) => a.key === '');
+  const members = approvals.filter((a) => a.key !== '' && a.as !== 'part');
   const drifted = members.filter((a) => a.state === 'drifted');
   const never = members.filter((a) => a.state === 'never');
 
@@ -164,6 +166,19 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   // PROJECT_ID_RENAMED by — `validate`, `lock` and this gate cannot disagree.
   const idMoved = record ? projectIdVerdict(record) : null;
   if (idMoved) return idMoved;
+
+  // Steps 14-15: an external the approval owes — never pinned, or used beyond
+  // what its pin records. `wairon lock` refuses both, so passing here would
+  // approve what the lock will not; it is the same entry status prints.
+  if (record && ownEntry?.owed !== undefined) {
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) does not cover what this design is judged against: ${ownEntry.owed}. `
+        + 'Nothing records what a producer that broke these uses would be judged against, and `wairon lock` refuses until it does. '
+        + 'Fix: pin first (`wairon externals pin`), then run `wairon lock`, and commit .wai/lock.json with the pin.',
+    };
+  }
 
   // A stale verdict under an earlier identity still refuses — nothing proves
   // the design unchanged — but it says so plainly, with whether any own spec
@@ -340,7 +355,7 @@ function describeMemberAt(member: ProjectApproval, folders: Map<string, string>)
   const dir = folders.get(member.key);
   const shown = dir ? (path.relative(process.cwd(), dir) || '.') : undefined;
   const state = member.state === 'drifted'
-    ? (member.upgraded ? 'approved under an earlier gate identity — re-lock it once' : 'changed since its own approval')
+    ? (member.owed !== undefined ? member.owed : member.upgraded ? 'approved under an earlier gate identity — re-lock it once' : 'changed since its own approval')
     : 'never approved';
   return `${member.alias ?? member.key} (${state}${shown ? `, in ${shown}` : ''})`;
 }
@@ -636,6 +651,16 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     throw new LockRefusedError(
       `declared external(s) never pinned — ${unpinned.map((a) => `"${a}"`).join(', ')}: nothing records what this design is judged against, `
         + `so a producer that broke it could not be told. Pin first (\`wairon externals pin ${unpinned.join(' ')}\`), then lock. Nothing was written.`,
+    );
+  }
+  // A use its pin does not record is judged against nothing, exactly as a
+  // never-pinned external is: refused the same way.
+  const unrecorded = Object.entries(unrecordedExternalUses());
+  if (unrecorded.length > 0) {
+    throw new LockRefusedError(
+      `external(s) used beyond their pin — ${unrecorded.map(([alias, uses]) => `"${alias}": ${uses.join(', ')}`).join('; ')} (used now, but not in the lock): `
+        + 'nothing records what these uses are judged against, so a producer that broke one could not be told. '
+        + `Re-pin first (\`wairon externals pin ${unrecorded.map(([alias]) => alias).join(' ')}\`), then lock. Nothing was written.`,
     );
   }
   logger.blank();

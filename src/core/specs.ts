@@ -1521,6 +1521,21 @@ function partRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string, 
   };
 }
 
+/**
+ * A type's file paths — its sourcePath and each method's — re-expressed from
+ * the root that holds the part in memory to the part's own root, exactly as
+ * partRelativeFilePaths does an implementation's.
+ */
+function partRelativeTypePaths(spec: StoredTypeSpec, authoringRoot: string, partRoot: string): StoredTypeSpec {
+  const reexpress = (p: string): string =>
+    (path.isAbsolute(p) ? p : (path.relative(partRoot, path.resolve(authoringRoot, p)) || '.').split(path.sep).join('/'));
+  return {
+    ...spec,
+    ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
+    ...(spec.methods ? { methods: spec.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: reexpress(m.sourcePath) } : m)) } : {}),
+  } as StoredTypeSpec;
+}
+
 // ---------------------------------------------------------------------------
 // The scan without position: its per-root working state and the pure steps of
 // its three phases (tables, then binding). The workspace owns the I/O half.
@@ -3699,6 +3714,16 @@ export class SpecWorkspace {
             detectedType = 'type';
             const parsed = TypeSpecSchema.parse(doc);
             this.reportUnknownKeys(file, 'type', doc, parsed, keyIn(key, parsed.id));
+            // A part's type names its files from the part's root, as its
+            // implementations do: normalized against the project holding it.
+            if (baseDir !== raw.dir) {
+              const normalizeSourcePath = (p: string): string =>
+                (path.isAbsolute(p) ? p : path.relative(raw.dir, path.resolve(baseDir, p)).split(path.sep).join('/'));
+              if (parsed.sourcePath) parsed.sourcePath = normalizeSourcePath(parsed.sourcePath);
+              for (const method of parsed.methods ?? []) {
+                if (method.sourcePath) method.sourcePath = normalizeSourcePath(method.sourcePath);
+              }
+            }
             keep('type', index.types, parsed, file);
           }
         }
@@ -3714,7 +3739,8 @@ export class SpecWorkspace {
         this.loaderIssues.push({
           severity: 'error',
           code: 'SCHEMA_VALIDATION_ERROR',
-          message: `Failed to parse ${detectedType} spec "${file}": ${e.message || String(e)}`,
+          // A schema refusal reads as `path: message` per issue, never zod's JSON dump.
+          message: `Failed to parse ${detectedType} spec "${file}": ${e instanceof z.ZodError ? formatZodIssues(e) : e.message || String(e)}`,
           specId: this.loaderIssueSpecId(file, rawId, key),
         });
       }
@@ -4503,7 +4529,11 @@ export class SpecWorkspace {
   prepareTypeForWrite(spec: TypeSpec | StoredTypeSpec): StoredTypeSpec {
     const canonical = typeCanonicalTypes(spec).spec;
     const stored = { ...canonical, methods: (canonical.methods ?? []).map((m) => storedTypeMethod(m)) };
-    return this.relativizeSpec('type', stored as TypeSpec) as StoredTypeSpec;
+    const relative = this.relativizeSpec('type', stored as TypeSpec) as StoredTypeSpec;
+    // A part's type (stage 8) names its files from the part's root, as its
+    // implementations do: the inverse of the scan's normalization.
+    const partDir = this.partHolding(this.getTypePath(spec.id, spec.subsystem, (spec as { group?: string }).group))?.part.directory;
+    return partDir ? partRelativeTypePaths(relative, this.rootDir, partDir) : relative;
   }
 
   prepareGroupForWrite(spec: GroupSpec): GroupSpec {

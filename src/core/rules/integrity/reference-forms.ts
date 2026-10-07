@@ -65,6 +65,10 @@ export const referenceFormsRule: SddRule = {
       // A path-form reference whose rewrite equals what was written becomes
       // canonical by declaring the external alone — EXTERNAL_UNDECLARED's to say.
       if (ref.rewrite !== undefined && ref.rewrite === ref.authored) continue;
+      // A two-segment `x::y` that binds nowhere is the current `alias::name`
+      // form with an alias the project does not declare — EXTERNAL_UNDECLARED
+      // says so; read as a member path it would be misdescribed.
+      if (ref.form === 'path' && ref.binding === 'unresolved' && ref.authored.split('::').length === 2 && !ref.authored.startsWith('::')) continue;
       const bound = ref.binding === 'outside' || ref.binding === 'unresolved' ? '' : ` It binds to "${ref.resolved}".`;
       const instead = ref.rewrite !== undefined ? `Write "${ref.rewrite}" instead.` : `${whyNoRewrite(ref)[0].toUpperCase()}${whyNoRewrite(ref).slice(1)}.`;
       ctx.addIssue(

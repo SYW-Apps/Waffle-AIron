@@ -30,6 +30,8 @@ export {
   renameField,
   // `wairon method rename-param` (spec_maintenance_portal renameParam).
   renameParam,
+  // `wairon method rename` (spec_maintenance_portal renameMethod).
+  renameMethod,
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,

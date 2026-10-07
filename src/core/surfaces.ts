@@ -591,6 +591,51 @@ export function listPinnedExternals(): PinnedExternal[] {
   });
 }
 
+/**
+ * surface_orchestrator.unrecordedUses — the uses of each PINNED external that
+ * its pin does not record: every public name (and method of one) the bound
+ * project's specs use now through the alias, counted offline exactly as a pin
+ * counts them, that the lock entry's `used` map does not hold — keeping only
+ * the ones the pinned snapshot carries (a use it does not carry is a design
+ * error the gate reports, which no re-pin cures). Keyed by alias, each value
+ * `<name>` or `<name>.<method>`, sorted; an alias with none is left out. No
+ * producer is read; writes nothing.
+ */
+export function unrecordedUses(): Record<string, string[]> {
+  // Step 1: the pinned externals, each with its entry and snapshot.
+  const pinned = listPinnedExternals().filter((p) => p.entry !== undefined && p.snapshot !== undefined);
+  // Steps 2-3: none pinned, nothing to resolve.
+  if (pinned.length === 0) return {};
+  // Step 4: the declared externals resolved offline — only their usages are read.
+  const bindings = resolveExternals(true);
+  // Step 5: each pinned alias's uses its lock entry does not hold.
+  const out: Record<string, string[]> = {};
+  for (const p of pinned) {
+    const usage = bindings.find((b) => b.external.alias === p.alias)?.usage;
+    const locked = p.entry!.used ?? {};
+    const snapshot = p.snapshot!;
+    const carriesName = (name: string): boolean => snapshot.interfaces.some((e) => e.id === name) || (snapshot.exportedTypes ?? []).some((t) => t.id === name);
+    const missing = new Set<string>();
+    for (const use of usage?.used ?? []) {
+      const recorded = locked[use.publicName];
+      // A name recorded with no members covers the whole name, as the live comparison reads it.
+      if (recorded !== undefined && Object.keys(recorded).length === 0) continue;
+      if (use.members.length === 0) {
+        if (recorded === undefined && carriesName(use.publicName)) missing.add(use.publicName);
+        continue;
+      }
+      for (const member of use.members) {
+        if (recorded !== undefined && member in recorded) continue;
+        if (memberDigest(snapshot, use.publicName, member) === null) continue;
+        missing.add(member === 'type' ? use.publicName : `${use.publicName}.${member}`);
+      }
+    }
+    if (missing.size > 0) out[p.alias] = [...missing].sort(compareOrdinal);
+  }
+  // Step 6.
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Exchange workflows (surface_orchestrator)
 // ---------------------------------------------------------------------------
@@ -1239,9 +1284,11 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   for (const ref of usage?.unexported ?? []) {
     const spelled = ref.authored.split('::');
     const name = spelled.length === 2 ? spelled[1] : spelled.length === 1 ? spelled[0] : undefined;
-    if (name !== undefined && !liveHas(name) && !uses.some((u) => u.publicName === name && (u.member === ref.member || u.member === undefined))) {
-      const gone = goneUse(live, name, ref.member, undefined);
-      uses.push(gone);
+    if (name !== undefined && !liveHas(name)) {
+      // A name already answered as renamed or removed — under any member, a
+      // type's `type` included — is answered once.
+      if (uses.some((u) => u.publicName === name && (ref.member === undefined || u.member === undefined || u.member === ref.member))) continue;
+      uses.push(goneUse(live, name, ref.member, undefined));
       continue;
     }
     uses.push({ member: ref.member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: `"${ref.specId}" reaches "${ref.target}", which the producer does not export — nothing to compare` });

@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { ExportUsage } from './exports.js';
+import type { ExportUsage, ExportUse } from './exports.js';
 import type { DeclaredExternal } from './project.js';
 import type { SubsystemSpec } from './specs.js';
 // TYPE-ONLY: a part is recorded by the scan that read it (spec_index), and the graph carries it as read.
@@ -281,6 +281,17 @@ export interface ExternalConsumer {
   broken?: string[];
   /** How it was found: `search` for a project root in a searched folder outside the family; absent for the family. */
   found?: 'search';
+  /** What its specs use, method-granular: each public name with the members its references reach; absent when it uses nothing. */
+  uses?: ExportUse[];
+}
+
+/**
+ * external_consumer.reaches — whether a consumer's specs reach `member` (a
+ * contract method, or `type`) on one of `publicNames`: what tells a producer
+ * that renaming that method breaks this consumer. Pure.
+ */
+export function consumerReaches(consumer: ExternalConsumer, publicNames: readonly string[], member: string): boolean {
+  return (consumer.uses ?? []).some((u) => publicNames.includes(u.publicName) && u.members.includes(member));
 }
 
 /** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */

@@ -175,7 +175,7 @@ function printRemoval(removal: ExternalRemoval, dryRun: boolean): void {
     logger.error(removal.refusal);
     return;
   }
-  const what = [removal.removed || dryRun ? 'its declaration' : '', removal.unpinned ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
+  const what = [removal.removed ? 'its declaration' : '', removal.unpinned ? 'its pin (lock entry and snapshot)' : ''].filter(Boolean).join(' and ') || 'nothing more';
   if (dryRun) logger.info(`Dry run: would remove ${chalk.cyan(removal.alias)} — ${what}. Nothing was written.`);
   else logger.success(`Removed ${chalk.cyan(removal.alias)}: ${what}.`);
 }
@@ -200,6 +200,9 @@ function printConsumers(rows: ExternalConsumer[], searched: boolean): void {
     const broken = r.broken?.length ? chalk.red(` — still writes ${r.broken.map((n) => `${n} (no longer exported)`).join(', ')}`) : '';
     const where = r.found === 'search' ? ` ${chalk.gray(`[${r.directory}]`)}` : '';
     logger.info(`${chalk.cyan(r.project)} (${r.section}.${r.alias})${where}: ${r.names.length ? r.names.join(', ') : chalk.gray('declares it, uses no name yet')}${broken}`);
+    // Method-granular: who calls what, the line a producer reads before it renames a method.
+    const calls = (r.uses ?? []).flatMap((u) => u.members.filter((m) => m !== 'type').map((m) => `${u.publicName}.${m}`));
+    if (calls.length) logger.info(chalk.gray(`    calls: ${calls.join(', ')}`));
   }
   logger.info(chalk.gray(searched
     ? 'The family in reach, and the project roots in the searched folders that declare this one by path or git. A consumer elsewhere (another machine, a hosted project) declares its dependency on its own side.'

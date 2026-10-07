@@ -795,6 +795,68 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 
 ### Fixes
 
+- **Code↔spec conformance, round-4 trials:**
+  - A Portal's calls are resolved by the TypeScript type checker, so no receiver spelling hides a write to a data component any more (element access, destructuring, `.call`, a field of a dependency bag, a type alias, a barrel, `Pick<>`, a factory, `new Store()`, a port interface the Portal declares itself): `PORTAL_WRITE_SHORTCUT_IN_CODE`, plus `UNDECLARED_DEPENDENCY` on the edge.
+  - `PORTAL_CALL_UNRESOLVED` is now a **warning** (was a notice): a write-named call through an `any`/`unknown`/untyped receiver fails `--ci` instead of passing.
+  - New `UNDECLARED_WRITE_CALL` (warning): a method's code calls another component's write- or lifecycle-effect method that its narrative never claims.
+  - `TECH_LEAKAGE_IN_CODE` also reports a known technology package (e.g. `ioredis`) that no implementation binds.
+  - Constructor parameter properties count as the class's fields (no false `UNREALIZED_TYPE_FIELD`).
+  - `typescript` is now a runtime dependency: the analyzer uses the project's own TypeScript 5/6 and wairon's copy otherwise, so TypeScript 7 or no TypeScript no longer means `CONFORMANCE_DEGRADED`.
+  - A long-lived MCP server no longer keeps a stale compiler or a stale parse: both are keyed on what they depend on.
+- **Approval, migrations, externals and surfaces, round-4 trials:**
+  - `wairon status`, `sdd_get_status`, `lock-check` and `lock` read one verdict: a project whose id moved since its approval (`wairon project rename`), or whose declared external was never pinned or is used beyond its pin, reads **drifted** with what it owes (`ProjectApproval.owed`) — never "approved … no spec has changed since" while `lock-check` fails. "No spec has changed since" now always says what the approval owes instead. A member in that state is `MEMBER_DRIFTED` with the reason.
+  - `PROJECT_ID_RENAMED` names the new id (it printed the display name where the new id belongs).
+  - `wairon lock` refuses a design whose external uses are not in its pin ("used now, but not in the lock") exactly as it refuses a never-pinned external — re-pin first, nothing written; `lock-check` fails on both.
+  - A storage move is no design change: a part's TYPE `sourcePath`s are read relative to the part's root like its implementations' (no more `SOURCE_PATH_ESCAPES_ROOT` after `subsystem externalize`), and every migration whose edits only move files (`member internalize` of a part included) asks for a re-lock only when the approval no longer covers the tree.
+  - `surface diff` lists every fact a consumer's pin drifts by — `abi`, transport, role, stereotype, basePath, auth, a method's effect, a type's own methods, `targetLanguage` — never prints "signature A → A" (a method whose closure type changed shape says so), and refuses an impossible comparison (no git, no committed approval) in one line, exit 1.
+  - A call to a renamed method carries "It was renamed to …" from the target's rename trace (`INVALID_TARGET_METHOD_REFERENCE`, `SURFACE_REF_NOT_EXPOSED`), as a renamed type always did.
+  - New `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dir...>] [--no-pin-symbol]`; `sdd_rename_method` takes `dryRun` and `search` and answers `breaks`: the consumers (family members and found checkouts) whose specs call the method through an export. `externals consumers` / `sdd_list_consumers` report method-granular use (`uses`).
+  - `sdd_validate_tree` (and `validate --family`) at a member's root judges its network from the enclosing family — no "no declared network encloses the root" or `ENTRY_UNPROVEN` on verbs the family proves — says that its proofs are judged at the family root as the CLI does, and every per-project count is counted from the findings listed under it.
+  - `network why` reads a renamed project's former id (with a note) and, at a member's root, the member's bare names.
+  - `implements:` naming an export consumers call (not role implement) is `EXTERNAL_NOT_EXPORTED`; `sdd_update_spec` reports it on the write, dry run included.
+  - An undeclared alias in `alias::name` is `EXTERNAL_UNDECLARED` alone — no `DEPRECATED_REFERENCE_FORM` "member path" beside it.
+  - `sdd_remove_external` dry run answers `removed: true` for a declared external; `sdd_get_externals_status` and `EXTERNAL_LIVE_INCOMPATIBLE` list a renamed name once.
+  - The externals hint no longer sends a project without members to `validate --family`.
+  - `member attach` refuses a malformed alias as `alias-invalid` (was `alias-taken`).
+  - The generated AI guide names every `sdd_*` tool the server registers and says plainly that an L4/L5 prose change re-opens the approval while code linkage does not.
+- **Ids Windows cannot store are refused on every platform.** A spec id (component,
+  subsystem, type, …) may no longer be a name Windows reserves for a device —
+  `con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9` — nor longer than 64
+  characters: such an id became a folder no Windows checkout can hold, and
+  `git add -A` failed for the whole repository (a 270-character id died on a raw
+  `ENOENT`). The MCP tools and the CLI refuse it with the reason and write
+  nothing; `validate` reports one already in a tree as `SCHEMA_VALIDATION_ERROR`,
+  now worded `path: message` instead of a JSON dump. An external alias, which
+  names its pin file, refuses the same device names.
+- **A `project.yaml` that does not parse stops every command alike.** A duplicated
+  key (a second `rules:` block appended by hand) crashed `validate` and
+  `network declare` with a Node stack trace, while `lock-check` and `status`
+  carried on as if the file were fine. Every command now refuses with one line
+  naming the file, the line and the key — `✖ .wai/project.yaml:33: duplicated
+  mapping key "rules"` — and exits 1; `doctor` diagnoses it in the same words.
+- **No stack traces for bad input.** Whatever a command throws is printed as one
+  `✖` line with exit 1 (`surface export --portal <unknown>`, `surface diff`
+  without a committed approval, …); `WAIRON_DEBUG=1` prints the stack for a bug
+  report. `project rename` to a malformed id is refused as `id-invalid` (it said
+  `id-collision`), and `member rename-alias` to a malformed alias as
+  `alias-invalid` (it said `alias-taken`).
+- **OpenAPI path parameters.** `surface export --format openapi` declared every
+  parameter of `GET /stats/{code}` `in: query` — an invalid document, and a
+  generated client sent `?code=`. A param named by a `{name}` segment of the path
+  is now `in: path`, required; the others stay in the query (GET, DELETE) or the
+  JSON body (POST, PUT, PATCH).
+- **`TECH_LEAKAGE` reads no binding into prose.** Binding `redis` on one Store
+  made another Store's description ("in memory now, Redis later") a leak, on its
+  component, contract and implementation. The prose of a data-layer seam (Adapter,
+  Store, Registry, Index) names a technology about its own realization and is no
+  longer leakage; its identifiers, and every surface of a logic component, still
+  are.
+- **Docs.** `wairon surface diff`, `externals consumers --search`, the dev
+  server's MCP endpoint (`POST /mcp?project=local`), what to commit, the analysis
+  grades and how a refusal is printed are documented. The CI recipe pins "the
+  version you lock with" instead of a fixed dev or release version, and README
+  links the design docs and `CONTRIBUTING.md` relatively — the package now ships
+  them — so no link 404s before `main` has the file.
 - **Approval messages agree.** `lock` no longer says "Nothing has changed" when
   only an input moved (the project id, a network, a pinned external): it names
   what did. A storage move is no change for `lock`, as it already was for

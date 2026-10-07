@@ -2,10 +2,15 @@
  * The code twins of two design rules — src/core/rules/conformance/dependency-conformance.ts.
  *
  * Documented intents pinned here (rule description):
- *  - PORTAL_WRITE_SHORTCUT_IN_CODE (error): a Portal's own method calls a
+ *  - PORTAL_WRITE_SHORTCUT_IN_CODE (error): a Portal's own code calls a
  *    write- or lifecycle-effect contract method of a Repository, Index, Store or
- *    Registry — through a collaborator its file types, or a proven binding —
- *    that its narrative does not claim. The code twin of PORTAL_WRITE_SHORTCUT.
+ *    Registry — the call resolved by the type checker whatever the receiver's
+ *    spelling (element access, destructuring, a port interface the Portal
+ *    declares itself) — that its narrative does not claim. The code twin of
+ *    PORTAL_WRITE_SHORTCUT.
+ *  - PORTAL_CALL_UNRESOLVED (warning): a call in a Portal's file the analysis
+ *    cannot resolve (any/unknown/untyped receiver) under the name of a data
+ *    component's write: it fails closed.
  *  - TECH_LEAKAGE_IN_CODE (warning): a file imports a technology's package — a
  *    bare specifier whose package name is one of the technology's declared
  *    tokens, compared exactly — while no component it realizes is that
@@ -153,8 +158,16 @@ export default [
     tree: storeTree("import { Kysely } from 'kysely';\nvoid Kysely;"),
   }),
   defineRuleFixture({
+    code: 'TECH_LEAKAGE_IN_CODE',
+    severity: 'warning',
+    anchoredTo: 'link_portal_impl',
+    expectFire: true,
+    scenario: 'The link Portal imports `ioredis`, the package of the redis technology, which no implementation of the tree binds — the design never says where redis lives.',
+    tree: storeTree("import Redis from 'ioredis';\nvoid Redis;"),
+  }),
+  defineRuleFixture({
     code: 'PORTAL_CALL_UNRESOLVED',
-    severity: 'notice',
+    severity: 'warning',
     anchoredTo: 'habit_portal_impl',
     expectFire: true,
     scenario:
@@ -167,5 +180,30 @@ export default [
     reason: 'A receiver followed through a non-null assertion is the declared field itself: the write is judged (the shortcut), never left unresolved.',
     scenario: 'The habit Portal calls the repository\'s write through its injected field with a non-null assertion.',
     tree: habitTree('this.checkins!.record(id);'),
+  }),
+  defineRuleFixture({
+    code: 'PORTAL_WRITE_SHORTCUT_IN_CODE',
+    severity: 'error',
+    anchoredTo: 'habit_portal_impl',
+    expectFire: true,
+    scenario:
+      'The habit Portal writes the repository through an element access on its injected collaborator, the call spelled with a string key.',
+    tree: habitTree("this.checkins['record'](id);"),
+  }),
+  defineRuleFixture({
+    code: 'PORTAL_WRITE_SHORTCUT_IN_CODE',
+    severity: 'error',
+    anchoredTo: 'habit_portal_impl',
+    expectFire: true,
+    scenario:
+      'The habit Portal destructures the write method off its injected collaborator and invokes it with call().',
+    tree: habitTree('const { record } = this.checkins; record.call(this.checkins, id);'),
+  }),
+  defineRuleFixture({
+    code: 'PORTAL_CALL_UNRESOLVED',
+    expectFire: false,
+    reason: 'Only a write- or lifecycle-effect name fails closed: a read through an unresolvable receiver is no shortcut candidate.',
+    scenario: 'The habit Portal reads through an untyped factory\'s store before dispatching to the tracker.',
+    tree: habitTree('const store = (globalThis as any).makeStore(); store.find(id);'),
   }),
 ];

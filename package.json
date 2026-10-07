@@ -30,7 +30,13 @@
     "schemas",
     "README.md",
     "docs/*.md",
-    "docs/standards/**"
+    "docs/standards/**",
+    "docs/design/supervisor-doctrine.md",
+    "docs/design/pack-scoping.md",
+    "docs/design/connecting-agent-entrypoint.md",
+    "docs/design/execution-budgets.md",
+    "docs/design/approval-baseline.md",
+    "CONTRIBUTING.md"
   ],
   "workspaces": [
     "sdk"
@@ -72,6 +78,7 @@
     "js-yaml": "^4.1.0",
     "ora": "^5.4.1",
     "swagger-ui-dist": "^5.32.9",
+    "typescript": "^5.5.2",
     "yaml": "^2.9.1",
     "zod": "^3.23.8"
   },
@@ -87,7 +94,6 @@
     "rimraf": "^5.0.7",
     "tsup": "^8.1.0",
     "tsx": "^4.15.7",
-    "typescript": "^5.5.2",
     "vitest": "^4.1.9",
     "zod-to-json-schema": "^3.25.2"
   }

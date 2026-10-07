@@ -266,8 +266,10 @@ methods:
         label: recorded
         description: >-
           Record the consumer: its id (else its key), key, root, the alias and section it declares
-          the producer under, the public names its usage counts, and the names it still writes that
-          bind to none (broken), sorted
+          the producer under, the public names its usage counts, what it uses method-granular
+          (`uses`: each public name with the contract methods, `type` or capabilities its references
+          reach and the specs that reach it — what a producer renaming a method reads), and the
+          names it still writes that bind to none (broken), sorted
         type: local
       - stepNumber: 9
         label: search
@@ -310,8 +312,8 @@ methods:
       - stepNumber: 15
         label: found
         description: >-
-          Count the public names its specs spell through the alias, and record it as a consumer
-          found by the search (found: search)
+          Count the public names its specs spell through the alias, each with the methods its
+          references reach (`uses`), and record it as a consumer found by the search (found: search)
         type: call
         targetComponent: spec_loader
         targetMethod: pinnedUsage
@@ -388,4 +390,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-07T10:53:53.098Z'
+updatedAt: '2026-10-07T18:42:20.456Z'

@@ -389,7 +389,7 @@ A fresh runner has an empty store, so the gate would fail closed on
 action at `.github/actions/setup-wairon` so consumers do not hand-roll it:
 
 ```yaml
-- uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v5
+- uses: SYW-Apps/Waffle-AIron/.github/actions/setup-wairon@v<version>   # the version you lock with
   with:
     version: 5.1.0        # pin the wairon binary; default = latest stable
     packs: sync           # sync (default) | none | an explicit source list

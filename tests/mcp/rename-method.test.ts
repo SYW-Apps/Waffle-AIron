@@ -103,7 +103,7 @@ describe('sdd_rename_method', () => {
     client = await connect(createMcpServer());
     const tool = (await client.listTools()).tools.find((t) => t.name === 'sdd_rename_method');
     expect(tool).toBeDefined();
-    expect(Object.keys(tool!.inputSchema.properties ?? {}).sort()).toEqual(['id', 'method', 'newName', 'pinSymbol']);
+    expect(Object.keys(tool!.inputSchema.properties ?? {}).sort()).toEqual(['dryRun', 'id', 'method', 'newName', 'pinSymbol', 'search']);
     expect([...(tool!.inputSchema.required ?? [])].sort()).toEqual(['id', 'method', 'newName']);
   });
 

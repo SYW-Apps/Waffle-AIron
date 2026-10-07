@@ -162,10 +162,18 @@ export const narrativeTargetReferencesRule: SddRule = {
           }
 
           if (!targetMethodSpec) {
+            // The same hint a renamed type carries: a method whose rename
+            // trace records the called name is what it was renamed to.
+            const renamedTo = targetInterfaces
+              .flatMap((intf) => intf.methods.filter((m) => (m.previousNames ?? []).some((p) => p === entry.targetMethod || p === `${intf.id}.${entry.targetMethod}` || p.endsWith(`.${entry.targetMethod}`))))
+              .map((m) => m.name)[0];
+            const hint = renamedTo !== undefined
+              ? ` It was renamed to "${renamedTo}" (the rename trace of "${target}" records "${entry.targetMethod}") — did you mean "${renamedTo}"?`
+              : '';
             ctx.addIssue(
               'error',
               'INVALID_TARGET_METHOD_REFERENCE',
-              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} method "${entry.targetMethod}" on component "${target}" which is not defined on any of its interfaces${where}.`,
+              `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} method "${entry.targetMethod}" on component "${target}" which is not defined on any of its interfaces${where}.${hint}`,
               impl.id,
               isDraftCtx || ctx.isComponentDraft(target),
             );

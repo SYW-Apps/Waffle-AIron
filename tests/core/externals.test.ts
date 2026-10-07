@@ -253,7 +253,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     const pinned = at(f.dispatch, () => validateProject());
     expect(codes(pinned, 'EXTERNAL_NOT_EXPORTED')).toEqual(['error @route-planner', 'error @route-planner-impl']);
     expect(pinned.issues.find((i) => i.code === 'EXTERNAL_NOT_EXPORTED')!.resolution).toMatchObject({ outcome: 'missing', inputDigest: expect.stringMatching(/^sha256:/) });
-    expect(pinned.hint).toMatch(/validate --family/);
+    expect(pinned.hint).toMatch(/judged against its pin alone; the advisory live comparison reads/);
   });
 
   // ---- pin, status, list -----------------------------------------------------------

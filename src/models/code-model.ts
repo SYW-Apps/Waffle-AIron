@@ -538,6 +538,65 @@ export interface SourceFileFacts {
    * failed to parse, so it leaves this unset rather than guess.
    */
   reexportOnly?: boolean;
+  /**
+   * Every call expression of the file as the TypeScript type checker resolved
+   * it (see ResolvedCallFact), in source order. EXACT grade only, and only
+   * where a compiler with a type checker was loaded. What the Portal
+   * write-shortcut twin and the unnarrated-write check read first: the
+   * checker follows every spelling of a receiver to the declaration, where
+   * the shape facts follow the spellings they know.
+   */
+  resolvedCalls?: ResolvedCallFact[];
+}
+
+/**
+ * One place a call the type checker resolved can land in THIS project's code:
+ * the file holding the declaration (or an implementor of it), the class,
+ * interface or shape it is a member of, and the member's name. A declaration
+ * in a dependency's typings or the language's own library is no target — it
+ * is nobody's component.
+ */
+export interface CallTargetFact {
+  /** Canonical project-relative path of the file holding the declaration or implementor. */
+  path: string;
+  /** The class, interface or named shape the member belongs to; absent for a module-level function. */
+  container?: string;
+  /** The declared name of the method or function the call reaches. */
+  member: string;
+  /**
+   * `declaration` when the checker named this declaration itself;
+   * `implementor` when the declaration sits in an interface or type shape and
+   * this is a class of the project that realizes it.
+   */
+  via: 'declaration' | 'implementor';
+}
+
+/**
+ * One call expression of a file as the TypeScript type checker resolved it:
+ * what was invoked, how it was written, which body it sits in, and every
+ * place in this project it can land. Where CallSiteFact records the SHAPE a
+ * pure model can follow, this records the checker's answer — so a receiver
+ * reached through an alias, a field chain, an element access, a destructured
+ * method, a factory's result, a barrel or a port interface lands where the
+ * checker says it lands, whatever its spelling.
+ */
+export interface ResolvedCallFact {
+  /** The invoked name: the declared member a target names, else the name as written. */
+  name: string;
+  /** The callee as written, whitespace-collapsed and shortened — what a finding quotes. */
+  written: string;
+  /** The innermost named function-like the call sits in; absent at module scope. */
+  enclosing?: string;
+  /** The top-level class or object literal whose member that function-like is, when it is one. */
+  enclosingContainer?: string;
+  /** Every place in this project's own code the call can land; empty for a call into a dependency or the language library. */
+  targets: CallTargetFact[];
+  /**
+   * True when the checker resolved the callee to no declaration at all
+   * because its receiver (or the callee itself) is typed any, unknown or not
+   * at all — neither a landing nor its absence means anything.
+   */
+  unresolved?: boolean;
 }
 
 export interface CodeModel {

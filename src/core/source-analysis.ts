@@ -6,6 +6,7 @@ import {
   typeSourceFiles,
   pathKey,
   type CallSiteFact,
+  type CallTargetFact,
   type CodeModel,
   type ExportAliasFact,
   type FunctionBodyFact,
@@ -13,6 +14,7 @@ import {
   type ImportBindingFact,
   type MethodImplementation,
   type ParameterFact,
+  type ResolvedCallFact,
   type RouteFact,
   type ShapeMemberFact,
   type SourceFileFacts,
@@ -302,39 +304,69 @@ function analyzeGeneric(text: string): Omit<SourceFileFacts, 'path' | 'status' |
 type TsModule = typeof import('typescript');
 
 /**
- * Per-projectRoot resolution cache. Successful resolutions are kept for the
- * process lifetime (the module is loaded either way); FAILED resolutions are
- * retried after a short TTL so a long-running MCP/hosted process picks up an
- * `npm install typescript` in the analyzed project without a restart.
+ * A compiler module loaded from one `typescript` package, remembered under
+ * what it depends on: the resolved package.json, its version and its
+ * modification time. A long-lived MCP or hosted process sees an install, an
+ * upgrade or a removal on its next run — the key changes, and the module a
+ * previous install left in Node's require cache is evicted before the new one
+ * loads, which is how a server once kept answering from a TypeScript 7 module
+ * after the project had installed TypeScript 5.
  */
-const tsResolutionCache = new Map<string, { ts: TsModule | null; at: number }>();
-const TS_RESOLUTION_RETRY_MS = 30_000;
+const tsLoads = new Map<string, { key: string; ts: TsModule | null }>();
 
-function resolveTypeScript(projectRoot: string): TsModule | null {
-  const cached = tsResolutionCache.get(projectRoot);
-  if (cached && (cached.ts !== null || Date.now() - cached.at < TS_RESOLUTION_RETRY_MS)) {
-    return cached.ts;
+/** The `typescript` package one base resolves, or null when it resolves none or loads one without a usable JavaScript compiler API. */
+function compilerFrom(base: string, requireBelow7: boolean): TsModule | null {
+  let req: NodeRequire;
+  let manifest: string;
+  try {
+    req = createRequire(base);
+    manifest = req.resolve('typescript/package.json');
+  } catch {
+    return null; // absence is a supported state, not an error
+  }
+  let key: string;
+  let major = Number.NaN;
+  try {
+    const stat = fs.statSync(manifest);
+    const version = String((JSON.parse(fs.readFileSync(manifest, 'utf8')) as { version?: unknown }).version ?? '');
+    major = Number.parseInt(version, 10);
+    key = `${version}|${stat.mtimeMs}|${stat.size}`;
+  } catch {
+    return null;
+  }
+  const cached = tsLoads.get(manifest);
+  if (cached && cached.key === key) return cached.ts;
+  // A different install under the same path: drop every module the previous
+  // one left cached, so the require below reads the files now on disk.
+  const dir = path.dirname(manifest) + path.sep;
+  for (const loaded of Object.keys(req.cache ?? {})) {
+    if (loaded.startsWith(dir)) delete req.cache[loaded];
   }
   let ts: TsModule | null = null;
-  // The analyzed project's own compiler first, wairon's installation second.
-  // A `typescript` that loads but carries no JavaScript compiler API (the
-  // native TypeScript 7 compiler ships none) is passed over like an absent
-  // one, so a project on TypeScript 7 still reads at exact grade wherever a
-  // usable compiler can be found.
-  const bases = [path.join(projectRoot, 'package.json'), __filename];
-  for (const base of bases) {
+  // TypeScript 7's native compiler ships no JavaScript compiler API: passed
+  // over like an absent package, so the next candidate answers instead.
+  if (!(requireBelow7 && Number.isFinite(major) && major >= 7)) {
     try {
-      const req = createRequire(base);
       const candidate = req('typescript') as TsModule;
-      if (typeof candidate?.createSourceFile !== 'function') continue;
-      ts = candidate;
-      break;
+      if (typeof candidate?.createSourceFile === 'function' && typeof candidate?.createProgram === 'function') ts = candidate;
     } catch {
-      // keep trying — absence is a supported state, not an error
+      ts = null;
     }
   }
-  tsResolutionCache.set(projectRoot, { ts, at: Date.now() });
+  tsLoads.set(manifest, { key, ts });
   return ts;
+}
+
+/**
+ * The TypeScript compiler the analysis reads a project with: the project's
+ * own when it ships the JavaScript compiler API (TypeScript 5 or 6), else the
+ * copy wairon itself depends on — so neither TypeScript 7 nor a project with
+ * no TypeScript at all degrades a run. Re-resolved on every call (a resolve
+ * and a stat), so nothing about a previous run's answer outlives the package
+ * it came from.
+ */
+function resolveTypeScript(projectRoot: string): TsModule | null {
+  return compilerFrom(path.join(projectRoot, 'package.json'), true) ?? compilerFrom(__filename, false);
 }
 
 interface ExactFacts {
@@ -683,7 +715,19 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     const fields: ShapeMemberFact[] = [];
     const methods: string[] = [];
     for (const member of members) {
-      // A constructor, an index signature and a call signature name no member.
+      // A constructor names no member of its own, but each of its parameter
+      // PROPERTIES (`constructor(public readonly amount: number)`) declares a
+      // field exactly as a property declaration would — the language's own
+      // shorthand for one. Absent-able only when marked optional: a default
+      // fills it, so the value always carries it.
+      if (ts.isConstructorDeclaration(member)) {
+        for (const param of member.parameters) {
+          if (!isParameterProperty(param) || !ts.isIdentifier(param.name)) continue;
+          fields.push({ name: param.name.text, optional: !!param.questionToken });
+        }
+        continue;
+      }
+      // An index signature and a call signature name no member.
       const memberName = member.name ? propertyNameText(member.name) : undefined;
       if (!memberName) continue;
       if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
@@ -1958,6 +2002,369 @@ function walkDeclaredRoots(
   return found;
 }
 
+// ---------------------------------------------------------------------------
+// Call resolution through the type checker (source_file_facts.resolvedCalls)
+//
+// The shape facts above follow the receiver spellings a pure model knows, and
+// every spelling they do not know was a way past the Portal write check: an
+// element access, a destructured method, a field of a dependency bag, an alias
+// of the type, a port declared in a contracts module. The checker keeps no list
+// of spellings — it resolves the callee to the DECLARATION it is — so each
+// call is recorded with where that declaration lives, and, for a declaration
+// in an interface or type shape, with the project classes that realize it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parsed source files reused across runs, keyed on what a parse depends on:
+ * the compiler module, the options it was parsed under and the file's exact
+ * text. A long-lived process never answers from a stale parse — a changed
+ * file, or a different compiler, misses — and a run over an unchanged tree
+ * parses nothing twice (the language library alone is most of the cost).
+ */
+const parsedSources = new Map<string, { ts: TsModule; settings: string; text: string; sf: import('typescript').SourceFile }>();
+const PARSED_SOURCES_MAX = 4000;
+
+/** The compiler options the program is built under: the project's tsconfig module resolution, with emit, ambient types and the DOM library left out. */
+function checkerOptions(ts: TsModule, projectRoot: string): import('typescript').CompilerOptions {
+  let options: import('typescript').CompilerOptions = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    esModuleInterop: true,
+  };
+  const configFile = path.join(projectRoot, 'tsconfig.json');
+  if (isFile(configFile)) {
+    try {
+      const read = ts.readConfigFile(configFile, ts.sys.readFile);
+      if (!read.error && read.config) {
+        const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, projectRoot, undefined, configFile);
+        options = { ...parsed.options };
+      }
+    } catch {
+      // an unreadable tsconfig falls back to the defaults above
+    }
+  }
+  return {
+    ...options,
+    noEmit: true,
+    allowJs: true,
+    checkJs: false,
+    skipLibCheck: true,
+    types: [],
+    lib: ['lib.es2022.d.ts'],
+    noLib: false,
+    declaration: false,
+    declarationMap: false,
+    composite: false,
+    incremental: false,
+    tsBuildInfoFile: undefined,
+    maxNodeModuleJsDepth: 0,
+  };
+}
+
+/** A class of the project, as implementor resolution reads it. */
+interface ProjectClass {
+  node: import('typescript').ClassDeclaration;
+  path: string;
+  name: string;
+  members: Set<string>;
+}
+
+/**
+ * Every call of each given file, resolved. `files` maps each absolute path to
+ * its canonical key; the answer is keyed the same way. A program the compiler
+ * cannot build answers nothing, and the rules fall back to the shape facts.
+ */
+function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: string): Map<string, ResolvedCallFact[]> {
+  const out = new Map<string, ResolvedCallFact[]>();
+  if (files.size === 0) return out;
+  const options = checkerOptions(ts, projectRoot);
+  const settings = JSON.stringify(options);
+  const host = ts.createCompilerHost(options, true);
+  const readSource = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, languageVersionOrOptions, onError, shouldCreate) => {
+    const text = host.readFile(fileName);
+    if (text === undefined) return readSource(fileName, languageVersionOrOptions, onError, shouldCreate);
+    const key = `${fileName}|${JSON.stringify(languageVersionOrOptions)}`;
+    const cached = parsedSources.get(key);
+    if (cached && cached.ts === ts && cached.settings === settings && cached.text === text) return cached.sf;
+    const sf = ts.createSourceFile(fileName, text, languageVersionOrOptions, true);
+    if (parsedSources.size >= PARSED_SOURCES_MAX) parsedSources.clear();
+    parsedSources.set(key, { ts, settings, text, sf });
+    return sf;
+  };
+  let program: import('typescript').Program;
+  try {
+    program = ts.createProgram({ rootNames: [...files.keys()], options, host });
+  } catch {
+    return out;
+  }
+  const checker = program.getTypeChecker();
+  const assignable = (checker as unknown as {
+    isTypeAssignableTo?: (a: import('typescript').Type, b: import('typescript').Type) => boolean;
+  }).isTypeAssignableTo;
+
+  const ownKey = (sf: import('typescript').SourceFile): string | undefined => {
+    if (program.isSourceFileDefaultLibrary(sf) || program.isSourceFileFromExternalLibrary(sf)) return undefined;
+    const absolute = path.resolve(sf.fileName);
+    if (!isOwnFile(projectRoot, absolute)) return undefined;
+    return pathKey(path.relative(projectRoot, absolute));
+  };
+
+  // ---- the project's classes, read once: what an interface lands on ----
+  let classes: ProjectClass[] | undefined;
+  const projectClasses = (): ProjectClass[] => {
+    if (classes) return classes;
+    const found: ProjectClass[] = [];
+    for (const sf of program.getSourceFiles()) {
+      const key = ownKey(sf);
+      if (!key || sf.isDeclarationFile) continue;
+      const visit = (node: import('typescript').Node): void => {
+        if (ts.isClassDeclaration(node) && node.name) {
+          const members = new Set<string>();
+          for (const member of node.members) {
+            if (ts.isConstructorDeclaration(member)) {
+              for (const p of member.parameters) if (ts.isIdentifier(p.name)) members.add(p.name.text);
+              continue;
+            }
+            const name = nameText(member.name);
+            if (name) members.add(name);
+          }
+          found.push({ node, path: key, name: node.name.text, members });
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sf);
+    }
+    classes = found;
+    return found;
+  };
+
+  const symbolOf = (node: import('typescript').Node): import('typescript').Symbol | undefined => {
+    let symbol = checker.getSymbolAtLocation(node);
+    if (symbol && symbol.flags & ts.SymbolFlags.Alias) {
+      try {
+        symbol = checker.getAliasedSymbol(symbol);
+      } catch {
+        // keep the alias itself
+      }
+    }
+    return symbol;
+  };
+
+  function nameText(name: import('typescript').Node | undefined): string | undefined {
+    if (!name) return undefined;
+    if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text;
+    return undefined;
+  }
+
+  /**
+   * The project classes realizing a shape: the ones whose implements clause
+   * names it when any does — the code then says who realizes it — else every
+   * class declaring all its members that the checker finds assignable to it.
+   */
+  const implementorCache = new Map<import('typescript').Node, ProjectClass[]>();
+  const implementorsOf = (shape: import('typescript').InterfaceDeclaration | import('typescript').TypeLiteralNode): ProjectClass[] => {
+    const cached = implementorCache.get(shape);
+    if (cached) return cached;
+    const shapeSymbol = ts.isInterfaceDeclaration(shape) ? symbolOf(shape.name) : undefined;
+    let found = shapeSymbol
+      ? projectClasses().filter(c => (c.node.heritageClauses ?? []).some(clause =>
+        clause.token === ts.SyntaxKind.ImplementsKeyword && clause.types.some(t => symbolOf(t.expression) === shapeSymbol)))
+      : [];
+    if (found.length === 0) {
+      const shapeType = ts.isInterfaceDeclaration(shape) && shapeSymbol
+        ? checker.getDeclaredTypeOfSymbol(shapeSymbol) : checker.getTypeAtLocation(shape);
+      const wanted = checker.getPropertiesOfType(shapeType).map(p => p.getName());
+      const generic = ts.isInterfaceDeclaration(shape) && (shape.typeParameters?.length ?? 0) > 0;
+      found = projectClasses().filter(c => {
+        if (!wanted.every(name => c.members.has(name))) return false;
+        if (generic || !assignable) return true;
+        const classSymbol = c.node.name ? symbolOf(c.node.name) : undefined;
+        if (!classSymbol) return false;
+        try {
+          return assignable.call(checker, checker.getDeclaredTypeOfSymbol(classSymbol), shapeType);
+        } catch {
+          return true;
+        }
+      });
+    }
+    implementorCache.set(shape, found);
+    return found;
+  };
+
+  /** The class, interface, shape or object a member declaration belongs to, by name. */
+  const containerOf = (decl: import('typescript').Node): string | undefined => {
+    const holder = decl.parent;
+    if (!holder) return undefined;
+    if ((ts.isClassLike(holder) || ts.isInterfaceDeclaration(holder)) && holder.name) return holder.name.text;
+    if (ts.isTypeLiteralNode(holder) && holder.parent && ts.isTypeAliasDeclaration(holder.parent)) return holder.parent.name.text;
+    if (ts.isObjectLiteralExpression(holder) && holder.parent && ts.isVariableDeclaration(holder.parent)) return nameText(holder.parent.name);
+    return undefined;
+  };
+
+  const MEMBER_KINDS = new Set<number>([
+    ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.MethodSignature, ts.SyntaxKind.PropertyDeclaration,
+    ts.SyntaxKind.PropertySignature, ts.SyntaxKind.FunctionDeclaration, ts.SyntaxKind.PropertyAssignment,
+    ts.SyntaxKind.ShorthandPropertyAssignment, ts.SyntaxKind.GetAccessor, ts.SyntaxKind.FunctionExpression,
+    ts.SyntaxKind.ArrowFunction,
+  ]);
+
+  const targetsOf = (decls: Iterable<import('typescript').Declaration>): CallTargetFact[] => {
+    const targets: CallTargetFact[] = [];
+    const seen = new Set<string>();
+    const add = (target: CallTargetFact): void => {
+      const id = `${target.path}|${target.container ?? ''}|${target.member}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      targets.push(target);
+    };
+    for (const declared of decls) {
+      let decl: import('typescript').Node = declared;
+      // A function or arrow expression is named by the slot that holds it.
+      if ((ts.isFunctionExpression(decl) || ts.isArrowFunction(decl)) && decl.parent
+        && (ts.isPropertyAssignment(decl.parent) || ts.isPropertyDeclaration(decl.parent) || ts.isVariableDeclaration(decl.parent))) {
+        decl = decl.parent;
+      }
+      const key = ownKey(decl.getSourceFile());
+      if (!key) continue;
+      const member = nameText(ts.getNameOfDeclaration(decl as import('typescript').Declaration));
+      if (!member) continue;
+      const container = containerOf(decl);
+      add({ path: key, ...(container ? { container } : {}), member, via: 'declaration' });
+      const holder = decl.parent;
+      if (holder && (ts.isInterfaceDeclaration(holder) || ts.isTypeLiteralNode(holder))) {
+        for (const c of implementorsOf(holder)) {
+          if (c.members.has(member)) add({ path: c.path, container: c.name, member, via: 'implementor' });
+        }
+      }
+    }
+    return targets;
+  };
+
+  const unwrap = (expr: import('typescript').Expression): import('typescript').Expression => {
+    let at = expr;
+    for (;;) {
+      if (ts.isParenthesizedExpression(at) || ts.isNonNullExpression(at) || ts.isAsExpression(at)
+        || ts.isSatisfiesExpression(at) || ts.isTypeAssertionExpression(at)) at = at.expression;
+      else return at;
+    }
+  };
+
+  // A type the CODE made opaque — `any`, `unknown`, a cast to either, an
+  // unannotated parameter. Not the checker's own error type: that is what a
+  // name from a package this run has no typings for reads as (a response
+  // object of an HTTP library, say), which says nothing about the receiver
+  // being one of this project's components.
+  const isOpaque = (type: import('typescript').Type | undefined): boolean =>
+    !!type && (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+    && (type as unknown as { intrinsicName?: string }).intrinsicName !== 'error';
+
+  const isLibraryDecl = (decl: import('typescript').Node | undefined): boolean =>
+    !!decl && program.isSourceFileDefaultLibrary(decl.getSourceFile());
+
+  /** The innermost NAMED function-like a node sits in, and the top-level class or object literal it is a member of. */
+  const enclosingOf = (node: import('typescript').Node): { name?: string; container?: string } => {
+    for (let at: import('typescript').Node | undefined = node.parent; at; at = at.parent) {
+      let name: string | undefined;
+      let holder: import('typescript').Node | undefined = at.parent;
+      if (ts.isFunctionDeclaration(at) || ts.isMethodDeclaration(at) || ts.isGetAccessorDeclaration(at) || ts.isSetAccessorDeclaration(at)) {
+        name = nameText(at.name);
+      } else if (ts.isConstructorDeclaration(at)) {
+        name = 'constructor';
+      } else if ((ts.isFunctionExpression(at) || ts.isArrowFunction(at)) && at.parent
+        && (ts.isVariableDeclaration(at.parent) || ts.isPropertyAssignment(at.parent) || ts.isPropertyDeclaration(at.parent))) {
+        name = nameText(at.parent.name);
+        holder = at.parent.parent;
+      }
+      if (name === undefined) continue;
+      let container: string | undefined;
+      if (holder && ts.isClassLike(holder) && holder.name) container = holder.name.text;
+      else if (holder && ts.isObjectLiteralExpression(holder) && holder.parent && ts.isVariableDeclaration(holder.parent)) container = nameText(holder.parent.name);
+      return { name, ...(container ? { container } : {}) };
+    }
+    return {};
+  };
+
+  const resolveOne = (call: import('typescript').CallExpression): ResolvedCallFact | undefined => {
+    let callee = unwrap(call.expression);
+    // `f.call(t, …)`, `f.apply(t, …)` and `f.bind(t)(…)` invoke f itself.
+    let viaFunctionMethod = false;
+    if (ts.isCallExpression(callee)) {
+      const inner = unwrap(callee.expression);
+      if (ts.isPropertyAccessExpression(inner) && inner.name.text === 'bind'
+        && isLibraryDecl(checker.getResolvedSignature(callee)?.declaration)) {
+        callee = unwrap(inner.expression);
+        viaFunctionMethod = true;
+      }
+    }
+    if (!viaFunctionMethod && ts.isPropertyAccessExpression(callee) && (callee.name.text === 'call' || callee.name.text === 'apply')
+      && isLibraryDecl(checker.getResolvedSignature(call)?.declaration)) {
+      callee = unwrap(callee.expression);
+      viaFunctionMethod = true;
+    }
+    let nameNode: import('typescript').Node | undefined;
+    let receiver: import('typescript').Expression | undefined;
+    if (ts.isPropertyAccessExpression(callee)) {
+      nameNode = callee.name;
+      receiver = callee.expression;
+    } else if (ts.isElementAccessExpression(callee)) {
+      nameNode = callee.argumentExpression;
+      receiver = callee.expression;
+    } else if (ts.isIdentifier(callee)) {
+      nameNode = callee;
+    } else if (callee.kind === ts.SyntaxKind.SuperKeyword || callee.kind === ts.SyntaxKind.ImportKeyword) {
+      return undefined;
+    }
+
+    const decls = new Set<import('typescript').Declaration>();
+    if (viaFunctionMethod) {
+      for (const signature of checker.getTypeAtLocation(callee).getCallSignatures()) {
+        if (signature.declaration && !ts.isJSDocSignature(signature.declaration)) decls.add(signature.declaration);
+      }
+    } else {
+      const signature = checker.getResolvedSignature(call);
+      if (signature?.declaration && !ts.isJSDocSignature(signature.declaration)) decls.add(signature.declaration);
+    }
+    const symbol = nameNode ? symbolOf(nameNode) : undefined;
+    for (const decl of symbol?.declarations ?? []) if (MEMBER_KINDS.has(decl.kind)) decls.add(decl);
+
+    const targets = targetsOf(decls);
+    const fact: ResolvedCallFact = {
+      name: targets.find(t => t.via === 'declaration')?.member ?? nameText(nameNode) ?? '',
+      written: callee.getText().replace(/\s+/g, ' ').slice(0, 80),
+      targets,
+    };
+    const where = enclosingOf(call);
+    if (where.name !== undefined) fact.enclosing = where.name;
+    if (where.container !== undefined) fact.enclosingContainer = where.container;
+    if (decls.size === 0 && (isOpaque(checker.getTypeAtLocation(callee)) || (receiver !== undefined && isOpaque(checker.getTypeAtLocation(receiver))))) {
+      fact.unresolved = true;
+    }
+    return fact;
+  };
+
+  for (const [absolute, key] of files) {
+    const sf = program.getSourceFile(absolute);
+    if (!sf) continue;
+    const calls: ResolvedCallFact[] = [];
+    const visit = (node: import('typescript').Node): void => {
+      if (ts.isCallExpression(node)) {
+        try {
+          const fact = resolveOne(node);
+          if (fact) calls.push(fact);
+        } catch {
+          // one call the checker cannot answer never costs the file its others
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    out.set(key, calls);
+  }
+  return out;
+}
+
 /**
  * Build the pure source-code model for a validation run: one SourceFileFacts
  * per distinct source path across the given implementations — each
@@ -1978,6 +2385,11 @@ export function buildCodeModel(
   const files: SourceFileFacts[] = [];
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
+  // One compiler for the whole run, resolved fresh: what it depends on may
+  // have changed since the last run of a long-lived process.
+  const ts = resolveTypeScript(projectRoot);
+  /** The files read at exact grade, by absolute path: the type checker's roots. */
+  const checkerRoots = new Map<string, string>();
   const rootFiles = walkDeclaredRoots(sourceRoots, exclude, projectRoot);
   // The repository's own packages, read once: what lets a package specifier
   // naming one of them resolve like a relative import.
@@ -2043,7 +2455,6 @@ export function buildCodeModel(
 
     let analyzed: Omit<SourceFileFacts, 'path' | 'status' | 'language'>;
     if (language === 'typescript' || language === 'javascript') {
-      const ts = resolveTypeScript(projectRoot);
       if (ts) {
         try {
           const facts = walkExact(ts, text, absolute);
@@ -2082,6 +2493,7 @@ export function buildCodeModel(
             topLevelMutableBindings: [...facts.mutableBindings],
             reexportOnly: facts.reexportOnly,
           };
+          checkerRoots.set(absolute, sourcePath);
         } catch {
           analyzed = analyzeGeneric(text);
         }
@@ -2097,6 +2509,22 @@ export function buildCodeModel(
     }
 
     files.push({ path: sourcePath, status: 'analyzed', language, ...analyzed });
+  }
+
+  // Every call of every exact-grade file, resolved by the type checker. A
+  // program that cannot be built leaves the facts without resolved calls, and
+  // the rules read the shape facts as they always have.
+  if (ts && checkerRoots.size > 0) {
+    let resolved = new Map<string, ResolvedCallFact[]>();
+    try {
+      resolved = resolveCalls(ts, checkerRoots, projectRoot);
+    } catch {
+      resolved = new Map();
+    }
+    for (const facts of files) {
+      const calls = resolved.get(facts.path);
+      if (calls) facts.resolvedCalls = calls;
+    }
   }
 
   return { files, projectRoot, rootFiles, packages };

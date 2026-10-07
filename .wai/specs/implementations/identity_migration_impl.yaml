@@ -12,8 +12,8 @@ methods:
         description: >-
           Resolve the target project from the bound node by its member alias path (the bound project
           when empty): none is not-a-member, its directory absent is member-absent; a family that is
-          not whole is family-partial; a malformed new id or one any family node answers to is
-          id-collision
+          not whole is family-partial; a malformed new id is id-invalid, and one any family node
+          answers to is id-collision
         type: local
       - stepNumber: 2
         description: Is the rename possible?
@@ -66,7 +66,7 @@ methods:
       - stepNumber: 1
         description: >-
           Find the alias in the bound node's alias table: in neither map is not-a-member; a
-          malformed new alias or one either map declares is alias-taken
+          malformed new alias is alias-invalid, and one either map declares is alias-taken
         type: local
       - stepNumber: 2
         description: Is the rename possible?
@@ -148,4 +148,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-10-07T06:22:18.579Z'
+updatedAt: '2026-10-07T18:29:08.502Z'

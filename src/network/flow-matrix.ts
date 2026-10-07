@@ -263,19 +263,54 @@ function notAllowed(model: ReachModel, flows: NetworkFlow[], refused: NetworkFlo
  * nothing). Pure.
  */
 export function explain(flows: NetworkFlow[], from: string, to: string, model: ReachModel): FlowExplanation {
-  // Steps 1-3: parse both parties; a name the model does not know is a typo, not a refusal.
-  const unknown = [from, to].filter((n) => !isKnown(model, n));
+  // Step 1: parse both parties — a renamed project's former id read as its
+  // current one, and at a member's own root a bare name of its own read under
+  // the member, each reading noted at the head of the chain.
+  const notes: string[] = [];
+  const asWritten = [from, to];
+  [from, to] = [from, to].map((n) => partyName(model, n, notes));
+  // Steps 2-3: a name the model does not know is a typo, not a refusal.
+  const unknown = asWritten.filter((_n, i) => !isKnown(model, [from, to][i]));
   if (unknown.length > 0) {
     return {
       allowed: false,
       flows: [],
       unknown,
       chain: [
+        ...notes,
         ...unknown.map((n) => `unknown party "${n}": nothing in the design is named so`),
-        'name a party as outside, network[:<id>], a project, a subsystem or a component, and a callee also as portal.verb; a subsystem of this project is named bare (a project is reached as <alias>::<name>)',
+        'name a party as outside, network[:<id>], a project, a subsystem or a component, and a callee also as portal.verb; a subsystem of this project is named bare (a project is reached as <alias>::<name>)'
+          + (model.focus ? `; here, at the member "${model.focus}", its own components are named bare or as ${model.focus}::<name>` : ''),
       ],
     };
   }
+  const answer = explainKnown(flows, from, to, model);
+  return notes.length ? { ...answer, chain: [...notes, ...answer.chain] } : answer;
+}
+
+/**
+ * A party as written, read the way policy and check read one: as written when
+ * the model knows it; else a renamed project's former id as its current one;
+ * else, at a member's own root, a bare name of the member's own under it.
+ */
+function partyName(model: ReachModel, name: string, notes: string[]): string {
+  if (isKnown(model, name)) return name;
+  for (const [former, current] of Object.entries(model.formerNames ?? {})) {
+    if (name !== former && !name.startsWith(`${former}::`)) continue;
+    const renamed = `${current}${name.slice(former.length)}`;
+    if (!isKnown(model, renamed)) continue;
+    notes.push(`note: "${name}" names the renamed project "${current}" by its former name (kept in its previousIds): read as "${renamed}"`);
+    return renamed;
+  }
+  if (model.focus && !name.includes('::') && name !== 'outside' && !name.startsWith('network')) {
+    const qualified = `${model.focus}::${name}`;
+    if (isKnown(model, qualified)) return qualified;
+  }
+  return name;
+}
+
+/** Steps 4-9 of explain, over two parties the model knows. */
+function explainKnown(flows: NetworkFlow[], from: string, to: string, model: ReachModel): FlowExplanation {
   // Step 4: the flows between them.
   const selected = flows.filter((f) => isNamed(f.from, from) && isNamed(f.to, to));
   // Step 5: a flow the gate refuses allows nothing.

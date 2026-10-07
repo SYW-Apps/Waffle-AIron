@@ -25,6 +25,16 @@ nothing and printing the exact `wairon member add <alias> <path> --project` to
 run from the parent (or: make the folder its own repository with `git init` and
 re-run `wairon init` for an independent project).
 
+**What to commit.** All of `.wai/` — the specs, `project.yaml`, `lock.json`,
+`externals/` and `externals.lock.yaml`, vendored packs: the gate reads committed
+files only (a migration's scratch folder, `.wai/transactions/`, ignores itself).
+The generated `CLAUDE.md`/`GEMINI.md`, `.claude/` (or `.gemini/`) skills and
+`.mcp.json` hold no machine path: commit them and every clone's assistant starts
+with them, or ignore them and run `wairon generate` after a clone — either way
+`wairon generate` / `wairon doctor --fix` refreshes them.
+wairon writes no `.gitignore` — your toolchain's own entries (`node_modules/`,
+`dist/`, …) are all it needs.
+
 #### Which project a command acts on
 Every command, the MCP server (`wairon mcp serve`) and `wairon dev` bind the same
 project: from the folder you are in, the nearest folder whose `.wai/specs` holds
@@ -35,6 +45,15 @@ in a parent folder therefore binds nothing in a child repository. Outside any
 repository the walk is unbounded. Each command that acts on a project prints
 `project <id> at <root>` on stderr first, so `wairon export` and every `--json`
 output keep a pure stdout.
+
+#### When a command refuses
+A refusal is one `✖` line and a non-zero exit — never a Node stack trace, whatever
+the input. A `.wai/project.yaml` that does not parse as YAML (most often a key
+written twice, e.g. a second `rules:` block appended by hand) stops every command
+the same way, naming the file, the line and the key —
+`✖ .wai/project.yaml:33: duplicated mapping key "rules" — …` — and `wairon doctor`
+diagnoses it too; no command runs on defaults instead. To report a bug, set
+`WAIRON_DEBUG=1` and the stack is printed after the line.
 
 ### `wairon status [--subsystem <id>] [--no-recursive] [--all]`
 Print the SDD spec tree as a hierarchy. Its percentages measure **authoring
@@ -76,7 +95,8 @@ warnings as errors (notices are printed and counted, never fatal).
   says so in one line, so a green member run is never read as a proven one.
   **In CI, run `wairon validate --ci` at the family root**, after installing
   the project's dependencies (`npm ci` or your package manager's equivalent —
-  the gate reads TypeScript/JavaScript code with the project's own TypeScript;
+  the gate reads TypeScript/JavaScript code with the project's own TypeScript
+  when it is 5 or 6, and with the copy wairon ships otherwise;
   see [Using it in GitHub Actions](#using-it-in-github-actions)); a member in
   its own repository adds the root's run to its pipeline or relies on the root
   repository's.
@@ -116,9 +136,20 @@ warnings as errors (notices are printed and counted, never fatal).
   collaborator is collaboration whatever the import's form: when its type comes
   from a component the caller never declared, even through `import type`, it is
   `UNDECLARED_DEPENDENCY`; a Portal calling a write- or lifecycle-effect method
-  of a Repository, Index, Store or Registry that way is
+  of a Repository, Index, Store or Registry is
   `PORTAL_WRITE_SHORTCUT_IN_CODE` (error, the code twin of
-  `PORTAL_WRITE_SHORTCUT`); and a file importing a technology's package
+  `PORTAL_WRITE_SHORTCUT`). A Portal's calls are resolved by the TypeScript
+  type checker, so how the receiver is written does not matter: the call lands
+  on the method the checker resolves it to, and a call through an interface or
+  type — a port declared in the Portal's own contracts file included — lands on
+  every class of the project that realizes it (the ones that say `implements`
+  when any does, else every class the checker finds assignable). A call the
+  checker cannot resolve because its receiver is typed `any` or `unknown`, cast
+  to either, or typed nothing, under the name of a data component's write, is
+  `PORTAL_CALL_UNRESOLVED` (a warning, so `--ci` fails): give the receiver its
+  type. An Orchestrator (or any component) whose code calls a write- or
+  lifecycle-effect method of another component that its narrative never
+  claims is `UNDECLARED_WRITE_CALL`. And a file importing a technology's package
   outside the components that bind it is `TECH_LEAKAGE_IN_CODE`. A technology's
   packages are its declared tokens (its name, or its `matches`) plus the common
   packages wairon knows for it — see [Technologies and their
@@ -152,6 +183,11 @@ how an Adapter reaches anything — so no entry names one. To extend the list,
 write the technology as `{ name, matches }` (each `matches` token is a package
 too), or have a pack contribute `technologyPackages: { <technology>: [<package>,
 …] }`.
+
+A package of a technology that **no** implementation binds is reported too:
+the code uses a technology the design never placed, so every importer is
+outside its (missing) home. Bind it on the data-layer component that owns the
+vendor call (`technologies: [redis]`), and that component becomes its home.
 
 ### `wairon generate [--target <name>] [--domain <id>] [--domains <ids>] [--root] [--family] [--no-prune] [--global] [--dry-run]`
 Reconcile the generated guides, skills and context, and — only when the project
@@ -194,7 +230,13 @@ approval lives in `.wai/lock.json`. Implementation gates on that approval —
 **What it certifies is the design.** Only design findings can refuse a lock.
 Code-conformance findings (the code↔spec checks) are recorded **beside** the
 claim in the record's `code` block, with the analyzer that produced them, and
-printed as `code: N error(s), … recorded beside the claim`. CI enforces them:
+printed as `code: N error(s), … recorded beside the claim`, with the analysis
+**grade** — the weakest any analyzed file got: `exact` (read with the project's
+TypeScript compiler API: declarations, imports and calls resolved), `pattern`
+(read through the language's declaration and import patterns — recognized, not
+resolved), `generic` (word-boundary identifiers only, the floor for any
+language), or `none` (no file analyzed yet: no code, or none the specs name).
+CI enforces them:
 `wairon validate --ci` still fails on a code error. A design can be approved
 before its code exists.
 
@@ -331,12 +373,17 @@ merging is the thing that was reviewed.
 
 #### Using it in GitHub Actions
 
-This repository publishes it as a **reusable workflow**. **6.0.0 is the first
-release that ships the workflow and the `lock-check` command** — earlier releases
-have neither, and no `v6.0.0` tag exists before that release. On a dev build (and
-until 6.0.0 is out), pin the dev tag matching `wairon --version` instead: a CLI
-reporting `5.1.1-dev.107` pins `@v5.1.1-dev.107` with `wairon-version:
-'5.1.1-dev.107'`. Add one job to your own workflow:
+This repository publishes it as a **reusable workflow**. Pin it — and the CLI it
+installs — to **the version you lock with**: the one `wairon --version` prints
+where you run `wairon lock`. Every published version has a git tag `v<version>`
+and the same version on npm: a release `X.Y.Z` is `@vX.Y.Z` with
+`wairon-version: 'X.Y.Z'`; a dev build `X.Y.Z-dev.N` is `@vX.Y.Z-dev.N` with
+`wairon-version: 'X.Y.Z-dev.N'` (the npm `dev` dist-tag names the newest dev
+build, but it moves — pin the exact version). Check that the version you pin is
+on npm before you commit the job: `npm view @wairon/cli@<version> version`. The
+workflow and the `lock-check` command first ship with 6.0.0 and its dev builds;
+an older version has neither. Below, `<version>` stands for yours. Add one job
+to your own workflow:
 
 ```yaml
 # .github/workflows/ci.yml in YOUR repository
@@ -344,9 +391,9 @@ on: [pull_request]
 
 jobs:
   approved-design:
-    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v<version>
     with:
-      wairon-version: '6.0.0'
+      wairon-version: '<version>'
       strict: true      # a deleted .wai/lock.json fails instead of switching the gate off
 ```
 
@@ -354,10 +401,10 @@ With inputs (all optional):
 
 ```yaml
   approved-design:
-    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v<version>
     with:
       working-directory: packages/api   # where the .wai/ tree lives (default: .)
-      wairon-version: '6.0.0'           # version or npm dist-tag, 6.0.0 or later (default: latest)
+      wairon-version: '<version>'       # the version you lock with, or an npm dist-tag (default: latest)
       strict: true                      # fail when nothing was approved — use it once you have locked (default: false)
       validate: true                    # also run `wairon validate --ci` there (default: true)
       install: auto                     # the project's dependencies before validate: auto | none | <command> (default: auto)
@@ -380,10 +427,13 @@ directory (`validate: false` turns it off). Point `working-directory` at the
 family run, which judges the network proofs no member's own gate can.
 
 **The project's dependencies come first.** The conformance gate reads
-TypeScript/JavaScript code with the project's own TypeScript compiler. A fresh
-checkout has none until the project's dependencies are installed, and then every
-file is analyzed below exact grade and `--ci` fails on `CONFORMANCE_DEGRADED` —
-a finding about the runner, not your design. So before `validate --ci` the job
+TypeScript/JavaScript code with the project's own TypeScript compiler when it is
+TypeScript 5 or 6, and with the copy wairon ships otherwise — a fresh checkout,
+a project without TypeScript, or one on TypeScript 7 (whose native compiler has
+no JavaScript API) is still read at exact grade, and `CONFORMANCE_DEGRADED` is
+left for a file the compiler could not read at all. Installing the project's
+dependencies keeps the analysis on the project's own compiler. So before
+`validate --ci` the job
 installs them with the project's own package manager (`install: auto`, the
 default): nothing without a `package.json`; otherwise the nearest lockfile from
 `working-directory` up to the repository root decides — `package-lock.json` →
@@ -411,9 +461,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install --global @wairon/cli@6.0.0   # the version you lock with
+      - run: npm install --global @wairon/cli@<version>   # the version you lock with (wairon --version)
       - run: wairon lock-check --strict
-      - run: npm ci                                    # the project's dependencies: the gate reads your code with your TypeScript
+      - run: npm ci                                    # the project's dependencies: the gate reads your code with your TypeScript (5 or 6)
       - run: wairon validate --ci
 ```
 
@@ -1060,18 +1110,19 @@ return the impact of every pack they applied in their results.
 | `wairon externals add <alias> [<source>] [--project <id>] [--ref <ref>] [--dir <dir>] [--use a,b\|'*'] [--description <text>] [--no-pin] [--dry-run] [--json]` | Declare one external in `.wai/project.yaml`. The source is the location grammar members use: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>` (the commit is the ref the pin follows, fixed there); omit it when the family provides the producer. Text that is no location (braces, quotes, whitespace) is refused. The declaration is checked against the producer it reaches **before** anything is written — `--dry-run` included: one answering to another id, or not exporting a `use` name to this project, is refused naming the id, the closest exported names, or the narrower audience the name is exported to (see Export audiences). Pins by default; a producer that cannot be read leaves it declared and unpinned, saying why, and exits 2 (nothing was pinned). A refusal is one sentence naming the accepted form, and exits 1 |
 | `wairon externals use <alias> [--add a,b\|'*'] [--remove c] [--dry-run] [--json]` | Change one declared external's `use` imports, so the specs may name the producer's public names bare (e.g. so an `implements` of the producer's trait spells its types as the producer does — though `alias::name` and the bare imported name compare as one type either way). An added name the producer does not export to this project is refused. The pin is untouched. Exits 1 on a refusal |
 | `wairon externals remove <alias> [--dry-run] [--json]` | Remove one external: its declaration and its pin (`.wai/externals/<alias>.yaml` and its lock entry) together. An orphaned pin — one whose declaration was deleted by hand, which `externals list` shows — is removed too. Exits 1 when the alias is neither declared nor pinned |
-| `wairon externals consumers [--json]` | From a producer's root: the family projects in reach that consume it — each with the alias and section it declares it under and the public names its specs use — so a producer sees who breaks before it changes its surface. A sibling checkout, git or hosted consumer outside the family declares its dependency on its own side and is not visible here |
+| `wairon externals consumers [--search <dirs...>] [--json]` | From a producer's root: the projects that consume it — each with the alias and section it declares it under and the public names its specs use — so a producer sees who breaks before it changes its surface. Without `--search`, the family read from the highest root in reach. `--search ..` (any folders) also scans those folders and the project roots directly under them for projects declaring this one as an external by a path that resolves here, or by git — a sibling checkout is found this way. A hosted consumer, or one on another machine, declares its dependency on its own side and is not visible here (`sdd_list_consumers` is the same answer for an assistant) |
 | `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
 | `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
 | `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration, and an orphaned pin whose declaration is gone, are listed with their problem, never hidden |
-| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI document per portal), import one, or list them |
+| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal — a `{name}` segment of an endpoint path is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH), import one, or list them. An unknown `--portal` is refused naming the portals the surface renders |
+| `wairon surface diff [--against <ref\|file>] [--json]` | The public-surface changelog: this project's export table now against the same table at its last **committed** approval (or at a git revision, or in a saved native snapshot from `surface export`) — every exported name and contract method `added`, `removed`, `renamed` (from its rename trace) or `changed` (signature or type shape), and how many a consumer may have to follow. What a producer writes release notes from before it re-locks; `wairon externals consumers --search <dir>` then says who uses what. Read-only. With no approval ever committed it says so (lock and commit first, or name `--against`). `sdd_surface_diff` is the same answer for an assistant |
 | `wairon produce <notion\|miro> [--page <id>] [--token <token>]` | Project the local spec tree to Notion or Miro (the token comes from `--token`, the environment, else a prompt; nothing is stored) |
 
 ## Tooling
 
 | Command | Description |
 |---------|-------------|
-| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only) |
+| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
 | `wairon update [--check] [--channel <name>]` | Check/install the latest release; switch channel |
 | `wairon aliases list` | Show command aliases (`wai`) and their status |
 | `wairon aliases enable <name>` / `disable <name>` | Create / remove an alias |

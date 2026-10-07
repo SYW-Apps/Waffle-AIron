@@ -18,9 +18,10 @@ methods:
         targetMethod: resolve
       - stepNumber: 2
         description: >-
-          Check the alias against the bound node's alias table (members and externals): declared is
-          alias-taken; an external of the bound project whose source path resolves to this directory
-          is already-member, naming `member adopt`; a family node at this directory is
+          Check the alias against the bound node's alias table (members and externals): one that
+          breaks the alias grammar [a-z0-9-_]+ is alias-invalid (as rename-alias names it); declared
+          is alias-taken; an external of the bound project whose source path resolves to this
+          directory is already-member, naming `member adopt`; a family node at this directory is
           already-member
         type: local
       - stepNumber: 3
@@ -295,4 +296,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-01T19:52:09.236Z'
+updatedAt: '2026-10-07T19:08:14.162Z'

@@ -369,7 +369,11 @@ function relockOf(plan: MigrationPlan, changes: FileChange[], rehearsal?: Rehear
     // whose approval, read on the rehearsal copy, still covers every spec —
     // its moved specs paired as moves — owes no re-lock, exactly as `wairon
     // lock` and `wairon lock-check` read it once the move is applied.
-    const storageMove = plan.request.verb === 'externalize' && plan.request.as !== 'project';
+    // Any verb whose planned edits only move and delete files is one —
+    // externalize into a part, internalize a part — never one that edits a
+    // reference, an export, a pin, an id or a member's kind.
+    const storageMove = plan.edits.length > 0 && plan.edits.every((e) => e.kind === 'move' || e.kind === 'delete')
+      && !(plan.request.verb === 'externalize' && plan.request.as === 'project');
     const stillApproved = (owner: string): boolean => {
       if (!storageMove || !rehearsal) return false;
       try {

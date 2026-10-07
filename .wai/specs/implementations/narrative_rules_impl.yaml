@@ -430,7 +430,11 @@ methods:
         description: >-
           Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
           ctx.isComponentDraft(the target component)) naming the method, the verb, the target
-          component and where
+          component and where — and, when a method of the target component's contracts lists the
+          called name in its rename trace (previousNames, `<contract>.<name>` or the bare name),
+          that it was renamed to that method, per the rename trace, with "did you mean" the new
+          name: the same hint a renamed type carries, read here from a member's or this project's
+          own contracts alike
         type: local
     symbol: check
     exportedVia: narrativeTargetReferencesRule
@@ -639,7 +643,10 @@ methods:
         description: >-
           Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; carrying the resolution)
           naming the method, the verb, the component in the other project, the providing project and
-          the entry id that does not expose it
+          the entry id that does not expose it — and, when a method of that entry lists the called
+          name in its rename trace (`formerly`), that it was renamed to it (follow the rename);
+          otherwise that a pin taken before the producer published the name cannot know it, so once
+          the producer exports it the remedy is a re-pin (`wairon externals pin <alias>`)
         type: local
     symbol: check
     exportedVia: surfaceReferenceBackingRule
@@ -1032,4 +1039,4 @@ methods:
     exportedVia: detailSufficiencyRule
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-09-28T17:16:47.445Z'
+updatedAt: '2026-10-07T18:42:21.671Z'

@@ -29,24 +29,29 @@ methods:
       Portal: partition the entries by backing portal, render each portal over just its own entries
       (its own servers from basePath, its own securitySchemes and per-operation security, provenance
       — project, version/StateId — in its info block), and return the named set. One portal yields
-      one spec; distinct portals are never merged into a combined document. In each document the
-      type closure becomes JSON-Schema components, and every type is read as its parsed canonical
-      expression, never by pattern: string, int (integer), float (number), bool (boolean); bytes a
-      string with contentEncoding base64; date, datetime and duration strings of format date,
-      date-time and duration; any no constraint; list an array, set an array with uniqueItems, map
-      an object with additionalProperties of the value's schema; `T?` the schema admitting null
-      (type [X, "null"], or anyOf with {type: "null"} around a $ref); a union of named types oneOf
-      their $refs; `async T` the schema of T; a named type a $ref into the components; an enum a
-      component of type string with its values as `enum`, their descriptions in its description; a
-      named scalar a component carrying the schema of the primitive it holds, titled with its name.
-      A position that is not canonical is documented as unconstrained with a description naming it,
-      never as an invented object. A signature type is a function type, which no JSON value can
-      carry, so it gets no invented JSON-Schema shape: its component carries no `type` constraint, a
-      description saying it is a function type with no JSON form, and an `x-wairon-signature`
-      extension holding its params (name, the type as wairon writes it and as a $ref or schema,
-      optional) and returns (the same two forms) — honest to an OpenAPI reader, and complete for a
-      wairon one. A wire operation whose param or return is typed by a signature therefore documents
-      a value that cannot be sent; the codec renders it as it is rather than hiding it.
+      one spec; distinct portals are never merged into a combined document. Each method's params go
+      where its endpoint carries them: a param named by a `{name}` template segment of the endpoint
+      path is a parameter `in: path`, always required (the path cannot be built without it); the
+      others are parameters `in: query` for a verb without a body (GET, DELETE, HEAD, OPTIONS) and
+      properties of the JSON request body for POST, PUT and PATCH — so every templated path declares
+      its path parameters, as OpenAPI requires. In each document the type closure becomes
+      JSON-Schema components, and every type is read as its parsed canonical expression, never by
+      pattern: string, int (integer), float (number), bool (boolean); bytes a string with
+      contentEncoding base64; date, datetime and duration strings of format date, date-time and
+      duration; any no constraint; list an array, set an array with uniqueItems, map an object with
+      additionalProperties of the value's schema; `T?` the schema admitting null (type [X, "null"],
+      or anyOf with {type: "null"} around a $ref); a union of named types oneOf their $refs; `async
+      T` the schema of T; a named type a $ref into the components; an enum a component of type
+      string with its values as `enum`, their descriptions in its description; a named scalar a
+      component carrying the schema of the primitive it holds, titled with its name. A position that
+      is not canonical is documented as unconstrained with a description naming it, never as an
+      invented object. A signature type is a function type, which no JSON value can carry, so it
+      gets no invented JSON-Schema shape: its component carries no `type` constraint, a description
+      saying it is a function type with no JSON form, and an `x-wairon-signature` extension holding
+      its params (name, the type as wairon writes it and as a $ref or schema, optional) and returns
+      (the same two forms) — honest to an OpenAPI reader, and complete for a wairon one. A wire
+      operation whose param or return is typed by a signature therefore documents a value that
+      cannot be sent; the codec renders it as it is rather than hiding it.
     signature: 'toOpenApiSet(snapshot: SurfaceSnapshot): list<NamedOpenApiSpec>'
     returns: list<NamedOpenApiSpec>
     params:
@@ -65,4 +70,4 @@ methods:
         description: The raw document body, JSON or YAML.
 status: complete
 createdAt: '2026-07-10T23:13:57.188Z'
-updatedAt: '2026-10-06T19:09:15.702Z'
+updatedAt: '2026-10-07T18:28:31.655Z'

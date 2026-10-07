@@ -74,11 +74,17 @@ methods:
       `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home.
       References outside that tree are leakage, and L3 contract identifiers must stay
       intent-language — the contract is the swap seam, so the vendor name is wrong even on the
-      owning component's own interface. A technology is matched by its name, or — when it declares
-      `matches` because its name is also an ordinary word of the tree (a package named after the
-      file format it reads) — by those tokens alone. Two declarations of one technology are one home
-      whichever notation each is written in: a component binding it as a bare name and one binding
-      it as `{name, matches}` are both inside it, even when one form's tokens police nothing.
+      owning component's own interface. A word in prose is not a binding: the PROSE of a data-layer
+      seam (an Adapter, Store, Registry or Index — the stereotypes that may bind a technology at
+      all) — its component description, its contract's descriptions and its implementations'
+      descriptions, intents and step prose — names the technology about its own realization ("in
+      memory now, Redis later"), so it is not leakage; its identifiers (id, name, dependsOn, owns,
+      basePath, a step's call target, a source file) still are, and every surface of any other
+      stereotype still is. A technology is matched by its name, or — when it declares `matches`
+      because its name is also an ordinary word of the tree (a package named after the file format
+      it reads) — by those tokens alone. Two declarations of one technology are one home whichever
+      notation each is written in: a component binding it as a bare name and one binding it as
+      `{name, matches}` are both inside it, even when one form's tokens police nothing.
     signature: 'technologyBoundaries(ctx: RuleContext): void'
     returns: void
     params:
@@ -257,4 +263,4 @@ methods:
           could name them as their signatureFrom
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-07T06:21:18.616Z'
+updatedAt: '2026-10-07T18:28:12.875Z'

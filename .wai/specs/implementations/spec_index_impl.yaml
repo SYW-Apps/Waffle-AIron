@@ -140,7 +140,9 @@ methods:
       - stepNumber: 3
         description: >-
           Parse each against ImplementationSpecSchema, keyed under its project and its references
-          bound as the scan binds them, collecting refusals as loader issues
+          bound as the scan binds them, collecting refusals as loader issues; every source file it
+          names (its own sourcePath, each method's, and a part's simPath) is normalized against the
+          root of the project holding it
         type: local
   - name: loadImplementationSpec
     narrative:
@@ -172,7 +174,13 @@ methods:
         targetComponent: spec_file_store
         targetMethod: read
       - stepNumber: 3
-        description: Parse each against TypeSpecSchema, collecting refusals as loader issues
+        description: >-
+          Parse each against TypeSpecSchema, collecting refusals as loader issues, and normalize
+          every source file it names — its own sourcePath and each method's — against the root of
+          the project holding it, exactly as an implementation's are: a part stores them relative to
+          the part's own root (`../../src/…` once a subsystem is externalized into `services/x`),
+          and read raw they would escape the project root (SOURCE_PATH_ESCAPES_ROOT) although they
+          name the same files
         type: local
       - stepNumber: 4
         description: Return the parsed type specs
@@ -581,4 +589,4 @@ methods:
         outcome: list<RetiredReachFact>
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-06T23:09:59.474Z'
+updatedAt: '2026-10-07T18:37:10.247Z'

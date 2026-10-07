@@ -320,4 +320,70 @@ methods:
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'impl-billing-orch')).toBe(true);
     } finally { proj.cleanup(); }
   });
+
+  // Round-4 trial (tinkerer): binding redis on one Store made ANOTHER Store's
+  // prose ("in memory now, swap to Redis later") a TECH_LEAKAGE — three times,
+  // on its component, contract and implementation. A word in a seam's prose is
+  // no binding; a seam's identifiers and any logic component's prose still are.
+  it('does not read a word in another data-layer seam\'s prose as leakage — its identifiers and logic prose still are', () => {
+    const proj = createTempProject();
+    proj.component('hit-store', 'Store');
+    proj.writeSpec('interface', 'ihit-store', `schemaVersion: 1.0.0
+id: ihit-store
+name: IHitStore
+description: Hit counters.
+component: hit-store
+methods:
+  - name: addHit
+    description: Adds one hit.
+    signature: "addHit(code: string): Promise<void>"
+    returns: "Promise<void>"`);
+    proj.writeSpec('implementation', 'impl-hit-store', `schemaVersion: 1.0.0
+id: impl-hit-store
+name: ImplHitStore
+description: Counters in redis.
+contract: ihit-store
+technologies: [redis]
+methods:
+  - { name: addHit, detail: intent, intent: INCR the counter key. }`);
+    // Another Store, whose prose names its own planned realization.
+    proj.writeSpec('component', 'link-store', `schemaVersion: 1.0.0
+id: link-store
+name: link-store
+description: Short links, held in memory now; swap to Redis later.
+subsystem: sub-a
+componentType: Store`);
+    proj.writeSpec('interface', 'ilink-store', `schemaVersion: 1.0.0
+id: ilink-store
+name: ILinkStore
+description: Link persistence (memory today, Redis once it scales).
+component: link-store
+methods:
+  - name: putLink
+    description: Stores one link; a later Redis realization keeps the same contract.
+    signature: "putLink(code: string): Promise<void>"
+    returns: "Promise<void>"`);
+    proj.writeSpec('implementation', 'impl-link-store', `schemaVersion: 1.0.0
+id: impl-link-store
+name: ImplLinkStore
+description: In-memory map, to be swapped for Redis.
+contract: ilink-store
+methods:
+  - { name: putLink, detail: intent, intent: Sets the map entry; the Redis version will SET the key. }`);
+    // A logic component whose prose names the vendor IS a leak.
+    proj.component('report-orch', 'Orchestrator');
+    proj.writeSpec('component', 'report-orch', `schemaVersion: 1.0.0
+id: report-orch
+name: report-orch
+description: Reads the redis counters directly for the report.
+subsystem: sub-a
+componentType: Orchestrator`);
+    // A seam whose IDENTIFIER names the vendor still leaks.
+    proj.component('redis-cache', 'Store');
+    proj.activate();
+    try {
+      const leaks = techIssues(validateProject()).filter(i => i.code === 'TECH_LEAKAGE').map(i => i.specId).sort();
+      expect(leaks).toEqual(['redis-cache', 'report-orch']);
+    } finally { proj.cleanup(); }
+  });
 });

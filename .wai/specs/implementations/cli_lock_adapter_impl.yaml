@@ -107,17 +107,39 @@ methods:
         error: declared external(s) never pinned
       - stepNumber: 12
         description: >-
+          Read the uses of the pinned externals that their pins do not record — a name or method the
+          design uses now that the pin was taken without ("used now, but not in the lock")
+        type: call
+        targetComponent: validator_portal
+        targetMethod: unrecordedExternalUses
+      - stepNumber: 13
+        description: >-
+          A use its pin does not record is judged against nothing, exactly as a never-pinned
+          external is
+        type: branch
+        condition: a pinned external is used beyond what its pin records
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Refuse, writing nothing, naming each alias with the uses its pin does not record: a
+          producer that broke one could not be told — re-pin first (`wairon externals pin <alias>`),
+          then lock
+        type: throw
+        error: external(s) used beyond their pin
+      - stepNumber: 15
+        description: >-
           Confirm with the human (skipped under --yes; a non-interactive shell without --yes
           refuses)
         type: branch
         condition: the human declined the confirmation
-        onTrueStep: 13
-        onFalseStep: 14
-      - stepNumber: 13
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
         description: 'Declined: nothing was written'
         type: return
         outcome: null (declined)
-      - stepNumber: 14
+      - stepNumber: 17
         description: >-
           Capture the approval: one digest per OWN spec file — the project's own and its parts'
           (stage 8), a part's keyed `members/<alias>/<path inside the part>` so moving its storage
@@ -126,40 +148,40 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: captureApprovedSpecs
-      - stepNumber: 15
+      - stepNumber: 18
         description: 'Resolve who is approving: the git author identity, else user@hostname'
         type: call
         targetComponent: approval_portal
         targetMethod: localApprover
-      - stepNumber: 16
+      - stepNumber: 19
         label: confirm
         description: Recompute the gate identity immediately before writing
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
           Did any input move while the lock ran — between the capture before validation and now, the
           confirmation prompt included?
         type: branch
         condition: the recomputed identity differs from the captured one
-        onTrueStep: 18
-        onFalseStep: 19
-      - stepNumber: 18
+        onTrueStep: 21
+        onFalseStep: 22
+      - stepNumber: 21
         description: >-
           Refuse, writing nothing: a spec, the doctrine, an input, the composition block or a
           member's approval changed while the lock ran, so the validation the human saw does not
           describe what would be recorded. Run the lock again
         type: throw
         error: the lock's inputs changed while it ran
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
           A scoped lock (--subsystem) covers only its subsystem: read the spec paths in that scope
           through the core portal, so every spec outside it keeps the approval it already had
         type: call
         targetComponent: spec_tree_portal
         targetMethod: specPathsInScope
-      - stepNumber: 20
+      - stepNumber: 23
         description: >-
           Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
           lockedAt, lockedBy, validatorVersion, validationResult = the design half's counts
@@ -169,12 +191,12 @@ methods:
           part, contentDigest, commit when known, state approved}, and `code` = gate.analysis
           without its codes list. No `children`, no `reexpressed` (a human approved this one)
         type: local
-      - stepNumber: 21
+      - stepNumber: 24
         description: Persist the commit-scoped lock record — the only file this lock writes
         type: call
         targetComponent: approval_portal
         targetMethod: writeLockRecord
-      - stepNumber: 22
+      - stepNumber: 25
         description: Return the written lock record
         type: return
         outcome: LockRecord
@@ -225,11 +247,14 @@ methods:
       - stepNumber: 6
         label: members
         description: >-
-          Read every member PROJECT's approval at its own root, at every depth, with how its
-          declaring project pinned it (parts are left out: a part has no approval of its own, its
-          declaring project's is its approval). The gate identity reads each member's RECORDED
-          approval, never its tree, so without this read a member's unapproved edits are invisible
-          here.
+          Read the root's own approval entry and every member PROJECT's approval at its own root, at
+          every depth, with how its declaring project pinned it (parts are left out: a part has no
+          approval of its own, its declaring project's is its approval). The gate identity reads
+          each member's RECORDED approval, never its tree, so without this read a member's
+          unapproved edits are invisible here. Each entry is the one `wairon status` and
+          sdd_get_status print (family_validator.approvals): drifted when its identity moved OR its
+          approval still owes something (`owed`: a moved id, an external never pinned or used beyond
+          its pin), so this gate and status read one verdict
         type: call
         targetComponent: validator_portal
         targetMethod: familyApprovals
@@ -251,10 +276,11 @@ methods:
       - stepNumber: 9
         label: verdict-member-drifted
         description: >-
-          Refuse at every strictness: the merge gate is never green while a member's design changes
-          are unapproved. Name each drifted member with its folder and the remedy — `wairon lock` at
-          that member's own root, then commit its .wai/lock.json — and say whether this project's
-          own approval needs one too.
+          Refuse at every strictness: the merge gate is never green while a member's approval does
+          not cover it. Name each drifted member with its folder, what it owes — its `owed` sentence
+          when it carries one (a moved id, an external to pin), else that its design changed since
+          its own approval — and the remedy: `wairon lock` at that member's own root, then commit
+          its .wai/lock.json; and say whether this project's own approval needs one too.
         type: return
         outcome: member drifted
       - stepNumber: 10
@@ -278,23 +304,30 @@ methods:
       - stepNumber: 12
         label: id-moved
         description: >-
-          Did the id move since the approval — changed by hand (PROJECT_ID_CHANGED), or by the
-          rename migration with the re-lock it owes not yet taken (PROJECT_ID_RENAMED)?
+          Does the approval on record still owe something the gate identity does not cover — the id
+          moved since it (changed by hand, PROJECT_ID_CHANGED, or by the rename migration with the
+          re-lock it owes not yet taken, PROJECT_ID_RENAMED), or the root's own entry read at step 6
+          owes an external (one declared but never pinned, or used beyond what its pin records —
+          `wairon lock` refuses both)?
         type: branch
-        condition: the identity names a changed or a renamed problem
+        condition: >-
+          the identity names a changed or a renamed problem, or the root's own entry carries an owed
+          external
         onTrueStep: 13
         onFalseStep: 14
       - stepNumber: 13
         label: verdict-id-moved
         description: >-
-          Refuse at every strictness, naming the id the approval recorded and the one the
-          configuration resolves to now. Changed by hand: as `wairon lock` refuses it — everything
-          keyed on the approved id no longer finds this project — with the fix: restore the approved
+          Refuse at every strictness. The id: name the id the approval recorded and the one the
+          configuration resolves to now — changed by hand, as `wairon lock` refuses it (everything
+          keyed on the approved id no longer finds this project), with the fix: restore the approved
           id in .wai/project.yaml, then change it deliberately with `wairon project rename <id>` and
-          re-lock. Renamed: the approval still names the former id, and `wairon lock` re-approves
-          the design under the new one; commit the updated .wai/lock.json.
+          re-lock; renamed, the approval still names the former id and `wairon lock` re-approves the
+          design under the new one. An external: quote what is owed (each alias, and the uses its
+          pin does not record) and the fix in the order the lock takes it — pin first (`wairon
+          externals pin <alias>`), then `wairon lock`. Either way, commit the updated .wai/lock.json
         type: return
-        outcome: stale (project id)
+        outcome: stale (project id or external pin)
       - stepNumber: 14
         label: dispatch-state
         description: Turn this project's own lock state into the decision.
@@ -483,4 +516,4 @@ methods:
         outcome: whether there is nothing to approve
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-07T11:44:54.828Z'
+updatedAt: '2026-10-07T18:55:52.663Z'

@@ -132,7 +132,16 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
 
     case 'diff': {
       // What the export table changed since the last approval (or a named revision / saved snapshot).
-      const diff = diffSurface(options.against);
+      // A comparison that cannot be made (no git work tree, a ref naming no
+      // commit, no approval ever committed) is refused in one line, never a
+      // stack trace.
+      let diff: SurfaceDiff;
+      try {
+        diff = diffSurface(options.against);
+      } catch (e) {
+        if (e instanceof WaironError) throw e;
+        throw new WaironError(e instanceof Error ? e.message : String(e));
+      }
       if (options.json) process.stdout.write(`${JSON.stringify(diff, null, 2)}\n`);
       else printSurfaceDiff(diff);
       return;

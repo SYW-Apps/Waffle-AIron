@@ -139,6 +139,13 @@ export interface ProjectApproval {
   subject?: string;
   /** Drifted only because the lock predates the stage-5 gate identity. */
   upgraded?: boolean;
+  /**
+   * Why the approval on record does not cover the project although its gate
+   * identity may match: its id moved since the approval, or a declared
+   * external was never pinned or is used beyond its pin. Set only on a
+   * drifted entry; status, lock-check and lock read the same entry.
+   */
+  owed?: string;
   /** How the parent's lock pinned it; absent on the root. */
   pinned?: PinState;
   /** part | project (stage 8). A part's state is its declaring project's, and it has no subject of its own. */

@@ -177,7 +177,8 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
   });
 
   it('flags a resolved source that is neither Adapter nor Store (AUTH_SOURCE_NOT_PROVIDER)', () => {
-    build({ callerType: 'Adapter', callerDependsOn: ['aux'], providers: [{ id: 'aux', type: 'Orchestrator' }], stepAuth: { from: 'component:aux' } });
+    // Not `aux`: a name Windows reserves for a device is no spec id (round-4 trial).
+    build({ callerType: 'Adapter', callerDependsOn: ['aux_logic'], providers: [{ id: 'aux_logic', type: 'Orchestrator' }], stepAuth: { from: 'component:aux_logic' } });
     const res = validateProject();
     expect(issuesOf(res, 'AUTH_SOURCE_NOT_PROVIDER')).toHaveLength(1);
     expect(issuesOf(res, 'AUTH_SOURCE_UNWIRED')).toHaveLength(0); // it IS wired

@@ -75,7 +75,7 @@ import {
 } from '../commands/subsystem.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
 import { runTypeRenameField } from '../commands/type.js';
-import { runMethodRenameParam } from '../commands/method.js';
+import { runMethodRename, runMethodRenameParam } from '../commands/method.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -96,12 +96,11 @@ program
     const opts = thisCommand.opts();
     if (opts.verbose) setLogLevel('verbose');
     else if (opts.silent) setLogLevel('silent');
-    // Name the project the command is about to act on (stderr; silent under --silent).
-    if (!opts.silent) {
-      const names: string[] = [];
-      for (let c: Command | null = actionCommand; c && c.parent; c = c.parent) names.unshift(c.name());
-      announceBinding(names.join(' '));
-    }
+    // Name the project the command is about to act on (stderr; silent under
+    // --silent) — and refuse it on a configuration that does not parse.
+    const names: string[] = [];
+    for (let c: Command | null = actionCommand; c && c.parent; c = c.parent) names.unshift(c.name());
+    announceBinding(names.join(' '));
   });
 
 // ---------------------------------------------------------------------------
@@ -1057,6 +1056,16 @@ const methodCmd = program
   .description("Act on a contract method of this project's spec tree");
 
 methodCmd
+  .command('rename <component> <method> <new-name>')
+  .description("Rename a contract method and retarget every reference to it; the old name joins its rename trace (previousNames, `formerly` in the design export) and every consumer that calls it through an export is named as one the rename breaks")
+  .option('--dry-run', 'Print what the rename would move, retarget and break, and write nothing')
+  .option('--search <dirs...>', 'Folders to scan for consumer checkouts outside the family')
+  .option('--no-pin-symbol', 'Do not pin an implementation without a symbol to the old name (its code is not written yet)')
+  .action(async (componentId: string, method: string, newName: string, opts: { dryRun?: boolean; search?: string[]; pinSymbol?: boolean }) => {
+    await runMethodRename(componentId, method, newName, { dryRun: opts.dryRun, search: opts.search, pinSymbol: opts.pinSymbol });
+  });
+
+methodCmd
   .command('rename-param <component> <method> <param> <new-name>')
   .description("Rename a parameter of a contract method; the old name joins the parameter's rename trace (previousNames, `formerly` in the design export), each signature is re-derived and an HTTP path placeholder that bound it is respelled")
   .action(async (componentId: string, method: string, param: string, newName: string) => {
@@ -1243,11 +1252,17 @@ async function main(): Promise<void> {
   try {
     await program.parseAsync(process.argv);
   } catch (err) {
+    // Whatever a command throws reaches the user as ONE line: a WaironError's
+    // message as it is, any other error's message the same way. The stack is a
+    // bug report's business, printed only when WAIRON_DEBUG is set.
     if (err instanceof WaironError) {
       logger.error(err.message);
-      process.exit(1);
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(message || String(err));
+      if (process.env.WAIRON_DEBUG && err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`);
     }
-    throw err;
+    process.exit(1);
   }
 }
 

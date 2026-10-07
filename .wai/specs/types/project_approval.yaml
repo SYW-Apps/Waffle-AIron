@@ -65,7 +65,18 @@ fields:
       another git repository than its declaring project (a git source, or a `../` sibling that is
       its own repository) — provenance the lock records.
     optional: true
+  - name: owed
+    type: string
+    description: >-
+      Why the approval on record does not cover the project although its gate identity matches, in
+      one sentence a verdict can quote: its project id moved since the approval (renamed by the
+      rename migration, or changed by hand — the id is no input of the gate identity), or a declared
+      external was never pinned or is used beyond what its pin records (a name or method the design
+      now uses that the pin does not hold). Set only on a drifted entry; `wairon status`,
+      sdd_get_status, `wairon lock-check` and `wairon lock` all read the same entry, so none of them
+      can call the project approved while another says the approval is owed.
+    optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-04T23:39:15.562Z'
+updatedAt: '2026-10-07T18:32:14.889Z'

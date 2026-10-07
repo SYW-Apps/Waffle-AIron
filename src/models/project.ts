@@ -1142,8 +1142,20 @@ export function projectIdentity(config: Pick<ProjectConfig, 'id' | 'name' | 'pre
 
 // ── project_config externals ────────────────────────────────────────────────
 
-/** An external's alias: a reference segment, so no dot (a dotted producer id needs an explicit alias). */
-export const EXTERNAL_ALIAS_RE = /^[a-z0-9_-]+$/;
+/**
+ * An external's alias: a reference segment, so no dot (a dotted producer id
+ * needs an explicit alias), and never a name Windows reserves for a device
+ * (`con`, `aux`, `com1`, …) — the alias names its pin file
+ * (`.wai/externals/<alias>.yaml`), which no Windows checkout could hold.
+ */
+export const EXTERNAL_ALIAS_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)[a-z0-9_-]+$/;
+
+/** Why an alias breaks EXTERNAL_ALIAS_RE, in words: the grammar, or a Windows device name. */
+export function aliasGrammarProblem(alias: string): string {
+  return /^[a-z0-9_-]+$/.test(alias)
+    ? `the alias "${alias}" is a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9), and it names a file — choose another`
+    : `the alias "${alias}" breaks [a-z0-9-_]+`;
+}
 
 /**
  * declared_external — one external as the configuration declares it,
@@ -1257,9 +1269,9 @@ export function declaredExternals(config: Pick<ProjectConfig, 'externals'> & Par
     const read = readExternalSource(declaration?.source);
     const source = read.source;
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
-      ? (PROJECT_ID_RE.test(alias)
+      ? (PROJECT_ID_RE.test(alias) && alias.includes('.')
         ? `the alias "${alias}" is not a reference name ([a-z0-9-_]+) — a dotted producer id needs an explicit alias, e.g. \`${alias.replace(/\./g, '-')}: { project: ${alias} }\``
-        : `the alias "${alias}" breaks [a-z0-9-_]+`)
+        : aliasGrammarProblem(alias))
       : config.members?.[alias] !== undefined
         ? `the alias "${alias}" is also declared under \`members\` — one alias names one project`
         : !PROJECT_ID_RE.test(project)
@@ -1436,7 +1448,7 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
     const imports = readUse(alias, declaration.use);
     const as = declaration.as;
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
-      ? `the member alias "${alias}" breaks [a-z0-9-_]+`
+      ? `the member ${aliasGrammarProblem(alias).replace(/^the /, '')}`
       : source !== undefined && deprecated !== undefined
         ? `the member "${alias}" names both \`source\` and the deprecated \`path\` — keep \`source\``
         : source === undefined && deprecated === undefined

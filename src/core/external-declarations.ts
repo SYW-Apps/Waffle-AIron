@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { runWithProjectRoot } from '../utils/fs.js';
 import {
   EXTERNAL_ALIAS_RE,
+  aliasGrammarProblem,
   PROJECT_ID_RE,
   USE_ENTRY_RE,
   effectiveProjectId,
@@ -80,6 +81,7 @@ function refused(alias: string, why: string): ExternalAddition {
 /** The request's own problems, before anything is read or written; null when it can be declared. */
 function requestProblem(request: ExternalRequest, config: ProjectConfig | null, source: ExternalSource | undefined, sourceProblem: string | undefined): string | null {
   const { alias } = request;
+  if (!EXTERNAL_ALIAS_RE.test(alias) && /^[a-z0-9_-]+$/.test(alias)) return `${aliasGrammarProblem(alias)}: it would be the name of its pin file`;
   if (!EXTERNAL_ALIAS_RE.test(alias)) return `an alias is [a-z0-9-_]+, and "${alias}" is not — choose one specs can write as \`${alias.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}::name\``;
   if (config?.members?.[alias] !== undefined) return `"${alias}" is already declared under \`members\` — one alias names one project, so choose another alias`;
   if (config?.externals?.[alias] !== undefined) return `"${alias}" is already declared under \`externals\` — choose another alias, change its imports with \`wairon externals use ${alias} --add <names>\` (sdd_update_external), or remove it first with \`wairon externals remove ${alias}\``;
@@ -293,7 +295,7 @@ export function remove(alias: string, dryRun?: boolean): ExternalRemoval {
     };
   }
   // Steps 5-6: a dry run writes nothing.
-  if (dryRun) return { alias, removed: false, unpinned: pinned };
+  if (dryRun) return { alias, removed: declared, unpinned: pinned };
   // Step 7: the declaration, when declared.
   const removed = declared ? removeExternal(alias) : false;
   // Step 8: the pin with it.

@@ -67,6 +67,14 @@ function contractIdentifiers(m: MethodSignature): string {
   return parts.join(' ');
 }
 
+/**
+ * The stereotypes that may bind a technology at all (technology-binding's
+ * DATA_LAYER). Their PROSE naming a technology describes their own
+ * realization — "in memory now, Redis later" — which is no binding and no
+ * leak; their identifiers still are.
+ */
+const SEAMS = new Set(['Adapter', 'Store', 'Registry', 'Index']);
+
 /** One technology an implementation declares — its name and the tokens it is matched by — with the declaring component. */
 interface TechDeclaration {
   comp: ComponentSpec;
@@ -87,7 +95,7 @@ export const technologyRule: SddRule = {
   name: 'technology-boundaries',
   judges: 'design',
   description:
-    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone. Two declarations of one technology are one home whichever notation each is written in: a component binding it as a bare name and one binding it as `{name, matches}` are both inside it, even when one form\'s tokens police nothing.',
+    "Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component's own interface. A word in prose is not a binding: the PROSE of a data-layer seam (an Adapter, Store, Registry or Index — the stereotypes that may bind a technology at all) — its component description, its contract's descriptions and its implementations' descriptions, intents and step prose — names the technology about its own realization (\"in memory now, Redis later\"), so it is not leakage; its identifiers (id, name, dependsOn, owns, basePath, a step's call target, a source file) still are, and every surface of any other stereotype still is. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone. Two declarations of one technology are one home whichever notation each is written in: a component binding it as a bare name and one binding it as `{name, matches}` are both inside it, even when one form's tokens police nothing.",
   codes: [
     { code: 'TECH_LEAKAGE', defaultSeverity: 'warning', summary: 'Technology referenced outside its owning boundary' },
     { code: 'VENDOR_NAME_IN_CONTRACT', defaultSeverity: 'warning', summary: 'Technology name in L3 contract identifiers' },
@@ -186,6 +194,9 @@ export const technologyRule: SddRule = {
     if (homes.size === 0) return;
 
     const ownersDesc = (h: TechHome): string => [...h.ownerComponents].map(c => `"${c}"`).join(', ');
+    // A word in a seam's prose is not a binding (see SEAMS).
+    const isSeam = (componentId: string | undefined): boolean =>
+      componentId !== undefined && SEAMS.has(ctx.componentMap.get(componentId)?.componentType ?? '');
 
     for (const home of homes.values()) {
       // L3 identifier surfaces — ALL interfaces, including the owning
@@ -210,7 +221,7 @@ export const technologyRule: SddRule = {
         if (home.scope.has(comp.id)) continue;
         const surfaces: [string, string | undefined][] = [
           ['id/name', `${comp.id} ${comp.name}`],
-          ['description', comp.description],
+          ['description', isSeam(comp.id) ? undefined : comp.description],
           ['dependsOn', comp.dependsOn.join(' ')],
           ['owns', comp.owns.join(' ')],
           ['basePath', comp.basePath],
@@ -241,7 +252,7 @@ export const technologyRule: SddRule = {
       }
 
       for (const intf of ctx.interfaces) {
-        if (home.scope.has(intf.id)) continue;
+        if (home.scope.has(intf.id) || isSeam(intf.component)) continue;
         const prose = [intf.description, ...intf.methods.map(m => m.description)].join(' ');
         if (home.match(prose)) {
           ctx.addIssue(
@@ -256,7 +267,7 @@ export const technologyRule: SddRule = {
 
       for (const impl of ctx.implementations) {
         if (home.scope.has(impl.id)) continue;
-        if (home.match(implementationText(impl))) {
+        if (home.match(implementationText(impl, !isSeam(ctx.interfaceMap.get(impl.contract)?.component)))) {
           ctx.addIssue(
             'warning',
             'TECH_LEAKAGE',
@@ -286,13 +297,20 @@ export const technologyRule: SddRule = {
   },
 };
 
-/** Every text surface of an implementation: its own prose and files, its methods' intents, and every narrative step's fields. */
-function implementationText(impl: ImplementationSpec): string {
-  const parts: (string | undefined)[] = [impl.description, ...implementationSourceFiles(impl)];
+/**
+ * The text surfaces of an implementation: its files and every narrative step's
+ * call target, and — with `prose` — its own description, its methods' intents
+ * and every step's prose fields (a seam's implementation passes false).
+ */
+function implementationText(impl: ImplementationSpec, prose: boolean): string {
+  const parts: (string | undefined)[] = [...implementationSourceFiles(impl)];
+  if (prose) parts.push(impl.description);
   for (const m of impl.methods) {
-    parts.push(m.intent);
+    if (prose) parts.push(m.intent);
     for (const s of m.narrative ?? []) {
-      parts.push(s.description, s.targetComponent, s.targetMethod, s.condition, s.over, s.on, s.outcome, s.error);
+      parts.push(s.targetComponent, s.targetMethod);
+      if (!prose) continue;
+      parts.push(s.description, s.condition, s.over, s.on, s.outcome, s.error);
       for (const c of s.cases ?? []) parts.push(c.value);
       for (const c of s.catches ?? []) parts.push(c.error);
     }
