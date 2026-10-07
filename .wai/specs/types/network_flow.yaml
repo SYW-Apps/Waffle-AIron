@@ -50,10 +50,16 @@ fields:
   - name: flaggedBy
     type: list<string>
     description: >-
-      The gate's warnings and notices that sit on this flow (ENTRY_UNPROVEN, ...), each as `CODE:
-      message`: allowed, but marked
+      The gate's warnings that sit on this flow (ENTRY_UNPROVEN, ...), each as `CODE: message`:
+      allowed, but marked
+    optional: true
+  - name: notedBy
+    type: list<string>
+    description: >-
+      The gate's notices that sit on this flow (MULTIPLE_GATEWAYS, ...), each as `CODE: message`:
+      allowed, and marked at the notice's own severity, never as a warning
     optional: true
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:30.619Z'
-updatedAt: '2026-10-06T23:02:39.152Z'
+updatedAt: '2026-10-07T06:19:23.535Z'

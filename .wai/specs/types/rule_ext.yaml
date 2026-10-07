@@ -57,6 +57,20 @@ fields:
       Each deprecated field a loaded pack still declares, as the extension loader recorded it
       (loaded_extensions.deprecations) — what the pack-deprecations rule reports as a notice
     optional: false
+  - name: technologyPackages
+    type: map<string, list<string>>
+    description: >-
+      Package names loaded packs contribute per technology name
+      (loaded_extensions.technologyPackages) — what technology.packages adds to the built-in table
+      when the code twin of the leakage rule compares an import's package name
+    optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline type of RuleContext's `ext` property in
+        src/core/rules/types.ts (code reaches it as RuleContext['ext']), so there is no symbol a
+        sourcePath could bind.
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-10-03T23:40:33.021Z'
+updatedAt: '2026-10-07T06:30:28.545Z'

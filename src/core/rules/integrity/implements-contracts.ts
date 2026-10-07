@@ -37,10 +37,13 @@ export const implementsContractsRule: SddRule = {
         const own = intf.methods.find((m) => m.name === expected.name);
         const differs = own ? difference(expected, own, expectedType, ownType) : 'is not declared';
         if (!differs) continue;
+        // The producer's rename trace: a former name this interface still declares is a rename to follow.
+        const former = own ? undefined : (expected.formerly ?? []).find((f) => intf.methods.some((m) => m.name === f));
+        const renamedFrom = former ? ` It was renamed from "${former}" (the producer's rename trace), which this interface still declares — rename it to "${expected.name}".` : '';
         ctx.addIssue(
           'error',
           'IMPLEMENTS_MISMATCH',
-          `Interface "${intf.id}" implements "${intf.implements}", whose method "${expected.name}" ${differs === 'is not declared' ? 'it does not declare' : `it declares with ${differs}`}. An implementation of an extension point declares every method of it with the same signature: ${expected.name}(${(expected.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${expected.returns}.`,
+          `Interface "${intf.id}" implements "${intf.implements}", whose method "${expected.name}" ${differs === 'is not declared' ? 'it does not declare' : `it declares with ${differs}`}.${renamedFrom} An implementation of an extension point declares every method of it with the same signature: ${expected.name}(${(expected.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${expected.returns}.`,
           intf.id,
           draft,
           undefined,
@@ -91,7 +94,8 @@ function difference(
 
 /** An extension point's methods, and how its producer's own type names read as its public names. */
 interface ExtensionPoint {
-  methods: Pick<MethodSignature, 'name' | 'params' | 'returns'>[];
+  /** Each method with the former names the producer's rename trace records for it. */
+  methods: (Pick<MethodSignature, 'name' | 'params' | 'returns'> & { formerly?: string[] })[];
   /** The producer's type name (last segment) → the public name it exports it by, where they differ. */
   publicNames: Map<string, string>;
 }
@@ -124,10 +128,33 @@ function extensionPoint(ctx: RuleContext, specId: string, ref: string): Extensio
   if (!entry || entry.role !== 'implement' || !entry.component) return undefined;
   const methods = entry.interface ? ctx.interfaceMap.get(entry.interface)?.methods : ctx.interfaceMethodsOf(entry.component);
   if (!methods) return undefined;
+  const traced = methods.map((m) => ({ ...m, formerly: (m.previousNames ?? []).map((k) => k.slice(k.lastIndexOf('.') + 1)) }));
   // A member's exported type reads as its public name.
   const publicNames = new Map<string, string>();
   for (const e of table?.entries ?? []) {
     if (e.kind === 'type' && e.typeDef) publicNames.set(lastName(e.typeDef), e.publicName);
   }
-  return { methods, publicNames };
+  return { methods: traced, publicNames };
+}
+
+/**
+ * The method an exported contract's rename trace carries a former method name
+ * to: `alias::name.method` whose method the producer renamed, answered with
+ * its current name; undefined when the source names no export, or the method
+ * was not renamed. Read from the pin (or a foreign snapshot), else from a
+ * contained member's live table.
+ */
+export function renamedExportMethod(ctx: RuleContext, source: string): string | undefined {
+  const dot = source.lastIndexOf('.');
+  if (dot <= 0 || !source.includes('::')) return undefined;
+  const [head, method] = [source.slice(0, dot), source.slice(dot + 1)];
+  const surface = ctx.resolveSurfaceRef(head);
+  if (surface.kind === 'resolved') return surface.entry.methods.find((m) => (m.formerly ?? []).includes(method))?.name;
+  const [alias, name] = head.split('::');
+  const key = ctx.projectFamily?.nodes.find((n) => n.namespace === '')?.aliases.get(alias);
+  if (key === undefined || name === undefined) return undefined;
+  const entry = (ctx.exportTables ?? []).find((t) => t.level === 'project' && t.owner === key)?.entries.find((e) => e.kind === 'component' && e.publicName === name);
+  if (!entry?.component) return undefined;
+  const methods = entry.interface ? ctx.interfaceMap.get(entry.interface)?.methods : ctx.interfaceMethodsOf(entry.component);
+  return methods?.find((m) => (m.previousNames ?? []).some((k) => k.slice(k.lastIndexOf('.') + 1) === method))?.name;
 }

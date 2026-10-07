@@ -183,7 +183,28 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: renameField
+  - name: reinjectLocalGuides
+    narrative:
+      - stepNumber: 1
+        description: Forward to the agent context portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: reinjectLocalGuides
+  - name: registerProjectServer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the agent context portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: registerProjectServer
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: Call renameParam on the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameParam
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:07:27.031Z'
+updatedAt: '2026-10-07T06:25:29.425Z'

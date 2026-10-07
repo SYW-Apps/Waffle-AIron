@@ -43,5 +43,6 @@ fields:
       included
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T17:08:53.404Z'
-updatedAt: '2026-10-04T10:20:27.039Z'
+updatedAt: '2026-10-07T06:28:38.682Z'

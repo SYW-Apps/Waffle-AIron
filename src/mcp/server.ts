@@ -59,6 +59,7 @@ import {
   renameMethod,
   renameType,
   renameField,
+  renameParam,
   loadProjectConfig,
   getStatusReport,
   approvalVerdict,
@@ -78,6 +79,7 @@ import { pinExternals, getExternalsStatus, declareExternal as addExternal } from
 // sdd_remove_external's and sdd_update_external's workflows
 // (mcp_externals_orchestrator.remove and .updateUse).
 import { removeExternal as dropExternal, updateExternalUse as changeExternalUse } from './adapters/surfaces.js';
+import { listConsumers as externalConsumers, diffSurface as surfaceDiff } from './adapters/surfaces.js';
 // The read-only network tools' workflows (mcp_network_orchestrator).
 import { flows as networkFlows, explain as explainNetworkFlow, declare as declareNetwork } from './network.js';
 import type { NetworkFlow } from './adapters/network.js';
@@ -353,7 +355,10 @@ function migrationView(report: FamilyMigrationReport, dryRun: boolean): Record<s
     ...(madeAt ? {
       newProject: {
         root: madeAt,
-        next: `The new project at ${madeAt} has no guide, skills or MCP registration of its own yet. The human runs, in that folder: \`wairon generate\` and \`wairon mcp install --backend claude\` (the CLI's \`wairon member promote\` / \`subsystem externalize --as project\` do this themselves). Its own session then designs it — its specs, L0 export table and project.yaml are written from its own root.`,
+        ...(report.sessionScaffold ? { sessionScaffold: report.sessionScaffold } : {}),
+        next: report.sessionScaffold && !report.sessionScaffold.some((f) => f.startsWith('not set up'))
+          ? `The new project at ${madeAt} is set up for its own sessions (its guide, skills and .mcp.json, listed under sessionScaffold), as the CLI's \`wairon member promote\` / \`subsystem externalize --as project\` set it up. A session opened in that folder designs it — its specs, L0 export table and project.yaml are written from its own root.`
+          : `The new project at ${madeAt} has no guide, skills or MCP registration of its own yet. The human runs, in that folder: \`wairon generate\` and \`wairon mcp install --backend claude\` (the CLI's \`wairon member promote\` / \`subsystem externalize --as project\` do this themselves). Its own session then designs it — its specs, L0 export table and project.yaml are written from its own root.`,
       },
     } : {}),
     ...(report.outcome ? { outcome: { committed: report.outcome.committed, restored: report.outcome.restored, unrestored: report.outcome.unrestored, ...(report.outcome.failure ? { failure: report.outcome.failure } : {}) } } : {}),
@@ -427,6 +432,35 @@ const externalRemovalOutput = {
   removed: z.boolean().describe('Whether .wai/project.yaml no longer carries the declaration because this call took it out.'),
   unpinned: z.boolean().describe('Whether the alias\'s lock entry and pinned snapshot were removed (or would be, on a dry run).'),
   refusal: z.string().optional().describe('Why nothing was removed, in one sentence.'),
+  ...staleServerOutput,
+};
+
+/** sdd_list_consumers' structured answer: one row per project that consumes the bound one. */
+const externalConsumersOutput = {
+  consumers: z.array(z.object({
+    project: z.string(),
+    key: z.string(),
+    directory: z.string(),
+    alias: z.string(),
+    section: z.enum(['externals', 'members']),
+    names: z.array(z.string()),
+    broken: z.array(z.string()).optional(),
+    found: z.enum(['search']).optional(),
+  })).describe('Each consumer with the alias and section it declares this project under, the public names its specs use, the names it still writes that this project no longer exports (broken), and found: search for one met in a searched folder outside the family.'),
+  ...staleServerOutput,
+};
+
+/** sdd_surface_diff's structured answer: the public-surface changelog. */
+const surfaceDiffOutput = {
+  project: z.string(),
+  against: z.string().describe('What the surface was compared with: the last committed approval, a named revision, or a saved snapshot file.'),
+  changes: z.array(z.object({
+    kind: z.enum(['added', 'removed', 'renamed', 'changed']),
+    name: z.string(),
+    member: z.string().optional(),
+    from: z.string().optional(),
+    detail: z.string(),
+  })).describe('Every public name or contract method added, removed, renamed (traced) or changed in signature, sorted by name.'),
   ...staleServerOutput,
 };
 
@@ -738,6 +772,28 @@ const specChangeReportOutput = {
   ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
+
+/**
+ * sdd_get_status' Network line (mcp_orchestrator getStatus step 4): whether
+ * this project declares a network, said in-band. A status answer that never
+ * mentioned the declaration let a fresh session tell its user that a
+ * declared, gated boundary did not exist. A read failure leaves it out.
+ */
+export function statusNetworkLine(): string {
+  try {
+    const network = loadProjectConfig()?.network;
+    if (network) {
+      const description = typeof network === 'object' && network.description ? ` ("${network.description}")` : '';
+      return `Network: declared${description} — this project and every member below it form one isolated network boundary, and the network rules (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...) judge the design; sdd_get_network_flows lists who may reach what.\n`;
+    }
+    if (resolveChainingParent()) {
+      return 'Network: none declared here — a network the enclosing family declares is judged at its root, and sdd_get_network_flows reads it from there.\n';
+    }
+    return 'Network: none declared — Portal entries are not narrowed by an isolated network (sdd_set_network declares one).\n';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * sdd_get_status' Externals section: one line per advisory finding — what
@@ -1234,6 +1290,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_rename_method',
   'sdd_rename_type',
   'sdd_rename_field',
+  'sdd_rename_param',
   'sdd_add_component',
   'sdd_define_interface',
   'sdd_set_endpoints',
@@ -2110,7 +2167,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; newName: string; pinSymbol?: boolean }>(server,
     'sdd_rename_method',
     {
-      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
+      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript; for a component one of whose contracts implements another project\'s extension point, any identifier, since the producer names those methods (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
       inputSchema: {
         id: z.string().describe('The component whose method is renamed (namespaced if needed)'),
         method: z.string().describe('The method name as it stands'),
@@ -2168,6 +2225,28 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const bare = id.startsWith('::') ? id.slice(2) : id;
         const resolved = loadTypeSpec(bare) ? bare : id;
         return json(renameField(resolved, field, newName));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ id: string; method: string; param: string; newName: string }>(server,
+    'sdd_rename_param',
+    {
+      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` on the method\'s own binding is respelled (the URL a caller sends is unchanged). Prose is never rewritten. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component), a method no contract of the component declares (method-missing), a parameter the method does not declare or takes from a signatureFrom (param-missing), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Returns the component, method, from and to, the interfaces it moved in and the placeholders respelled. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
+      inputSchema: {
+        id: z.string().describe('The component whose contract method\'s parameter is renamed (namespaced if needed)'),
+        method: z.string().describe('The contract method'),
+        param: z.string().describe('The parameter\'s name as it stands'),
+        newName: z.string().describe('Its new name: an identifier'),
+      },
+    },
+    ({ id, method, param, newName }) => {
+      try {
+        // mcp_orchestrator.renameParam: resolve the id in the bound tree,
+        // rename through the core adapter, and return the report as the result.
+        return json(renameParam(qualifiedComponentId(id), method, param, newName));
       } catch (e) {
         return errText(String(e));
       }
@@ -2981,8 +3060,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // the terminal this tool has no exit code to spend on it — so the
         // report's `failed` fact belongs to `wairon status`, and the
         // explanation belongs here.
-        // Step 2: which trees this answer spans.
-        const family = statusFamilyContext();
+        // Step 2: which trees this answer spans, and the network it declares.
+        const family = statusFamilyContext() + statusNetworkLine();
         // Step 3: what the lock says about the tree as it stands. An agent
         // reading this tool is deciding whether it may write code against these
         // specs, so a tree that has drifted from its approval is the single most
@@ -3114,6 +3193,51 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const moved = [change.added.length ? `+ ${change.added.join(', ')}` : '', change.removed.length ? `- ${change.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'no change';
         const list = change.use.length ? change.use.join(', ') : '(none)';
         return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved}).`, { ...change });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ search?: string[] }>(server,
+    'sdd_list_consumers',
+    {
+      description: 'Who consumes the bound project — the producer\'s answer to "who breaks if I change my surface": every project of the family in reach that declares it (as an external or a member), and, with search, every project root in (or directly under) the named folders that declares it as an external by a path source reaching it or a git source naming its id — a sibling checkout outside the family. Each with the alias, the public names its specs use, and the names it still writes that this project no longer exports. A read: writes nothing.',
+      inputSchema: {
+        search: z.array(z.string()).optional().describe('Folders to scan for consumers outside the family (e.g. the folder holding the sibling checkouts), relative to the bound project root or absolute'),
+      },
+      outputSchema: externalConsumersOutput,
+    },
+    ({ search }) => {
+      try {
+        const root = getProjectRoot();
+        const consumers = externalConsumers(search?.map((d) => path.resolve(root, d)));
+        const lines = consumers.length
+          ? consumers.map((c) => `${c.project} (${c.section}.${c.alias})${c.found ? ` [${c.directory}]` : ''}: ${c.names.length ? c.names.join(', ') : 'declares it, uses no name yet'}${c.broken?.length ? ` — still writes ${c.broken.join(', ')} (no longer exported)` : ''}`)
+          : [`No project ${search?.length ? 'of the family in reach, nor in the searched folders,' : 'of the family in reach'} consumes this project.${search?.length ? '' : ' Pass search with the folder holding sibling checkouts to look outside the family.'}`];
+        return structured(lines.join('\n'), { consumers });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ against?: string }>(server,
+    'sdd_surface_diff',
+    {
+      description: 'The bound project\'s public-surface changelog: its export table now against the same table at its last committed approval (the last commit that changed .wai/lock.json) — or at a named git revision, or in a saved native surface snapshot file — as names and contract methods added, removed, renamed (from the rename trace) and changed in signature. What a producer writes release notes from and weighs a breaking change by (pair it with sdd_list_consumers). A read: writes nothing.',
+      inputSchema: {
+        against: z.string().optional().describe('A git revision (branch, tag, commit) or a saved native surface snapshot file to compare with; the last committed approval when omitted'),
+      },
+      outputSchema: surfaceDiffOutput,
+    },
+    ({ against }) => {
+      try {
+        const diff = surfaceDiff(against);
+        const lines = diff.changes.length
+          ? diff.changes.map((c) => `${c.kind} ${c.member ? `${c.name}.${c.member}` : c.name} — ${c.detail}`)
+          : ['no change — every exported name, method and signature is as it was'];
+        return structured(`Public surface of "${diff.project}" against ${diff.against}:\n${lines.join('\n')}`, { ...diff });
       } catch (e) {
         return errMessage(e);
       }

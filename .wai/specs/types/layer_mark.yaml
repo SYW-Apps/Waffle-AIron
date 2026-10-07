@@ -6,6 +6,13 @@ description: >-
   caller may distinguish them or not.
 fields: []
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the signature is the `layer` method member of the StatusDecor
+        interface in src/core/status.ts, not a type of its own, so there is no symbol a sourcePath
+        could bind.
 params:
   - name: kind
     type: string
@@ -15,4 +22,4 @@ params:
     description: The label as the renderer would print it
 returns: string
 createdAt: '2026-10-04T10:27:10.487Z'
-updatedAt: '2026-10-04T10:27:10.488Z'
+updatedAt: '2026-10-07T06:30:15.521Z'

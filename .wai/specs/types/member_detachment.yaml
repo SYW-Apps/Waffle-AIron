@@ -39,5 +39,6 @@ fields:
     description: The family repository commit covering every touched family project's .wai/, when git-backed
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T17:03:59.641Z'
-updatedAt: '2026-10-04T10:20:28.390Z'
+updatedAt: '2026-10-07T06:28:39.587Z'

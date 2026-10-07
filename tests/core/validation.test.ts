@@ -734,6 +734,68 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
+  it('reports ENDPOINT_TRANSPORT_MISMATCH at its registry severity on a draft Portal too: a contradiction, not unfinished work (platform-r3)', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', `
+schemaVersion: 1.0.0
+name: TestSystem
+vision: A system for testing
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('subsystem', 'sub-a', `
+schemaVersion: 1.0.0
+id: sub-a
+name: SubsystemA
+description: Subsystem A description
+parentSystem: TestSystem
+status: draft
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('component', 'comp-grpc', `
+schemaVersion: 1.0.0
+id: comp-grpc
+name: ComponentGrpc
+description: gRPC component, its transport just switched from HTTP
+subsystem: sub-a
+componentType: Portal
+transport: gRPC
+status: draft
+dependsOn: []
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.writeSpec('interface', 'icomp-grpc', `
+schemaVersion: 1.0.0
+id: icomp-grpc
+name: InterfaceGrpc
+description: Interface still bound over HTTP
+component: comp-grpc
+status: draft
+methods:
+  - name: getStock
+    description: Read the stock of one item
+    signature: "getStock(): void"
+    returns: "void"
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /stock
+createdAt: '2026-06-10T22:00:00Z'
+updatedAt: '2026-06-10T22:00:00Z'
+`);
+    proj.activate();
+    try {
+      const res = validateProject();
+      const mismatch = res.issues.filter(i => i.code === 'ENDPOINT_TRANSPORT_MISMATCH');
+      expect(mismatch).toHaveLength(1);
+      expect(mismatch[0].severity).toBe('error');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
   it('accepts a Portal method with a matching endpoint', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', `

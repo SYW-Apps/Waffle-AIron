@@ -28,8 +28,15 @@ methods:
         type: call
         targetComponent: skills_portal
         targetMethod: buildServerInstructions
+  - name: exportSddSkills
+    narrative:
+      - stepNumber: 1
+        description: Call exportSddSkills on the skills portal across the subsystem boundary.
+        type: call
+        targetComponent: skills_portal
+        targetMethod: exportSddSkills
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T12:21:52.237Z'
-updatedAt: '2026-09-25T20:49:27.440Z'
+updatedAt: '2026-10-07T06:21:48.837Z'

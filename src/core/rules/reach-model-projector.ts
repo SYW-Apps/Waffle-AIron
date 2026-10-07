@@ -183,6 +183,9 @@ export function project(ctx: RuleContext, network: NetworkDeclaration | undefine
     componentType: c.componentType,
   }));
 
+  // ...and every own subsystem, one holding only types included, so it is known as a party.
+  const subsystems = ctx.subsystems.map((s) => s.id).filter((id) => !ctx.isInChainedSubproject(id)).sort();
+
   // Step 7: every own end of the pub/sub graph, one per component, topic and side.
   const topics: TopicEnd[] = [];
   const addEnd = (component: string, topic: string, emits: boolean): void => {
@@ -206,6 +209,7 @@ export function project(ctx: RuleContext, network: NetworkDeclaration | undefine
     calls: calls.sort(byCall),
     placements: placements.sort(byPlacement),
     topics: topics.sort(byTopic),
+    subsystems,
   };
 }
 
@@ -260,7 +264,9 @@ export function compose(
   const calls: ModelledCall[] = [];
   const placements: ComponentPlacement[] = [];
   const topics: TopicEnd[] = [];
+  const subsystems: string[] = [];
   for (const [key, model] of models) {
+    for (const s of model.subsystems ?? []) subsystems.push(qualify(key, s));
     for (const p of model.placements ?? []) {
       placements.push({
         ...p,
@@ -332,5 +338,6 @@ export function compose(
     calls: calls.sort(byCall),
     placements: placements.sort(byPlacement),
     topics: topics.sort(byTopic),
+    subsystems: subsystems.sort(),
   };
 }

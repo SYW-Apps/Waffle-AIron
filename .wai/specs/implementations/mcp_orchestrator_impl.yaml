@@ -555,6 +555,16 @@ methods:
         targetMethod: listDirectChainedSubprojects
       - stepNumber: 4
         description: >-
+          Read the bound project's network declaration from its configuration, for one Network line:
+          declared (with its description; the network rules judge the design and
+          sdd_get_network_flows lists who reaches what), none declared here while an enclosing
+          family may declare one (judged at its root), or none declared — a status report that said
+          nothing let a fresh session tell its user a declared, gated boundary did not exist
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
           Ask what the lock says about the tree as it stands, passing the pin tree so the verdict
           names members whose pin moved and the stage-5 upgrade. An agent reading this tool is
           deciding whether it may write code against these specs, so a tree that has drifted from
@@ -563,7 +573,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: approvalVerdict
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Compare this project's externals with their live producers, offline and advisory, via the
           validator client adapter — so an agent deciding whether to write code against these specs
@@ -571,7 +581,7 @@ methods:
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: adviseExternals
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Answer it behind the tool-family context line, so a client reading one tool's output knows
           which family of tools it belongs to — with an Externals section when any external moved
@@ -711,7 +721,28 @@ methods:
         description: 'Shape the tool response from the report: the type, from and to, and the specs rewritten'
         type: return
         outcome: FieldRename
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound tree's components through the core client adapter, and resolve the tool's
+          id, namespaced if needed, to the qualified component id among them, so core can refuse a
+          component inside a chained subproject
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: Rename the parameter of the contract method via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameParam
+      - stepNumber: 3
+        description: >-
+          Shape the tool response from the report: the component, method, from and to, the
+          interfaces it moved in and the placeholders respelled
+        type: return
+        outcome: ParamRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-06T23:07:43.462Z'
+updatedAt: '2026-10-07T06:25:42.069Z'

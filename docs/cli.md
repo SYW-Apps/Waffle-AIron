@@ -74,8 +74,11 @@ warnings as errors (notices are printed and counted, never fatal).
   **family root** (the project that declares the members). A member validated on
   its own judges its own gate with its `network` entries counted as declared, and
   says so in one line, so a green member run is never read as a proven one.
-  **In CI, run `wairon validate --ci` at the family root**; a member in its own
-  repository adds the root's run to its pipeline or relies on the root
+  **In CI, run `wairon validate --ci` at the family root**, after installing
+  the project's dependencies (`npm ci` or your package manager's equivalent —
+  the gate reads TypeScript/JavaScript code with the project's own TypeScript;
+  see [Using it in GitHub Actions](#using-it-in-github-actions)); a member in
+  its own repository adds the root's run to its pipeline or relies on the root
   repository's.
 - **Externals, compared live (advisory: the pin gates).** The gate judges each
   external against its pin. Then every external the run did not compose is
@@ -97,6 +100,9 @@ warnings as errors (notices are printed and counted, never fatal).
   `METHOD_SOURCE_PATH_MISSING` (warning). `rules.conformance.requireCode: true`
   in `project.yaml` reports the two notices as errors, for a CI that must say
   every designed implementation has code.
+- **Types are linked to code too.** A type spec without a `sourcePath` is
+  `MISSING_TYPE_SOURCE_PATH` — a notice before its subsystem has code, a
+  warning after. Plan a type's `sourcePath` when you plan the implementations'.
 - **What the closing line says.** Plain `validate` passes with warnings and
   says so — `Passed with N warning(s)` (`--ci` fails on them); `All checks
   passed` means none. A tree holding no design yet (no L0, or an L0 with nothing
@@ -112,14 +118,40 @@ warnings as errors (notices are printed and counted, never fatal).
   `UNDECLARED_DEPENDENCY`; a Portal calling a write- or lifecycle-effect method
   of a Repository, Index, Store or Registry that way is
   `PORTAL_WRITE_SHORTCUT_IN_CODE` (error, the code twin of
-  `PORTAL_WRITE_SHORTCUT`); and a file importing a technology's package — a
-  package named by one of the technology's declared tokens (its name, or its
-  `matches`), never a guessed vendor list — outside the components that bind it
-  is `TECH_LEAKAGE_IN_CODE`. An Adapter's call step to a verb of a Portal that
-  declares an out-of-process transport (HTTP, gRPC, a database, a bus, a CLI…)
-  is the link the design models: it is never resolved to the remote Portal's
-  file, so it never reads as `CALL_ORIGIN_UNRESOLVED`; the call to the Adapter
-  stays checked.
+  `PORTAL_WRITE_SHORTCUT`); and a file importing a technology's package
+  outside the components that bind it is `TECH_LEAKAGE_IN_CODE`. A technology's
+  packages are its declared tokens (its name, or its `matches`) plus the common
+  packages wairon knows for it — see [Technologies and their
+  packages](#technologies-and-their-packages). An Adapter's call step to a verb
+  of a Portal that declares an out-of-process transport (HTTP, gRPC, a
+  database, a bus, a CLI…) is the link the design models: it is never resolved
+  to the remote Portal's file, so it never reads as `CALL_ORIGIN_UNRESOLVED`;
+  the call to the Adapter stays checked. Likewise the Adapter's `dependsOn` to
+  that Portal is realized by the link, never reported `UNREALIZED_DEPENDENCY`:
+  never add an import across a network boundary to satisfy a check.
+
+#### Technologies and their packages
+
+`TECH_LEAKAGE_IN_CODE` compares each import's package with the packages of the
+technologies an implementation binds. A design writes the technology the way
+people say it (`postgres`) while the code imports its driver (`pg`), so wairon
+knows the common packages of the common technologies by default:
+
+| Technology (any of these names) | Packages |
+| --- | --- |
+| `postgres`, `postgresql`, `pg` | `pg`, `postgres`, `pg-promise`, `@neondatabase/serverless`, `@vercel/postgres` |
+| `mysql`, `mariadb` | `mysql2`, `mysql`, `mariadb` |
+| `redis`, `valkey` | `redis`, `ioredis`, `@redis/client` |
+| `mongodb`, `mongo` | `mongodb`, `mongoose` |
+| `sqlite`, `sqlite3` | `better-sqlite3`, `sqlite3`, `sqlite` |
+| `kafka` | `kafkajs`, `node-rdkafka` |
+| `rabbitmq`, `amqp` | `amqplib`, `amqp-connection-manager` |
+
+An HTTP client (`fetch`, `axios`, `got`, `undici`) is never a technology — it is
+how an Adapter reaches anything — so no entry names one. To extend the list,
+write the technology as `{ name, matches }` (each `matches` token is a package
+too), or have a pack contribute `technologyPackages: { <technology>: [<package>,
+…] }`.
 
 ### `wairon generate [--target <name>] [--domain <id>] [--domains <ids>] [--root] [--family] [--no-prune] [--global] [--dry-run]`
 Reconcile the generated guides, skills and context, and — only when the project
@@ -299,9 +331,12 @@ merging is the thing that was reviewed.
 
 #### Using it in GitHub Actions
 
-This repository publishes it as a **reusable workflow** (from v6.0.0 — the
-workflow and the `lock-check` command do not exist in earlier releases). Add one
-job to your own workflow:
+This repository publishes it as a **reusable workflow**. **6.0.0 is the first
+release that ships the workflow and the `lock-check` command** — earlier releases
+have neither, and no `v6.0.0` tag exists before that release. On a dev build (and
+until 6.0.0 is out), pin the dev tag matching `wairon --version` instead: a CLI
+reporting `5.1.1-dev.107` pins `@v5.1.1-dev.107` with `wairon-version:
+'5.1.1-dev.107'`. Add one job to your own workflow:
 
 ```yaml
 # .github/workflows/ci.yml in YOUR repository
@@ -325,6 +360,7 @@ With inputs (all optional):
       wairon-version: '6.0.0'           # version or npm dist-tag, 6.0.0 or later (default: latest)
       strict: true                      # fail when nothing was approved — use it once you have locked (default: false)
       validate: true                    # also run `wairon validate --ci` there (default: true)
+      install: auto                     # the project's dependencies before validate: auto | none | <command> (default: auto)
       node-version: '20'                # (default: '20')
       runs-on: ubuntu-latest            # (default: ubuntu-latest)
 ```
@@ -342,6 +378,44 @@ After the approval check the job runs `wairon validate --ci` in the same
 directory (`validate: false` turns it off). Point `working-directory` at the
 **family root** — the project that declares the members — so that run is the
 family run, which judges the network proofs no member's own gate can.
+
+**The project's dependencies come first.** The conformance gate reads
+TypeScript/JavaScript code with the project's own TypeScript compiler. A fresh
+checkout has none until the project's dependencies are installed, and then every
+file is analyzed below exact grade and `--ci` fails on `CONFORMANCE_DEGRADED` —
+a finding about the runner, not your design. So before `validate --ci` the job
+installs them with the project's own package manager (`install: auto`, the
+default): nothing without a `package.json`; otherwise the nearest lockfile from
+`working-directory` up to the repository root decides — `package-lock.json` →
+`npm ci`, `pnpm-lock.yaml` → `pnpm install --frozen-lockfile`, `yarn.lock` →
+`yarn install` (`--immutable`, or `--frozen-lockfile` for Yarn 1). `install:
+none` skips it; any other value is run as the install command. The approval
+check alone (`validate: false`) installs nothing.
+
+#### Without the reusable workflow
+
+The same gate as plain steps — for another CI system, or a job of your own. For
+a TypeScript/JavaScript project with code, **install the project's dependencies
+before `wairon validate --ci`** (`npm ci`, `pnpm install --frozen-lockfile` or
+`yarn install --immutable`, whichever your lockfile is for):
+
+```yaml
+# .github/workflows/design.yml in YOUR repository
+on: [pull_request]
+
+jobs:
+  design:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install --global @wairon/cli@6.0.0   # the version you lock with
+      - run: wairon lock-check --strict
+      - run: npm ci                                    # the project's dependencies: the gate reads your code with your TypeScript
+      - run: wairon validate --ci
+```
 
 **A failing job does not block a merge on its own.** A workflow can only fail;
 making a failing job stop a merge is a branch-protection / ruleset setting on
@@ -597,6 +671,20 @@ field that does not exist, a name that is not an identifier, and a name another
 field of the type holds or retired. The MCP twin is `sdd_rename_field`. As with
 any design edit, the next `wairon lock` approves it.
 
+### `wairon method rename-param <component> <method> <param> <new-name>`
+Renames a parameter of a contract method. The parameter moves on every
+interface of the component that declares the method, keeping its place, type,
+description and optionality; its old name joins the parameter's rename trace
+(`previousNames`), which `wairon export` shows as `formerly`, so a generator or
+consumer reads a rename, not a signature change. Each signature is re-derived
+from the params (a method whose `signatureFrom` names this one follows by
+itself), and an HTTP endpoint path placeholder `{old}` on the method's own
+binding is respelled — the URL a caller sends is unchanged. Prose is never
+rewritten. It refuses, writing nothing, a component, method or parameter that
+does not exist (or a parameter the method takes from a `signatureFrom`), a name
+that is not an identifier, and a name another parameter of the method holds or
+retired. The MCP twin is `sdd_rename_param`. The next `wairon lock` approves it.
+
 ### `wairon network flows|policy|diagram|check|why|declare|undeclare`
 Networking derived from the design: the reach the validator already models
 (modelled calls, Portal entries and their scopes, declared networks and their
@@ -767,7 +855,13 @@ included); applying it stages every change with a backup under each project's
 `.wai/transactions/<id>/` (never committed) and swaps them in, restoring every
 backup on any failure. A crash mid-swap leaves a journal: `wairon status` and
 `wairon validate` show it as a notice, and `wairon doctor --fix` rolls it back.
-No verb ever locks — each names the projects to re-lock. A member stored in a
+No verb ever locks — each names the projects to re-lock. A promote (or `externalize --as project`) re-roots every
+source path that moves with the new project: a path inside the new project's folder becomes
+member-relative, and one outside it (source code you have not moved yet) becomes a member-relative
+*planned* path — `SOURCE_FILE_PLANNED`, never a path that escapes the root — so the new project
+validates on day one and you move the code when you are ready. A topic finding
+(`UNCONSUMED_TOPIC`, `UNSOURCED_SUBSCRIPTION`) is sited at its topic: an allow names it
+with `at: <topic>`. A member stored in a
 `../` sibling checkout on the same volume joins the same transaction: its files
 change all-or-nothing with the family's, the coordinator's journal names every
 owner (so `wairon doctor --fix` recovers from either root), and the plan says
@@ -841,21 +935,23 @@ project, so it holds nothing machine-specific: it runs `wairon mcp serve` from t
 and the server attaches to the project it is started in. A `--global` registration is
 machine-wide and names the running CLI by its absolute path.
 
-The local server offers 38 tools:
+The local server offers 47 tools:
 
 | Group | Tools |
 |-------|-------|
 | Topology (read) | `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig` |
 | Authoring | `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`, `sdd_update_spec`, `sdd_delete_spec` |
 | Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
-| Renames and moves (in this tree) | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_type`, `sdd_move_methods` |
+| Renames and moves (in this tree) | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_param`, `sdd_rename_type`, `sdd_rename_field`, `sdd_move_methods` |
 | Members and family migrations (each takes `dryRun`) | `sdd_add_member`, `sdd_move_member`, `sdd_externalize_subsystem`, `sdd_promote_member`, `sdd_demote_member`, `sdd_internalize_member`, `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias` |
 | Externals | `sdd_add_external`, `sdd_update_external`, `sdd_remove_external`, `sdd_pin_externals`, `sdd_get_externals_status` |
+| Public surface (the producer's side) | `sdd_list_consumers`, `sdd_surface_diff` |
+| Network | `sdd_set_network`, `sdd_get_network_flows`, `sdd_explain_flow` |
 | Packs | `sdd_pack_impact` |
 | Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
 
 A hosted server adds its own `sdd_host_*` and `sdd_landscape_*` tools; see the
-[hosted server guide](design/hosted-mcp-server.md).
+[hosted server guide](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md).
 
 ---
 
@@ -865,7 +961,7 @@ A hosted server adds its own `sdd_host_*` and `sdd_landscape_*` tools; see the
 projects behind one endpoint — a public **data plane** (the `sdd_*` tools over
 streamable HTTP, per-project API-key scoped) and an admin **control plane**
 (project & key lifecycle, state-scoped lock). See the
-[hosted server guide](design/hosted-mcp-server.md) for the architecture, Docker
+[hosted server guide](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md) for the architecture, Docker
 self-hosting, auth, and sizing.
 
 ### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`

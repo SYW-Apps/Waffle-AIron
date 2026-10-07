@@ -211,11 +211,12 @@ describe('family codes — fire and control', () => {
     expect(family(run, 'EXTERNAL_INCOMPATIBLE')).toEqual([]);
   });
 
-  it('EXTERNAL_CHECK_UNAVAILABLE fires on a use the lock does not hold; quiet once pinned', () => {
+  it('EXTERNAL_UNPINNED fires on a use of an external never pinned (an error: never a pass); quiet once pinned', () => {
     const f = contractFamily();
-    expect(family(familyAt(f.top), 'EXTERNAL_CHECK_UNAVAILABLE').map((i) => [i.project, i.severity])).toEqual([['billing', 'warning']]);
-    pin(f.billing);
+    expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED').map((i) => [i.project, i.severity])).toEqual([['billing', 'error']]);
     expect(family(familyAt(f.top), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
+    pin(f.billing);
+    expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED')).toEqual([]);
   });
 
   it('MEMBER_NOT_FOUND fires on a declared member with no project on disk; quiet when it is there', () => {
@@ -284,11 +285,11 @@ describe('family codes — fire and control', () => {
     expect(family(familyAt(f.top), 'MEMBER_UNAPPROVED').map((i) => i.severity)).toEqual(['error', 'error']);
     // The consumer owns the composition of its externals; the root's word does not reach it.
     f.setConfig(f.top, ['id: house', 'name: House', 'members:', '  ledger: ledger', '  billing: billing',
-      'rules:', '  sddRuleSeverity:', '    EXTERNAL_CHECK_UNAVAILABLE: "off"']);
-    expect(family(familyAt(f.top), 'EXTERNAL_CHECK_UNAVAILABLE')).toHaveLength(1);
+      'rules:', '  sddRuleSeverity:', '    EXTERNAL_UNPINNED: "off"']);
+    expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED')).toHaveLength(1);
     f.setConfig(f.billing, ['id: billing', 'name: Billing', 'externals:', '  ledger: {}',
-      'rules:', '  sddRuleSeverity:', '    EXTERNAL_CHECK_UNAVAILABLE: "off"']);
-    expect(family(familyAt(f.top), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
+      'rules:', '  sddRuleSeverity:', '    EXTERNAL_UNPINNED: "off"']);
+    expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED')).toEqual([]);
   });
 });
 

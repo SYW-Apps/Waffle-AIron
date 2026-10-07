@@ -7,9 +7,11 @@ description: >-
   id, a `project::subsystem` (a bare subsystem for the bound root's own), a `project::portal` (a
   bare component for the root's own), or `network:<id>` for callers anywhere inside a declared
   network; the most specific key a party has wins, and a party no key maps falls back to its default
-  workload name (flow_party.workload). A name with no binding gets the placeholder label
-  wairon.dev/workload: <name> (made a valid label value), listed in the output, so nothing is
-  silently opened; a flow from outside with no outside blocks admits nothing and is listed too.
+  workload name (flow_party.workload). A key written with a renamed project's former name (its
+  previousIds) still binds it, and the output notes the key to rename. A name with no binding gets
+  the placeholder label wairon.dev/workload: <name> (made a valid label value), listed in the output
+  and failing `network policy`, so nothing is silently opened or silently denied; a flow from
+  outside with no outside blocks admits nothing and is listed too.
 subsystem: sdd_network
 fields:
   - name: workloads
@@ -25,4 +27,4 @@ fields:
 methods: []
 sourcePath: src/network/types.ts
 createdAt: '2026-10-06T13:09:37.680Z'
-updatedAt: '2026-10-06T19:24:51.260Z'
+updatedAt: '2026-10-07T06:38:21.091Z'

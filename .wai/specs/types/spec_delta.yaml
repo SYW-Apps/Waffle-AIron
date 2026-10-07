@@ -31,5 +31,12 @@ fields:
       standing.
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the code takes a delta as an open Record<string, any> (updateSpec in
+        src/core/specs.ts) and interprets its markers in the merge, deliberately leaving the shape
+        untyped below the top level, so there is no symbol a sourcePath could bind.
 createdAt: '2026-09-18T21:41:16.851Z'
-updatedAt: '2026-10-04T10:21:08.309Z'
+updatedAt: '2026-10-07T06:30:30.310Z'

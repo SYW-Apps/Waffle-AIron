@@ -159,9 +159,11 @@ methods:
           renamed or removed is EXTERNAL_INCOMPATIBLE (naming the member, what the lock recorded and
           what the live table now holds — for a rename, the new name the producer's trace carries it
           to, so the fix reads as "follow the rename" rather than "it is gone"); a drifted producer
-          with every used member unchanged is one EXTERNAL_DRIFTED; each unavailable or unlocked use
-          is EXTERNAL_CHECK_UNAVAILABLE with its reason — never a pass. Each severity is the
-          project's own sddRuleSeverity override, else the code default
+          with every used member unchanged is one EXTERNAL_DRIFTED; an external never pinned at all
+          whose uses are still present live is one EXTERNAL_UNPINNED (error) naming those uses — the
+          composed gate cannot tell what the design is judged against; each other unavailable or
+          unlocked use is EXTERNAL_CHECK_UNAVAILABLE with its reason — never a pass. Each severity
+          is the project's own sddRuleSeverity override, else the code default
         type: local
       - stepNumber: 8
         label: next
@@ -189,12 +191,21 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
+          Read each project's resolved L0 export table; for every entry at audience project that
+          re-exports a name from another project of the family, look for a reference of another
+          family project that reaches it through an alias naming the re-exporting project — none is
+          EXPORT_UNREACHED (notice): a dead re-export, to drop from the L0
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 4
+        description: >-
           Compute the approval state of every member of the selection, each at its own root — the
           same answer the lock records and status prints
         type: call
         targetComponent: family_validator
         targetMethod: approvals
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED and each
           drifted one as MEMBER_DRIFTED, saying so when the drift is only the stage-5 identity
@@ -204,7 +215,7 @@ methods:
           of its own, its approval is the declaring project's. The root's own lock is not a family
           finding
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Resolve each finding's severity with the root's sddRuleSeverity override, else the code
           default, and return them
@@ -783,45 +794,91 @@ methods:
   - name: reachModel
     narrative:
       - stepNumber: 1
+        description: >-
+          Is the bound root a member another project declares? Read its chaining parent (within the
+          request's reach)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 2
+        description: >-
+          A member's view is its enclosing family's, unless the run asked for the member alone
+          (memberDepth 0)
+        type: branch
+        condition: a chaining parent is in reach and memberDepth is not 0
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Climb to the family's top root: bind each parent root in turn and read its own chaining
+          parent the same way, the caller's binding restored afterwards; the member's key there is
+          the node whose directory is the bound root
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer the top root's model, derived by this same workflow bound there, focused on the
+          member's key (focus) and naming the root it was judged at (judgedAt): the enclosing
+          network declaration and its proofs, so a member's view and its family's agree row for row
+        type: return
+        outcome: the enclosing family's reach model, focused on the member
+      - stepNumber: 5
         description: 'Read the bound root''s project graph: the selection the family run makes'
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
-      - stepNumber: 2
+      - stepNumber: 6
         description: For each selected project, root first
         type: loop
         loopKind: forEach
         over: the selected projects of the graph
-        endStep: 4
-      - stepNumber: 3
+        endStep: 8
+      - stepNumber: 7
         description: Bind the project's root for the next call, restoring the caller's binding afterwards
         type: local
-      - stepNumber: 4
+      - stepNumber: 8
         description: Collect its own reach model
         type: call
         targetComponent: spec_validator
         targetMethod: reachModel
-      - stepNumber: 5
+      - stepNumber: 9
         description: Compose the family's model
         type: call
         targetComponent: reach_model_projector
         targetMethod: compose
-      - stepNumber: 6
+      - stepNumber: 10
         description: Judge the composed model, so the derived outputs never trust a design that fails the gate
         type: call
         targetComponent: network_arbiter
         targetMethod: judge
-      - stepNumber: 7
+      - stepNumber: 11
         description: >-
           Keep each finding as a ReachFinding on the model: tuned by the rules.sddRuleSeverity of
           the project whose spec it sits on (a code turned off there is dropped), and dropped when a
           lint.allow on that spec covers it at its site — an error is never allowed, so a refused
           flow stays refused
         type: local
-      - stepNumber: 8
-        description: Answer it
+      - stepNumber: 12
+        description: >-
+          Answer it, carrying the bound root's project id (rootProject), its declared externals'
+          aliases, and each renamed member's former names (its previousIds, qualified like its key)
+          mapped to its key
         type: return
         outcome: the family's reach model
+  - name: unpinned
+    narrative:
+      - stepNumber: 1
+        description: The bound project's parts — no producer, nothing to pin
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: The bound root's declared externals with their lock entries, read from its own files
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listPinnedExternals
+      - stepNumber: 3
+        description: Answer every declared alias the lock holds no entry for
+        type: return
+        outcome: the aliases with no lock entry, parts left out
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-06T23:03:07.274Z'
+updatedAt: '2026-10-07T10:58:36.545Z'

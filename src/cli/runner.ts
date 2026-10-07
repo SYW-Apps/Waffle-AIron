@@ -14,7 +14,7 @@ import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree, checkApproval } from '../commands/lock.js';
+import { runLock as lockTree, checkApproval, holdsNoDesign } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
@@ -84,7 +84,16 @@ async function runLock(options: LockOptions): Promise<void> {
   const projectConfig = loadProjectConfig();
   if (!projectConfig) throw new ProjectNotInitializedError();
 
-  // Step 6: capture the identity the record will certify, before anything is judged.
+  // Steps 6-8: a tree holding the L0 and nothing below it, never approved, has
+  // no design to approve — approving it would record an empty design. Said, and
+  // nothing written; not a failure.
+  if (holdsNoDesign()) {
+    logger.info('Nothing designed to approve yet: the spec tree holds the L0 and nothing below it (no subsystem, no member project). '
+      + 'Add a subsystem first (an assistant adds one with sdd_add_subsystem), then run `wairon lock`. Nothing was written.');
+    return;
+  }
+
+  // Step 9: capture the identity the record will certify, before anything is judged.
   const captured = computeGateStateId();
 
   logger.info('Analyzing and validating specifications in-memory...');
@@ -94,7 +103,7 @@ async function runLock(options: LockOptions): Promise<void> {
     scopeSubsystem: options.subsystem,
   });
 
-  // Step 8: the design half is what the approval certifies and the only
+  // Step 11: the design half is what the approval certifies and the only
   // findings that may refuse it — a design can be approved before its code exists.
   const design = designOnly(dry);
   const errors = design.issues.filter((i) => i.severity === 'error');
@@ -160,14 +169,14 @@ async function runLock(options: LockOptions): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** cli_runner.runLock — hosted when attached, else the local approval. */
-export async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean }): Promise<void> {
+export async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     const outcome = await lockAttached(target);
     logger.success(`Hosted lock of "${target.projectId}" on ${target.url}: ${outcome}`);
     return;
   }
-  await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive });
+  await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive, all: opts.all });
 }
 
 /** cli_runner.runValidate — hosted when attached, else the local validation. */
@@ -468,8 +477,14 @@ function reportGateFindings(doc: NetworkDocument, what: string): void {
   }
   for (const line of doc.gateFindings) {
     if (line.includes(' (error): ')) logger.error(`  ${line}`);
+    else if (line.includes(' (notice): ')) logger.notice(`  ${line}`);
     else logger.warn(`  ${line}`);
   }
+}
+
+/** The notes a derived output carries, each on stderr: what a reader must act on. */
+function reportNetworkNotes(notes: string[] | undefined): void {
+  for (const note of notes ?? []) logger.warn(`NOTE: ${note}`);
 }
 
 /** cli_runner.runNetworkFlows — print (or write) the allowed-flows matrix. */
@@ -479,7 +494,10 @@ export async function runNetworkFlows(options: NetworkCommandOptions): Promise<v
   const doc = networkFlows(networkSelection(options), networkFormat(options.format, 'json', ['json', 'csv', 'markdown']));
   // Step 2: printed, then every gate finding that refused or marked a row.
   emitNetworkDocument(doc, options.out);
+  reportNetworkNotes(doc.notes);
   reportGateFindings(doc, 'the rows marked REFUSED are refused by the gate, not allowed');
+  // A matrix of a refused design is not one to commit: the run fails, like policy, why and check.
+  if (doc.refused) process.exitCode = 1;
 }
 
 /** cli_runner.runNetworkPolicy — generate network policy from the matrix and the team's bindings. */
@@ -495,10 +513,18 @@ export async function runNetworkPolicy(options: NetworkCommandOptions): Promise<
   const doc = networkPolicy(networkSelection(options), options.bindings, format);
   // Step 3: print or write it, then list each unbound name with its placeholder label.
   emitNetworkDocument(doc, options.out);
+  reportNetworkNotes(doc.notes);
   for (const name of doc.unbound) {
-    logger.warn(name === 'outside'
+    logger.error(name === 'outside'
       ? 'unbound: outside — the bindings name no `outside:` blocks, so nothing from outside is admitted'
       : `unbound: ${name} — selected by the placeholder label wairon.dev/workload, which matches no pod until it is bound`);
+  }
+  // An unbound workload is not a safe default: applied as-is, its policy selects
+  // a placeholder (or admits nothing from outside), which is default deny for
+  // that workload in production. The run says so and fails.
+  if (doc.unbound.length > 0) {
+    logger.error(`${doc.unbound.length} name(s) unbound: applied as-is, this policy denies their ingress by default, so nothing reaches them in production. Bind each in the bindings file (a NOTE above names any key written under a renamed project's former name), then generate again.`);
+    process.exitCode = 1;
   }
   // A design that fails the gate has no policy to commit: the refused flows are left out, and the run fails.
   reportGateFindings(doc, 'the flows it refuses were left out of the policy (the file\'s head names them)');
@@ -552,6 +578,7 @@ export async function runNetworkCheck(options: NetworkCommandOptions): Promise<v
   // Step 3.
   if (options.format === 'json') process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   else printFlowCheck(report);
+  if (options.format !== 'json') reportNetworkNotes(report.notes);
   // Step 4: an unexercised flow is a review item, not a failure.
   if (report.unexpected.length > 0 || report.disallowed.length > 0 || report.unknownVerbs.length > 0) process.exitCode = 1;
 }
@@ -588,14 +615,17 @@ function whyHeading(explanation: FlowExplanation, from: string, to: string): str
  */
 export async function runNetworkDeclare(options: NetworkCommandOptions): Promise<void> {
   assertProjectInitialized();
-  // Step 1: through the core adapter.
-  const wrote = setNetwork(options.description !== undefined ? { description: options.description } : {});
+  // Step 1: a declaration already held keeps its description unless a new one is given.
+  const held = loadProjectConfig()?.network;
+  const description = options.description ?? (typeof held === 'object' && held !== null ? held.description : undefined);
+  // Step 2: through the core adapter.
+  const wrote = setNetwork(description !== undefined ? { description } : {});
   // Step 2: what was written, and what it changes.
   if (!wrote) {
     logger.info('This project already declares that network: nothing was written.');
     return;
   }
-  logger.success(`Declared this project's network in .wai/project.yaml${options.description ? ` ("${options.description}")` : ''}: it and every member below it form one isolated network boundary.`);
+  logger.success(`Declared this project's network in .wai/project.yaml${description ? ` ("${description}")` : ''}: it and every member below it form one isolated network boundary.`);
   logger.info('The network rules now judge the design (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...): run `wairon validate`. The declaration is part of the gate identity — re-lock (`wairon lock`) once it validates.');
 }
 

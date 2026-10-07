@@ -148,8 +148,24 @@ export default [
   defineRuleFixture({
     code: 'TECH_LEAKAGE_IN_CODE',
     expectFire: false,
-    reason: 'A package the technology does not declare among its tokens is not its package: the rule never guesses a vendor list.',
-    scenario: 'The link Portal imports `pg-promise`, which the postgres binding does not name.',
-    tree: storeTree("import pgp from 'pg-promise';\nvoid pgp;"),
+    reason: 'A package is a technology\'s only when its tokens, the curated built-in table or a pack name it: a query builder that speaks to many databases is no postgres package, and an HTTP client is never a technology.',
+    scenario: 'The link Portal imports `kysely`, a query builder neither the postgres binding nor the built-in table names.',
+    tree: storeTree("import { Kysely } from 'kysely';\nvoid Kysely;"),
+  }),
+  defineRuleFixture({
+    code: 'PORTAL_CALL_UNRESOLVED',
+    severity: 'notice',
+    anchoredTo: 'habit_portal_impl',
+    expectFire: true,
+    scenario:
+      'The habit Portal calls `record` — the repository\'s write — on a store it builds through an untyped factory, so nothing in its file says what the receiver is.',
+    tree: habitTree('const store = (globalThis as any).makeStore(); store.record(id);'),
+  }),
+  defineRuleFixture({
+    code: 'PORTAL_CALL_UNRESOLVED',
+    expectFire: false,
+    reason: 'A receiver followed through a non-null assertion is the declared field itself: the write is judged (the shortcut), never left unresolved.',
+    scenario: 'The habit Portal calls the repository\'s write through its injected field with a non-null assertion.',
+    tree: habitTree('this.checkins!.record(id);'),
   }),
 ];

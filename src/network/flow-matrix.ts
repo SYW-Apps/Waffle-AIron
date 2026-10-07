@@ -121,11 +121,12 @@ function findingLine(f: ReachFinding): string {
 function markFlows(flows: NetworkFlow[], f: ReachFinding): void {
   if (f.specId === undefined) return;
   const onVerb = (flow: NetworkFlow): boolean =>
-    flow.from.scope !== undefined && flow.to.component === f.specId && (f.at === undefined || flow.to.verb === f.at);
+    flow.from.scope !== undefined && flow.to.component === f.specId
+    && (f.at !== undefined ? flow.to.verb === f.at : f.covers === undefined || f.covers.includes(flow.to.verb ?? ''));
   const onCall = (flow: NetworkFlow): boolean =>
     flow.from.scope === undefined && flow.from.component === f.specId && f.at !== undefined && flow.evidence.includes(`call ${f.at}`);
   for (const flow of flows.filter((x) => onVerb(x) || onCall(x))) {
-    const field = f.severity === 'error' ? 'refusedBy' : 'flaggedBy';
+    const field = f.severity === 'error' ? 'refusedBy' : f.severity === 'notice' ? 'notedBy' : 'flaggedBy';
     const list = flow[field] ?? [];
     if (!list.includes(findingLine(f))) list.push(findingLine(f));
     flow[field] = list;
@@ -163,8 +164,12 @@ export function project(model: ReachModel): NetworkFlow[] {
   // Step 7: each flow marked with the findings that sit on it.
   const marked = [...flows.values()];
   for (const f of model.findings ?? []) markFlows(marked, f);
-  // Step 8.
-  return marked.sort(byCalleeThenCaller);
+  // Step 8: at a member's root, only the flows that start or land inside it.
+  const focus = model.focus;
+  const inside = (party: FlowParty): boolean =>
+    focus !== undefined && party.project !== undefined && (party.project === focus || party.project.startsWith(`${focus}::`));
+  const kept = focus === undefined ? marked : marked.filter((f) => inside(f.from) || inside(f.to));
+  return kept.sort(byCalleeThenCaller);
 }
 
 /** A network's display name: the declaring project's key, or the bound root's. */
@@ -178,7 +183,7 @@ function chainOf(flow: NetworkFlow): string[] {
   for (const network of flow.crosses) lines.push(`enters network ${networkName(network)}`);
   if (flow.via !== undefined) lines.push(`through gateway ${flow.via}`);
   lines.push(`reaches ${partyKey(flow.to)} over ${flow.transport}${flow.binding ? ` (${flow.binding})` : ''}`);
-  for (const flag of flow.flaggedBy ?? []) lines.push(`marked by the gate: ${flag}`);
+  for (const flag of [...(flow.flaggedBy ?? []), ...(flow.notedBy ?? [])]) lines.push(`marked by the gate: ${flag}`);
   return lines;
 }
 
@@ -192,9 +197,18 @@ function reachesOverNetwork(model: ReachModel, to: string): boolean {
   return model.verbs.some((v) => transportKind(v.transport) === 'network' && isNamed(verbParty(v), to));
 }
 
-/** Whether a name denotes anything in the model: outside, a network, a placement's project, subsystem or component, or a verb. */
+/** The external alias a name is written through (`<alias>::<name>`), when it is one of the model's externals. */
+function throughExternal(model: ReachModel, name: string): string | undefined {
+  const at = name.indexOf('::');
+  const alias = at > 0 ? name.slice(0, at) : name;
+  return (model.externals ?? []).includes(alias) ? alias : undefined;
+}
+
+/** Whether a name denotes anything in the model: outside, a network, a placement's project, subsystem or component, a subsystem (types only too), an external's party, or a verb. */
 function isKnown(model: ReachModel, name: string): boolean {
   if (name === 'outside' || name === 'network') return true;
+  // A subsystem (one holding only types too), or a member project holding only such subsystems.
+  if ((model.subsystems ?? []).some((s) => s === name || s.startsWith(`${name}::`)) || throughExternal(model, name) !== undefined) return true;
   if (name.startsWith('network:')) return model.networks.some((n) => n.id === name.slice('network:'.length));
   const placed = (model.placements ?? []).some((p) =>
     isNamed({ project: p.project, ...(p.subsystem !== undefined ? { subsystem: p.subsystem } : {}), component: p.component }, name));
@@ -213,6 +227,18 @@ function notAllowed(model: ReachModel, flows: NetworkFlow[], refused: NetworkFlo
   }
   // A callee that takes no network flow at all is reached in-process.
   if (!reachesOverNetwork(model, to)) {
+    const alias = throughExternal(model, to);
+    if (alias !== undefined) {
+      return {
+        allowed: false,
+        flows: [],
+        inProcess: true,
+        chain: [
+          `${to} is consumed through the external "${alias}": this design's network model holds no verb of it, so it neither allows nor forbids a network flow to it here`,
+          `a library is reached in-process; a network producer's flows are derived and judged in its own project (\`wairon network flows\` there)`,
+        ],
+      };
+    }
     return {
       allowed: false,
       flows: [],

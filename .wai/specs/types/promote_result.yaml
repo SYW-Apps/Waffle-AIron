@@ -20,9 +20,14 @@ fields:
   - name: exported
     type: list<string>
     description: >-
-      One line per export entry written, naming the side and the name, e.g. "platform L0: money
-      (from contracts)" — every name crossing the boundary, and every name the parent's L0
-      re-exports from a moved subsystem, so no re-export is left pointing at nothing.
+      One line per export entry written or re-pointed, naming the side and the name, e.g. "platform
+      L0: money (from contracts)" — every name crossing the boundary; every name the parent's L0
+      re-exports from a moved subsystem, exported by the new project under the parent entry's public
+      name at the parent entry's audience or wider ("analytics L0: reporting_portal as stats at
+      instance (re-exported by the parent)"); and each parent entry re-pointed to re-export that
+      public name through the new project, audience kept ("linkshort L0: stats re-exported through
+      analytics as stats at instance (was reporting_portal from subsystem analytics)") — so no
+      re-export is left pointing at nothing or wider than its source.
     optional: false
   - name: imported
     type: list<string>
@@ -62,7 +67,25 @@ fields:
       project), consumed in the parent by payment_outcome_observer". The family run pairs them
       across projects; the new project's own gate, run alone, reports them
     optional: false
+  - name: pathsRebased
+    type: list<string>
+    description: >-
+      One line per file path of the new project's implementations and types (sourcePath, a method's
+      sourcePath, simPath) that escaped its root and was re-expressed member-relative — the path the
+      code has relative to the family root, now read under the member's root — naming the spec, the
+      field, the path before and after and where the file still lies, e.g. "hits_portal_http
+      sourcePath: ../../src/analytics/ingestion-portal.ts → src/analytics/ingestion-portal.ts (the
+      code is not moved: it is planned there until src/analytics/ingestion-portal.ts of the parent
+      moves into parts/analytics)". A new project never names a file outside its own root.
+    optional: false
+  - name: signaturesRederived
+    type: list<string>
+    description: >-
+      One line per contract or type method whose params the respelling changed and whose stored
+      signature text was re-derived from them, e.g. "ihit_client.reportHit: reportHit(hit: hit):
+      async void → reportHit(hit: analytics::hit): async void" — so no stored text is left stale.
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-05T23:34:25.221Z'
-updatedAt: '2026-10-06T23:08:02.583Z'
+updatedAt: '2026-10-07T06:20:36.608Z'

@@ -35,7 +35,20 @@ methods:
       The tokens the technology-boundaries rule matches for this entry: its `matches` when it
       declares them, else its name alone.
     symbol: technologyTokens
+  - name: packages
+    signature: 'packages(contributed: map<string, list<string>>): list<string>'
+    returns: list<string>
+    description: >-
+      The package names the code twin of the leakage rule (TECH_LEAKAGE_IN_CODE) compares an
+      import's package name with, lower-cased and de-duplicated: the entry's tokens, then the
+      curated built-in table's packages for its name (src/models/technology-packages.ts — the common
+      Node drivers of postgres, mysql, redis, mongodb, sqlite, kafka and rabbitmq, each named by the
+      technology's usual spellings; an HTTP client is never a technology), then the packages
+      `contributed` lists under its name (what loaded packs contribute). Pure: the contributions are
+      handed in.
+    sourcePath: src/models/technology-packages.ts
+    symbol: technologyPackages
 sourcePath: src/models/specs.ts
 symbol: Technology
 createdAt: '2026-10-01T23:44:47.520Z'
-updatedAt: '2026-10-04T10:21:16.669Z'
+updatedAt: '2026-10-07T06:22:21.389Z'

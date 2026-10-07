@@ -69,8 +69,9 @@ methods:
           type expression references (type_expression.namedRefs) through a data type's fields and a
           signature type's params and returns, carrying a signature type into the closure with its
           params and returns, an enum with its values in declared order, a named scalar with the
-          primitive it holds, and a renamed type with its previousIds as `formerly` (outside every
-          digest, like the contracts' trace)
+          primitive it holds, a type with its own pure methods (its checked constructors, so a
+          binding written against a pin knows them; carried, never digested), and a renamed type
+          with its previousIds as `formerly` (outside every digest, like the contracts' trace)
         type: local
       - stepNumber: 10
         description: >-
@@ -95,4 +96,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-10-06T23:09:21.897Z'
+updatedAt: '2026-10-07T10:56:19.385Z'

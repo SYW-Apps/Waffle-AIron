@@ -32,5 +32,6 @@ fields:
     optional: false
 methods: []
 componentClass: sdk_orchestrator
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:12:40.241Z'
-updatedAt: '2026-10-04T23:39:58.018Z'
+updatedAt: '2026-10-07T06:28:16.412Z'

@@ -1202,7 +1202,10 @@ methods:
         label: unresolved
         description: >-
           Report SIGNATURE_SOURCE_UNRESOLVED at the method, naming what the source matched if
-          anything — a type of another kind, or nothing
+          anything — a type of another kind, or nothing — and, for an exported contract's method
+          (`alias::name.method`) the producer renamed, the name its rename trace carries it to (read
+          from the pin, else a contained member's live table), so the fix reads "follow the rename";
+          the message names an exported contract's method among the valid sources
         type: local
       - stepNumber: 4
         description: Done with this fact
@@ -1447,10 +1450,12 @@ methods:
         label: methodsEnd
         description: >-
           Report IMPLEMENTS_MISMATCH (error, on intf.id, sited at the method; draft context when
-          intf.status is draft or design) naming the extension point, the method and what differs
+          intf.status is draft or design) naming the extension point, the method and what differs —
+          and, when the interface lacks the method but still declares a former name the producer's
+          rename trace records for it, that it was renamed from that name, to rename it
         type: local
     symbol: check
     exportedVia: implementsContractsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-06T23:08:15.351Z'
+updatedAt: '2026-10-07T10:58:55.499Z'

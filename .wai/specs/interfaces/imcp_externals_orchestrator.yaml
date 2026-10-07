@@ -71,6 +71,31 @@ methods:
       - name: request
         type: ExternalUseRequest
         description: The alias, the names to add and remove, and dryRun
+  - name: consumers
+    description: >-
+      The sdd_list_consumers tool workflow: the projects that consume the bound project — the family
+      in reach, and with search folders (resolved against the bound root) the project roots in them
+      declaring it by path or git — through the surfaces adapter, shaped as one line per consumer
+      beside the structured list. A read.
+    signature: 'consumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diff
+    description: >-
+      The sdd_surface_diff tool workflow: the bound project's public-surface changelog since its
+      last committed approval, a named revision or a saved snapshot, through the surfaces adapter,
+      shaped as one line per change beside the structured answer. A read.
+    signature: 'diff(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
 status: complete
 createdAt: '2026-09-26T17:50:42.455Z'
-updatedAt: '2026-10-06T23:06:47.694Z'
+updatedAt: '2026-10-07T11:00:28.510Z'

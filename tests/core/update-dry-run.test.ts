@@ -228,3 +228,34 @@ describe('an update names the delta paths it did not act on', () => {
     expect(report.ineffective).toEqual([]);
   });
 });
+
+describe('a Portal transport change names its impact on the calling Adapters before it is written (platform-r3)', () => {
+  it('the dry run lists each Adapter that states the old transport: the ADAPTER_TRANSPORT_MISMATCH it would raise', () => {
+    const proj = seed();
+    saveSpec('subsystem', {
+      schemaVersion: '1.0.0', id: 'inventory', name: 'Inventory', description: 'Inventory',
+      parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
+    });
+    saveComponentSpec({
+      id: 'stock_portal', name: 'Stock', description: 'The stock API', subsystem: 'inventory',
+      componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [], createdAt: now, updatedAt: now,
+    } as never);
+    saveComponentSpec({
+      id: 'stock_client', name: 'StockClient', description: 'Calls the stock API', subsystem: 'billing',
+      componentType: 'Adapter', transport: 'HTTP', owns: [], dependsOn: ['stock_portal'], createdAt: now, updatedAt: now,
+    } as never);
+    saveComponentSpec({
+      id: 'quiet_client', name: 'QuietClient', description: 'States no transport: follows the Portal', subsystem: 'billing',
+      componentType: 'Adapter', owns: [], dependsOn: ['stock_portal'], createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+    const file = specFile(proj, 'stock_portal');
+    const before = fs.readFileSync(file);
+    const report = updateSpecGated('component', 'stock_portal', { transport: 'gRPC' }, true);
+    const impact = report.notices.filter((n) => n.includes('ADAPTER_TRANSPORT_MISMATCH'));
+    expect(impact).toHaveLength(1);
+    expect(impact[0]).toContain('Adapter "stock_client" states transport "HTTP"');
+    expect(impact[0]).toContain('"gRPC"');
+    expect(fs.readFileSync(file).equals(before)).toBe(true);
+  });
+});

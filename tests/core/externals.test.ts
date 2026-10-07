@@ -313,7 +313,8 @@ describe('stage 2b — the project graph and declared externals', () => {
     at(f.dispatch, () => pinExternals());
     write(f.root, 'packages/dispatch/.wai/project.yaml', projectYaml('dispatch', 'Dispatch Service'));
     expect(at(f.dispatch, () => pinExternals())).toEqual([]);
-    expect(at(f.dispatch, () => externalsRepository.readLock())).toEqual({ externals: {} });
+    // A lock with no entry left goes with its last entry (round 3): no empty `externals: {}` file stays behind.
+    expect(at(f.dispatch, () => externalsRepository.readLock())).toBeNull();
     expect(fs.existsSync(path.join(f.dispatch, '.wai', 'externals'))).toBe(false);
   });
 
@@ -379,7 +380,7 @@ describe('stage 2b — the project graph and declared externals', () => {
       expect(exportUsage('dispatch', 'billing')).toEqual({
         consumer: 'dispatch',
         producer: 'billing',
-        used: [{ publicName: 'invoicing', kind: 'component', members: ['issueInvoice'] }],
+        used: [{ publicName: 'invoicing', kind: 'component', members: ['issueInvoice'], specs: ['dispatch::route-planner', 'dispatch::route-planner-impl'] }],
         unexported: [],
       });
       expect(exportUsage('billing', 'dispatch')).toEqual({ consumer: 'billing', producer: 'dispatch', used: [], unexported: [] });

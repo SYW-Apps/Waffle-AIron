@@ -1,6 +1,7 @@
+import { posix } from 'path';
 import {
   fieldTypesOf, implementationSourceFiles, importBindingOf, localTypesOf, methodSourceFile, pathKey, resolveImport,
-  technologyName, technologyTokens, type CallSiteFact, type ComponentSpec, type ImplementationSpec,
+  technologyName, technologyPackages, type CallSiteFact, type ComponentSpec, type ImplementationSpec,
 } from '../../../models/index.js';
 import { closedCallSites } from './call-conformance.js';
 import { RuleContext, SddRule } from '../types.js';
@@ -48,12 +49,13 @@ export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses — type coupling is allowed — but a CALL of a modelled contract method through a collaborator whose declared type comes from another component\'s file is runtime collaboration whatever the import\'s form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning); a type-only import realizes it, since `import type` is what dependency injection writes down. Two twins of design rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal\'s own narrative already claims that call (the design rule\'s finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE); and a file importing a technology\'s package — a bare specifier whose package name is one of the technology\'s declared tokens (its name, or its `matches` when it declares them), compared exactly, never guessed — while no component it realizes is that technology\'s home is the leak TECH_LEAKAGE refuses in the design (TECH_LEAKAGE_IN_CODE). Only exact-grade analyzed files participate; chained subprojects validate standalone.',
+    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses — type coupling is allowed — but a CALL of a modelled contract method through a collaborator whose declared type comes from another component\'s file is runtime collaboration whatever the import\'s form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning); a type-only import realizes it, since `import type` is what dependency injection writes down. An Adapter\'s edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter\'s transport client realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would couple two deployables\' builds. Two twins of design rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal\'s own narrative already claims that call (the design rule\'s finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A receiver is followed through a non-null assertion, parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field exactly as through the field itself (a cast to any or unknown says nothing, and is not followed), and a call in a Portal\'s own file whose receiver the analysis cannot follow at all, under the name of a write- or lifecycle-effect method of a data component in the Portal\'s own subsystem or one it depends into, is said so rather than passed in silence (PORTAL_CALL_UNRESOLVED). And a file importing a technology\'s package while no component it realizes is that technology\'s home is the leak TECH_LEAKAGE refuses in the design (TECH_LEAKAGE_IN_CODE): a technology\'s packages are its declared tokens (its name, or its `matches`), the curated built-in table of the common packages its name is known by (postgres: pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis, ioredis; mongodb: mongodb, mongoose; sqlite: better-sqlite3, sqlite3; kafka: kafkajs; rabbitmq: amqplib — an HTTP client is never a technology leak), and the packages a loaded pack contributes for it, each compared exactly with an import\'s package name. Only exact-grade analyzed files participate; chained subprojects validate standalone.',
   codes: [
     { code: 'UNDECLARED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A runtime import, or a call through a type-only-imported collaborator, between component-mapped files has no declared dependsOn/owns (or published-surface) justification' },
     { code: 'PORTAL_WRITE_SHORTCUT_IN_CODE', defaultSeverity: 'error', summary: 'A Portal\'s code calls a write- or lifecycle-effect method of a data component (Repository, Index, Store, Registry) directly — the code twin of PORTAL_WRITE_SHORTCUT: mutations route through an Orchestrator' },
     { code: 'TECH_LEAKAGE_IN_CODE', defaultSeverity: 'warning', summary: 'A source file imports a technology\'s package although no component it realizes binds that technology — the code twin of TECH_LEAKAGE' },
     { code: 'UNREALIZED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A declared dependsOn/owns edge between components in different files is realized by no import between any of their files' },
+    { code: 'PORTAL_CALL_UNRESOLVED', defaultSeverity: 'notice', summary: "A call in a Portal's own file, under the name of a data component's write- or lifecycle-effect method, goes through a receiver the analysis cannot follow at all — neither proven a shortcut nor cleared, and said so rather than passed in silence" },
   ],
 
   check(ctx: RuleContext): void {
@@ -195,6 +197,14 @@ export const dependencyConformanceRule: SddRule = {
       for (const targetId of declaredTargets) {
         const target = ctx.componentMap.get(targetId);
         if (!target) continue;
+        // An Adapter's edge to a Portal reached over an out-of-process
+        // transport is the LINK the design models: the Adapter's transport
+        // client realizes it, never an import — and asking for one would tell
+        // the author to couple two deployables' builds across the wire.
+        if (
+          component.componentType === 'Adapter' && target.componentType === 'Portal'
+          && target.transport !== undefined && target.transport !== 'InProcess'
+        ) continue;
 
         // Across subsystems ANY mapped file of the target subsystem proves the
         // hop EXISTS (where it lands is portal-imports' question), minus the
@@ -288,9 +298,52 @@ export const dependencyConformanceRule: SddRule = {
         if (!specifier) continue;
         const toPath = resolveImport(scope, specifier, mappedPaths, code.packages);
         if (toPath && toPath !== scope) out.push({ toPath, typeOnly: typeOnly !== undefined });
+        // An interface declared in a shared contracts file, apart from the
+        // class that realizes it: the call can land in every implementor.
+        // Resolved by path whether or not the run analyzed it: a shared
+        // contracts file is one no spec need name.
+        const declaredAt = resolveImport(scope, specifier, code.paths, code.packages)
+          ?? (specifier.startsWith('.') ? posix.join(posix.dirname(scope), specifier) : undefined);
+        const published = importBindingOf(facts, typeName)?.imported ?? typeName;
+        if (declaredAt) {
+          for (const implementor of code.implementorsOf(declaredAt, published)) {
+            if (mappedPaths.has(implementor) && implementor !== scope) out.push({ toPath: implementor, typeOnly: typeOnly !== undefined });
+          }
+        }
       }
       return out;
     };
+    /**
+     * Whether a member call's receiver is one nothing in the file says
+     * anything about — no field type, no annotation, no import binding, none
+     * of the receiver shapes the analysis follows — so neither a landing nor
+     * its absence means anything.
+     */
+    const unfollowable = (site: CallSiteFact, file: string): boolean => {
+      const facts = code.factsAt(pathKey(site.from ?? file));
+      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') return false;
+      if (site.field) return fieldTypesOf(facts, site.field).length === 0;
+      if (site.via) return !importBindingOf(facts, site.via) && localTypesOf(facts, site.via).length === 0;
+      return !site.constructed && !site.returnedBy && !site.enclosingClass && !site.receiverPath;
+    };
+    /** Every write- or lifecycle-effect contract method of a data component, by the name code calls it under. */
+    const dataWrites = new Map<string, Array<{ component: string; method: string }>>();
+    for (const c of ctx.components) {
+      if (!DATA_COMPONENTS.has(c.componentType)) continue;
+      for (const m of ctx.interfaceMethodsOf(c.id)) {
+        if (m.effect !== 'write' && m.effect !== 'lifecycle') continue;
+        const names = new Set([m.name]);
+        for (const impl of realization.implementationsOf(c.id)) {
+          const bound = impl.methods.find(x => x.name === m.name)?.symbol;
+          if (bound) names.add(bound);
+        }
+        for (const name of names) {
+          const list = dataWrites.get(name) ?? [];
+          list.push({ component: c.id, method: m.name });
+          dataWrites.set(name, list);
+        }
+      }
+    }
     /** The contract methods a call reaches at a file: each component realized there whose contract names it. */
     const calledAt = (toPath: string, name: string): Array<{ component: ComponentSpec; method: { name: string; effect?: string } }> =>
       realization.componentsAt(toPath)
@@ -299,6 +352,7 @@ export const dependencyConformanceRule: SddRule = {
 
     const reportedEdges = new Set<string>();
     const reportedWrites = new Set<string>();
+    const reportedUnresolved = new Set<string>();
     for (const fromPath of mappedPaths) {
       const facts = code.factsAt(fromPath);
       const fromComponents = realization.componentsAt(fromPath);
@@ -317,6 +371,28 @@ export const dependencyConformanceRule: SddRule = {
               // forwards to by identity is the other component's to answer for.
               if (!site.member || pathKey(site.from ?? fromPath) !== fromPath) continue;
               const landings = new Set([...typedLandings(site, fromPath).map(l => l.toPath), ...code.originOf(site, fromPath)]);
+              // A receiver the analysis cannot follow at all, under the name
+              // of a data component's write: said so, never passed in silence.
+              if (landings.size === 0 && unfollowable(site, fromPath)) {
+                // Only a data component the Portal could plausibly be handed:
+                // one in its own subsystem, or in a subsystem it depends into.
+                const near = new Set([portal.subsystem, ...portal.dependsOn.map(d => ctx.componentMap.get(d)?.subsystem)]);
+                const candidates = (dataWrites.get(site.name) ?? []).filter(w =>
+                  near.has(ctx.componentMap.get(w.component)?.subsystem) && !claims(portal.id, w.component, w.method));
+                const at = `${fromPath} -> ${site.name}`;
+                if (candidates.length > 0 && !reportedUnresolved.has(at)) {
+                  reportedUnresolved.add(at);
+                  ctx.addIssue(
+                    'notice',
+                    'PORTAL_CALL_UNRESOLVED',
+                    `Portal "${portal.id}": its method "${method.name}" in "${fromPath}" calls \`${site.via ?? (site.field ? `this.${site.field}` : '<receiver>')}.${site.name}(…)\` through a receiver this analysis cannot follow (nothing in the file declares its type), and ${candidates.map(w => `${w.component}.${w.method}`).join(', ')} — a data component's write — carries that name. Neither proven a persistence shortcut nor cleared: give the receiver a declared type (a field or parameter annotation) so the call can be judged.`,
+                    impl.id,
+                    draftAt(fromPath),
+                    undefined,
+                    { at },
+                  );
+                }
+              }
               for (const toPath of landings) {
                 if (toPath === fromPath) continue;
                 for (const { component: target, method: called } of calledAt(toPath, site.name)) {
@@ -387,7 +463,7 @@ export const dependencyConformanceRule: SddRule = {
       const facade = ownerOf.get(owner.id);
       if (facade) members.add(facade.id);
       for (const technology of technologies) {
-        for (const token of technologyTokens(technology)) {
+        for (const token of technologyPackages(technology, ctx.ext.technologyPackages)) {
           const key = token.toLowerCase();
           const entry = homes.get(key) ?? { label: technologyName(technology), home: new Set<string>() };
           for (const id of members) entry.home.add(id);

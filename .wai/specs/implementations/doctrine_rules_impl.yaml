@@ -1055,9 +1055,10 @@ methods:
       - stepNumber: 9
         label: mismatch
         description: >-
-          Report ENDPOINT_TRANSPORT_MISMATCH (error, on intf.id; draft context isDraftCtx ||
-          isIntfDraft) naming the method, the interface, its declared transport, the Portal with its
-          portalType, and the expected transport
+          Report ENDPOINT_TRANSPORT_MISMATCH (error, on intf.id; never in draft context: an endpoint
+          contradicting its Portal's transport is a contradiction, not unfinished work, so it prints
+          at its registry severity on a draft too) naming the method, the interface, its declared
+          transport, the Portal with its transport, and the expected transport
         type: local
     symbol: check
     exportedVia: portalsRule
@@ -1539,4 +1540,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-06T23:08:17.783Z'
+updatedAt: '2026-10-07T06:22:04.854Z'

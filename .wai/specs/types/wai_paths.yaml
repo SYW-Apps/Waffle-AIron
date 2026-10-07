@@ -108,6 +108,7 @@ fields:
     description: The generated wairon usage guide.
     optional: false
 methods: []
+sourcePath: src/config/paths.ts
 lint:
   allow:
     - code: UNUSED_TYPE
@@ -120,4 +121,4 @@ lint:
         needed an edge to it. Deleting the type instead would leave the layout undesigned, which is
         the state Track D exists to end.
 createdAt: '2026-09-20T20:41:18.293Z'
-updatedAt: '2026-10-05T23:36:16.751Z'
+updatedAt: '2026-10-07T06:28:33.849Z'

@@ -26,5 +26,6 @@ fields:
       user setting, a role, the everyone-default)
     optional: false
 methods: []
+sourcePath: src/utils/fs.ts
 createdAt: '2026-10-03T13:35:32.925Z'
-updatedAt: '2026-10-04T10:21:13.702Z'
+updatedAt: '2026-10-07T06:28:32.344Z'

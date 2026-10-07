@@ -450,7 +450,16 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // Always said, a lone project never approved included: `status` promises the
   // approval state, and leaving it out read as "nothing to say" rather than "never".
   const own = options.approvals?.find((a) => a.key === '');
-  if (own) output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
+  // A tree holding the L0 and nothing below it, never approved, has no design
+  // to approve: said as `wairon lock` (which writes no record then) and
+  // `lock-check` say it, never as an approval waiting to be taken.
+  const nothingDesigned = own?.state === 'never' && loadSubsystemSpecs().length === 0
+    && !(options.approvals ?? []).some((a) => a.key !== '' && a.parent === '' && a.as !== 'part');
+  if (own && nothingDesigned) {
+    output += `${mark.layer('system', 'Approval:')} nothing to approve yet — the tree holds the L0 and nothing below it (add a subsystem, then \`wairon lock\`)\n`;
+  } else if (own) {
+    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
+  }
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP
   // client and a test all read the same account rather than three renderings

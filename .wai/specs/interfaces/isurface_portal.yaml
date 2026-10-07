@@ -149,9 +149,17 @@ methods:
     signatureFrom: external_declarations.updateUse
   - name: listConsumers
     description: >-
-      Published: the family projects in reach that consume the bound project, with the names each
-      uses (`wairon externals consumers`). Read-only. Forwarded to the surface orchestrator.
+      Published: the projects that consume the bound project — the family in reach, and with search
+      folders the project roots in them declaring it by path or git — with the names each uses and
+      still writes but no longer finds exported (`wairon externals consumers [--search <dir>…]`,
+      sdd_list_consumers). Read-only. Forwarded to the surface orchestrator.
     signatureFrom: surface_orchestrator.listConsumers
+  - name: diffSurface
+    description: >-
+      Published: the bound project's public-surface changelog since its last committed approval, a
+      named revision or a saved snapshot (`wairon surface diff`, sdd_surface_diff). Read-only.
+      Forwarded to the surface orchestrator.
+    signatureFrom: surface_orchestrator.diff
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-06T23:06:18.336Z'
+updatedAt: '2026-10-07T10:55:51.654Z'

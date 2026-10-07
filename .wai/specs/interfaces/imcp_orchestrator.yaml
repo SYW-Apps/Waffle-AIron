@@ -372,6 +372,25 @@ methods:
       - name: newName
         type: string
         description: Its new name
+  - name: renameParam
+    description: >-
+      Resolve the component id against the bound tree, then rename the parameter of its contract
+      method through the core adapter
+    signature: 'renameParam(id: string, method: string, param: string, newName: string): ParamRename'
+    returns: ParamRename
+    params:
+      - name: id
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: method
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-06T23:07:29.112Z'
+updatedAt: '2026-10-07T06:25:31.974Z'

@@ -144,11 +144,13 @@ methods:
         label: bound
         description: >-
           Carry the entry's audience, name, role, details, auth policy, version and stability onto
-          every name it brought in, with the export kind derived from the backing Portal's transport
-          (transport.exportKind; an InProcess Portal — a library — is shown as InProcess, never as
-          the free-form Custom; an authored kind is read only as the legacy value), and record a
-          re-exported component that cannot serve its role (a called entry neither a Portal nor an
-          Observer; an implemented entry neither a Portal nor an Adapter) as an unconsumable problem
+          every name it brought in, with the export kind derived from the backing component
+          (transport.exportKind of a Portal's transport; an InProcess Portal — a library — is shown
+          as InProcess, never as the free-form Custom; an extension point (role implement) held by
+          an Adapter is realized in-process by its consumers, so InProcess unless the Adapter names
+          a transport; an authored kind is read only as the legacy value), and record a re-exported
+          component that cannot serve its role (a called entry neither a Portal nor an Observer; an
+          implemented entry neither a Portal nor an Adapter) as an unconsumable problem
         type: local
       - stepNumber: 12
         description: >-
@@ -164,4 +166,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-10-06T23:09:08.257Z'
+updatedAt: '2026-10-07T10:54:51.277Z'

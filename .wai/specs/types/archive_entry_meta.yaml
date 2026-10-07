@@ -23,5 +23,6 @@ fields:
     optional: false
 methods: []
 componentClass: pack_archive_adapter
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:13:01.742Z'
-updatedAt: '2026-10-04T23:38:45.696Z'
+updatedAt: '2026-10-07T06:28:06.038Z'

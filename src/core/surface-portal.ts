@@ -15,7 +15,7 @@
 import * as surfaceOrchestrator from './surfaces.js';
 // external_declarations: declaring one external is a workflow of its own.
 import * as externalDeclarations from './external-declarations.js';
-import type { SurfaceExportResult } from './surfaces.js';
+import type { SurfaceDiff, SurfaceExportResult } from './surfaces.js';
 import type {
   DesignApproval,
   DesignExport,
@@ -106,7 +106,12 @@ export function updateExternalUse(request: ExternalUseRequest): ExternalUseChang
   return externalDeclarations.updateUse(request);
 }
 
-/** isurface_portal.listConsumers — the family projects in reach that consume the bound project (`wairon externals consumers`). Read-only. */
-export function listConsumers(): ExternalConsumer[] {
-  return surfaceOrchestrator.listConsumers();
+/** isurface_portal.listConsumers — the family projects in reach that consume the bound project, and every project root in the searched folders declaring it as an external (`wairon externals consumers [--search <dir>…]`, sdd_list_consumers). Read-only. */
+export function listConsumers(search?: string[]): ExternalConsumer[] {
+  return surfaceOrchestrator.listConsumers(search);
+}
+
+/** isurface_portal.diffSurface — the bound project's public-surface changelog since its last committed approval, a named revision or a saved snapshot (`wairon surface diff`, sdd_surface_diff). Read-only. */
+export function diffSurface(against?: string): SurfaceDiff {
+  return surfaceOrchestrator.diff(against);
 }

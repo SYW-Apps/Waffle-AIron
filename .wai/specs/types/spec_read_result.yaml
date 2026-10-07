@@ -31,5 +31,12 @@ fields:
       rather than stored on the spec. Never written back.
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the answer is the inline zod output schema getSpecOutput of
+        sdd_get_spec in src/mcp/server.ts (a plain const of zod fields, no type alias), so there is
+        no symbol a sourcePath could bind.
 createdAt: '2026-09-19T23:05:27.992Z'
-updatedAt: '2026-10-04T23:37:56.220Z'
+updatedAt: '2026-10-07T06:30:25.676Z'

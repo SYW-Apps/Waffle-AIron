@@ -18,5 +18,12 @@ fields:
     description: How the parent declares it.
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline element type `{ dir; alias; form }` of
+        listDirectChainedSubprojects' return in src/core/provision.ts, so there is no symbol a
+        sourcePath could bind.
 createdAt: '2026-09-13T22:56:07.350Z'
-updatedAt: '2026-10-04T23:38:58.105Z'
+updatedAt: '2026-10-07T06:30:09.263Z'

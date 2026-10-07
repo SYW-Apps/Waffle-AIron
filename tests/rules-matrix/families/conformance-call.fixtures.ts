@@ -1257,18 +1257,41 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // The CROSS-FILE limit of the annotated receiver, recorded rather than
-  // discovered later. An annotation names where the TYPE was written, never
-  // where the body was: a parameter typed with a contract declared in a module
-  // of its own lands on that contract's module, and the implementing class's
-  // file is never reached. So the call stays unresolved though it really is
-  // the store's - a false NEGATIVE, and a possibility still never accuses.
+  // The CROSS-FILE step of the annotated receiver. An annotation names where
+  // the TYPE was written, never where the body was: a parameter typed with a
+  // contract declared in a module of its own (the shared contracts file) lands
+  // on that contract's module — and from there on every class whose
+  // `implements` clause names it, wherever it lives. A class that answers the
+  // contract only structurally (no `implements`) is never reached, so that
+  // call stays unresolved though it really is the store's: a false NEGATIVE,
+  // and a possibility still never accuses.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'CALL_ORIGIN_UNRESOLVED',
     severity: 'warning',
     anchoredTo: 'payslip_repository_impl',
     expectFire: true,
+    scenario:
+      'The payslip repository takes its store as the payslip-rows contract, which is declared in a module of its own, while the store class answers that contract only structurally, without an implements clause.',
+    tree: payslipContractTree([
+      'import type { PayslipRows } from \'./payslip-rows.js\';',
+      '',
+      '/** The pay-run facade over any payslip rows: one recorded payslip per employee, per run. */',
+      'export function payslipRepositoryOver(rows: PayslipRows) {',
+      '  return {',
+      '    record(payslipId: string): void {',
+      '      rows.append(payslipId);',
+      '    },',
+      '  };',
+      '}',
+      '',
+    ].join('\n'), false),
+  }),
+  defineRuleFixture({
+    code: 'CALL_ORIGIN_UNRESOLVED',
+    expectFire: false,
+    reason:
+      'A contract declared in a shared module leads on to every class whose implements clause names it: the store class implements the payslip-rows contract, so the call is followed into the store module the narrative names — the shared contracts layout no longer has to be restructured to be traced.',
     scenario:
       'The payslip repository takes its store as the payslip-rows contract, which is declared in a module of its own, while the class implementing it lives in the store module the narrative names.',
     tree: payslipContractTree([
@@ -2074,7 +2097,7 @@ function ledgerJournalTree(target: 'ledger-writer' | 'journal-writer'): import('
  * different files — which is exactly the limit of following an annotated
  * receiver.
  */
-function payslipContractTree(repositoryModule: string): import('../harness.js').FixtureTree {
+function payslipContractTree(repositoryModule: string, implementsContract = true): import('../harness.js').FixtureTree {
   return {
     subsystems: [{ id: 'payroll', description: 'Pay runs, payslip records and their retention.' }],
     components: [
@@ -2162,7 +2185,7 @@ function payslipContractTree(repositoryModule: string): import('../harness.js').
         'import type { PayslipRows } from \'./payslip-rows.js\';',
         '',
         '/** The authoritative payslip rows of every open pay run. */',
-        'export class PayslipStore implements PayslipRows {',
+        `export class PayslipStore${implementsContract ? ' implements PayslipRows' : ''} {`,
         '  append(payslipId: string): void {',
         '    // persist the payslip row',
         '  }',

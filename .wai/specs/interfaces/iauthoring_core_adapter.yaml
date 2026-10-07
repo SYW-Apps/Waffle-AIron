@@ -136,6 +136,13 @@ methods:
       Forward to spec_tree_portal.scanAllSpecs: the bound tree's spec index, which the gated write
       asks which spec retired an id (spec_index.retiredBy) before giving it to a new spec
     signatureFrom: spec_tree_portal.scanAllSpecs
+  - name: loadComponentSpecs
+    description: >-
+      Every component spec of the bound tree — how a write that changes a Portal's transport finds
+      the Adapters that call it. Forwarded to the core portal.
+    signature: 'loadComponentSpecs(): list<ComponentSpec>'
+    returns: list<ComponentSpec>
+    params: []
 status: complete
 createdAt: '2026-09-18T21:41:49.125Z'
-updatedAt: '2026-10-04T23:37:21.447Z'
+updatedAt: '2026-10-07T06:23:15.926Z'

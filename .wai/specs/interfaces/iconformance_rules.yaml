@@ -13,19 +13,20 @@ methods:
       not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice — planned, not written yet), at method
       level as at implementation level and whether or not the implementation's realization has
       begun: a design names the file a method will live in before the method is written, and code
-      linkage, outside the approval since format 3, costs nothing to declare. Whether the
-      realization has BEGUN (code_index.holdsAny over the files it names: at least one exists)
-      decides only how an unlinked method is reported: before that, an implementation that names no
-      file is unlinked design (MISSING_SOURCE_PATH, a notice), so a design-only tree passes
-      `validate --ci`; once it has begun, a contract method that names no file while others do is
-      unlinked (METHOD_SOURCE_PATH_MISSING, a warning), and a method its named, existing file does
-      not hold is method-realization's UNREALIZED_METHOD. A team that wants CI to demand code for
-      every designed implementation sets rules.conformance.requireCode, which reports the two
-      notices at error, naming the setting. A file that escapes the root or cannot be analyzed is
-      reported once and blocks only the methods realized in it. A run in which TypeScript/JavaScript
-      files were analyzed below exact grade reports that once (CONFORMANCE_DEGRADED).
-      Implementations under chained subsystems (projectPath) validate standalone in their own
-      project run and are skipped here.
+      linkage, outside the approval since format 3, costs nothing to declare. The planned files of
+      one implementation are one notice naming them all, so a planned design reads as one line per
+      component, never one per file. Whether the realization has BEGUN (code_index.holdsAny over the
+      files it names: at least one exists) decides only how an unlinked method is reported: before
+      that, an implementation that names no file is unlinked design (MISSING_SOURCE_PATH, a notice),
+      so a design-only tree passes `validate --ci`; once it has begun, a contract method that names
+      no file while others do is unlinked (METHOD_SOURCE_PATH_MISSING, a warning), and a method its
+      named, existing file does not hold is method-realization's UNREALIZED_METHOD. A team that
+      wants CI to demand code for every designed implementation sets rules.conformance.requireCode,
+      which reports the two notices at error, naming the setting. A file that escapes the root or
+      cannot be analyzed is reported once and blocks only the methods realized in it. A run in which
+      TypeScript/JavaScript files were analyzed below exact grade reports that once
+      (CONFORMANCE_DEGRADED). Implementations under chained subsystems (projectPath) validate
+      standalone in their own project run and are skipped here.
     signature: 'sourceFileLinkage(ctx: RuleContext): void'
     returns: void
     params:
@@ -57,9 +58,10 @@ methods:
       - code: SOURCE_FILE_PLANNED
         severity: notice
         summary: >-
-          A source file an implementation or one of its methods names is not on disk — planned, not
-          written yet, whether or not another file it names exists; method-realization judges the
-          methods in it once it does. An error under rules.conformance.requireCode
+          Source files an implementation or its methods name are not on disk — planned, not written
+          yet, whether or not another file it names exists; one notice per implementation naming
+          every planned file, and method-realization judges the methods in each once it exists. An
+          error under rules.conformance.requireCode
       - code: METHOD_SOURCE_PATH_MISSING
         severity: warning
         summary: >-
@@ -226,16 +228,29 @@ methods:
       Conversely, a declared dependsOn/owns edge between components realized in different files
       should be visible as an import between any file of the source and any file of the target
       (UNREALIZED_DEPENDENCY — DI indirection can defeat this, hence warning); a type-only import
-      realizes it, since `import type` is what dependency injection writes down. Two twins of design
-      rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract
-      method of a Repository, Index, Store or Registry is the persistence shortcut the design rule
-      PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own narrative already claims that call (the
-      design rule's finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE); and a file importing a
-      technology's package — a bare specifier whose package name is one of the technology's declared
-      tokens (its name, or its `matches` when it declares them), compared exactly, never guessed —
-      while no component it realizes is that technology's home is the leak TECH_LEAKAGE refuses in
-      the design (TECH_LEAKAGE_IN_CODE). Only exact-grade analyzed files participate; chained
-      subprojects validate standalone.
+      realizes it, since `import type` is what dependency injection writes down. An Adapter's edge
+      to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link
+      the design models: the Adapter's transport client realizes it, never an import, so it is never
+      UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would
+      couple two deployables' builds. Two twins of design rules are judged on the same code: a
+      Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store
+      or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless
+      the Portal's own narrative already claims that call (the design rule's finding then)
+      (PORTAL_WRITE_SHORTCUT_IN_CODE). A receiver is followed through a non-null assertion,
+      parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field
+      exactly as through the field itself (a cast to any or unknown says nothing, and is not
+      followed), and a call in a Portal's own file whose receiver the analysis cannot follow at all,
+      under the name of a write- or lifecycle-effect method of a data component in the Portal's own
+      subsystem or one it depends into, is said so rather than passed in silence
+      (PORTAL_CALL_UNRESOLVED). And a file importing a technology's package while no component it
+      realizes is that technology's home is the leak TECH_LEAKAGE refuses in the design
+      (TECH_LEAKAGE_IN_CODE): a technology's packages are its declared tokens (its name, or its
+      `matches`), the curated built-in table of the common packages its name is known by (postgres:
+      pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis,
+      ioredis; mongodb: mongodb, mongoose; sqlite: better-sqlite3, sqlite3; kafka: kafkajs;
+      rabbitmq: amqplib — an HTTP client is never a technology leak), and the packages a loaded pack
+      contributes for it, each compared exactly with an import's package name. Only exact-grade
+      analyzed files participate; chained subprojects validate standalone.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -264,6 +279,12 @@ methods:
         summary: >-
           A source file imports a technology's package although no component it realizes binds that
           technology — the code twin of TECH_LEAKAGE
+      - code: PORTAL_CALL_UNRESOLVED
+        severity: notice
+        summary: >-
+          A call in a Portal's own file, under the name of a data component's write- or
+          lifecycle-effect method, goes through a receiver the analysis cannot follow at all —
+          neither proven a shortcut nor cleared, and said so rather than passed in silence
   - name: integrationSimDeclaration
     description: >-
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
@@ -356,10 +377,15 @@ methods:
       name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never
       realized), and each of its pure methods must appear in its own file (the method's sourcePath,
       else the type's) at the declaration tier, under the method's `symbol`, else the method's name.
-      A type that names no sourcePath claims nothing and is never reported. Findings carry the
-      analysis grade, a file that escapes the root or could not be analyzed is reported once and
-      blocks only what it would have realized, and types under chained subsystems (projectPath)
-      validate standalone in their own project run.
+      A type that names no sourcePath of its own claims no code, so nothing ever compares its shape
+      with the code — and that is said, never left silent: before the code of the type's subsystem
+      has begun (no file an implementation of that subsystem names exists; for a type no subsystem
+      owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice
+      — plan the type's sourcePath with the implementations'), and once that code exists it is a
+      type no check reads (a warning). rules.conformance.requireCode reports the notice at error,
+      naming the setting. Findings carry the analysis grade, a file that escapes the root or could
+      not be analyzed is reported once and blocks only what it would have realized, and types under
+      chained subsystems (projectPath) validate standalone in their own project run.
     signature: 'typeRealization(ctx: RuleContext): void'
     returns: void
     params:
@@ -397,6 +423,12 @@ methods:
         summary: >-
           A source file a type names is not on disk and none of its named files is — planned, not
           written yet; an error under rules.conformance.requireCode
+      - code: MISSING_TYPE_SOURCE_PATH
+        severity: notice
+        summary: >-
+          A type names no sourcePath of its own, so its shape is never compared with code — a notice
+          while its subsystem has no code yet (plan the path with the implementations'), a warning
+          once it has; an error under rules.conformance.requireCode
   - name: unclaimedSource
     description: >-
       Rule unclaimed-source. Code↔spec Level 1, asked the other way round: every source file under
@@ -703,4 +735,4 @@ methods:
           returns does not say so
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-06T23:06:15.637Z'
+updatedAt: '2026-10-07T10:53:28.180Z'

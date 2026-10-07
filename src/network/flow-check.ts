@@ -26,12 +26,26 @@ import type { FlowCheckReport, FlowParty, NetworkBindings, NetworkFlow, Observed
  * usually names a workload by; several design names may run as one
  * workload), else as written. Outside stays outside.
  */
-function designNames(name: string, bindings: NetworkBindings | null): string[] {
-  if (name === 'outside' || bindings === null) return [name];
-  if (Object.prototype.hasOwnProperty.call(bindings.workloads, name)) return [name];
-  const carries = (b: WorkloadBinding): boolean => Object.values(b.selector).some((v) => v === name || (b.namespace !== undefined && `${b.namespace}/${v}` === name));
-  const matches = Object.entries(bindings.workloads).filter(([, b]) => carries(b)).map(([k]) => k);
-  return matches.length > 0 ? matches : [name];
+function designNames(name: string, bindings: NetworkBindings | null, formerNames: Record<string, string>, notes: Set<string>): string[] {
+  if (name === 'outside') return [name];
+  let names = [name];
+  if (bindings !== null && !Object.prototype.hasOwnProperty.call(bindings.workloads, name)) {
+    const carries = (b: WorkloadBinding): boolean => Object.values(b.selector).some((v) => v === name || (b.namespace !== undefined && `${b.namespace}/${v}` === name));
+    const matches = Object.entries(bindings.workloads).filter(([, b]) => carries(b)).map(([k]) => k);
+    if (matches.length > 0) names = matches;
+  }
+  return names.map((n) => currentName(n, formerNames, notes));
+}
+
+/** A design name written as a renamed project's former name (`<former>` or `<former>::…`), read as its current one, noted. */
+function currentName(name: string, formerNames: Record<string, string>, notes: Set<string>): string {
+  for (const [former, current] of Object.entries(formerNames)) {
+    if (name !== former && !name.startsWith(`${former}::`)) continue;
+    const renamed = `${current}${name.slice(former.length)}`;
+    notes.add(`"${name}" names the renamed project "${current}" by its former name (kept in its previousIds): it was matched as "${renamed}" — rename it in the bindings file or the observed-flow export.`);
+    return renamed;
+  }
+  return name;
 }
 
 /** Whether an observed source lies within a flow's caller: a network-wide caller admits any source inside. */
@@ -81,7 +95,9 @@ function gateLines(model: ReachModel): string[] {
  */
 export function check(flows: NetworkFlow[], observed: ObservedFlow[], bindings: NetworkBindings | null, model: ReachModel): FlowCheckReport {
   // Step 1: each observed party in design terms.
-  const named = observed.map((o) => ({ o, sources: designNames(o.source, bindings), destinations: designNames(o.destination, bindings) }));
+  const former = model.formerNames ?? {};
+  const notes = new Set<string>();
+  const named = observed.map((o) => ({ o, sources: designNames(o.source, bindings, former, notes), destinations: designNames(o.destination, bindings, former, notes) }));
   const report: FlowCheckReport = { unexpected: [], unexercised: [], unknownVerbs: [], disallowed: [], gateFindings: gateLines(model) };
   const exercised = new Set<NetworkFlow>();
   // Step 2: each observed flow.
@@ -108,6 +124,7 @@ export function check(flows: NetworkFlow[], observed: ObservedFlow[], bindings: 
   }
   // Step 9: every admitted flow never seen.
   report.unexercised = flows.filter((f) => !isRefused(f) && !exercised.has(f));
+  if (notes.size > 0) report.notes = [...notes];
   // Step 10.
   return report;
 }

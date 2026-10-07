@@ -244,6 +244,18 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: registerProjectServer
+    description: >-
+      Register the wairon MCP server in a project's own portable .mcp.json when it registers none;
+      answers the path written, or none. Forwarded 1:1 to the tool guide — published so the MCP
+      server can scaffold a project a family migration made, as the CLI's install does.
+    signature: 'registerProjectServer(projectRoot: string): string?'
+    returns: string?
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose .mcp.json to write
+    effect: io
 status: complete
 createdAt: '2026-09-25T17:33:13.399Z'
-updatedAt: '2026-10-04T23:38:21.171Z'
+updatedAt: '2026-10-07T06:21:33.824Z'

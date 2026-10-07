@@ -62,5 +62,7 @@ fields:
     type: string
     optional: false
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareLink
 createdAt: '2026-07-17T22:32:28.008Z'
-updatedAt: '2026-10-04T10:21:03.438Z'
+updatedAt: '2026-10-07T06:28:56.985Z'

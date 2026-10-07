@@ -81,6 +81,31 @@ methods:
         type: list<string>
         description: Directory or file paths relative to the directory
     effect: read
+  - name: lastCommitOf
+    description: >-
+      The last commit of the work tree holding a directory that changed the file at the pathspec
+      (relative to the directory), or none when no commit did, the directory is in no work tree or
+      git is not installed. No network.
+    signature: 'lastCommitOf(directory: string, pathspec: string): string?'
+    returns: string?
+    params:
+      - name: directory
+        type: string
+      - name: pathspec
+        type: string
+    effect: io
+  - name: commitOf
+    description: >-
+      The full commit a ref (a branch, tag or commit) names in the work tree holding a directory, or
+      none when it names none. No network.
+    signature: 'commitOf(directory: string, ref: string): string?'
+    returns: string?
+    params:
+      - name: directory
+        type: string
+      - name: ref
+        type: string
+    effect: io
 status: complete
 createdAt: '2026-10-02T20:19:32.127Z'
-updatedAt: '2026-10-05T20:59:21.606Z'
+updatedAt: '2026-10-07T10:53:26.720Z'

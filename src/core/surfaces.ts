@@ -25,10 +25,13 @@ import {
   contentDigest,
   memberDigest,
   carriedFactChanges,
+  surfaceChanges,
+  type SurfaceChange,
   declaredExternals,
   declaredMembers,
   type PinnedExternal,
   type ExportUsage,
+  type CrossProjectReference,
   type ExternalBinding,
   type ExternalConsumer,
   type ExternalListing,
@@ -56,6 +59,8 @@ import {
   resolveExternals,
   excerptParent,
   listExternalConsumers,
+  getLoaderIssues,
+  approvedRevision,
 } from './adapters/surfaces-core.js';
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
@@ -176,6 +181,10 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], 
         : {}),
       // A named scalar travels with the primitive it holds.
       ...(t.holds !== undefined ? { holds: t.holds } : {}),
+      // Its own methods (checked constructors, pure operations) travel with it — carried, never digested.
+      ...(t.methods && t.methods.length
+        ? { methods: t.methods.map((m) => ({ name: m.name, signature: m.signature, ...(m.params ? { params: m.params.map(describe) } : {}), returns: m.returns, ...(m.description ? { description: m.description } : {}) })) }
+        : {}),
       // A renamed type travels with its rename trace — provenance, outside every digest.
       ...formerlyOf(t.previousIds, t.id),
     };
@@ -356,6 +365,7 @@ function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
       fields: def.fields.map((f) => ({ ...f, type: canon(f.type) })),
       ...(def.params ? { params: def.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
       ...(def.returns !== undefined ? { returns: canon(def.returns) } : {}),
+      ...(def.methods ? { methods: def.methods.map((m) => ({ ...m, returns: canon(m.returns), ...(m.params ? { params: m.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}) })) } : {}),
     })),
   };
 }
@@ -666,9 +676,26 @@ function exportResult(
   };
 }
 
+/**
+ * Refusal of an OpenAPI export that has no HTTP Portal to describe — an
+ * in-process library, or nothing exported at the audience: OpenAPI does not
+ * apply, and the native snapshot is never written in its place.
+ */
+export class OpenApiNotApplicableError extends Error {
+  constructor(snapshot: SurfaceSnapshot, maxAudience: string) {
+    const kinds = [...new Set(snapshot.interfaces.map((e) => e.type))].sort();
+    super(snapshot.interfaces.length
+      ? `OpenAPI does not apply to "${snapshot.projectName}": it exposes no HTTP Portal at audience ≥ ${maxAudience} — its ${snapshot.interfaces.length} exported interface(s) are ${kinds.join(', ')}${kinds.includes('InProcess') ? ' (an in-process library is called, not requested over HTTP)' : ''}, which no OpenAPI document describes. Nothing was written; export the native snapshot (\`--format native\`) instead.`
+      : `OpenAPI does not apply to "${snapshot.projectName}": it exports no interface at audience ≥ ${maxAudience}. Nothing was written.`);
+    this.name = 'OpenApiNotApplicableError';
+  }
+}
+
 export function exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string): SurfaceExportResult {
   const snapshot = projectOwnSurface(maxAudience);
   let renderedSet = format === 'openapi' ? toOpenApiSet(snapshot) : undefined;
+  // No HTTP Portal: OpenAPI does not apply — a file asked for is refused, never written as the native snapshot.
+  if (renderedSet && renderedSet.length === 0 && outPath) throw new OpenApiNotApplicableError(snapshot, maxAudience);
   if (renderedSet && portalId) renderedSet = selectPortalSpec(renderedSet, portalId);
   const writtenPaths = outPath ? writeSurfaceFile(outPath, snapshot, renderedSet) : [];
   return exportResult(snapshot, renderedSet, writtenPaths);
@@ -844,24 +871,74 @@ function producerUnreadable(external: ResolvedExternal): string | null {
  * audience it was filtered to. A root that holds no project throws.
  */
 function projectProducer(external: ResolvedExternal): SurfaceSnapshot {
-  const snapshot = runWithProjectRoot(external.directory!, () => projectOwnSurface(external.audience));
+  const snapshot = runWithProjectRoot(external.directory!, () => {
+    const projected = projectOwnSurface(external.audience);
+    // A spec file of the producer that fails to parse leaves its table short:
+    // what it held reads as gone. Never projected as a producer that removed
+    // names — it is unreadable, naming the file, for the producer to fix.
+    const broken = getLoaderIssues().find((i) => i.code === 'SCHEMA_VALIDATION_ERROR');
+    if (broken) throw new Error(unreadableReason(broken.message));
+    return projected;
+  });
   return { ...snapshot, audience: external.audience };
 }
 
-/** The lock's `used` map for one binding: each used member's digest in the pinned snapshot. */
-function usedDigests(usage: ExportUsage | undefined, snapshot: SurfaceSnapshot): { used: Record<string, Record<string, string>>; missing: string[] } {
+/** The prefix every unreadable-producer reason starts with. */
+const PRODUCER_UNREADABLE = 'producer unreadable';
+
+/** `producer unreadable: <file>: <error>`, read off the loader's parse failure. */
+function unreadableReason(message: string): string {
+  const parsed = /^Failed to parse (?:\w+ )?spec(?: "([^"]+)")?: ([\s\S]*)$/.exec(message);
+  if (!parsed) return `${PRODUCER_UNREADABLE}: ${message}`;
+  return `${PRODUCER_UNREADABLE}: ${parsed[1] ?? 'its system spec'}: ${parsed[2]}`;
+}
+
+/** A failed producer read as a reason: an unreadable producer said as such, anything else prefixed. */
+function readFailure(e: unknown): string {
+  const detail = e instanceof Error ? e.message : String(e);
+  return detail.startsWith(PRODUCER_UNREADABLE) ? detail : `the producer could not be read: ${detail}`;
+}
+
+/**
+ * The lock's `used` map for one binding: each used member's digest in the
+ * pinned snapshot; and each used member the snapshot does not carry, as the
+ * reference that reaches it (the first referring spec), so every surface that
+ * answers a pin — the CLI line and the MCP answer alike — names it.
+ */
+function usedDigests(usage: ExportUsage | undefined, snapshot: SurfaceSnapshot, alias: string): { used: Record<string, Record<string, string>>; missing: string[]; uncarried: CrossProjectReference[] } {
   const used: Record<string, Record<string, string>> = {};
   const missing: string[] = [];
+  const uncarried: CrossProjectReference[] = [];
   for (const use of usage?.used ?? []) {
     const members: Record<string, string> = {};
     for (const member of use.members) {
       const digest = memberDigest(snapshot, use.publicName, member);
-      if (digest === null) missing.push(`${use.publicName}.${member}`);
-      else members[member] = digest;
+      if (digest !== null) {
+        members[member] = digest;
+        continue;
+      }
+      missing.push(`${use.publicName}.${member}`);
+      uncarried.push({
+        specId: use.specs?.[0] ?? '', position: 'uncarried', target: `${alias}::${use.publicName}`,
+        ...(member !== 'type' ? { member } : {}), consumer: usage?.consumer ?? '', producer: alias, authored: `${alias}::${use.publicName}`,
+      });
     }
     used[use.publicName] = members;
   }
-  return { used, missing };
+  return { used, missing, uncarried };
+}
+
+/**
+ * What a pin says beside its outcome: the used members it could not carry,
+ * or — when no spec references the external yet — plainly that the pin
+ * records none of this project's uses, and fills on the next pin.
+ */
+function pinDetail(missing: string[], usedNames: number, alias: string): { detail?: string } {
+  if (missing.length) return { detail: `used members the snapshot does not carry cannot be pinned: ${missing.join(', ')}` };
+  if (usedNames === 0) {
+    return { detail: `no spec references "${alias}" yet, so this pin records none of its uses — it fills on the next pin (\`wairon externals pin ${alias}\` / sdd_pin_externals) once a spec writes \`${alias}::<name>\`; until then each new reference reads "used now, but not in the lock"` };
+  }
+  return {};
 }
 
 /** Pin one resolved binding: the snapshot written when its content moved, and the lock entry. */
@@ -876,8 +953,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
     // Steps 9-10: project it at the audience ceiling, stamped with that audience.
     snapshot = projectProducer(external);
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    return { pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `the producer could not be read: ${detail}; its previous pin stays` }, changed: false };
+    return { pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `${readFailure(e)}; its previous pin stays` }, changed: false };
   }
   const digest = contentDigest(snapshot);
   // Steps 11-13: the snapshot is rewritten only when its content moved.
@@ -888,7 +964,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   const snapshotChanged = !pinned || contentDigest(pinned) !== digest || pinnedContentKey(pinned) !== pinnedContentKey(snapshot);
   if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
   // Step 14: the lock entry — `used` maps each used member to its digest.
-  const { used, missing } = usedDigests(binding.usage, snapshot);
+  const { used, missing, uncarried } = usedDigests(binding.usage, snapshot, external.alias);
   const entry: ExternalLockEntry = {
     project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used,
     ...(external.commit !== undefined ? { commit: external.commit } : {}),
@@ -904,8 +980,8 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
       snapshot: entry.snapshot,
       digest,
       usedNames: Object.keys(used).length,
-      unexported,
-      ...(missing.length ? { detail: `used members the snapshot does not carry cannot be pinned: ${missing.join(', ')}` } : {}),
+      unexported: [...unexported, ...uncarried],
+      ...(pinDetail(missing, Object.keys(used).length, external.alias)),
     },
     changed: entryChanged,
   };
@@ -1156,7 +1232,18 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
       if (!(member in locked[use.publicName])) uses.push(unlocked(use.publicName, member));
     }
   }
+  // A reference that bound to no public name: one whose name the live table
+  // no longer holds at all is a break the live producer proves (removed, or
+  // renamed per its trace), pinned or not; one it holds but does not show
+  // this consumer cannot be compared.
   for (const ref of usage?.unexported ?? []) {
+    const spelled = ref.authored.split('::');
+    const name = spelled.length === 2 ? spelled[1] : spelled.length === 1 ? spelled[0] : undefined;
+    if (name !== undefined && !liveHas(name) && !uses.some((u) => u.publicName === name && (u.member === ref.member || u.member === undefined))) {
+      const gone = goneUse(live, name, ref.member, undefined);
+      uses.push(gone);
+      continue;
+    }
     uses.push({ member: ref.member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: `"${ref.specId}" reaches "${ref.target}", which the producer does not export — nothing to compare` });
   }
   return uses;
@@ -1196,7 +1283,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
       // Steps 6-7: the producer's live table at the audience ceiling.
       live = projectProducer(external);
     } catch (e) {
-      reason = `the producer could not be read: ${e instanceof Error ? e.message : String(e)}`;
+      reason = readFailure(e);
     }
   }
   if (!live) {
@@ -1294,9 +1381,44 @@ export function listExternals(): ExternalListing[] {
  * consume the bound project, each with the alias and section it declares it
  * under and the public names its specs use, read through the core. Read-only.
  */
-export function listConsumers(): ExternalConsumer[] {
-  // Steps 1-2.
-  return listExternalConsumers();
+export function listConsumers(search?: string[]): ExternalConsumer[] {
+  // Steps 1-2: the family in reach, and every project root in the searched folders.
+  return listExternalConsumers(search);
+}
+
+/** What `wairon surface diff` and sdd_surface_diff answer: the baseline compared against, and every change since. */
+export interface SurfaceDiff {
+  /** The project whose surface was compared. */
+  project: string;
+  /** What the surface was compared with: the last committed approval, a named revision, or a saved snapshot file. */
+  against: string;
+  changes: SurfaceChange[];
+}
+
+/**
+ * surface_orchestrator.diff — the bound project's public-surface
+ * changelog: its export table now (the whole table, every audience) against
+ * the same table at its last committed approval — or at a named git revision,
+ * or in a saved native surface snapshot file — as added, removed, renamed
+ * (traced) and signature-changed names and methods. What a producer writes
+ * release notes from and judges impact by. Read-only.
+ */
+export function diff(against?: string): SurfaceDiff {
+  // Step 1: the surface now.
+  const current = projectOwnSurface('project');
+  // Steps 2-4: the baseline — a saved snapshot file, else the tree at the revision.
+  let baseline: SurfaceSnapshot;
+  let label: string;
+  if (against !== undefined && fs.existsSync(against) && fs.statSync(against).isFile()) {
+    baseline = SurfaceSnapshotSchema.parse(parseYaml(fs.readFileSync(against, 'utf8'), against));
+    label = `the saved surface ${path.resolve(against)}`;
+  } else {
+    const revision = approvedRevision(against);
+    baseline = runWithProjectRoot(revision.directory, () => projectOwnSurface('project'));
+    label = revision.label;
+  }
+  // Step 5: the changes.
+  return { project: current.projectId ?? current.projectName, against: label, changes: surfaceChanges(current, baseline) };
 }
 
 // ---------------------------------------------------------------------------

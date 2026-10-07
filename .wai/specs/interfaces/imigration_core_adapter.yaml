@@ -309,6 +309,12 @@ methods:
       - name: changes
         type: MemberDeclaration
         description: The fields to set
+  - name: diffAgainstApproval
+    description: >-
+      Forward to approval_portal.diffAgainstApproval: what differs between a project root's tree and
+      the approval it carries — a storage move counted as moved, never as a change — or null when it
+      carries none.
+    signatureFrom: approval_portal.diffAgainstApproval
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-05T23:34:34.853Z'
+updatedAt: '2026-10-07T10:54:45.803Z'

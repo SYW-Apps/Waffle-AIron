@@ -14,5 +14,12 @@ fields:
     description: True when the L0 system spec was created
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline return type `{ wroteConfig; wroteSystem }` of
+        ensureProjectInitialized in src/core/provision.ts, so there is no symbol a sourcePath could
+        bind.
 createdAt: '2026-09-13T22:56:05.165Z'
-updatedAt: '2026-10-04T10:20:48.948Z'
+updatedAt: '2026-10-07T06:30:27.072Z'

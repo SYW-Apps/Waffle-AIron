@@ -373,6 +373,30 @@ methods:
         targetComponent: mcp_orchestrator
         targetMethod: renameField
     symbol: sdd_rename_field
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameParam workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameParam
+    symbol: sdd_rename_param
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the consumers workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: consumers
+    symbol: sdd_list_consumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the surface-changelog workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: diff
+    symbol: sdd_surface_diff
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:07:33.479Z'
+updatedAt: '2026-10-07T11:00:37.113Z'

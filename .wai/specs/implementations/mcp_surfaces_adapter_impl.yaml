@@ -41,6 +41,20 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: updateExternalUse
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listConsumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: diffSurface
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-10-06T23:06:39.132Z'
+updatedAt: '2026-10-07T10:59:32.077Z'

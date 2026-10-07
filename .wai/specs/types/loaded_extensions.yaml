@@ -75,7 +75,13 @@ fields:
       (today: a language's foreignBuiltins, whose check is retired); accepted and ignored, and
       reported as a notice so a pack author learns it before the field is removed
     optional: false
+  - name: technologyPackages
+    type: map<string, list<string>>
+    description: >-
+      Merged pack-contributed package names per technology name (lower-cased, deduped across packs)
+      — the extension half of the table technology.packages reads
+    optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-10-04T10:20:23.314Z'
+updatedAt: '2026-10-07T06:29:48.757Z'

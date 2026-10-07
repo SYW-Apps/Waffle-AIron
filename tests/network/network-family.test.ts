@@ -52,19 +52,20 @@ describe('network_portal.flows (sim:network_portal.flows)', () => {
   it('derives the least-privilege matrix of the family: entries, modelled calls, nested networks, no library flows', () => {
     const matrix = JSON.parse(flows({}, 'json').content) as NetworkFlow[];
     expect(matrix.map(row)).toEqual([
-      'outside -> api_gateway.listOrders [] via api_gateway',
-      'outside -> api_gateway.placeOrder [] via api_gateway',
+      // JSON names the root's network by the root project's id, never "".
+      'outside -> api_gateway.listOrders [platform] via api_gateway',
+      'outside -> api_gateway.placeOrder [platform] via api_gateway',
       // billing's gateway: entered from the platform network (outside billing is the next network out) and by the orders service.
-      'network -> billing::billing_api.charge [billing] via billing::billing_api',
+      'network:platform -> billing::billing_api.charge [billing] via billing::billing_api',
       'orders::billing_client -> billing::billing_api.charge [billing] via billing::billing_api',
-      'network -> billing::billing_api.refund [billing] via billing::billing_api',
+      'network:platform -> billing::billing_api.refund [billing] via billing::billing_api',
       // create's network entry is proven by the root's modelled caller: narrowed to it (no blanket network row).
       'orders_client -> orders::orders_api.create []',
       // get's network entry has no modelled caller: the whole network may reach it.
-      'network -> orders::orders_api.get []',
+      'network:platform -> orders::orders_api.get []',
     ]);
-    // The outside flows enter the root network through its gateway.
-    expect(matrix[0].crosses).toEqual(['']);
+    // The outside flows enter the root network through its gateway, named by the root project's id in JSON.
+    expect(matrix[0].crosses).toEqual(['platform']);
     expect(matrix.some((f) => f.to.component === 'geo::geo_lib')).toBe(false);
     expect(matrix.find((f) => f.to.verb === 'create')!.evidence).toEqual(['call orders_client_impl (call orders::orders)']);
   });

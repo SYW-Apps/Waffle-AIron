@@ -252,7 +252,11 @@ export function carriedFactChanges(pinned: SurfaceSnapshot, live: SurfaceSnapsho
   const liveTypes = new Map(live.types.map((t) => [t.id, t] as const));
   for (const def of pinned.types) {
     const now = liveTypes.get(def.id);
-    if (now) differs(`rename trace of ${def.id}`, def.formerly, now.formerly);
+    if (!now) continue;
+    differs(`rename trace of ${def.id}`, def.formerly, now.formerly);
+    // A type's own methods are carried for bindings, never digested: a change is a stale pin.
+    const methods = (d: SurfaceTypeDef): unknown => (d.methods ?? []).map((m) => ({ name: m.name, params: (m.params ?? []).map((p) => ({ type: p.type, optional: p.optional === true })), returns: m.returns }));
+    differs(`methods of ${def.id}`, def.methods?.length ? methods(def) : undefined, now.methods?.length ? methods(now) : undefined);
   }
   const unresolved = (snapshot: SurfaceSnapshot): unknown => [...(snapshot.unresolvedExports ?? [])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   differs('the unresolved re-exports', unresolved(pinned), unresolved(live));
@@ -290,4 +294,113 @@ export function memberDigest(snapshot: SurfaceSnapshot, publicName: string, memb
   const method = entry.methods.find((m) => m.name === member);
   if (!method) return null;
   return sha256(canonicalize({ method: methodShape(snapshot, method), closure: closureShapes(snapshot, methodTypeRefs(method)) }));
+}
+
+/** What moved on one public name (or one of its members) between two snapshots of one producer's surface. */
+export type SurfaceChangeKind = 'added' | 'removed' | 'renamed' | 'changed';
+
+/**
+ * surface_change — one entry of a public-surface changelog: a public name (and
+ * the member, for a contract method) that was added, removed, renamed (from
+ * the former name the rename trace records) or changed in signature, with a
+ * one-line reading. What a producer writes release notes from.
+ */
+export interface SurfaceChange {
+  kind: SurfaceChangeKind;
+  /** The public name, as the newer surface spells it (the older one for a removal). */
+  name: string;
+  /** The contract method, for a change inside a contract; absent for the name as a whole. */
+  member?: string;
+  /** The former name a rename was traced from. */
+  from?: string;
+  /** What changed, said in one line. */
+  detail: string;
+}
+
+/** A contract method's signature as a changelog shows it. */
+function shownSignature(method: MethodSignature): string {
+  return method.signature || `${method.name}(${(method.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${method.returns}`;
+}
+
+/**
+ * surface_snapshot.changesSince — what one producer's public surface changed
+ * from an older snapshot of it to this one: each public name (contract entry
+ * or exported type) added, removed, renamed per the newer snapshot's rename
+ * trace (`formerly`), or changed — its audience, or a type's shape — and
+ * inside each contract kept, each method added, removed, renamed per its
+ * trace, or changed in signature (memberDigest). Prose and provenance are
+ * never a change. Sorted by name, then member. Pure.
+ */
+export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): SurfaceChange[] {
+  const out: SurfaceChange[] = [];
+  const oldEntries = new Map(older.interfaces.map((e) => [e.id, e] as const));
+  const oldTypes = new Map((older.exportedTypes ?? []).map((t) => [t.id, t] as const));
+  const consumed = new Set<string>();
+  const formerOf = (formerly: string[] | undefined, has: (n: string) => boolean): string | undefined =>
+    (formerly ?? []).find((f) => has(f) && !consumed.has(f));
+  // Contract entries: added, renamed, changed member by member.
+  for (const entry of newer.interfaces) {
+    let before = oldEntries.get(entry.id);
+    if (!before) {
+      const from = formerOf(entry.formerly, (n) => oldEntries.has(n) && !newer.interfaces.some((e) => e.id === n));
+      if (from === undefined) {
+        out.push({ kind: 'added', name: entry.id, detail: `added: ${entry.type} contract with ${entry.methods.length} method(s), audience ${entry.audience}` });
+        continue;
+      }
+      consumed.add(from);
+      before = oldEntries.get(from)!;
+      out.push({ kind: 'renamed', name: entry.id, from, detail: `renamed from "${from}"` });
+    }
+    if (before.audience !== entry.audience) out.push({ kind: 'changed', name: entry.id, detail: `audience ${before.audience} → ${entry.audience}` });
+    const oldMethods = new Map(before.methods.map((m) => [m.name, m] as const));
+    const usedOld = new Set<string>();
+    for (const method of entry.methods) {
+      let was = oldMethods.get(method.name);
+      if (!was) {
+        const from = (method.formerly ?? []).find((f) => oldMethods.has(f) && !entry.methods.some((m) => m.name === f));
+        if (from === undefined) {
+          out.push({ kind: 'added', name: entry.id, member: method.name, detail: `method added: ${shownSignature(method)}` });
+          continue;
+        }
+        was = oldMethods.get(from)!;
+        out.push({ kind: 'renamed', name: entry.id, member: method.name, from, detail: `method renamed from "${from}"` });
+      }
+      usedOld.add(was.name);
+      const a = memberDigest(older, before.id, was.name);
+      const b = memberDigest(newer, entry.id, method.name);
+      // A rename alone moves the digest's name; compare the shape under one name.
+      const sameShape = a === b || memberDigest({ ...newer, interfaces: newer.interfaces.map((e) => (e !== entry ? e : { ...e, id: before!.id, methods: e.methods.map((m) => (m === method ? { ...m, name: was!.name } : m)) })) }, before.id, was.name) === a;
+      if (!sameShape) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `signature ${shownSignature(was)} → ${shownSignature(method)}` });
+    }
+    for (const m of before.methods) {
+      if (!usedOld.has(m.name)) out.push({ kind: 'removed', name: entry.id, member: m.name, detail: `method removed: ${shownSignature(m)}` });
+    }
+  }
+  // Exported types: added, renamed, changed in shape.
+  for (const t of newer.exportedTypes ?? []) {
+    let before = oldTypes.get(t.id);
+    if (!before) {
+      const def = newer.types.find((d) => d.id === t.type);
+      const from = formerOf(def?.formerly, (n) => oldTypes.has(n) && !(newer.exportedTypes ?? []).some((x) => x.id === n));
+      if (from === undefined) {
+        out.push({ kind: 'added', name: t.id, detail: `type added (${def?.kind ?? 'type'}), audience ${t.audience}` });
+        continue;
+      }
+      consumed.add(from);
+      before = oldTypes.get(from)!;
+      out.push({ kind: 'renamed', name: t.id, from, detail: `type renamed from "${from}"` });
+    }
+    if (before.audience !== t.audience) out.push({ kind: 'changed', name: t.id, detail: `audience ${before.audience} → ${t.audience}` });
+    const a = memberDigest(older, before.id, 'type');
+    const b = memberDigest(newer, t.id, 'type');
+    if (a !== b && before.id === t.id) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
+  }
+  // Whatever the older surface had that the newer neither keeps nor renamed.
+  for (const e of older.interfaces) {
+    if (!newer.interfaces.some((x) => x.id === e.id) && !consumed.has(e.id)) out.push({ kind: 'removed', name: e.id, detail: `removed: ${e.type} contract with ${e.methods.length} method(s)` });
+  }
+  for (const t of older.exportedTypes ?? []) {
+    if (!(newer.exportedTypes ?? []).some((x) => x.id === t.id) && !consumed.has(t.id)) out.push({ kind: 'removed', name: t.id, detail: 'type removed' });
+  }
+  return out.sort((x, y) => (x.name === y.name ? ((x.member ?? '') < (y.member ?? '') ? -1 : (x.member ?? '') > (y.member ?? '') ? 1 : 0) : x.name < y.name ? -1 : 1));
 }

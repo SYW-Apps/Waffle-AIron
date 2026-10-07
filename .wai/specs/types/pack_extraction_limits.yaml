@@ -28,5 +28,6 @@ fields:
     optional: true
 methods: []
 componentClass: pack_codec
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:12:45.243Z'
-updatedAt: '2026-10-04T10:29:08.280Z'
+updatedAt: '2026-10-07T06:28:14.777Z'

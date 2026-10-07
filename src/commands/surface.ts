@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import { assertProjectInitialized } from '../config/paths.js';
 import {
+  diffSurface,
   exportDesign,
   exportSurface,
   importSurface,
@@ -11,7 +12,8 @@ import {
 } from './adapters/surfaces.js';
 // cli_lock_adapter.checkApproval: the one approval verdict the tool has (lock-check's).
 import { checkApproval } from './lock.js';
-import { SURFACE_AUDIENCES, SurfaceOrigin, type DesignApproval, type DesignExport } from '../models/index.js';
+import { SURFACE_AUDIENCES, SurfaceOrigin, type DesignApproval, type DesignExport, type SurfaceChange } from '../models/index.js';
+import type { SurfaceDiff } from '../core/surfaces.js';
 
 // ---------------------------------------------------------------------------
 // `wairon surface` (sdd_cli → sdd_surfaces, through the surfaces client adapter)
@@ -33,6 +35,28 @@ export interface SurfaceOptions {
   /** OpenAPI export: select ONE portal's document. An OpenAPI spec is one API,
    *  so a multi-portal project renders one document per portal. */
   portal?: string;
+  /** diff: what to compare with — a git revision or a saved native snapshot file; the last committed approval when omitted. */
+  against?: string;
+  /** diff: print the structured answer. */
+  json?: boolean;
+}
+
+/** One changelog line per change, grouped by kind as release notes read. */
+function printSurfaceDiff(diff: SurfaceDiff): void {
+  logger.info(`Public surface of "${diff.project}" against ${diff.against}:`);
+  if (!diff.changes.length) {
+    logger.info('  no change — every exported name, method and signature is as it was.');
+    return;
+  }
+  const order: SurfaceChange['kind'][] = ['removed', 'renamed', 'changed', 'added'];
+  const colour = { removed: chalk.red, renamed: chalk.yellow, changed: chalk.yellow, added: chalk.green } as const;
+  for (const kind of order) {
+    for (const c of diff.changes.filter((x) => x.kind === kind)) {
+      logger.info(`  ${colour[kind](kind.padEnd(7))} ${chalk.cyan(c.member ? `${c.name}.${c.member}` : c.name)} — ${c.detail}`);
+    }
+  }
+  const breaking = diff.changes.filter((c) => c.kind !== 'added').length;
+  logger.info(chalk.gray(`${diff.changes.length} change(s), ${breaking} a consumer may have to follow. Who uses what: \`wairon externals consumers --search <dir>\`.`));
 }
 
 export async function runSurface(action: string, options: SurfaceOptions = {}): Promise<void> {
@@ -51,7 +75,17 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       if (options.portal && format !== 'openapi') {
         throw new WaironError('`--portal` selects one OpenAPI document and only applies to `--format openapi`.');
       }
-      const result = exportSurface(audience, format, options.out, options.portal);
+      let result;
+      try {
+        result = exportSurface(audience, format, options.out, options.portal);
+      } catch (e) {
+        if (e instanceof Error && e.name === 'OpenApiNotApplicableError') throw new WaironError(e.message);
+        throw e;
+      }
+      // An OpenAPI export with no HTTP Portal to describe: say so, never print the native entries as if they were it.
+      if (format === 'openapi' && (result.renderedSet ?? []).length === 0) {
+        throw new WaironError(`OpenAPI does not apply to "${result.snapshot.projectName}": it exposes no HTTP Portal at audience ≥ ${audience}${result.snapshot.interfaces.length ? ` — its ${result.snapshot.interfaces.length} exported interface(s) are ${[...new Set(result.snapshot.interfaces.map((e) => e.type))].join(', ')}, which no OpenAPI document describes` : ''}. Export the native snapshot (\`--format native\`) instead.`);
+      }
       logger.success(
         `Projected surface of "${result.snapshot.projectName}": ${result.snapshot.interfaces.length} interface(s), ${result.snapshot.types.length} type(s) at audience ≥ ${audience}.`,
       );
@@ -96,6 +130,14 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       return;
     }
 
+    case 'diff': {
+      // What the export table changed since the last approval (or a named revision / saved snapshot).
+      const diff = diffSurface(options.against);
+      if (options.json) process.stdout.write(`${JSON.stringify(diff, null, 2)}\n`);
+      else printSurfaceDiff(diff);
+      return;
+    }
+
     case 'list': {
       const snapshots = listSnapshots();
       if (!snapshots.length) {
@@ -112,7 +154,7 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
     }
 
     default:
-      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list). \`surface pin\` and \`surface externals\` are gone: declare the producer under \`externals\` in .wai/project.yaml and use \`wairon externals pin|status|list\`.`);
+      throw new WaironError(`Unknown surface action "${action}" (supported: export, import, list, diff). \`surface pin\` and \`surface externals\` are gone: declare the producer under \`externals\` in .wai/project.yaml and use \`wairon externals pin|status|list\`.`);
   }
 }
 

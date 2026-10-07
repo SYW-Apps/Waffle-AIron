@@ -53,6 +53,26 @@ methods:
       - name: request
         type: ExternalUseRequest
         description: The alias, the names to add and remove, and dryRun
+  - name: listConsumers
+    description: >-
+      Forward to the surface portal: the projects that consume the bound project, the searched
+      folders' too (sdd_list_consumers).
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diffSurface
+    description: 'Forward to the surface portal: the public-surface changelog (sdd_surface_diff).'
+    signature: 'diffSurface(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
 status: complete
 createdAt: '2026-07-24T18:14:20.548Z'
-updatedAt: '2026-10-06T23:06:38.133Z'
+updatedAt: '2026-10-07T10:59:30.465Z'

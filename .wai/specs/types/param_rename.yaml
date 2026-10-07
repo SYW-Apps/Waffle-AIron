@@ -1,0 +1,41 @@
+kind: value-object
+id: param_rename
+name: ParamRename
+description: >-
+  What renaming a parameter of a contract method changed: the parameter moved to its new name on
+  every contract of the component that declares the method (its old name appended to the parameter's
+  rename trace, previousNames, which the design export shows as `formerly`), each signature
+  re-derived under the new name, and the HTTP endpoint path placeholders that bound it by name
+  respelled.
+subsystem: sdd_core
+fields:
+  - name: component
+    type: string
+    description: The component whose contract method's parameter moved
+    optional: false
+  - name: method
+    type: string
+    description: The contract method the parameter belongs to
+    optional: false
+  - name: from
+    type: string
+    description: The parameter's name before the rename
+    optional: false
+  - name: to
+    type: string
+    description: The parameter's name after the rename
+    optional: false
+  - name: movedIn
+    type: list<string>
+    description: Ids of the interfaces the parameter was renamed in
+    optional: false
+  - name: rewritten
+    type: list<string>
+    description: >-
+      The endpoint path placeholders respelled, each `<interface>.<method>: {old} -> {new}` — the
+      URL a caller sends is unchanged, only the name binding the segment to the parameter
+    optional: false
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-10-07T06:24:46.657Z'
+updatedAt: '2026-10-07T06:24:47.236Z'

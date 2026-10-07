@@ -25,9 +25,17 @@ fields:
     optional: true
   - name: at
     type: string
-    description: 'The site inside that spec: the verb, or the call''s evidence'
+    description: >-
+      The site inside that spec: the verb, or the call's evidence; absent on a finding that covers
+      several verbs of one Portal
+    optional: true
+  - name: covers
+    type: list<string>
+    description: >-
+      The verbs of the Portal it sits on that one aggregated finding covers (a Portal-level
+      GATEWAY_BYPASSED): it sits on each of their entry flows
     optional: true
 methods: []
 sourcePath: src/models/reach.ts
 createdAt: '2026-10-06T23:02:20.977Z'
-updatedAt: '2026-10-06T23:02:21.803Z'
+updatedAt: '2026-10-07T06:19:21.751Z'

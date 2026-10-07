@@ -196,7 +196,7 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
     return { ...plan, refusals: [...plan.refusals, ...refused] };
   }
   // Steps 19-20.
-  return { ...plan, rehearsal, changes, relock: relockOf(plan, changes) };
+  return { ...plan, rehearsal, changes, relock: relockOf(plan, changes, rehearsal) };
 }
 
 /** The relocated project's directory and where it goes, when the plan moves one (a hosted detach or adopt). */
@@ -357,13 +357,30 @@ function onCopy<T>(rehearsal: Rehearsal, run: () => T): T {
  * apart (its project.yaml deleted, an internalized member) has nothing left to
  * re-lock.
  */
-function relockOf(plan: MigrationPlan, changes: FileChange[]): string[] {
+function relockOf(plan: MigrationPlan, changes: FileChange[], rehearsal?: Rehearsal): string[] {
   const ended = new Set(changes.filter((c) => c.action === 'delete' && c.path === '.wai/project.yaml').map((c) => path.resolve(c.project)));
   const owners = [...new Set(changes.map((c) => path.resolve(c.project)))].filter((o) => !ended.has(o));
   // A relocated project carries its lock to its new root, where it is re-locked.
   const moved = movedOf(plan);
   const relocated = moved !== null && core.approvalRecord(moved.from) !== null ? [moved.to] : [];
-  if (plan.request.verb !== 'rename') return [...owners.filter((owner) => core.approvalRecord(owner) !== null), ...relocated];
+  if (plan.request.verb !== 'rename') {
+    const locked = owners.filter((owner) => core.approvalRecord(owner) !== null);
+    // Step 20: a storage move changes nothing an approval covers. An owner
+    // whose approval, read on the rehearsal copy, still covers every spec —
+    // its moved specs paired as moves — owes no re-lock, exactly as `wairon
+    // lock` and `wairon lock-check` read it once the move is applied.
+    const storageMove = plan.request.verb === 'externalize' && plan.request.as !== 'project';
+    const stillApproved = (owner: string): boolean => {
+      if (!storageMove || !rehearsal) return false;
+      try {
+        const diff = core.diffAgainstApproval(rehearsalRoot(rehearsal, owner));
+        return diff !== null && diff.added.length + diff.changed.length + diff.removed.length === 0;
+      } catch {
+        return false;
+      }
+    };
+    return [...locked.filter((owner) => !stillApproved(owner)), ...relocated];
+  }
   const renamed = plan.edits.find((e) => e.write?.call === 'renameId')?.write?.root;
   const first = renamed !== undefined ? path.resolve(renamed) : undefined;
   return [...owners.filter((o) => o === first), ...owners.filter((o) => o !== first)];

@@ -35,11 +35,42 @@ methods:
         targetMethod: apply
       - stepNumber: 6
         description: >-
+          Did the applied migration make a project (a promote, or an externalize as project), whose
+          folder now holds a configuration?
+        type: branch
+        condition: the report is applied, the request made a project, and its folder holds .wai/project.yaml
+        onFalseStep: 11
+      - stepNumber: 7
+        description: Under the new project's binding, read its configuration for the targets it enables
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 8
+        description: Write its project-local guides and root pointer for those targets
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: reinjectLocalGuides
+      - stepNumber: 9
+        description: Export the SDD skills into it
+        type: call
+        targetComponent: mcp_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 10
+        description: >-
+          When claude is one of its targets, register the wairon server in its portable .mcp.json
+          (an existing registration is kept); record every file written as the report's session
+          scaffold. A failure here is said in the answer with the commands to run there, never
+          fatal: the migration already committed
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: registerProjectServer
+      - stepNumber: 11
+        label: answer
+        description: >-
           Answer the report as structured content: applied with the projects to re-lock — and, when
-          it made a new project (a promote, or an externalize --as project), the folder it lives in
-          and exactly what the human runs there so a team's own session can open it (`wairon
-          generate` and `wairon mcp install --backend claude`; the CLI's verbs do it themselves) —
-          or the failure (a tool error) and whether the family was restored
+          it made a new project, the folder it lives in and the session scaffold written there, so a
+          team's own session can open it — or the failure (a tool error) and whether the family was
+          restored
         type: return
         outcome: FamilyMigrationReport
   - name: pending
@@ -59,4 +90,4 @@ methods:
         outcome: notice lines
 status: complete
 createdAt: '2026-09-30T20:39:33.686Z'
-updatedAt: '2026-10-06T00:13:50.203Z'
+updatedAt: '2026-10-07T06:22:13.232Z'

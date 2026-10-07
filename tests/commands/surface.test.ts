@@ -212,6 +212,6 @@ describe('wairon surface — the retired family actions', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-gone-'));
     buildTwoPortalProject(rootDir);
     setProjectRoot(rootDir);
-    await expect(runSurface(action, {})).rejects.toThrow(/supported: export, import, list\)[\s\S]*wairon externals/);
+    await expect(runSurface(action, {})).rejects.toThrow(/supported: export, import, list, diff\)[\s\S]*wairon externals/);
   });
 });

@@ -44,6 +44,46 @@ fields:
       model was read for the derived networking outputs (family_validator.reachModel); absent on a
       model a rule projects to judge
     optional: true
+  - name: subsystems
+    type: list<string>
+    description: >-
+      Every subsystem in scope, qualified like the placements, including one that holds only types
+      (a library of value objects): how such a subsystem is known as a party, and answered as
+      reached in-process
+    optional: true
+  - name: externals
+    type: list<string>
+    description: >-
+      The aliases of the bound project's declared externals: a party named `<alias>::<name>` through
+      one is known, and, with no network verb of the model under it, answered as reached outside
+      this design's network model
+    optional: true
+  - name: rootProject
+    type: string
+    description: >-
+      The bound root's project id: how the root's own parties and network are named in an encoded
+      matrix, where its key is empty
+    optional: true
+  - name: formerNames
+    type: map<string, string>
+    description: >-
+      Each former name of a renamed member project (its previousIds, qualified like its key) mapped
+      to its current key: how a bindings key or an observed-flow name written before the rename
+      still resolves, each such use reported so the key can be renamed
+    optional: true
+  - name: focus
+    type: string
+    description: >-
+      At a member's own root: the member's key in the enclosing family the model was composed for.
+      The matrix keeps only the flows that start or land inside it, row for row as the family root
+      derives them
+    optional: true
+  - name: judgedAt
+    type: string
+    description: >-
+      At a member's own root: the root directory of the enclosing family whose network declaration
+      and proofs the model carries
+    optional: true
 methods:
   - name: callersOf
     signature: 'callersOf(portal: string, verb: string): list<ModelledCall>'
@@ -65,4 +105,4 @@ methods:
       Pure
 sourcePath: src/models/reach.ts
 createdAt: '2026-10-06T12:57:20.910Z'
-updatedAt: '2026-10-06T23:02:37.011Z'
+updatedAt: '2026-10-07T06:19:18.298Z'

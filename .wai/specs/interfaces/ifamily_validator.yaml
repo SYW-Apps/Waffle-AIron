@@ -35,20 +35,22 @@ methods:
       project members (a `../`, git or hosted source; stage 8) — as its lock records it with the
       producer's live export table (decision 19, signature-level superset, canonical digests). The
       uses compared are every public name the project's references land on or spell — `alias::name`
-      references and bare names bound through its `use` imports alike, for family and outside
-      producers alike since stage 8 — so a type used only bare is covered, and a producer outside
-      the family that breaks a used method is EXTERNAL_INCOMPATIBLE, not only drifted. A used method
-      or type that changed, was renamed (the producer's rename trace names the new name, and the
-      message names it) or vanished is EXTERNAL_INCOMPATIBLE (error) — pinned or not: a use the lock
-      does not hold is still compared with the live producer the run can read, and one gone from its
-      live table is a break the composed gate reports at the family root, never left to a pin nobody
-      took (the member's own gate keeps it advisory); a producer whose canonical contract changed
+      references and bare names bound through its `use` imports alike, each method of an implemented
+      extension point too, for family and outside producers alike since stage 8 — so a type used
+      only bare is covered, and a producer outside the family that breaks a used method is
+      EXTERNAL_INCOMPATIBLE, not only drifted. A used method or type that changed, was renamed (the
+      producer's rename trace names the new name, and the message names it) or vanished is
+      EXTERNAL_INCOMPATIBLE (error) — pinned or not, a public name gone from the live table
+      included: a use the lock does not hold is still compared with the live producer the run can
+      read. An external with uses that was never pinned at all is EXTERNAL_UNPINNED (error): nothing
+      records what the design is judged against, so a producer change cannot be told — never a pass,
+      and `wairon lock` refuses until it is pinned. A producer whose canonical contract changed
       while nothing used changed, or whose pinned snapshot no longer carries what the producer says
       (a stale abi, transport or role), is EXTERNAL_DRIFTED (notice; prose never drifts); a use that
-      cannot be compared — unpinned and still present live, used but not in the lock, an unreachable
-      or unfetchable producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the
-      family run's gate over producers inside its reach (one checkout, so live is reproducible
-      there); everything else is advise's to report.
+      cannot be compared — used but not in the lock, an unreachable, unfetchable or unreadable
+      producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the family run's
+      gate over producers inside its reach (one checkout, so live is reproducible there); everything
+      else is advise's to report.
     signature: 'compose(project: string): ExternalComposition'
     returns: ExternalComposition
     params:
@@ -71,6 +73,11 @@ methods:
         summary: >-
           A use of an external could not be compared with its producer: unpinned, not in the lock,
           or the producer unreachable
+      - code: EXTERNAL_UNPINNED
+        severity: error
+        summary: >-
+          A project uses an external it never pinned: nothing records what its design is judged
+          against
   - name: checkMembers
     description: >-
       The family checks over the root's graph. A declared member with no project on disk is
@@ -82,12 +89,15 @@ methods:
       identity, moved here from the project-identity rule, which judges only the bound project's own
       id. Projects of the selection that depend on each other in a loop are PROJECT_DEPENDENCY_CYCLE
       (warning), reported once per loop on each project in it with the references that close each
-      edge. A present member whose approval state (approvals) is never is MEMBER_UNAPPROVED, and one
-      that is drifted is MEMBER_DRIFTED — warnings, and they stay warnings in stage 5 (decision
-      #11): `--ci` at the parent fails until the member is locked or its severity is lowered, and a
-      parent that wants its own lock to refuse sets composition.requireApprovedMembers. A member
-      drifted only by the stage-5 identity upgrade says so in the message. Each finding's severity
-      is the root's rules.sddRuleSeverity override, else the default.
+      edge. A family-only (audience project) L0 re-export of another family project's name that no
+      project of the family reaches through the re-exporting project is EXPORT_UNREACHED (notice): a
+      dead re-export, its consumer moved to the source or left. A present member whose approval
+      state (approvals) is never is MEMBER_UNAPPROVED, and one that is drifted is MEMBER_DRIFTED —
+      warnings, and they stay warnings in stage 5 (decision #11): `--ci` at the parent fails until
+      the member is locked or its severity is lowered, and a parent that wants its own lock to
+      refuse sets composition.requireApprovedMembers. A member drifted only by the stage-5 identity
+      upgrade says so in the message. Each finding's severity is the root's rules.sddRuleSeverity
+      override, else the default.
     signature: 'checkMembers(family: ProjectFamily): list<ValidationIssue>'
     returns: list<ValidationIssue>
     params:
@@ -118,6 +128,11 @@ methods:
       - code: PROJECT_ID_AMBIGUOUS
         severity: warning
         summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
+      - code: EXPORT_UNREACHED
+        severity: notice
+        summary: >-
+          A family-only re-export of another project's name that no project of the family reaches:
+          dead
   - name: checkPolicies
     description: >-
       The governance checks over the root's graph (governance stage). Every selected project that
@@ -349,6 +364,16 @@ methods:
         type: ValidationOptions
         description: 'The selection: member depth and reach, exactly as run takes them'
     effect: read
+  - name: unpinned
+    description: >-
+      The bound project's declared externals (and referenced project members) never pinned: no entry
+      in its externals lock, so nothing records what its design is judged against. A part is no
+      producer and is left out. Read from the bound root's own pins
+      (validator_surfaces_adapter.listPinnedExternals); writes nothing.
+    signature: 'unpinned(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-06T23:09:47.041Z'
+updatedAt: '2026-10-07T10:58:33.855Z'

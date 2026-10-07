@@ -46,5 +46,7 @@ fields:
       selected, an index lists them.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareSnapshot
 createdAt: '2026-07-17T22:32:32.574Z'
-updatedAt: '2026-10-04T10:21:04.745Z'
+updatedAt: '2026-10-07T06:29:01.175Z'

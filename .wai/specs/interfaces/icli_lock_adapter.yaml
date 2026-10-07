@@ -32,7 +32,7 @@ methods:
         type: LockOptions
         description: >-
           CLI flags: --yes (skip confirmation), --subsystem (scope narrowing of the approved
-          digests)
+          digests), --all (list every changed spec of the summary)
       - name: gate
         type: ValidationResult
         description: >-
@@ -88,6 +88,16 @@ methods:
     signature: 'reexpressApproval(): LockRecord?'
     returns: LockRecord?
     params: []
+  - name: holdsNoDesign
+    description: >-
+      Whether there is nothing to approve: the tree holds the L0 and nothing below it — no
+      subsystem, no direct member project — and no approval is on record. `wairon lock` writes no
+      record then (approving an empty design approves nothing) and says to add a subsystem first;
+      `lock-check` and `status` say the same of such a tree. A tree emptied after an approval is not
+      this state: that change is the approval's to take.
+    signature: 'holdsNoDesign(): bool'
+    returns: bool
+    params: []
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-06T10:10:39.141Z'
+updatedAt: '2026-10-07T11:35:48.866Z'

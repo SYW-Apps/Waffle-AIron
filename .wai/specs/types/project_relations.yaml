@@ -36,5 +36,6 @@ fields:
       unavailable with this reason — never ok.
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-10-03T12:14:14.074Z'
-updatedAt: '2026-10-04T10:20:52.824Z'
+updatedAt: '2026-10-07T06:28:31.490Z'

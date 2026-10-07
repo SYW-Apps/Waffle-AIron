@@ -28,6 +28,8 @@ export {
   retireSpecialists,
   // `wairon type rename-field` (spec_maintenance_portal renameField).
   renameField,
+  // `wairon method rename-param` (spec_maintenance_portal renameParam).
+  renameParam,
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,

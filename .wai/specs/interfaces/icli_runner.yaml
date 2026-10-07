@@ -222,7 +222,9 @@ methods:
     params:
       - name: options
         type: LockOptions
-        description: 'CLI flags: --yes (skip confirmation), --subsystem (scope narrowing), --recursive.'
+        description: >-
+          CLI flags: --yes (skip confirmation), --subsystem (scope narrowing), --recursive, --all
+          (list every changed spec instead of summarizing a long list).
   - name: runAgent
     description: >-
       Handle `wairon agent <action> <id>`: `brief` prints the agent's LIVE delegation brief
@@ -882,6 +884,30 @@ methods:
       - name: newName
         type: string
         description: Its new name
+  - name: runMethodRenameParam
+    description: >-
+      `wairon method rename-param <component> <method> <param> <new-name>`: rename a parameter of a
+      contract method, the old name kept in the parameter's rename trace (previousNames, `formerly`
+      in the design export), each signature re-derived and an HTTP path placeholder that bound it
+      respelled. Prints the move, the interfaces it moved in and the placeholders respelled, and
+      that a lock goes stale as with any edit; a refusal prints its reason and exits non-zero.
+    signature: >-
+      runMethodRenameParam(componentId: string, methodName: string, param: string, newName: string):
+      async void
+    returns: async void
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T23:08:01.267Z'
+updatedAt: '2026-10-07T06:25:20.472Z'

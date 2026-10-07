@@ -42,5 +42,6 @@ fields:
     description: The rehearsal the writes were made into; absent once applied or discarded
     optional: true
 methods: []
+sourcePath: src/server/members.ts
 createdAt: '2026-10-01T16:27:23.715Z'
-updatedAt: '2026-10-04T10:20:29.403Z'
+updatedAt: '2026-10-07T06:28:27.509Z'

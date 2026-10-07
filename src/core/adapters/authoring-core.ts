@@ -11,6 +11,7 @@ export {
   updateSpec,
   moveMethods,
   loadSpec,
+  loadComponentSpecs,
   loadImplementationSpecs,
   saveSpec,
   deleteSpec,

@@ -89,8 +89,10 @@ export interface NetworkFlow {
   verbs?: string[];
   /** The gate's error findings that sit on it, each `CODE: message`: the design refuses it, so nothing admits it. */
   refusedBy?: string[];
-  /** The gate's warnings and notices that sit on it, each `CODE: message`: allowed, but marked. */
+  /** The gate's warnings that sit on it, each `CODE: message`: allowed, but marked. */
   flaggedBy?: string[];
+  /** The gate's notices that sit on it, each `CODE: message`: allowed, and marked at the notice's own severity. */
+  notedBy?: string[];
 }
 
 /**
@@ -153,6 +155,8 @@ export interface FlowCheckReport {
   disallowed: ObservedFlow[];
   /** The gate findings over the reach model, each `CODE (severity): message`; a flow an error sits on allowed nothing. */
   gateFindings: string[];
+  /** One line per observed or bindings name that resolved only through a project's former name: matched, and to be renamed. */
+  notes?: string[];
 }
 
 /**
@@ -188,6 +192,8 @@ export interface NetworkDocument {
   gateFindings: string[];
   /** Whether the gate refused a flow of the design: marked in a matrix, left out of a policy. */
   refused: boolean;
+  /** What a reader must act on before applying the output: a key bound only through a former name, a workload whose verbs differ in reach. */
+  notes?: string[];
 }
 
 /**

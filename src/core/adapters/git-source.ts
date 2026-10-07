@@ -48,9 +48,15 @@ function cacheRoot(): string {
   return root;
 }
 
-/** git, never prompting for credentials: an unattended run fails rather than hangs. */
+/**
+ * git, never prompting for credentials: an unattended run fails rather than hangs.
+ * Every call runs with core.longpaths on: a cache entry sits several hash-named
+ * folders deep, past the Windows path limit under a long cache root, and a
+ * checkout there fails ("unpack-objects failed") unless git may use long paths.
+ * The setting is read only on Windows; elsewhere it changes nothing.
+ */
 function git(args: string[], cwd?: string): string {
-  return execFileSync('git', args, {
+  return execFileSync('git', ['-c', 'core.longpaths=true', ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -201,3 +207,30 @@ export function repositoryRoot(directory: string): string | null {
   }
 }
 
+
+/**
+ * igit_source_adapter.lastCommitOf — the last commit of the work tree holding
+ * a directory that changed the file at `pathspec` (relative to the
+ * directory), or null when none did, the directory is in no work tree or git
+ * is not installed. No network.
+ */
+export function lastCommitOf(directory: string, pathspec: string): string | null {
+  try {
+    return git(['log', '-1', '--format=%H', '--', pathspec], directory).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * igit_source_adapter.commitOf — the full commit a ref (a branch, tag or
+ * commit) names in the work tree holding a directory, or null when it names
+ * none. No network.
+ */
+export function commitOf(directory: string, ref: string): string | null {
+  try {
+    return git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], directory).trim() || null;
+  } catch {
+    return null;
+  }
+}

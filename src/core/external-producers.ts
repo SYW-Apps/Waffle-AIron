@@ -1,6 +1,7 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { bindDeclaredExternal, declaredExternals, declaredMembers, FULL_COMMIT_RE, type ExternalBinding, type ExternalConsumer, type ExternalDeclaration, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
+import { bindDeclaredExternal, declaredExternals, declaredMembers, effectiveProjectId, FULL_COMMIT_RE, type ExternalBinding, type ExternalConsumer, type ExternalDeclaration, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
 // core_orchestrator.resolveChainingParent (the reach-gated detection) and the
 // spec repository's graph, export usage and pinned usage, all on the one core module.
 import { exportUsage, graph, listProjectRoots, pinnedUsage, resolveChainingParent } from './specs.js';
@@ -244,12 +245,21 @@ export function resolveCandidate(alias: string, declaration: ExternalDeclaration
  * key, root, alias, section and the public names its specs use. Read-only and
  * within reach: a consumer outside the family read is never listed.
  */
-export function listConsumers(): ExternalConsumer[] {
+export function listConsumers(search?: string[]): ExternalConsumer[] {
   // Step 1: the producer is the bound root.
   const bound = path.resolve(getProjectRoot());
   // Step 2: climb to the highest root in reach.
   const { top } = climb(bound);
   // Steps 3-10: the graph there, each project that declares the producer.
+  const family = familyConsumers(bound, top);
+  // Steps 11-14: each project root under the searched folders that declares it.
+  const seen = new Set(family.map((c) => dirKey(c.directory)));
+  const found = searchedConsumers(bound, search ?? []).filter((c) => !seen.has(dirKey(c.directory)));
+  return [...family, ...found];
+}
+
+/** Steps 3-10 of listConsumers: the family read at the top root in reach. */
+function familyConsumers(bound: string, top: string): ExternalConsumer[] {
   return runWithProjectRoot(top, () => {
     const family = graph();
     const producer = consumerNode(family, bound);
@@ -269,8 +279,113 @@ export function listConsumers(): ExternalConsumer[] {
         alias,
         section: external ? 'externals' : 'members',
         names: usage.used.map((u) => u.publicName).sort(),
+        ...brokenNames(usage),
       });
     }
     return consumers.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   });
+}
+
+/**
+ * The names a consumer still writes that bind to no public name of the
+ * producer — the ones a breaking change just broke — so "who breaks" never
+ * drops them. Absent when there are none.
+ */
+function brokenNames(usage: { unexported: { authored: string }[] }): { broken?: string[] } {
+  const names = [...new Set(usage.unexported.map((r) => r.authored.split('::').pop() ?? r.authored))].sort();
+  return names.length ? { broken: names } : {};
+}
+
+/** The project roots a searched folder holds: itself when it is one, else each folder directly under it that is. */
+function projectRootsUnder(folder: string): string[] {
+  const isRoot = (dir: string): boolean => fs.existsSync(path.join(dir, '.wai', 'project.yaml'));
+  const at = path.resolve(folder);
+  if (!fs.existsSync(at)) return [];
+  if (isRoot(at)) return [at];
+  return fs.readdirSync(at, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules')
+    .map((d) => path.join(at, d.name))
+    .filter(isRoot);
+}
+
+/**
+ * Steps 11-14 of listConsumers: every project root in (or directly under) a
+ * searched folder that declares the bound project as an external — by a path
+ * source that resolves to the bound root, or by a git source whose declared
+ * project id is the bound project's — each with the alias, and the public
+ * names its specs spell through that alias. Read-only; each root is bound in
+ * turn and the caller's binding restored.
+ */
+function searchedConsumers(bound: string, search: string[]): ExternalConsumer[] {
+  if (search.length === 0) return [];
+  // A hosted request reads its own project's records, never a folder on the server's disk.
+  if (getHostedLookup() !== null) throw new Error('searching folders for consumers is a local read: a hosted request reads no folder outside its project');
+  const producerId = runWithProjectRoot(bound, () => {
+    const config = consumerConfig(bound);
+    return config ? effectiveProjectId(config) : null;
+  });
+  const roots = [...new Set(search.flatMap(projectRootsUnder).map((r) => path.resolve(r)))].filter((r) => dirKey(r) !== dirKey(bound));
+  const out: ExternalConsumer[] = [];
+  for (const root of roots) {
+    const answer = runWithProjectRoot(root, (): ExternalConsumer | null => {
+      let config: ProjectConfig | null;
+      try {
+        config = consumerConfig(root);
+      } catch {
+        return null;
+      }
+      if (!config) return null;
+      const declared = declaredExternals(config).find((e) => !e.problem && (
+        (e.sourcePath !== undefined && dirKey(path.resolve(root, e.sourcePath)) === dirKey(bound))
+        || (e.sourceGit !== undefined && producerId !== null && e.project === producerId)));
+      if (!declared) return null;
+      const node = consumerNode(graph(), root);
+      const usage = node ? pinnedUsage(node.namespace, declared.alias) : null;
+      return {
+        project: effectiveProjectId(config) ?? path.basename(root),
+        key: node?.namespace ?? '',
+        directory: root,
+        alias: declared.alias,
+        section: 'externals',
+        names: (usage?.used ?? []).map((u) => u.publicName).sort(),
+        found: 'search',
+      };
+    });
+    if (answer) out.push(answer);
+  }
+  return out.sort((a, b) => (a.directory < b.directory ? -1 : a.directory > b.directory ? 1 : 0));
+}
+
+/** Where the baseline of a surface comparison was read: the tree at one commit, and how a reader names it. */
+export interface ApprovedRevision {
+  directory: string;
+  commit: string;
+  label: string;
+}
+
+/**
+ * iexternal_producers.approvedRevision — the bound project's tree as it stood
+ * at a revision, materialized read-only in the fetch cache: the given ref
+ * (a branch, tag or commit), else the commit that last recorded its approval
+ * (the last commit to change .wai/lock.json). Throws naming why when the
+ * project is in no git work tree, the ref names no commit, or no approval was
+ * ever committed. No network: the repository is the local one.
+ */
+export function approvedRevision(against?: string): ApprovedRevision {
+  // Step 1: the bound root and the work tree holding it.
+  const bound = path.resolve(getProjectRoot());
+  const repo = gitSource.repositoryRoot(bound);
+  if (!repo) throw new Error(`${bound} is in no git work tree, so there is no earlier revision to compare with — pass a saved surface snapshot (\`--against <file>\`) instead`);
+  // Step 2: the commit — the ref asked for, else the last approval committed.
+  const commit = against !== undefined ? gitSource.commitOf(bound, against) : gitSource.lastCommitOf(bound, path.join('.wai', 'lock.json'));
+  if (!commit) {
+    throw new Error(against !== undefined
+      ? `"${against}" names no commit of the repository at ${repo}`
+      : 'no approval of this project was ever committed (.wai/lock.json is in no commit) — lock and commit first, or name a revision (`--against <ref>`)');
+  }
+  // Step 3: that commit's tree of the project, from the fetch cache.
+  const relative = path.relative(repo, bound);
+  const directory = gitSource.fetch(repo, commit, relative === '' ? undefined : relative);
+  // Step 4.
+  return { directory, commit, label: against !== undefined ? `${against} (${commit.slice(0, 12)})` : `the last approval, committed at ${commit.slice(0, 12)}` };
 }

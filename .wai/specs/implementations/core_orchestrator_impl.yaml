@@ -1196,11 +1196,16 @@ methods:
           Guard: the new name must be an identifier in the method casing of the tree's language:
           naming_rule_config.methodCasingFor(the subsystem's effective targetLanguage), the casing
           the naming-conventions rule and the define tools judge by, so define and rename accept the
-          same names (snake_case in a Rust tree, camelCase in a TypeScript one)
+          same names (snake_case in a Rust tree, camelCase in a TypeScript one). A contract of the
+          component that implements another project's extension point (`implements`) takes its
+          method names from the producer, in the producer's language, so for such a component any
+          identifier is accepted — IMPLEMENTS_MISMATCH judges the name against the producer's, and
+          the casing rule exempts it
         type: branch
         condition: >-
-          newName is outside the identifier grammar: not an identifier in that casing, or carrying a
-          separator
+          newName is outside the identifier grammar: not an identifier at all, or carrying a
+          separator, or — when no contract of the component declares `implements` — not in that
+          casing
         onFalseStep: 8
       - stepNumber: 7
         label: invalid-name
@@ -2186,8 +2191,13 @@ methods:
           name there — a type through its own subsystem (`{ typeDef }`) and an L0 entry re-exporting
           it with `from: <its subsystem>`, a component its subsystem already publishes through its
           L0 — and, in the new project, every name the parent's L0 re-exports from one of the part's
-          subsystems, so no re-export is left pointing at a name the member does not export. Record
-          each entry written
+          subsystems: an entry the new project already holds for that item is widened to the parent
+          entry's audience, else one is added naming the item (and the narrowed interface) under the
+          parent entry's public name (its `as`, else the item's own name) at the parent entry's
+          audience. Then re-point each such parent entry at the public name the new project now
+          exports it under (`from: <alias>`, the item named by that public name, its `as`, audience
+          and details kept), so no re-export names an item the member does not export and none is
+          wider than its source. Record each entry written or re-pointed
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
@@ -2200,9 +2210,26 @@ methods:
         targetMethod: importNames
       - stepNumber: 17
         description: >-
+          Re-express, under the new project's scope, every file path its implementations and types
+          name (sourcePath, each method's sourcePath, simPath) that escapes its root: the path the
+          file has relative to the family root, read under the member's root — the layout the code
+          takes once it is moved in (the source is not moved: until then it is planned code there).
+          A path inside the root is left alone. Record each, naming where the file still lies
+        type: local
+      - stepNumber: 18
+        description: >-
+          Re-derive the stored signature text of every contract and type method the respelling
+          changed the params of, on either side, by re-saving each loaded spec whose stored text its
+          params now contradict (the writer derives the text); record each before and after
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 19
+        description: >-
           Part promoted to a project in place; nothing locked. Answer what was written across the
-          boundary: the respelled references, the exports, the imports, the dropped consumers, the
-          entries declared and the topics now crossing
+          boundary: the respelled references, the exports and re-pointed re-exports, the imports,
+          the dropped consumers, the entries declared, the topics now crossing, the paths
+          re-expressed and the signature texts re-derived
         type: return
         outcome: the promote result
     conformance: 'off'
@@ -2312,8 +2339,16 @@ methods:
         targetMethod: normalizeReferences
       - stepNumber: 15
         description: >-
-          Member demoted to a part in place: answer where each piece went and what was deleted;
-          nothing locked
+          Re-derive the stored signature text of every contract and type method the respelling back
+          changed the params of, by re-saving each loaded spec whose stored text its params now
+          contradict; record each in signaturesRederived
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 16
+        description: >-
+          Member demoted to a part in place: answer where each piece went, what was deleted and
+          which signature texts were re-derived; nothing locked
         type: return
         outcome: InternalizeResult
     conformance: 'off'
@@ -2696,6 +2731,79 @@ methods:
           written
         type: throw
         error: WaironError
+  - name: renameParam
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          A component that does not exist, or one inside a chained subproject, is refused before
+          anything is read further
+        type: branch
+        condition: the component exists and is not inside a chained subproject
+        onFalseStep: 11
+      - stepNumber: 3
+        description: >-
+          Load every interface spec, and collect the contracts of the component that declare the
+          method
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 4
+        description: >-
+          Guard, before any write: the method must be declared (method-missing) and declare the
+          parameter on every moving contract (param-missing); the new name must be an identifier and
+          — when rules.naming.variables is set and no contract of the component implements another
+          project's extension point — in that casing (invalid-name); and no other parameter of the
+          method may hold it (name-taken) or list it in its previousNames (name-retired)
+        type: branch
+        condition: >-
+          the method and parameter are declared, the new name is acceptable, and it is neither taken
+          nor retired on the method
+        onFalseStep: 11
+      - stepNumber: 5
+        description: Judge every interface file the rename would write against the hosted request's write reach
+        type: local
+      - stepNumber: 6
+        label: contractLoop
+        description: Rename the parameter on each moving contract
+        type: loop
+        over: the moving contracts
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Rename the parameter in place, appending its old name to the parameter's previousNames,
+          re-derive the method's signature text from its params, and respell an HTTP endpoint path
+          placeholder `{old}` on the method's own binding to `{new}`, recording it
+        type: local
+      - stepNumber: 8
+        description: Save the interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 9
+        description: Drop the loader cache so the next read sees the renamed parameter
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 10
+        description: >-
+          Answer the ParamRename: component, method, from, to, the interfaces it moved in and the
+          placeholders respelled
+        type: return
+        outcome: ParamRename
+      - stepNumber: 11
+        label: refuse
+        description: >-
+          Refuse with the reason that applies (component-missing, chained-component, method-missing,
+          param-missing, invalid-name, name-taken, name-retired), naming what holds or retired the
+          name; nothing was written
+        type: throw
+        error: WaironError
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:09:31.905Z'
+updatedAt: '2026-10-07T06:25:31.040Z'

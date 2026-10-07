@@ -27,5 +27,6 @@ fields:
     description: The documented widening, or empty when the rewrite only spells the same reach in record ids
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-10-01T16:27:13.765Z'
-updatedAt: '2026-10-04T10:20:44.881Z'
+updatedAt: '2026-10-07T06:28:45.598Z'

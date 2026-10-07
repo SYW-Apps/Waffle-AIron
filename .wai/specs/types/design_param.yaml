@@ -19,7 +19,13 @@ fields:
   - name: description
     type: string
     optional: true
+  - name: formerly
+    type: list<string>
+    description: >-
+      The parameter's rename trace: every name it held before, oldest first (the parameter's
+      previousNames). Absent when it was never renamed.
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:52:39.596Z'
-updatedAt: '2026-10-04T15:39:11.859Z'
+updatedAt: '2026-10-07T06:25:53.942Z'

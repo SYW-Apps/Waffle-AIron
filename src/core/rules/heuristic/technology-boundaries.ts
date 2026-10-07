@@ -87,7 +87,7 @@ export const technologyRule: SddRule = {
   name: 'technology-boundaries',
   judges: 'design',
   description:
-    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone.',
+    'Technology stays behind its owning boundary: an L4 that declares `technologies` (e.g. [mysql]) makes its component\'s ownership tree the technology\'s home. References outside that tree are leakage, and L3 contract identifiers must stay intent-language — the contract is the swap seam, so the vendor name is wrong even on the owning component\'s own interface. A technology is matched by its name, or — when it declares `matches` because its name is also an ordinary word of the tree (a package named after the file format it reads) — by those tokens alone. Two declarations of one technology are one home whichever notation each is written in: a component binding it as a bare name and one binding it as `{name, matches}` are both inside it, even when one form\'s tokens police nothing.',
   codes: [
     { code: 'TECH_LEAKAGE', defaultSeverity: 'warning', summary: 'Technology referenced outside its owning boundary' },
     { code: 'VENDOR_NAME_IN_CONTRACT', defaultSeverity: 'warning', summary: 'Technology name in L3 contract identifiers' },
@@ -169,8 +169,10 @@ export const technologyRule: SddRule = {
     // any of its tokens does.
     const homes = new Map<string, TechHome>();
     for (const { comp, name, tokens } of declarations) {
+      // A declaration whose tokens police nothing (a 2-letter package name)
+      // still puts its component INSIDE the technology's home: a bare name and
+      // `{name, matches}` are one technology whichever form each is written in.
       const matchers = tokens.map(makeMatcher).filter((m): m is NonNullable<typeof m> => m !== null);
-      if (!matchers.length) continue; // unpoliceable without drowning in noise
       const key = name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('');
       const home = homes.get(key) ?? newHome(name);
       home.matchers.push(...matchers);
@@ -178,6 +180,9 @@ export const technologyRule: SddRule = {
       for (const id of scopeOf(comp)) home.scope.add(id);
       homes.set(key, home);
     }
+    // A home none of whose declarations brought a policeable token cannot be
+    // matched without drowning in noise.
+    for (const [key, home] of homes) if (home.matchers.length === 0) homes.delete(key);
     if (homes.size === 0) return;
 
     const ownersDesc = (h: TechHome): string => [...h.ownerComponents].map(c => `"${c}"`).join(', ');

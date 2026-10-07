@@ -143,6 +143,30 @@ methods:
         type: return
         outcome: the guide body
     symbol: guideBody
+  - name: registerServer
+    narrative:
+      - stepNumber: 1
+        description: Read <projectRoot>/.mcp.json when it exists
+        type: local
+      - stepNumber: 2
+        description: Is it unparsable, or does its mcpServers already hold a wairon entry?
+        type: branch
+        condition: the file cannot be parsed, or mcpServers.wairon is set
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Leave it exactly as it is: nothing written'
+        type: return
+        outcome: none
+      - stepNumber: 4
+        description: >-
+          Set mcpServers.wairon to the portable entry { command: wairon, args: [mcp, serve] }, every
+          other key kept, and write the file
+        type: local
+      - stepNumber: 5
+        description: Answer the path written
+        type: return
+        outcome: the .mcp.json path
+    symbol: registerProjectServer
 status: complete
 createdAt: '2026-09-23T00:11:34.495Z'
-updatedAt: '2026-10-05T23:38:26.472Z'
+updatedAt: '2026-10-07T06:31:06.069Z'

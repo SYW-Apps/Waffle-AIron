@@ -289,7 +289,9 @@ methods:
         label: emittersEnd
         description: >-
           Report UNCONSUMED_TOPIC (warning; draft context from ctx.isComponentDraft(e.compId)) on
-          e.compId, naming the topic and every declaration of it on that component
+          e.compId, sited at the topic (parts.at), naming it and every declaration of it on that
+          component — so a lint.allow covers one topic, and a topic added later is not covered
+          silently
         type: local
       - stepNumber: 7
         label: subscribers
@@ -307,7 +309,8 @@ methods:
         label: subscribersEnd
         description: >-
           Report UNSOURCED_SUBSCRIPTION (warning; draft context from ctx.isComponentDraft(s.compId))
-          on s.compId, naming the topic and every declaration of it on that component
+          on s.compId, sited at the topic (parts.at), naming it and every declaration of it on that
+          component
         type: local
     symbol: check
     exportedVia: eventTopologyRule
@@ -1038,4 +1041,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-06T23:07:25.924Z'
+updatedAt: '2026-10-07T06:21:54.559Z'

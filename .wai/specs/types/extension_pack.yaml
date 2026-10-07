@@ -5,12 +5,12 @@ description: >-
   A parsed extension-pack manifest — wairon's plugin unit. A declarative (YAML) pack carries data
   only (profiles, languages, skills, patterns, guarantees, instructions); a programmatic (JS) pack
   adds rules. Listed in project.yaml under extensions.packs, vendored into .wai/packs for
-  reproducibility. Its two pure methods (settings, changesAgainst) are realized as free functions
-  (packSettings, doctrineChanges) in src/models/pack-impact.ts; the type's own declaration
-  (ExtensionPack in src/core/extensions.ts) is not claimed yet. Note what a pack cannot carry today:
-  variants and new component kinds — variants come from the project's and machine's variant files,
-  not from packs, and pack-contributed stereotypes are deferred — so a pack's concept changes are
-  profiles, stereotype fencing, edge licenses, patterns, guarantee tokens and language tables.
+  reproducibility. The type is declared as ExtensionPack in src/core/extensions.ts; its two pure
+  methods (settings, changesAgainst) are realized as free functions (packSettings, doctrineChanges)
+  in src/models/pack-impact.ts. Note what a pack cannot carry today: variants and new component
+  kinds — variants come from the project's and machine's variant files, not from packs, and
+  pack-contributed stereotypes are deferred — so a pack's concept changes are profiles, stereotype
+  fencing, edge licenses, patterns, guarantee tokens and language tables.
 fields:
   - name: name
     type: string
@@ -71,6 +71,14 @@ fields:
       The version the manifest declares, when it declares one. What a requirement's range is checked
       against for a pack loaded from a legacy path reference, which carries no selection version.
     optional: true
+  - name: technologyPackages
+    type: map<string, list<string>>
+    description: >-
+      Package names a technology's code is imported by, keyed by the technology's name — extending
+      the curated built-in table (technology.packages) the code twin of the leakage rule compares
+      imports with, for a driver or SDK the table does not know. Data only, so a declarative pack
+      may carry it.
+    optional: false
 methods:
   - name: settings
     signature: 'settings(profile: string | null): PackSettings'
@@ -98,5 +106,6 @@ methods:
       learn what wairon's defaults are.
     sourcePath: src/models/pack-impact.ts
     symbol: doctrineChanges
+sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-10-04T10:20:08.623Z'
+updatedAt: '2026-10-07T06:29:17.552Z'

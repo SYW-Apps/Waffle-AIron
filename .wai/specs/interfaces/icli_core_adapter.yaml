@@ -609,6 +609,27 @@ methods:
       - name: newName
         type: string
         description: Its new name
+  - name: renameParam
+    description: >-
+      Forward to spec_maintenance_portal.renameParam: rename a parameter of a contract method,
+      keeping its old name in the parameter's rename trace
+    signature: >-
+      renameParam(componentId: string, methodName: string, param: string, newName: string):
+      ParamRename
+    returns: ParamRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:07:58.701Z'
+updatedAt: '2026-10-07T06:25:16.375Z'

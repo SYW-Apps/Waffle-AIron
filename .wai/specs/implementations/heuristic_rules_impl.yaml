@@ -265,22 +265,28 @@ methods:
         type: local
       - stepNumber: 14
         label: methodLoop
-        description: For each method on the interface, check its name and its parameters' names.
+        description: >-
+          For each method on the interface, check its name and its parameters' names — except a
+          method the extension point the interface implements (`implements`, resolved as
+          implements-contracts resolves it) declares under the same name: the producer named it and
+          its parameters, in its own language, so it is exempt.
         type: loop
         loopKind: forEach
         over: intf.methods
         endStep: 16
       - stepNumber: 15
         description: >-
-          When namingConfig.methods is set, check m.name against it (NAMING_CONVENTION_VIOLATION or
-          INVALID_NAMING_PATTERN, against intf.id, draft context isDraft).
+          Check m.name against methodCasingFor(namingConfig, the subsystem's targetLanguage)
+          (NAMING_CONVENTION_VIOLATION or INVALID_NAMING_PATTERN, against intf.id, draft context
+          isDraft), unless the method is exempt as an implemented extension-point method.
         type: local
       - stepNumber: 16
         label: paramCheck
         description: >-
           When namingConfig.variables is set, check every parameter name in (m.params ?? []) against
           it (NAMING_CONVENTION_VIOLATION or INVALID_NAMING_PATTERN per parameter, against intf.id,
-          draft context isDraft).
+          draft context isDraft), unless the method is exempt as an implemented extension-point
+          method.
         type: local
       - stepNumber: 17
         label: implLoop
@@ -294,10 +300,11 @@ methods:
         description: >-
           Resolve intf = ctx.interfaceMap.get(impl.contract); comp = intf ?
           ctx.componentMap.get(intf.component) : undefined; namingConfig =
-          ctx.namingConfigFor(comp?.subsystem); isDraft = ctx.isImplementationDraft(impl); when
-          namingConfig.methods is set, check every method in impl.methods by name against it
-          (NAMING_CONVENTION_VIOLATION or INVALID_NAMING_PATTERN, against impl.id, draft context
-          isDraft).
+          ctx.namingConfigFor(comp?.subsystem); isDraft = ctx.isImplementationDraft(impl); check
+          every method in impl.methods by name against methodCasingFor(namingConfig, the subsystem's
+          targetLanguage) (NAMING_CONVENTION_VIOLATION or INVALID_NAMING_PATTERN, against impl.id,
+          draft context isDraft), except the methods the contract's implemented extension point
+          declares.
         type: local
       - stepNumber: 19
         label: typeLoop
@@ -867,21 +874,24 @@ methods:
         label: record_home
         description: >-
           matchers = makeMatcher(token) for each of the declaration's tokens, keeping the non-null
-          ones (a token that normalizes to 3+ significant characters is policeable); when any
-          remain, key = the normalized fused form of the technology's NAME, so two declarations of
-          one technology share a home whichever tokens they declare; fetch or create homes.get(key)
+          ones (a token that normalizes to 3+ significant characters is policeable); key = the
+          normalized fused form of the technology's NAME, so two declarations of one technology
+          share a home whichever notation and tokens each declares; fetch or create homes.get(key)
           as {label: name, match: a text matches when any of the home's matchers does,
           ownerComponents: [], scope: []}, add this declaration's matchers to the home, add comp.id
-          to its ownerComponents and merge scopeOf(comp) into its scope, and homes.set(key, home). A
-          technology whose name is also a word the tree uses for something else (a package named
-          after the file format it reads) declares `matches`, and its name is then never matched at
-          all.
+          to its ownerComponents and merge scopeOf(comp) into its scope — whether or not this
+          declaration's own tokens police anything, since a component binding the technology is
+          inside its home either way — and homes.set(key, home). A technology whose name is also a
+          word the tree uses for something else (a package named after the file format it reads)
+          declares `matches`, and its name is then never matched at all.
         type: local
       - stepNumber: 7
         label: homes_empty_guard
-        description: Branch on whether there is anything to police at all.
+        description: >-
+          Branch on whether there is anything to police at all: drop every home none of whose
+          declarations brought a policeable token
         type: branch
-        condition: homes is empty (no implementation declared a policeable technology)
+        condition: no home has a matcher (no implementation declared a policeable technology)
         onFalseStep: 9
       - stepNumber: 8
         description: >-
@@ -1040,4 +1050,4 @@ methods:
     exportedVia: signatureSourceSuggestionsRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-03T22:06:46.741Z'
+updatedAt: '2026-10-07T06:22:15.448Z'

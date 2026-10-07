@@ -29,5 +29,12 @@ fields:
       response so the MCP client sees a tool error rather than a transport failure.
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the envelope is the inline return type `{ jsonrpc: '2.0'; id; result:
+        McpToolResult }` of the data-plane tool dispatch in src/server/request.ts, so there is no
+        symbol a sourcePath could bind.
 createdAt: '2026-09-18T19:30:34.884Z'
-updatedAt: '2026-10-04T10:20:26.330Z'
+updatedAt: '2026-10-07T06:30:21.243Z'

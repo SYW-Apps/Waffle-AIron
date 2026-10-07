@@ -96,6 +96,8 @@ export interface MemberPublicNames {
   alias: string;
   projectId: string;
   names: Map<string, string>;
+  /** The member's public names the bound project's references reach, read off the project graph. */
+  referenced?: string[];
 }
 
 /**
@@ -219,6 +221,7 @@ function projectParams(params: MethodParam[] | undefined, position: TypePosition
     type: typeRef(p.type, position, keys, owner),
     optional: p.optional === true,
     ...(p.description !== undefined ? { description: p.description } : {}),
+    ...(p.previousNames && p.previousNames.length > 0 ? { formerly: [...p.previousNames] } : {}),
   }));
 }
 
@@ -284,7 +287,8 @@ function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null,
     projectId: member.projectId,
     role: 'member',
     ...(digest !== undefined ? { digest } : {}),
-    uses: [...(keys.used.get(member.alias) ?? [])].sort(compareOrdinal),
+    // Every public name a reference reaches (the graph's), and every one the projection wrote.
+    uses: [...new Set([...(member.referenced ?? []), ...(keys.used.get(member.alias) ?? [])])].sort(compareOrdinal),
   };
 }
 
@@ -318,7 +322,10 @@ function directMembers(family: ProjectFamily): MemberPublicNames[] {
           for (const key of bound(target)) if (!names.has(key)) names.set(key, name);
         }
       }
-      return { alias, projectId: n.id ?? alias, names };
+      const referenced = [...new Set(family.references
+        .filter((r) => r.consumer === '' && r.producer === n.namespace && r.publicName !== undefined)
+        .map((r) => r.publicName!))];
+      return { alias, projectId: n.id ?? alias, names, referenced };
     })
     .sort((a, b) => compareOrdinal(a.alias, b.alias));
 }

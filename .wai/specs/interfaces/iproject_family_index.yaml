@@ -16,6 +16,23 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: implementedMethods
+    description: >-
+      The methods of an extension point an implementing contract uses: each method it declares, by
+      the name it takes its signature from when that is a method of the implemented export
+      (`alias::name.method`), else by its own name. What a pin records a digest for — and what the
+      graph counts an `implements` reference by, one cross-project reference per method — so a
+      producer renaming or changing a method a consumer implements is a moved use like any call.
+    signature: 'implementedMethods(interfaceId: string, implemented: string): list<string>'
+    returns: list<string>
+    params:
+      - name: interfaceId
+        type: string
+        description: The implementing contract's in-memory key
+      - name: implemented
+        type: string
+        description: The extension point it implements, as written (`alias::name`)
+    effect: read
 status: complete
 createdAt: '2026-09-26T17:41:03.952Z'
-updatedAt: '2026-09-27T10:38:55.826Z'
+updatedAt: '2026-10-07T10:54:05.608Z'

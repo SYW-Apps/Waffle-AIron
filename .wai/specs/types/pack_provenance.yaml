@@ -18,5 +18,11 @@ fields:
     description: Which layer the pack loaded from (project packs win on collision).
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the record is the inline element type of LoadedExtensions.packs in
+        src/core/extensions.ts, so there is no symbol a sourcePath could bind.
 createdAt: '2026-07-14T18:56:28.020Z'
-updatedAt: '2026-10-04T23:40:00.917Z'
+updatedAt: '2026-10-07T06:30:22.593Z'

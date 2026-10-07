@@ -41,8 +41,11 @@ methods:
       design-reading spec whose digest differs only because its status moved still matches: status
       is readiness, not design, and a digest taken while the view still carried it is compared with
       every status a spec can have. Which specs were added, which changed, which were removed, and
-      which are untouched. Null when the project has no record at all — never approved is not the
-      same as approved and drifted.
+      which are untouched — and which only MOVED: an added path and a removed one carrying the same
+      digest are one spec whose storage moved with its content unchanged (a part's folder relocating
+      it), named in `moved` and counted among the untouched, never as an addition and a removal, so
+      a storage move the gate identity calls unchanged is unchanged here too. Null when the project
+      has no record at all — never approved is not the same as approved and drifted.
     signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
     returns: ApprovalDiff?
     params:
@@ -152,4 +155,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-10-06T23:04:14.432Z'
+updatedAt: '2026-10-07T06:24:01.023Z'

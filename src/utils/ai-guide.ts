@@ -219,3 +219,27 @@ export function reinjectLocalGuides(projectRoot: string, targetTypes: string[]):
   }
   return written;
 }
+
+/**
+ * iai_tool_guide.registerServer — register the wairon MCP server in the
+ * project's own portable Claude configuration (<projectRoot>/.mcp.json) when it
+ * registers none: the `wairon mcp serve` entry, every other key kept. A file
+ * that already registers wairon, or that cannot be parsed, is left exactly as
+ * it is. Answers the path written, or null when nothing was written.
+ */
+export function registerProjectServer(projectRoot: string): string | null {
+  const file = path.join(projectRoot, '.mcp.json');
+  let settings: Record<string, unknown> = {};
+  if (fs.existsSync(file)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+  const servers = (settings.mcpServers ?? {}) as Record<string, unknown>;
+  if (servers.wairon !== undefined) return null;
+  settings.mcpServers = { ...servers, wairon: { command: 'wairon', args: ['mcp', 'serve'] } };
+  writeFile(file, JSON.stringify(settings, null, 2) + '\n');
+  return file;
+}

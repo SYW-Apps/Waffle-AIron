@@ -23,6 +23,11 @@ methods:
     signature: 'buildServerInstructions(): string'
     returns: string
     params: []
+  - name: exportSddSkills
+    description: >-
+      Export the SDD skills into a project a family migration made, via the skills portal, so its
+      own sessions have them.
+    signatureFrom: skills_portal.exportSddSkills
 status: complete
 createdAt: '2026-07-10T12:21:45.718Z'
-updatedAt: '2026-10-04T10:19:03.061Z'
+updatedAt: '2026-10-07T06:21:47.972Z'

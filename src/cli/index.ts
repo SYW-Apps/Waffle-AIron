@@ -75,6 +75,7 @@ import {
 } from '../commands/subsystem.js';
 import { showExecution, setExecutionTier } from '../commands/execution.js';
 import { runTypeRenameField } from '../commands/type.js';
+import { runMethodRenameParam } from '../commands/method.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -169,6 +170,7 @@ program
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
   .option('--no-recursive', 'accepted for one release and ignored: a lock approves this project only; each member locks at its own root')
+  .option('--all', 'list every changed spec in the summary instead of summarizing a long list')
   .action(async (opts) => {
     await lockCommand(opts);
   });
@@ -272,8 +274,9 @@ packCmd
   .option('--kind <kind>', 'pack variant: declarative | code', 'declarative')
   .option('--dir <path>', 'target directory (default ./<name>)')
   .option('--skill', 'include a skills/<id>/SKILL.md stub')
+  .option('-y, --yes', 'accepted for scripts; init never prompts')
   .action(async (name: string, opts) => {
-    await runPack('init', name, { kind: opts.kind, dir: opts.dir, skill: opts.skill });
+    await runPack('init', name, { kind: opts.kind, dir: opts.dir, skill: opts.skill, yes: opts.yes });
   });
 
 packCmd
@@ -592,15 +595,19 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list')
+  .description('public surface exchange: export | import | list | diff (the public-surface changelog since the last approval)')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')
   .option('--portal <id>', 'export: select one portal\'s OpenAPI spec (a multi-portal project renders one document per portal)')
   .option('--source <path>', 'import: the surface document (native snapshot YAML or OpenAPI)')
   .option('--origin <origin>', 'import provenance: exchanged | authored (default authored)')
+  .option('--against <ref|file>', 'diff: a git revision or a saved native surface snapshot to compare with (default: the last committed approval)')
+  .option('--json', 'diff: print the structured answer')
   .action(async (action: string, opts) => {
     await runSurface(action, {
+      against: opts.against,
+      json: opts.json,
       audience: opts.audience,
       format: opts.format,
       out: opts.out,
@@ -640,8 +647,10 @@ program
   .option('--dry-run', 'add, use, remove: say what would change, write nothing (add still reads the producer)')
   .option('--add <names>', "use: public names to import bare, comma-separated ('*' for all)")
   .option('--remove <names>', 'use: names to stop importing, comma-separated')
+  .option('--search <dirs...>', 'consumers: also scan these folders (and the project roots directly under them) for projects declaring this one as an external')
   .action(async (action: string, aliases: string[] | undefined, opts) => {
     await runExternals(action, aliases ?? [], {
+      ...(opts.search !== undefined ? { search: (opts.search as string[]).flatMap((d) => d.split(',')).map((d) => d.trim()).filter(Boolean) } : {}),
       json: opts.json,
       project: opts.project,
       ref: opts.ref,
@@ -1037,6 +1046,21 @@ typeCmd
   .description("Rename a field of a type and respell every reference to it (a foreign key's `references: <type>.<field>`); the old name joins the field's rename trace (previousNames, `formerly` in the design export)")
   .action(async (typeId: string, field: string, newName: string) => {
     await runTypeRenameField(typeId, field, newName);
+  });
+
+// ---------------------------------------------------------------------------
+// method rename-param — a parameter of a contract method, its old name traced
+// ---------------------------------------------------------------------------
+
+const methodCmd = program
+  .command('method')
+  .description("Act on a contract method of this project's spec tree");
+
+methodCmd
+  .command('rename-param <component> <method> <param> <new-name>')
+  .description("Rename a parameter of a contract method; the old name joins the parameter's rename trace (previousNames, `formerly` in the design export), each signature is re-derived and an HTTP path placeholder that bound it is respelled")
+  .action(async (componentId: string, method: string, param: string, newName: string) => {
+    await runMethodRenameParam(componentId, method, param, newName);
   });
 
 // ---------------------------------------------------------------------------

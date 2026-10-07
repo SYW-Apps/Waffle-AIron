@@ -26,7 +26,15 @@ fields:
     type: list<string>
     description: The plan's re-lock list, when applied; nothing is locked on anyone's behalf.
     optional: false
+  - name: sessionScaffold
+    type: list<string>
+    description: >-
+      The files written to set a project the migration made (a promote, or an externalize as
+      project) up for its own sessions — its guides and root pointer, its skills, its .mcp.json —
+      each relative to that project's root. Present when the route that applied it scaffolds (the
+      MCP tools); the CLI's verbs scaffold through generate and mcp install and report there.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:53.126Z'
-updatedAt: '2026-10-04T10:20:11.616Z'
+updatedAt: '2026-10-07T06:21:58.108Z'

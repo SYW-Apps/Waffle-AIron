@@ -223,6 +223,10 @@ git add .wai && git commit -m "Approve the design"
 #    --strict also fails when .wai/lock.json is missing or a member project was
 #    never approved; plain lock-check only fails an approval that no longer matches.
 wairon lock-check --strict
+npm ci                      # TS/JS project with code: install the project's dependencies first
+                            # (pnpm install --frozen-lockfile / yarn install --immutable): the gate
+                            # reads your code with YOUR TypeScript; without it --ci fails on
+                            # CONFORMANCE_DEGRADED. The reusable workflow does this for you.
 wairon validate --ci        # the conformance gate, run at the FAMILY ROOT (the project that
                             # declares the members): there it is the family run, which judges
                             # the network proofs; externals are judged against their pins
@@ -269,7 +273,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon domains list \| scan \| add \| remove` | Domains (subsystem-derived + free-standing) |
 | `wairon skills list \| install` | Manage the SDD skills installed into your tools |
 | `wairon lock [-y]` | Validate the design as complete and record its approval in `.wai/lock.json`, code findings beside it; no spec file is rewritten |
-| `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](https://github.com/SYW-Apps/Waffle-AIron/blob/main/.github/workflows/lock-check.yml) |
+| `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](https://github.com/SYW-Apps/Waffle-AIron/blob/dev/.github/workflows/lock-check.yml) (on `dev` and the dev tags until 6.0.0 ships it on `main`; pin a tag — see [docs/cli.md](docs/cli.md#using-it-in-github-actions)) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
 | `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
 | `wairon host unit \| project \| permission \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, keys, the state-scoped lock) |

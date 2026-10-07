@@ -26,8 +26,10 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  resolveChainingParent,
+  resolveProjectExports,
 } from './adapters/validator-core.js';
-import { getExternalsStatus } from './adapters/validator-surfaces.js';
+import { getExternalsStatus, listPinnedExternals } from './adapters/validator-surfaces.js';
 import { dependencyCycles, declaredExternals, declaredMembers, familyNode, keyIn, relationHealth, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
 import { admits, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
@@ -80,6 +82,8 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   EXTERNAL_INCOMPATIBLE: 'error',
   EXTERNAL_DRIFTED: 'notice',
   EXTERNAL_CHECK_UNAVAILABLE: 'warning',
+  // A used external never pinned: nothing records what it is judged against, so the composed gate fails.
+  EXTERNAL_UNPINNED: 'error',
   // The advisory live comparison (advise): printed and counted, never part of a failure decision.
   EXTERNAL_LIVE_INCOMPATIBLE: 'warning',
   EXTERNAL_LIVE_UNCOMPARED: 'notice',
@@ -90,6 +94,8 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   MEMBER_DRIFTED: 'warning',
   PROJECT_ID_DEFAULTED: 'notice',
   PROJECT_ID_AMBIGUOUS: 'warning',
+  // A family-only re-export from another project that no project of the family reaches: dead.
+  EXPORT_UNREACHED: 'notice',
   // Governance: a required pack not adopted blocks; a member's deviation from
   // an adopted pack's settings is visible and never fails --ci.
   POLICY_NOT_ADOPTED: 'error',
@@ -429,7 +435,15 @@ function judgeExternal(status: ExternalStatus, project: string, config: ProjectC
       `The producer of ${who} changed since ${named(project)} pinned it, but nothing ${named(project)} uses changed.${staleTail(status)} Re-pin when convenient (\`wairon externals pin ${status.alias}\`).`,
       project));
   }
-  for (const use of status.uses.filter((u) => u.state === 'unavailable' || u.state === 'unlocked')) {
+  // Never pinned at all: one finding for the external, never a warning per use —
+  // a composed gate that cannot tell what the design was judged against fails.
+  const neverPinned = status.pinnedDigest === undefined ? status.uses.filter((u) => u.state === 'unlocked') : [];
+  if (neverPinned.length > 0) {
+    out.push(finding(config, 'EXTERNAL_UNPINNED',
+      `${named(project)} uses ${neverPinned.map(useName).join(', ')} of ${who}, which was never pinned: nothing records what its design is judged against, so a producer change that breaks it cannot be told. Pin it (\`wairon externals pin ${status.alias}\`) — and \`wairon lock\` refuses until it is.`,
+      project));
+  }
+  for (const use of status.uses.filter((u) => u.state === 'unavailable' || (u.state === 'unlocked' && !neverPinned.includes(u)))) {
     const why = use.detail ?? (use.state === 'unlocked' ? 'used now, but not in the lock' : 'nothing to compare');
     out.push(finding(config, 'EXTERNAL_CHECK_UNAVAILABLE',
       `${named(project)}'s use of ${useName(use)} of ${who} could not be compared with the producer: ${why}. This is never a pass.`,
@@ -466,6 +480,19 @@ export function compose(project: string): ExternalComposition {
   }
   // Step 9.
   return { findings, notSelected };
+}
+
+/**
+ * ifamily_validator.unpinned — the bound project's declared externals (and
+ * referenced project members) never pinned: no entry in its externals lock,
+ * so nothing records what its design is judged against. A part is no
+ * producer and is left out. Reads the bound root's own files; writes nothing.
+ */
+export function unpinned(): string[] {
+  // Step 1: the parts — no producer, nothing to pin.
+  const parts = new Set(projectFamily().nodes.find((n) => n.namespace === '')?.parts.map((p) => p.alias) ?? []);
+  // Steps 2-3: every declared alias without a lock entry.
+  return listPinnedExternals().filter((p) => !parts.has(p.alias) && p.entry === undefined).map((p) => p.alias);
 }
 
 // ---- the advisory live comparison ------------------------------------------
@@ -674,12 +701,65 @@ export function checkMembers(family: ProjectFamily): ValidationIssue[] {
       `The referenced member ${named(ref.key)} could not be opened: ${ref.problem}. Its own gate and its composition did not run — this is never a pass.`,
       ref.parent));
   }
+  // Step 3b: each family-only re-export from another project nobody reaches.
+  out.push(...unreachedReexports(family, config));
   // Step 4: each present project member. The root's own lock is not a family finding.
   for (const entry of projectApprovals()) {
     if (present.has(entry.key) && entry.as !== 'part') out.push(approvalFinding(entry, config));
   }
   // Step 8: resolved and returned.
   return out.filter((f): f is ValidationIssue => f !== null);
+}
+
+/** The projects a node's alias names: its members' and its family externals' aliases, each to the project key. */
+function aliasTargets(node: ProjectNode): Map<string, string> {
+  const out = new Map<string, string>(node.aliases);
+  for (const e of node.externals) if (e.sourceKind === 'family' && e.producer !== undefined && !out.has(e.alias)) out.set(e.alias, e.producer);
+  return out;
+}
+
+/**
+ * Step 3b of checkMembers: an L0 entry at audience `project` — visible inside
+ * the family only, so the family run sees every reader it can have — that
+ * re-exports a name from another project of the family, and that no other
+ * project of the family reaches through an alias of the re-exporting project:
+ * a dead re-export (its consumer moved to the source, or left). Notice, on
+ * the re-exporting project; dropping the entry is the fix.
+ */
+function unreachedReexports(family: ProjectFamily, config: ProjectConfig | null): (ValidationIssue | null)[] {
+  const out: (ValidationIssue | null)[] = [];
+  const keys = new Set(family.nodes.map((n) => n.namespace));
+  // Every public name each project is reached by, through an alias naming it.
+  const reached = new Map<string, Set<string>>();
+  for (const ref of family.authoredReferences) {
+    const owner = family.nodes.find((n) => n.namespace === (family.owners.get(ref.specId) ?? ''));
+    if (!owner) continue;
+    const targets = aliasTargets(owner);
+    const via = ref.form === 'import' ? (ref.importedVia ?? '').split(', ') : [ref.authored.split('::')[0]];
+    const name = ref.form === 'import' ? ref.authored : ref.authored.split('::')[1];
+    for (const alias of via) {
+      const project = targets.get(alias);
+      if (project === undefined || project === owner.namespace || name === undefined) continue;
+      reached.set(project, (reached.get(project) ?? new Set<string>()).add(name));
+    }
+  }
+  for (const node of family.nodes) {
+    let entries;
+    try {
+      entries = resolveProjectExports(node.namespace || undefined).entries;
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const from = entry.via[0];
+      if ((entry.audience ?? 'instance') !== 'project' || from === undefined || from === node.namespace || !keys.has(from)) continue;
+      if (reached.get(node.namespace)?.has(entry.publicName)) continue;
+      out.push(finding(config, 'EXPORT_UNREACHED',
+        `${named(node.namespace)} re-exports "${entry.publicName}" from ${named(from)} at audience project — the family only — but no project of the family reaches it through ${named(node.namespace)}: a dead re-export. Drop the entry from its L0 export table (or widen its audience if a consumer outside the family uses it).`,
+        node.namespace));
+    }
+  }
+  return out;
 }
 
 // ---- the pin tree ----------------------------------------------------------
@@ -1303,7 +1383,12 @@ export function checkReach(family: ProjectFamily, models: Map<string, ReachModel
  * nothing.
  */
 export function reachModel(options: ValidationOptions): ReachModel {
-  // Step 1: the bound root's project graph, and the selection the family run makes.
+  // Steps 1-2: a member's view is its enclosing family's, unless the run asked for the member alone.
+  if (options.memberDepth !== 0) {
+    const enclosing = enclosingFamilyModel(options);
+    if (enclosing) return enclosing;
+  }
+  // Step 5: the bound root's project graph, and the selection the family run makes.
   const family = projectFamily();
   const root = path.resolve(getProjectRoot());
   const ceiling = reachCeiling(root, options.family);
@@ -1317,11 +1402,58 @@ export function reachModel(options: ValidationOptions): ReachModel {
   const scoped = narrowed(family, selected);
   return within(root, ceiling, () => {
     const model = composeReach(models, scoped, networksOf(scoped));
-    // Steps 6-7: judged, so no derived output trusts a design that fails the
+    // Steps 10-11: judged, so no derived output trusts a design that fails the
     // gate: each finding tuned by the severity of the project whose spec it
     // sits on, and dropped when a lint.allow there covers it at its site (an
     // error is never allowed, so a refused flow stays refused).
-    return { ...model, findings: judgedFindings(model, scoped) };
+    // Step 12: with the root's id, its externals' aliases and each renamed member's former names.
+    const config = configOrNull();
+    const externals = Object.keys(config?.externals ?? {});
+    return {
+      ...model,
+      findings: judgedFindings(model, scoped),
+      ...(config?.id !== undefined ? { rootProject: config.id } : {}),
+      ...(externals.length > 0 ? { externals } : {}),
+      ...formerNamesOf(scoped),
+    };
+  });
+}
+
+/** Each selected member's former ids (previousIds), qualified like its key, mapped to its key: empty entries left out. */
+function formerNamesOf(family: ProjectFamily): { formerNames?: Record<string, string> } {
+  const out: Record<string, string> = {};
+  for (const node of family.nodes) {
+    if (node.namespace === '') continue;
+    const previous = runWithProjectRoot(node.directory, configOrNull)?.previousIds ?? [];
+    for (const id of previous) {
+      const former = keyIn(node.parent ?? '', id);
+      if (former !== node.namespace && !family.nodes.some((n) => n.namespace === former)) out[former] = node.namespace;
+    }
+  }
+  return Object.keys(out).length > 0 ? { formerNames: out } : {};
+}
+
+/**
+ * Steps 1-4 of reachModel: at a member's own root, the enclosing family's
+ * model — read at its top root by this same workflow, focused on the member's
+ * key there and naming that root — so a member's view and its family's agree
+ * row for row. Null at a top root, or when no parent is in the request's reach.
+ */
+function enclosingFamilyModel(options: ValidationOptions): ReachModel | null {
+  const bound = path.resolve(getProjectRoot());
+  let top: string | null = null;
+  let parent = resolveChainingParent();
+  for (let hops = 0; parent && hops < 32; hops++) {
+    top = path.resolve(parent.parentRoot);
+    parent = runWithProjectRoot(top, resolveChainingParent);
+  }
+  if (top === null) return null;
+  const topRoot = top;
+  return runWithProjectRoot(topRoot, () => {
+    const member = projectFamily().nodes.find((n) => path.resolve(n.directory) === bound);
+    if (!member || member.namespace === '') return null;
+    const model = reachModel({ ...options, memberDepth: undefined });
+    return { ...model, focus: member.namespace, judgedAt: topRoot };
   });
 }
 
@@ -1348,6 +1480,7 @@ function judgedFindings(model: ReachModel, family: ProjectFamily): ReachFinding[
       message: f.message,
       ...(f.specId !== undefined ? { specId: f.specId } : {}),
       ...(f.at !== undefined ? { at: f.at } : {}),
+      ...(f.covers !== undefined ? { covers: f.covers } : {}),
     });
   }
   return out;

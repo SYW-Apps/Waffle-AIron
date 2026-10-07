@@ -6,6 +6,13 @@ description: >-
   however it grades things; the renderer never decides what a number means.
 fields: []
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the signature is the `score` method member of the StatusDecor
+        interface in src/core/status.ts, not a type of its own, so there is no symbol a sourcePath
+        could bind.
 params:
   - name: pct
     type: int
@@ -15,4 +22,4 @@ params:
     description: The score as the renderer would print it
 returns: string
 createdAt: '2026-10-04T10:27:12.423Z'
-updatedAt: '2026-10-04T10:27:12.424Z'
+updatedAt: '2026-10-07T06:30:16.851Z'

@@ -499,7 +499,9 @@ methods:
         type: string
         description: >-
           Its new name, an identifier in the tree's method casing
-          (naming_rule_config.methodCasingFor its targetLanguage)
+          (naming_rule_config.methodCasingFor its targetLanguage) — any identifier for a component
+          one of whose contracts implements another project's extension point, since the producer
+          names those methods
       - name: pinSymbol
         type: bool
         description: >-
@@ -1261,6 +1263,41 @@ methods:
       - name: newName
         type: string
         description: Its new name
+  - name: renameParam
+    description: >-
+      Rename a parameter of a contract method and every reference to it. The parameter moves on
+      every interface of the component that declares the method — keeping its place, type,
+      description and optionality under the new name, its old name appended to its rename trace
+      (previousNames, shown as `formerly` in the design export) — and each such method is re-saved
+      with the signature text its params derive. A method whose signatureFrom names this one reads
+      the new name through the loader; an HTTP endpoint path placeholder `{old}` on the method's own
+      binding is respelled `{new}` (the URL a caller sends is unchanged — only the name binding the
+      segment to the parameter moves). Prose is never rewritten. Refuses, writing nothing: a
+      component that does not exist (component-missing), one inside a chained subproject
+      (chained-component), a method no contract of the component declares (method-missing), a
+      parameter the method does not declare (param-missing), a new name that is not an identifier —
+      or, when rules.naming.variables is set and no contract of the component implements another
+      project's extension point, not in that casing (invalid-name) — and a name another parameter of
+      the method holds or retired in its trace (name-taken, name-retired). A lock goes stale as with
+      any edit. Inside a hosted request every spec it would write is judged against the request's
+      write reach before the first write (SubsystemWriteDenied).
+    signature: >-
+      renameParam(componentId: string, methodName: string, param: string, newName: string):
+      ParamRename
+    returns: ParamRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T23:07:10.625Z'
+updatedAt: '2026-10-07T06:24:54.852Z'

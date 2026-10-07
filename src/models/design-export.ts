@@ -86,6 +86,8 @@ export const DesignParamSchema = z.object({
   type: DesignTypeRefSchema,
   optional: z.boolean(),
   description: z.string().optional(),
+  /** The parameter's rename trace (its previousNames), oldest first; absent when never renamed. */
+  formerly: z.array(z.string()).optional(),
 }).passthrough();
 export type DesignParam = z.infer<typeof DesignParamSchema>;
 

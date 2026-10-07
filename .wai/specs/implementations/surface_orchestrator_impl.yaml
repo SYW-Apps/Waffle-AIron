@@ -31,7 +31,9 @@ methods:
           single document only when there is exactly one portal (one entry in the set), leaving
           `rendered` unset when multiple portals produced multiple documents. When portalId names a
           portal, narrow the set to that one document; a portalId naming no portal is rejected
-          rather than silently ignored.
+          rather than silently ignored. An OpenAPI export with no HTTP Portal at all (an in-process
+          library, or nothing exported at the audience) asked to write a file is refused naming why
+          — OpenAPI does not apply — and the native snapshot is never written in its place.
         type: local
       - stepNumber: 5
         description: An output path was given
@@ -195,9 +197,15 @@ methods:
         targetMethod: projectOwnSurface
       - stepNumber: 14
         description: >-
-          Restore the consumer's binding and stamp the snapshot with the audience it was filtered
-          to; take its content digest (SurfaceSnapshot.contentDigest)
-        type: local
+          Read the loader's diagnostics with the producer's root still bound: a spec file that
+          failed to parse leaves its table short, so the producer is recorded unreachable as
+          `producer unreadable: <file>: <error>` (its previous pin stays), never pinned as a
+          producer that removed names. Then restore the consumer's binding, stamp the snapshot with
+          the audience it was filtered to and take its content digest
+          (SurfaceSnapshot.contentDigest)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: getLoaderIssues
       - stepNumber: 15
         description: Read the snapshot pinned for the alias now
         type: call
@@ -294,7 +302,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the bindings
-        endStep: 11
+        endStep: 12
       - stepNumber: 4
         description: >-
           Read its pinned snapshot, if any — and carry the lock entry's digest and commit on the
@@ -309,7 +317,7 @@ methods:
           the producer is resolved, its root is in the request's reach (a git producer — a fetched
           commit — and a referenced member — a root its declarer names explicitly — are never a root
           above the family, so no ceiling applies to them) and holds a project
-        onFalseStep: 10
+        onFalseStep: 11
       - stepNumber: 6
         description: >-
           Bind the producer's root read-only (the caller must gate on reach itself), restoring the
@@ -321,6 +329,14 @@ methods:
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
       - stepNumber: 8
+        description: >-
+          Read the loader's diagnostics with the producer's root still bound: a spec file that
+          failed to parse makes the producer unreadable (`producer unreadable: <file>: <error>`) —
+          nothing compared, never a pass, never a removal
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 9
         description: >-
           Restore the consumer's binding. Compare every used member — the lock's and the one the
           references use now — at signature level, for every producer alike (family, path, git,
@@ -338,11 +354,11 @@ methods:
           no longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
           against the live one) — a stale snapshot is never ok
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Next external
         type: jump
-        toStep: 11
-      - stepNumber: 10
+        toStep: 12
+      - stepNumber: 11
         label: unavailable
         description: >-
           Report every locked used member — or, when none is locked, the external itself — as
@@ -353,11 +369,11 @@ methods:
           externals status` as the command that fetches it), or a source.hosted producer read
           outside a hosted server or out of the request's reach (outOfReach). Never a pass
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         label: reported
         description: The external's status is recorded
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Answer one status per declared external, in declaration order
         type: return
         outcome: ExternalStatus[]
@@ -654,8 +670,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read the family projects in reach that consume the bound project, through the core: each
-          with its alias, section and the public names it uses
+          Read the projects that consume the bound project through the core — the family in reach,
+          and the project roots in the searched folders that declare it — each with its alias,
+          section, the public names it uses and the ones it still writes that are no longer exported
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: listExternalConsumers
@@ -663,8 +680,52 @@ methods:
         description: 'Answer them as read: read-only, nothing written'
         type: return
         outcome: ExternalConsumer[]
+  - name: diff
+    narrative:
+      - stepNumber: 1
+        description: Project the bound project's surface now, at audience project (the whole table)
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 2
+        description: >-
+          A saved native snapshot, or a git revision (the last committed approval when none is
+          named)
+        type: branch
+        condition: against names a file on disk
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Read the saved snapshot and parse it through the snapshot schema as the baseline
+        type: local
+      - stepNumber: 4
+        description: Compare with it
+        type: jump
+        toStep: 7
+      - stepNumber: 5
+        label: revision
+        description: The bound project's tree at the revision, materialized read-only in the fetch cache
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: approvedRevision
+      - stepNumber: 6
+        description: >-
+          Project that tree's surface, its root bound for the projection and the caller's binding
+          restored, as the baseline
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 7
+        label: compare
+        description: >-
+          Compare the baseline with the surface now: surface_snapshot.changesSince (added, removed,
+          renamed per the trace, changed)
+        type: local
+      - stepNumber: 8
+        description: Answer the project, what it was compared with, and the changes
+        type: return
+        outcome: surface_diff
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-06T23:15:25.700Z'
+updatedAt: '2026-10-07T11:01:52.178Z'

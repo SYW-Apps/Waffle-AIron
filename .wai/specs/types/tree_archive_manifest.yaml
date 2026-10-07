@@ -68,5 +68,6 @@ fields:
     optional: true
 methods: []
 componentClass: tree_codec
+sourcePath: sdk/src/types.ts
 createdAt: '2026-08-12T17:18:10.306Z'
-updatedAt: '2026-10-04T10:29:21.594Z'
+updatedAt: '2026-10-07T06:28:19.519Z'

@@ -14,5 +14,11 @@ fields:
       approval is recorded under.
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the code spells it as an inline `{ paths: Set<string> }` parameter
+        type in src/core/approval.ts, so there is no symbol a sourcePath could bind.
 createdAt: '2026-09-12T00:19:27.640Z'
-updatedAt: '2026-10-04T10:19:52.493Z'
+updatedAt: '2026-10-07T06:30:06.117Z'

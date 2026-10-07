@@ -19,5 +19,11 @@ fields:
     description: Why the platform needs the edge
     optional: false
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline zod object of ProfileDefSchema's allowedEdges
+        array in src/core/extensions.ts, so there is no symbol a sourcePath could bind.
 createdAt: '2026-09-14T23:23:38.442Z'
-updatedAt: '2026-10-04T10:19:50.826Z'
+updatedAt: '2026-10-07T06:30:01.161Z'

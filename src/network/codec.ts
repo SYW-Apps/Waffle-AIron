@@ -35,19 +35,35 @@ function codeOf(line: string): string {
 /** A flow's gate cell: REFUSED with the error codes, or the codes that mark it. */
 function gateCell(flow: NetworkFlow): string {
   if (refusedFlow(flow)) return `REFUSED: ${[...new Set(flow.refusedBy!.map(codeOf))].join('; ')}`;
-  return [...new Set((flow.flaggedBy ?? []).map(codeOf))].join('; ');
+  return [...new Set([...(flow.flaggedBy ?? []), ...(flow.notedBy ?? [])].map(codeOf))].join('; ');
 }
 
-/** Step 1: the gate findings on the flows, each `CODE (severity): message`, errors first. */
+/** Step 1: the gate findings on the flows, each `CODE (severity): message` at its own severity, errors first. */
 function gateFindingsOf(flows: NetworkFlow[]): string[] {
   const errors = new Set<string>();
   const flags = new Set<string>();
+  const notes = new Set<string>();
   for (const f of flows) {
     for (const line of f.refusedBy ?? []) errors.add(line);
     for (const line of f.flaggedBy ?? []) flags.add(line);
+    for (const line of f.notedBy ?? []) notes.add(line);
   }
   const withSeverity = (line: string, severity: string): string => `${codeOf(line)} (${severity})${line.slice(codeOf(line).length)}`;
-  return [...[...errors].map((l) => withSeverity(l, 'error')), ...[...flags].map((l) => withSeverity(l, 'warning'))];
+  return [
+    ...[...errors].map((l) => withSeverity(l, 'error')),
+    ...[...flags].map((l) => withSeverity(l, 'warning')),
+    ...[...notes].map((l) => withSeverity(l, 'notice')),
+  ];
+}
+
+/** A flow with the root's empty project key and network id written as the root project's id, for JSON. */
+function namedRoot(flow: NetworkFlow, rootProject: string): NetworkFlow {
+  const party = (p: FlowParty): FlowParty => ({
+    ...p,
+    ...(p.project === '' ? { project: rootProject } : {}),
+    ...(p.network === '' ? { network: rootProject } : {}),
+  });
+  return { ...flow, from: party(flow.from), to: party(flow.to), crosses: flow.crosses.map((n) => (n === '' ? rootProject : n)) };
 }
 
 /** A network's display name: the declaring project's key, or the bound root's. */
@@ -98,14 +114,14 @@ function markdownOf(flows: NetworkFlow[]): string {
  * inetwork_codec.encodeFlows — the matrix as JSON, CSV or Markdown: every fact
  * of every flow, in the matrix's order. Pure.
  */
-export function encodeFlows(flows: NetworkFlow[], format: NetworkOutputFormat): NetworkDocument {
+export function encodeFlows(flows: NetworkFlow[], format: NetworkOutputFormat, rootProject?: string): NetworkDocument {
   // Step 1: the gate findings on the flows, and whether any flow is refused.
   const gate = { gateFindings: gateFindingsOf(flows), refused: flows.some(refusedFlow) };
   // Step 2: which format?
   switch (format) {
     case 'json':
       // Step 3.
-      return { format, content: JSON.stringify(sortedKeys(flows), null, 2) + '\n', unbound: [], ...gate };
+      return { format, content: JSON.stringify(sortedKeys(rootProject ? flows.map((f) => namedRoot(f, rootProject)) : flows), null, 2) + '\n', unbound: [], ...gate };
     case 'csv':
       // Step 4.
       return { format, content: csvOf(flows), unbound: [], ...gate };
@@ -239,8 +255,11 @@ function headerOf(unbound: string[], brokered: NetworkFlow[], refused: NetworkFl
  * inetwork_codec.encodePolicy — the matrix as Kubernetes NetworkPolicy
  * documents, one ingress policy per callee workload. Deterministic. Pure.
  */
-export function encodePolicy(flows: NetworkFlow[], bindings: NetworkBindings, format: NetworkOutputFormat): NetworkDocument {
+export function encodePolicy(flows: NetworkFlow[], bindings: NetworkBindings, format: NetworkOutputFormat, formerNames?: Record<string, string>): NetworkDocument {
   if (format !== 'kubernetes-network-policy') throw new Error(`"${format}" is not a policy target; the policy target is kubernetes-network-policy`);
+  // Step 4's first half: a key naming a renamed project's former name still binds it, and says so.
+  const notes: string[] = [];
+  const bound = throughFormerNames(bindings, formerNames ?? {}, notes);
   // Step 1: a flow the gate refuses is never admitted — no outside block is opened for an illegal entry.
   const refused = flows.filter(refusedFlow);
   const admitted = flows.filter((f) => !refusedFlow(f));
@@ -248,7 +267,7 @@ export function encodePolicy(flows: NetworkFlow[], bindings: NetworkBindings, fo
   const brokered = admitted.filter((f) => f.transport === 'MessageBus');
   const groups = new Map<string, { callee: Resolved; flows: NetworkFlow[] }>();
   for (const flow of admitted.filter((f) => f.transport !== 'MessageBus')) {
-    const callee = resolve(flow.to, bindings);
+    const callee = resolve(flow.to, bound);
     const group = groups.get(callee.name) ?? { callee, flows: [] };
     group.flows.push(flow);
     groups.set(callee.name, group);
@@ -257,12 +276,63 @@ export function encodePolicy(flows: NetworkFlow[], bindings: NetworkBindings, fo
   const unbound = new Set<string>();
   const documents = [...groups.keys()].sort().map((name) => {
     const group = groups.get(name)!;
-    return yamlOf(policyFor(group.callee, group.flows, bindings, unbound));
+    const mixed = mixedReach(group.callee.name, group.flows, bound);
+    if (mixed !== null) notes.push(mixed);
+    return yamlOf(policyFor(group.callee, group.flows, bound, unbound));
   });
-  // Step 6: the documents, headed by what was refused and what could not be bound.
+  // Step 6: the documents, headed by what was refused, what could not be bound, and the notes.
   const names = [...unbound].sort();
-  const content = [...headerOf(names, brokered, refused), ...documents.map((d) => `---\n${d}`)].join('\n') + '\n';
-  return { format, content, unbound: names, gateFindings: gateFindingsOf(flows), refused: refused.length > 0 };
+  const content = [...headerOf(names, brokered, refused), ...notes.map((n) => `# NOTE: ${n}`), ...documents.map((d) => `---\n${d}`)].join('\n') + '\n';
+  return { format, content, unbound: names, gateFindings: gateFindingsOf(flows), refused: refused.length > 0, ...(notes.length > 0 ? { notes } : {}) };
+}
+
+/**
+ * The bindings with every key that names a renamed project by its former name
+ * (`<former>` or `<former>::…`) also keyed by the current name, when that has
+ * no binding of its own; each such key adds a note naming the key to rename.
+ */
+function throughFormerNames(bindings: NetworkBindings, formerNames: Record<string, string>, notes: string[]): NetworkBindings {
+  const workloads = { ...bindings.workloads };
+  for (const key of Object.keys(bindings.workloads).sort()) {
+    for (const [former, current] of Object.entries(formerNames)) {
+      if (key !== former && !key.startsWith(`${former}::`)) continue;
+      const renamed = `${current}${key.slice(former.length)}`;
+      if (Object.prototype.hasOwnProperty.call(workloads, renamed)) continue;
+      workloads[renamed] = bindings.workloads[key];
+      notes.push(`bindings key "${key}" names the renamed project "${current}" by its former name (kept in its previousIds): it still binds "${renamed}" — rename the key to "${renamed}".`);
+    }
+  }
+  return { ...bindings, workloads };
+}
+
+/**
+ * A workload serving a verb entered from outside beside one outside may not
+ * reach, said as a note: a NetworkPolicy admits per pod and port, so outside
+ * reaches every verb on that port. Names the Portal-level binding that splits
+ * it, or, for verbs of one Portal, that only an L7 policy can. Null when every
+ * verb is entered from outside, or none is.
+ */
+function mixedReach(callee: string, flows: NetworkFlow[], bindings: NetworkBindings): string | null {
+  const sourcesOfVerb = new Map<string, Set<string>>();
+  const portalOf = new Map<string, string>();
+  for (const flow of flows) {
+    const verb = partyKey(flow.to);
+    const source = flow.from.scope === 'outside' ? 'outside' : resolve(flow.from, bindings).name;
+    sourcesOfVerb.set(verb, (sourcesOfVerb.get(verb) ?? new Set()).add(source));
+    portalOf.set(verb, flow.to.component ?? '');
+  }
+  const signature = (verb: string): string => [...sourcesOfVerb.get(verb)!].sort().join(', ');
+  // Only an outside-entered verb beside one outside may not reach is a gap a reader must act on.
+  const fromOutside = [...sourcesOfVerb.values()].map((s) => s.has('outside'));
+  if (!fromOutside.includes(true) || !fromOutside.includes(false)) return null;
+  const verbs = [...sourcesOfVerb.keys()].sort().map((v) => `${v} (from ${signature(v)})`);
+  const portals = [...new Set(portalOf.values())].sort();
+  const outsidePortal = [...sourcesOfVerb.keys()].sort().find((v) => sourcesOfVerb.get(v)!.has('outside'));
+  const toSplit = outsidePortal !== undefined ? portalOf.get(outsidePortal)! : portals[0];
+  const split = portals.length > 1
+    ? `bind a Portal on its own in the bindings file (workloads: { ${toSplit}: { selector, port } }, on its own port) so it gets a policy of its own`
+    : `these verbs share one Portal, so only an L7 policy (a mesh or gateway route rule) can separate them`;
+  return `workload "${callee}" serves verbs that differ in who may reach them — ${verbs.join('; ')} — but a NetworkPolicy admits per pod and port, so every source above reaches every verb on that port: ${split}.`;
 }
 
 // ---------------------------------------------------------------------------

@@ -310,6 +310,9 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | † `ASYNC_MISMATCH` | warning | an `async` returns and the function disagree | fix either side |
 | † `UNDECLARED_EXPORT`, `UNREALIZED_EXPORT_HANDLE` | warning | a file exports a name no contract declares and another component imports it, or a declared `exportedVia` names a missing export | put the name on a contract, or stop exporting it |
 | † `IMPORT_BYPASSES_PORTAL` | warning | an import into another subsystem lands on a file that realizes none of its published components | import through the portal |
+| † `MISSING_TYPE_SOURCE_PATH` | warning | a type names no `sourcePath`, so its shape is never compared with the code, and its subsystem already has code (a notice before that) | name the file that declares the type (`symbol` when the code name differs) |
+| † `TECH_LEAKAGE_IN_CODE` | warning | now also fires for a technology written by its plain name: common packages are known by default (`postgres` covers `pg`) | move the import behind the component that binds the technology |
+| `EXTERNAL_UNPINNED` | error | a declared external was never pinned (the project's gate composed with its externals, and the family root); `wairon lock` refuses until it is | `wairon externals pin` |
 
 Code-conformance findings can be recorded as classified debt in
 `rules.conformance.carried` instead of being allowed.
@@ -335,6 +338,10 @@ allow or severity naming it). Two notices are new: `MULTIPLE_GATEWAYS` and
 rules are split into smaller named rules (40 → 115); a split rule kept its codes.
 
 #### Spec, configuration and lock
+
+- `UNCONSUMED_TOPIC` and `UNSOURCED_SUBSCRIPTION` are sited at their topic. An
+  existing whole-spec `lint.allow` for them no longer covers them: write
+  `at: <topic>` on it.
 
 - **`project.yaml`** gains `id` (written by `init` and `doctor --fix`), `members`,
   `externals`, `composition` (`requirePolicies`, `requireApprovedMembers`),
@@ -655,12 +662,42 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 - `CONFORMANCE_DEGRADED` says what is missing: no TypeScript installed, or one that
   ships no JavaScript compiler API (TypeScript 7). A project's TypeScript 7 is
   passed over for a usable compiler where one can be found.
+- An Adapter's `dependsOn` to a Portal on an out-of-process transport is realized
+  by the link, never by an import, so it is never `UNREALIZED_DEPENDENCY`. Nothing
+  asks for an import across a network boundary any more.
+- A call is followed through a non-null assertion, a cast to a named type, a local
+  alias of a field and a destructured field exactly as through the field itself, so
+  those forms no longer hide `PORTAL_WRITE_SHORTCUT_IN_CODE` or
+  `UNDECLARED_DEPENDENCY`. A Portal's call through a receiver the analysis cannot
+  follow, under the name of a nearby data component's write, is reported as the
+  notice `PORTAL_CALL_UNRESOLVED` instead of passing silently. A field typed
+  `T | null` or `T | undefined` is read as a `T`.
+- Interfaces declared in a shared contracts file are followed to the classes whose
+  `implements` clause names them, wherever they live, so the layout no longer
+  breaks call tracing.
+- `TECH_LEAKAGE_IN_CODE` knows the common packages of common technologies
+  (postgres, mysql, redis, mongodb, sqlite, kafka, rabbitmq; an HTTP client is never
+  a technology). The table is documented and extended per technology by
+  `{ name, matches }` or by a pack's `technologyPackages`. A technology written
+  once as a name and once as `{ name, matches }` is one technology, with no spurious
+  `TECH_LEAKAGE`.
+- A type without a `sourcePath` is reported (`MISSING_TYPE_SOURCE_PATH`): a notice
+  before its subsystem has code, a warning after. The architect skill plans type
+  source paths with the implementations'.
+- The planned files of one implementation are one `SOURCE_FILE_PLANNED` notice.
 
 **Authoring.**
 
 - `wairon type rename-field` and `sdd_rename_field` rename a type's field and
   respell its references. The old name stays on the field (`previousNames`) and
   shows as `formerly` in the design export.
+- `wairon method rename-param` and `sdd_rename_param` rename a contract method's
+  parameter: the old name stays on the parameter (`formerly` in the design export),
+  the signature is re-derived and an HTTP path placeholder that bound it follows.
+- A contract that implements another project's extension point takes its method
+  and parameter names from the producer: those methods are exempt from the local
+  casing rule, and `sdd_rename_method` accepts the producer's names. Per-method
+  allows for that are no longer needed.
 - A key a spec's schema does not know (for example `exports:` in the L0, whose
   export table is `publicInterfaces`) is reported as `UNKNOWN_SPEC_KEY`, and an
   unknown setting in `project.yaml` as `UNKNOWN_CONFIG_KEY`. The docs show how to
@@ -692,6 +729,22 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 - Implementing another project's trait: the producer's bare type names and
   `alias::name` compare as one type, and a cross-project `signatureFrom` resolves
   from the pin.
+- The methods of an implemented contract are pinned one by one, so the producer
+  renaming one reads live as "renamed to <name>".
+- A public name gone from the live producer is `EXTERNAL_INCOMPATIBLE` whether the
+  consumer pinned it or not.
+- `wairon externals consumers --search <dir>…` finds consumers outside the family,
+  and `sdd_list_consumers` gives an assistant the same answer.
+- `wairon surface diff [--against <file>] [--json]` and `sdd_surface_diff` list
+  what changed on the public surface.
+- The design export's `uses` lists every referenced name.
+- A pin taken before anything references the external says it fills on the next
+  pin. A producer that cannot be read is named with its file and error. A name
+  exported but reached by nothing is the notice `EXPORT_UNREACHED`.
+- Removing the last external also removes `externals.lock.yaml`.
+- An Adapter exported as an extension point is typed `InProcess` (pins of such a
+  producer read drifted once). `surface export --format openapi` is refused for a
+  library. Pins carry the methods and constructors of exported types.
 
 **Networks.**
 
@@ -712,6 +765,20 @@ design as one deterministic JSON document (`wairon-design` 1.0,
   the new boundary, which the family run pairs; externalizing re-roots moved types'
   source paths; demoting removes the setup a promote wrote. `sdd_update_spec`
   refuses a member project's spec from the root and names the member's folder.
+- Promoting (or externalizing as a project) leaves a valid tree: export entries are
+  rewritten, and source paths outside the new project become member-relative
+  planned paths. The tool route sets the new project up for its own sessions, as
+  the CLI does.
+- `network policy` and `check` resolve a renamed project's former id in bindings
+  and observed names, with a NOTE; `policy` exits 1 when a name stays unbound, and
+  notes a workload that serves verbs of different reach on one port. A project
+  rename's plan lists the binding and telemetry keys to rename.
+- Inside a member, the network commands answer from the enclosing family
+  (`--no-recursive` judges the member alone). `flows` exits 1 on a design the gate
+  refuses, and its JSON names the root project.
+- `network why` answers for subsystems with only types, member projects and
+  `alias::name` parties. `sdd_get_status` has a Network line.
+- A Portal transport change, dry run included, lists the Adapters it affects.
 
 **CLI.**
 
@@ -719,8 +786,44 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 - `validate --all` prints every finding, with per-code totals.
 - `wairon update --channel dev`.
 - `wairon dev` is a local Canvas and Specs shell with no sign-in.
+- `wairon lock --all` lists every changed spec; a long list is otherwise
+  summarized.
+- The reusable `lock-check` workflow installs the project's dependencies (npm, pnpm
+  or yarn, from the lockfile; input `install`) before `validate --ci`, so a
+  TypeScript project's analysis runs at full grade on a fresh clone. The docs' CI
+  recipe says the same.
 
 ### Fixes
+
+- **Approval messages agree.** `lock` no longer says "Nothing has changed" when
+  only an input moved (the project id, a network, a pinned external): it names
+  what did. A storage move is no change for `lock`, as it already was for
+  `lock-check`. `lock` says when it approves an all-draft design, and
+  `validate --ci` prints how many draft-related warnings it waived.
+- **Nothing to approve on an empty tree.** `lock` on a tree that holds only the
+  L0 writes no lock and says to add a subsystem first (exit 0); `lock-check` and
+  `status` say the same.
+- **`lock-check` agrees with `lock` on the project id.** A hand-edited id
+  (`PROJECT_ID_CHANGED`) now fails `lock-check`, with or without `--strict`, and
+  names the fix: restore the id, or use `wairon project rename`. A rename not yet
+  re-locked fails it too.
+- **`lock-check` names what moved** in the same words as `lock` (for example the
+  network declaration), not a generic list.
+- **`status` and `lock-check` agree on unknown keys.** A key the spec schema does
+  not read, such as a top-level `symbol:` on an implementation, no longer shows
+  as a changed spec in `status`. It is reported as `UNKNOWN_SPEC_KEY`, with a hint
+  to put `symbol` on the method.
+- **Long cache paths on Windows.** wairon's git calls for its fetch cache use
+  `core.longpaths`, so `surface diff` and git producer fetches work under a deeply
+  nested cache directory.
+- **Networks.** `network declare` keeps the description. `GATEWAY_BYPASSED` is
+  reported once per Portal. `MULTIPLE_GATEWAYS` has one severity and anchor in the
+  project and the family run. `ENDPOINT_TRANSPORT_MISMATCH` stays an error on
+  drafts.
+- **Docs.** The documented tool count matches the server, shipped docs link only
+  to shipped files, and the docs explain which version of the reusable workflow
+  to pin on a dev build. `pack init` accepts `-y`.
+- **`externals status`** explains only the words it printed.
 
 - **Wording.** Plain `validate` ends with "Passed with N warning(s)" when it printed
   warnings, and says there is nothing to check on an empty tree. `status` marks a

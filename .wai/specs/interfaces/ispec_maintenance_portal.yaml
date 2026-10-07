@@ -340,6 +340,11 @@ methods:
   - name: renameField
     description: 'Forward to core_orchestrator.renameField: rename a field of a type and every reference to it'
     signatureFrom: core_orchestrator.renameField
+  - name: renameParam
+    description: >-
+      Forward to core_orchestrator.renameParam: rename a parameter of a contract method, keeping its
+      old name in the parameter's rename trace
+    signatureFrom: core_orchestrator.renameParam
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-06T23:07:21.108Z'
+updatedAt: '2026-10-07T06:25:13.137Z'

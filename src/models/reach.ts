@@ -95,6 +95,18 @@ export interface ReachModel {
   topics: TopicEnd[];
   /** The model's network findings, judged and lint-allow filtered, when it was read for the derived networking outputs. */
   findings?: ReachFinding[];
+  /** Every subsystem in scope, qualified like the placements, one holding only types included: how such a subsystem is known as a party. */
+  subsystems?: string[];
+  /** The aliases of the bound project's declared externals: a party named `<alias>::<name>` through one is known. */
+  externals?: string[];
+  /** The bound root's project id: how the root's own parties and network are named in an encoded matrix, where its key is empty. */
+  rootProject?: string;
+  /** Each former name of a renamed member project (its previousIds, qualified like its key) mapped to its current key. */
+  formerNames?: Record<string, string>;
+  /** At a member's own root: the member's key in the enclosing family the model was composed for. */
+  focus?: string;
+  /** At a member's own root: the root directory of the enclosing family whose network declaration and proofs the model carries. */
+  judgedAt?: string;
 }
 
 /**
@@ -133,8 +145,10 @@ export interface ReachFinding {
   message: string;
   /** The spec it sits on: the verb's Portal, or the call's calling component (family keys). */
   specId?: string;
-  /** The site inside that spec: the verb, or the call's evidence. */
+  /** The site inside that spec: the verb, or the call's evidence; absent on a finding that covers several verbs of one Portal. */
   at?: string;
+  /** The verbs of the Portal it sits on that one aggregated finding covers (a Portal-level GATEWAY_BYPASSED). */
+  covers?: string[];
 }
 
 /**

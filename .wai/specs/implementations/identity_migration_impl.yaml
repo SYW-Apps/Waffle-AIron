@@ -51,7 +51,11 @@ methods:
         description: >-
           Plan the target's own edit: its id moved, the old one appended to previousIds; add the
           notes — consumers outside the family are not discovered and must rewrite their own
-          externals
+          externals; and, when the member's key follows the id (its alias was the old id), the
+          deployment-side names the key change: the bindings keys and observed-flow names written as
+          the old key or `<old key>::…` (its default workload name and its subsystems' and Portals'
+          keys) are to be renamed to the new key, which the network commands meanwhile resolve
+          through previousIds, each such use reported
         type: local
       - stepNumber: 8
         description: Answer the plan, every written project to re-lock, the target first
@@ -144,4 +148,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-10-05T23:56:48.289Z'
+updatedAt: '2026-10-07T06:22:18.579Z'

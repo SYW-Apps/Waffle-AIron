@@ -91,17 +91,20 @@ methods:
       (Pick, Omit, Partial, Required, Readonly) is read as the type it wraps, since its members are
       that type's members by the language's own definition, and a type alias declared in the file
       that names one type outright (source_file_facts.aliasTargetOf) is followed that ONE hop,
-      landing on both the alias's module and the named type's. Anything further — a union, an
-      intersection, a mapped or conditional type, a second alias — is never expanded. All are
-      possibilities and not facts: a declared type says what a collaborator is and never which class
-      ships the body, a constructed class says where the class was written and never where a method
-      it INHERITS from a base was, a subclass may override what this.<method>() reaches, and an
-      annotated name is read per FILE, so same-named bindings in different functions union their
-      declared types. Empty for a field or a name the file annotates with nothing, for a chain link
-      nothing declares, for a function whose return the code does not settle, and for a class name
-      it cannot place, exactly as the proven tier is. A widened answer may only ACCEPT a call as
-      realized; naming a file a call landed in stays the proven tier's word alone, since a
-      possibility can never accuse
+      landing on both the alias's module and the named type's. A declared type that is an INTERFACE
+      is followed one step further, to every file declaring a named class whose `implements` clause
+      names that same declaration (source_file_facts.implementsClauses, each name resolved where the
+      class's file writes it) — the shared contracts file, where the interface lives apart from
+      every class that realizes it. Anything further — a union, an intersection, a mapped or
+      conditional type, a second alias — is never expanded. All are possibilities and not facts: a
+      declared type says what a collaborator is and never which class ships the body, a constructed
+      class says where the class was written and never where a method it INHERITS from a base was, a
+      subclass may override what this.<method>() reaches, and an annotated name is read per FILE, so
+      same-named bindings in different functions union their declared types. Empty for a field or a
+      name the file annotates with nothing, for a chain link nothing declares, for a function whose
+      return the code does not settle, and for a class name it cannot place, exactly as the proven
+      tier is. A widened answer may only ACCEPT a call as realized; naming a file a call landed in
+      stays the proven tier's word alone, since a possibility can never accuse
   - name: forwardsOf
     signature: 'forwardsOf(path: string, name: string, container?: string): list<ForwardedName>'
     params:
@@ -143,6 +146,25 @@ methods:
       sourcePath or a method's) exists, a type when its own file or a method's exists; a simPath
       harness does not count, it follows the code it wires. Before that a named file is planned, not
       missing. Pure: over the index's own facts.
+  - name: implementorsOf
+    signature: 'implementorsOf(path: string, typeName: string): set<string>'
+    params:
+      - name: path
+        type: string
+        description: The file that declares the type
+      - name: typeName
+        type: string
+        description: The name it declares the type under
+    returns: set<string>
+    description: >-
+      Every analyzed file declaring a named class whose `implements` clause names the type
+      `typeName` declared in `path` — each clause name followed to the module that declares it where
+      the class's own file writes it (its import binding's specifier, type-only or runtime, else
+      that file itself) under the name that module publishes. `path` need not be a file the run
+      analyzed: a shared contracts file no spec names is met by its module path (the source
+      extension and a trailing `/index` dropped), so the interface in it still leads to the classes
+      that realize it, wherever they live. A POSSIBILITY, never a proven origin, since another class
+      may implement the interface just as well. Exact grade only; pure over the index's own facts.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T00:21:08.829Z'
-updatedAt: '2026-10-06T10:07:24.147Z'
+updatedAt: '2026-10-07T10:52:55.447Z'

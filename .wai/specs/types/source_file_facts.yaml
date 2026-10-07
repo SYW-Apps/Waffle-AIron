@@ -250,6 +250,14 @@ fields:
       when it is an alias of this file: a field typed with a narrowed alias of a collaborator is
       still that collaborator
     optional: true
+  - name: implementsClauses
+    type: map<string, list<string>>
+    description: >-
+      The interface names each top-level named class's `implements` clause writes, by class name;
+      exact grade only. What lets a receiver whose declared type is an interface written in a shared
+      contracts file be followed to the class that implements it, wherever that class lives — a
+      possible origin, never a proven one, like every declared type
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -368,4 +376,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-05T23:33:23.778Z'
+updatedAt: '2026-10-07T06:22:33.635Z'

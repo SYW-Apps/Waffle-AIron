@@ -15,5 +15,9 @@ lint:
         An opaque handle, not a placeholder: the configured MCP server a transport connects to. Its
         concrete class is the MCP protocol library's (an implementation choice), and no contract
         reads its members, so a field or method here would leak that library into the design.
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No wairon declaration: the handle's concrete class is the MCP protocol library's McpServer,
+        an implementation choice this project imports rather than declares.
 createdAt: '2026-10-04T10:27:27.578Z'
-updatedAt: '2026-10-04T10:34:14.292Z'
+updatedAt: '2026-10-07T06:30:19.727Z'

@@ -27,5 +27,6 @@ fields:
     description: ISO-8601 timestamp of the selection.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:31.373Z'
-updatedAt: '2026-10-04T10:20:52.177Z'
+updatedAt: '2026-10-07T06:28:48.952Z'

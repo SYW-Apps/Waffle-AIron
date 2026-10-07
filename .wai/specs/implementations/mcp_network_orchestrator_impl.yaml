@@ -34,17 +34,26 @@ methods:
   - name: declare
     narrative:
       - stepNumber: 1
-        description: 'The declaration: a NetworkDeclaration with the description when declared, else none'
-        type: local
+        description: >-
+          Read the project's configuration: a declaration it already holds keeps its description
+          when none is given
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
       - stepNumber: 2
+        description: >-
+          The declaration: a NetworkDeclaration with the given description (else the one already
+          declared) when declared, else none
+        type: local
+      - stepNumber: 3
         description: Write it through the core client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: setNetwork
-      - stepNumber: 3
+      - stepNumber: 4
         description: Answer whether it wrote
         type: return
         outcome: bool
 status: complete
 createdAt: '2026-10-06T13:15:29.445Z'
-updatedAt: '2026-10-06T23:09:13.473Z'
+updatedAt: '2026-10-07T06:21:34.655Z'

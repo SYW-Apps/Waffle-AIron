@@ -52,7 +52,8 @@ export const portalsRule: SddRule = {
               'ENDPOINT_TRANSPORT_MISMATCH',
               `Method "${m.name}" on interface "${intf.id}" declares a "${m.endpoint.transport}" endpoint, but its Portal "${comp.id}" has transport "${comp.transport}" (expects transport "${expected}").`,
               intf.id,
-              isDraftCtx || isIntfDraft,
+              // A contradiction, not unfinished work: never downgraded on a draft.
+              false,
             );
           }
         }

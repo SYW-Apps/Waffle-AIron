@@ -265,6 +265,13 @@ export const DeclarativePackSchema = z.object({
    */
   guarantees: z.array(z.string().min(1)).default([]),
   /**
+   * Package names a technology's code is imported by, keyed by the
+   * technology's name — extending the built-in table the code twin of the
+   * leakage rule (TECH_LEAKAGE_IN_CODE) compares imports with, for a driver or
+   * SDK the table does not know. Data only.
+   */
+  technologyPackages: z.record(z.array(z.string().min(1))).default({}),
+  /**
    * Connecting-agent guidance appended to wairon's own MCP `initialize`
    * instructions, attributed to this pack, in pack load order.
    */
@@ -398,6 +405,8 @@ export interface LoadedExtensions {
   patterns: LoadedPattern[];
   /** Pack-declared semantic guarantee tokens (merged, deduped) — the extension half of the guarantee vocabulary. */
   guarantees: string[];
+  /** Pack-contributed package names per technology name (lower-cased, deduped across packs). */
+  technologyPackages: Record<string, string[]>;
   /** Declarative rule assertions across all loaded packs (with provenance + namespaced codes). */
   assertions: LoadedAssertion[];
   /**
@@ -426,7 +435,7 @@ export interface LoadedExtensions {
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], assertions: [], instructions: [], errors: [], selectionFailures: [], deprecations: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], errors: [], selectionFailures: [], deprecations: [] };
 }
 
 /** What replaces a language's foreignBuiltins: nothing a pack declares. */
@@ -549,6 +558,11 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   for (const p of pack.patterns) out.patterns.push({ ...p, pack: pack.name });
   // Guarantee tokens are a flat vocabulary — same token from two packs is one token.
   out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
+  // Technology packages accumulate per technology name, lower-cased and deduped.
+  for (const [tech, packages] of Object.entries(pack.technologyPackages ?? {})) {
+    const key = tech.toLowerCase();
+    out.technologyPackages[key] = [...new Set([...(out.technologyPackages[key] ?? []), ...packages.map((p) => p.toLowerCase())])];
+  }
   // Assertions accumulate with provenance; the namespaced code keeps packs collision-free.
   for (const a of pack.assertions) out.assertions.push({ ...a, pack: pack.name, fullCode: assertionFullCode(pack.name, a.code) });
   // Instruction blocks accumulate in LOAD order — unlike every other merged
@@ -608,6 +622,7 @@ export function readManifest(target: string, resolveFrom: string): ExtensionPack
     skills: mod.skills ?? [],
     patterns: mod.patterns ?? [],
     guarantees: mod.guarantees ?? [],
+    technologyPackages: mod.technologyPackages ?? {},
     assertions: mod.assertions ?? [],
     instructions: mod.instructions ?? [],
     applyByDefault: mod.applyByDefault ?? false,

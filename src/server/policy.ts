@@ -627,7 +627,7 @@ function foldAppliedProfile(
 }
 
 /** What repairing a project's governing profile left in force (project_policy_orchestrator). */
-interface ProfileRepair {
+export interface ProfileRepair {
   /** The projectType governing the project afterwards — the previous one when nothing was repaired. */
   governingProfileId: string;
   /** The projectType that governed before the repair, for the audit. */

@@ -277,6 +277,10 @@ export interface ExternalConsumer {
   section: 'externals' | 'members';
   /** The producer's public names the consumer's specs use, sorted. */
   names: string[];
+  /** The names its specs still write that the producer no longer exports (what a breaking change just broke), sorted; absent when none. */
+  broken?: string[];
+  /** How it was found: `search` for a project root in a searched folder outside the family; absent for the family. */
+  found?: 'search';
 }
 
 /** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */

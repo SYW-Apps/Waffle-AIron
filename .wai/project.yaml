@@ -137,24 +137,13 @@ rules:
       - src/utils/download.ts
       # The error types every subsystem throws and catches. 39 importers, no state,
       # no decisions: modelling it would give all 39 a declared edge saying only
-      # "this one throws errors". Same shape as fs.ts below.
+      # "this one throws errors".
       - src/utils/errors.ts
       # Filename slugging. Pure.
       - src/utils/filenames.ts
       # An interactive prompt widget. One importer, and it decides nothing about this
       # system — it asks a person a question.
       - src/utils/filteredCheckbox.ts
-      # The shared yaml and fs helpers. The spec file store used to claim both
-      # as its own sourcePaths, which was false: it is its own module and these
-      # are utilities many modules use. Carried here rather than left on a spec
-      # that does not hold them.
-      - src/utils/fs.ts
-      # Split out of config/loader.ts so that file could be one job. Kept
-      # unclaimed ON PURPOSE: nineteen modules resolve paths through it, it
-      # holds no state and decides nothing, and modelling it as a component
-      # was tried and measured - nineteen components then needed a declared
-      # edge saying only "this one resolves paths". Same shape as fs.ts above.
-      - src/config/paths.ts
       # Terminal output, 26 importers. A component here would be on the dependency
       # list of nearly every CLI narrative and would tell a reader nothing.
       - src/utils/logger.ts

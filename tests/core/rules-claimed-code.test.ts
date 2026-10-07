@@ -211,10 +211,13 @@ describe('type-realization — a type claim is judged like every other claim on 
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('stays silent for a type that claims nothing at all', () => {
+  it('says so, as a notice, for a type that claims nothing at all before any code exists', () => {
     const dir = mkTemp();
     try {
-      expect(findingsFor(dir, [type({ id: 'invoice', name: 'Invoice' })])).toEqual([]);
+      // A type no file claims is one nothing compares with the code: never
+      // silent (MISSING_TYPE_SOURCE_PATH), but no defect before code begins.
+      const found = findingsFor(dir, [type({ id: 'invoice', name: 'Invoice' })]);
+      expect(found.map((f) => [f.code, f.severity])).toEqual([['MISSING_TYPE_SOURCE_PATH', 'notice']]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 

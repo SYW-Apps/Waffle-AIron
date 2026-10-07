@@ -107,7 +107,10 @@ methods:
         description: >-
           Read that member's resolved L0 export table by its namespace: each bound key of an item it
           exports (the component, the interface it narrows to, the type) maps to `<alias>::<public
-          name>`, the stable name a consumer resolves
+          name>`, the stable name a consumer resolves; and take from the graph's cross-project
+          references every public name of that member the bound project's references reach, in every
+          position — the member dependency's `uses` is those names together with the ones the
+          projection wrote, never only the latter
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveProjectExports
@@ -186,4 +189,4 @@ methods:
         outcome: DesignExport
 status: complete
 createdAt: '2026-10-04T13:54:26.399Z'
-updatedAt: '2026-10-06T13:05:18.957Z'
+updatedAt: '2026-10-07T10:56:39.712Z'
