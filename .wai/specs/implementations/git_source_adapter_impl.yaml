@@ -2,7 +2,9 @@ id: git_source_adapter_impl
 name: Git Source Adapter Implementation
 description: >-
   The git client behind stage 8's git sources: shells out to the git executable for ls-remote, a
-  shallow single-commit fetch and rev-parse; the cache root is resolved once per process.
+  shallow single-commit fetch and rev-parse; the cache root is resolved once per process. Every git
+  process it runs is given core.longpaths=true for that process only, so a cache entry nested past
+  the Windows path limit still checks out (the setting changes nothing on other platforms).
 contract: igit_source_adapter
 sourcePath: src/core/adapters/git-source.ts
 technologies:
@@ -67,4 +69,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-10-02T20:19:38.761Z'
-updatedAt: '2026-10-07T10:53:29.214Z'
+updatedAt: '2026-10-07T11:35:48.288Z'

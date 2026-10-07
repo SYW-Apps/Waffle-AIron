@@ -7,7 +7,7 @@ import { describeApprover, type ProjectApproval, type SpecDigestReading } from '
 import { parseYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
-  componentDesignView, implementationDesignView, interfaceDesignView, subsystemDesignView, typeDesignView,
+  asSchemaReads, componentDesignView, implementationDesignView, interfaceDesignView, subsystemDesignView, typeDesignView,
   type SpecStatus,
 } from '../models/specs.js';
 import { approvalKeyIn } from '../models/project-family.js';
@@ -121,7 +121,7 @@ function designDigest(kind: LinkedKind | undefined, content: string): string {
   if (memo !== undefined) return memo;
   const parsed = parsedSpec(content);
   if (!parsed) return digest(content);
-  const out = viewDigest(designViewOf(kind, parsed));
+  const out = viewDigest(designViewOf(kind, schemaRead(kind, parsed)));
   if (designDigestMemo.size > 20000) designDigestMemo.clear();
   designDigestMemo.set(key, out);
   return out;
@@ -129,6 +129,15 @@ function designDigest(kind: LinkedKind | undefined, content: string): string {
 
 /** Every status a spec can be stored with: none, or one of the three. */
 const STATUS_CANDIDATES: ReadonlyArray<SpecStatus | undefined> = [undefined, 'draft', 'design', 'complete'];
+
+/**
+ * A parsed spec file as the loader reads it — the keys its kind's schema reads,
+ * none it drops — so a key that means nothing to the loaded tree (and so to the
+ * gate identity) moves no approval digest either. A kind with no view as it is.
+ */
+function schemaRead(kind: LinkedKind | undefined, parsed: Record<string, unknown>): Record<string, unknown> {
+  return kind ? asSchemaReads(kind, parsed) : parsed;
+}
 
 /** A parsed spec file projected to the design view of its kind; a kind with no view (the L0, a group) as it is. */
 function designViewOf(kind: LinkedKind | undefined, parsed: object): object {
@@ -162,17 +171,23 @@ function viewDigest(view: object): string {
  * The status a recorded design digest says a spec file was approved with: the
  * file's design view with each candidate status put back (none, draft, design,
  * complete) — the view the EARLIER design reading took, which still carried
- * status — digested and compared with the recorded digest. `null` for a spec
+ * status — digested and compared with the recorded digest; each in the
+ * schema's reading of the keys and in the file's own, which a digest recorded
+ * over a key the schema does not read was taken in. `null` for a spec
  * approved with no status stored; undefined when no candidate matches (the
  * spec moved in its design) or the file does not parse.
  */
 function statusApprovedIn(kind: LinkedKind | undefined, content: string, recorded: string): SpecStatus | null | undefined {
   const parsed = parsedSpec(content);
   if (!parsed) return undefined;
-  const view = designViewOf(kind, parsed) as Record<string, unknown>;
-  for (const status of STATUS_CANDIDATES) {
-    const candidate = status === undefined ? view : { ...view, status };
-    if (viewDigest(candidate) === recorded) return status ?? null;
+  // Both readings of the keys: the schema's, and — for a digest recorded before
+  // the design reading dropped what the schema does not read — the file's own.
+  const views = [designViewOf(kind, schemaRead(kind, parsed)), designViewOf(kind, parsed)] as Record<string, unknown>[];
+  for (const view of views) {
+    for (const status of STATUS_CANDIDATES) {
+      const candidate = status === undefined ? view : { ...view, status };
+      if (viewDigest(candidate) === recorded) return status ?? null;
+    }
   }
   return undefined;
 }

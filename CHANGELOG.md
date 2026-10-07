@@ -800,6 +800,22 @@ design as one deterministic JSON document (`wairon-design` 1.0,
   what did. A storage move is no change for `lock`, as it already was for
   `lock-check`. `lock` says when it approves an all-draft design, and
   `validate --ci` prints how many draft-related warnings it waived.
+- **Nothing to approve on an empty tree.** `lock` on a tree that holds only the
+  L0 writes no lock and says to add a subsystem first (exit 0); `lock-check` and
+  `status` say the same.
+- **`lock-check` agrees with `lock` on the project id.** A hand-edited id
+  (`PROJECT_ID_CHANGED`) now fails `lock-check`, with or without `--strict`, and
+  names the fix: restore the id, or use `wairon project rename`. A rename not yet
+  re-locked fails it too.
+- **`lock-check` names what moved** in the same words as `lock` (for example the
+  network declaration), not a generic list.
+- **`status` and `lock-check` agree on unknown keys.** A key the spec schema does
+  not read, such as a top-level `symbol:` on an implementation, no longer shows
+  as a changed spec in `status`. It is reported as `UNKNOWN_SPEC_KEY`, with a hint
+  to put `symbol` on the method.
+- **Long cache paths on Windows.** wairon's git calls for its fetch cache use
+  `core.longpaths`, so `surface diff` and git producer fetches work under a deeply
+  nested cache directory.
 - **Networks.** `network declare` keeps the description. `GATEWAY_BYPASSED` is
   reported once per Portal. `MULTIPLE_GATEWAYS` has one severity and anchor in the
   project and the family run. `ENDPOINT_TRANSPORT_MISMATCH` stays an error on

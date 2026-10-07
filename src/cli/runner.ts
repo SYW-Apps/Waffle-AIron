@@ -14,7 +14,7 @@ import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree, checkApproval } from '../commands/lock.js';
+import { runLock as lockTree, checkApproval, holdsNoDesign } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
@@ -84,7 +84,16 @@ async function runLock(options: LockOptions): Promise<void> {
   const projectConfig = loadProjectConfig();
   if (!projectConfig) throw new ProjectNotInitializedError();
 
-  // Step 6: capture the identity the record will certify, before anything is judged.
+  // Steps 6-8: a tree holding the L0 and nothing below it, never approved, has
+  // no design to approve — approving it would record an empty design. Said, and
+  // nothing written; not a failure.
+  if (holdsNoDesign()) {
+    logger.info('Nothing designed to approve yet: the spec tree holds the L0 and nothing below it (no subsystem, no member project). '
+      + 'Add a subsystem first (an assistant adds one with sdd_add_subsystem), then run `wairon lock`. Nothing was written.');
+    return;
+  }
+
+  // Step 9: capture the identity the record will certify, before anything is judged.
   const captured = computeGateStateId();
 
   logger.info('Analyzing and validating specifications in-memory...');
@@ -94,7 +103,7 @@ async function runLock(options: LockOptions): Promise<void> {
     scopeSubsystem: options.subsystem,
   });
 
-  // Step 8: the design half is what the approval certifies and the only
+  // Step 11: the design half is what the approval certifies and the only
   // findings that may refuse it — a design can be approved before its code exists.
   const design = designOnly(dry);
   const errors = design.issues.filter((i) => i.severity === 'error');

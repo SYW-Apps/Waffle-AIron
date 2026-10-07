@@ -2,6 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
+import * as yaml from 'js-yaml';
+import { canonicalize } from '../../src/utils/canonical-json.js';
+import { implementationDesignView } from '../../src/models/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
@@ -10,6 +14,7 @@ import {
   saveInterfaceSpec,
   invalidateSpecCache,
   readLockState,
+  scanAllSpecs,
 } from '../../src/core/specs.js';
 import { computeOwnDesignStateId, computeOwnStateId, stateIdEquals } from '../../src/core/statehash.js';
 import { approvalVerdict, currentSpecDigests, diffAgainstApproval, reexpress } from '../../src/core/approval.js';
@@ -113,6 +118,12 @@ function writeFormat2(root: string): LockRecord {
   return record;
 }
 
+/** The stored file of the fixture's one implementation. */
+function implFile(at: string): string {
+  setProjectRoot(at);
+  return scanAllSpecs().paths.implementation['worker_impl'];
+}
+
 let root: string;
 afterEach(() => {
   setProjectRoot(null);
@@ -188,6 +199,36 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
     expect(diffAgainstApproval()!.changed).toHaveLength(1);
     expect(diffAgainstApproval()!.changed[0]).toContain('.implementation');
     expect(checkApproval(false).approved).toBe(false);
+  });
+
+  it('a key the schema does not read (a misplaced top-level symbol) moves neither reading — status and lock-check agree', async () => {
+    root = project();
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    const file = implFile(root);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^contract: iworker$/m, 'contract: iworker\nsymbol: runWorker'));
+    invalidateSpecCache();
+    setProjectRoot(root);
+    expect(fs.readFileSync(file, 'utf8')).toMatch(/^symbol: runWorker$/m);
+    expect(readLockState(computeGateStateId()).state).toBe('locked');
+    expect(diffAgainstApproval()!.changed).toEqual([]);
+    expect(approvalVerdict().text).toContain('no spec has changed since');
+    expect(checkApproval(true).approved).toBe(true);
+  });
+
+  it('a digest recorded over such a key (before the schema reading) still matches the file as it stands', async () => {
+    root = project();
+    const file = implFile(root);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^contract: iworker$/m, 'contract: iworker\nsymbol: runWorker'));
+    invalidateSpecCache();
+    setProjectRoot(root);
+    const record = (await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId()))!;
+    // The digest the earlier reading took: the file's own keys, the unknown one included.
+    const key = Object.keys(record.specs!).find((k) => k.includes('worker_impl'))!;
+    const raw = yaml.load(fs.readFileSync(file, 'utf8')) as object;
+    const earlier = crypto.createHash('sha256').update(canonicalize(implementationDesignView(raw))).digest('hex');
+    expect(earlier).not.toBe(record.specs![key]);
+    writeLockRecord({ ...record, specs: { ...record.specs, [key]: earlier } });
+    expect(diffAgainstApproval()!.changed).toEqual([]);
   });
 
   it('a change-and-revert (only the timestamp moved) is no drift', async () => {

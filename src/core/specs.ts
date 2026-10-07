@@ -359,6 +359,7 @@ const UNKNOWN_KEY_HINTS: Readonly<Record<string, string>> = {
   'system.export': 'The L0 export table is `publicInterfaces` (sdd_set_public_interfaces writes it).',
   'subsystem.exports': 'A subsystem publishes through `publicInterfaces`.',
   'component.type': 'A component\'s stereotype is `componentType`.',
+  'implementation.symbol': 'A symbol names the code realizing ONE contract method: set it on that method (`methods[].symbol`).',
 };
 
 /**

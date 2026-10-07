@@ -48,9 +48,15 @@ function cacheRoot(): string {
   return root;
 }
 
-/** git, never prompting for credentials: an unattended run fails rather than hangs. */
+/**
+ * git, never prompting for credentials: an unattended run fails rather than hangs.
+ * Every call runs with core.longpaths on: a cache entry sits several hash-named
+ * folders deep, past the Windows path limit under a long cache root, and a
+ * checkout there fails ("unpack-objects failed") unless git may use long paths.
+ * The setting is read only on Windows; elsewhere it changes nothing.
+ */
 function git(args: string[], cwd?: string): string {
-  return execFileSync('git', args, {
+  return execFileSync('git', ['-c', 'core.longpaths=true', ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],

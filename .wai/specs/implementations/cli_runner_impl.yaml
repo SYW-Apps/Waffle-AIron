@@ -1027,6 +1027,29 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 6
+        label: empty-design
+        description: >-
+          Ask whether there is anything to approve: a tree that holds the L0 and nothing below it,
+          and was never approved, has no design yet
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: holdsNoDesign
+      - stepNumber: 7
+        description: Nothing to approve?
+        type: branch
+        condition: the tree holds no design and no approval is on record
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        label: nothing-to-approve
+        description: >-
+          Say there is nothing designed to approve yet — the tree holds the L0 and nothing below it,
+          which `validate` calls nothing to check yet — and to add a subsystem first, then lock.
+          Write no record (approving an empty design approves nothing) and exit 0: it is not a
+          failure
+        type: return
+        outcome: nothing to approve
+      - stepNumber: 9
         label: capture
         description: >-
           CAPTURE the gate identity before anything is judged — the identity the record will
@@ -1036,55 +1059,55 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 7
+      - stepNumber: 10
         description: >-
           Run the as-complete dry-run gate over the tree; the result carries its code half
           summarized with the analyzer identity
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 8
+      - stepNumber: 11
         description: >-
           Take the design half (ValidationResult.designOnly): what the approval certifies and the
           only findings that may refuse it. Code-conformance findings are recorded beside the
           approval and never refuse it, so a design can be approved before its code exists — CI
           enforces code conformance (`wairon validate --ci`), not the lock
         type: local
-      - stepNumber: 9
+      - stepNumber: 12
         description: The design half found errors (an invalid design is never frozen)
         type: branch
         condition: the design half reported errors
-        onTrueStep: 10
-        onFalseStep: 11
-      - stepNumber: 10
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
         description: Refuse the lock, printing the blocking findings; nothing was changed
         type: return
         outcome: refused
-      - stepNumber: 11
+      - stepNumber: 14
         description: >-
           Summarize, apply requireApprovedMembers, confirm with the human (skipped under --yes),
           re-confirm the captured identity and write the record through the lock adapter
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: lockTree
-      - stepNumber: 12
+      - stepNumber: 15
         description: Did the human decline?
         type: branch
         condition: the lock adapter answered no record
-        onTrueStep: 13
-        onFalseStep: 14
-      - stepNumber: 13
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
         description: 'Cancelled: nothing was changed'
         type: return
         outcome: cancelled
-      - stepNumber: 14
+      - stepNumber: 17
         description: >-
           Refresh THIS project's generated outputs only — never --family: a parent lock writes
           nothing below itself, generated outputs included
         type: call
         targetComponent: cli_runner
         targetMethod: runGenerate
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
           Print the lock record, each direct member's state, and the code results plainly on their
           own line — "code: N errors, M warnings recorded beside the claim (analyzer <version>,
@@ -3911,4 +3934,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T11:01:02.294Z'
+updatedAt: '2026-10-07T11:36:08.477Z'

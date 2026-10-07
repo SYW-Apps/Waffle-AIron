@@ -2036,6 +2036,52 @@ export function subsystemDesignView<T extends object>(subsystem: T): T {
 }
 
 /**
+ * `raw` without the keys `parsed` (its schema's reading) no longer carries —
+ * exactly the keys unknownKeysIn names, followed the same way. Builds a copy;
+ * `raw` is untouched.
+ */
+function withoutUnknownKeys(raw: unknown, parsed: unknown): unknown {
+  if (Array.isArray(raw)) {
+    if (!Array.isArray(parsed) || parsed.length !== raw.length) return raw;
+    return raw.map((item, i) => withoutUnknownKeys(item, parsed[i]));
+  }
+  if (!raw || typeof raw !== 'object' || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return raw;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (key in (parsed as Record<string, unknown>)) out[key] = withoutUnknownKeys(value, (parsed as Record<string, unknown>)[key]);
+  }
+  return out;
+}
+
+/** The schema each spec kind with a design view is read with. */
+const SCHEMA_OF_KIND = {
+  implementation: ImplementationSpecSchema,
+  type: TypeSpecSchema,
+  component: ComponentSpecSchema,
+  subsystem: SubsystemSpecSchema,
+  interface: InterfaceSpecSchema,
+} as const;
+
+/**
+ * A stored spec document as the loader reads it: every key its kind's schema
+ * reads, and none it drops. A dropped key (UNKNOWN_SPEC_KEY, or a tolerated
+ * one like schemaVersion) means nothing to the loaded tree, so the gate
+ * identity, which digests the loaded specs, never sees it — and the per-spec
+ * approval digests, which read the stored file, must not either, or `status`
+ * and `lock-check` disagree over an edit that changed no design. A component's
+ * retired `mounts` stays (it is read compatibly, and its design view keeps
+ * it). Nothing is added — no schema default — so a document holding only known
+ * keys comes back as it is. A document its schema refuses comes back as it is.
+ */
+export function asSchemaReads(kind: keyof typeof SCHEMA_OF_KIND, doc: Record<string, unknown>): Record<string, unknown> {
+  const parsed = SCHEMA_OF_KIND[kind].safeParse(doc);
+  if (!parsed.success) return doc;
+  const kept = withoutUnknownKeys(doc, parsed.data) as Record<string, unknown>;
+  if (kind === 'component' && 'mounts' in doc) kept.mounts = doc.mounts;
+  return kept;
+}
+
+/**
  * interface_spec.designView — this contract as the approval sees it: its
  * readiness (status) and the timestamps left out; every other field stays,
  * the methods, endpoints and findings included. Pure, and reads a stored

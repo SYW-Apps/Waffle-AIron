@@ -20,12 +20,15 @@ methods:
         targetMethod: snapshot
       - stepNumber: 2
         description: >-
-          Parse each file's spec and project it to its design view — implementation_spec.designView,
-          type_spec.designView or component_spec.designView for those kinds, every other kind with
-          createdAt and updatedAt dropped — then canonicalize it (stable key order) and digest it,
-          keying by the path relative to the project root (a part's file under `members/<alias>/…`).
-          A file that does not parse is digested in the content reading instead, so it is still
-          recorded and any edit to it still shows
+          Parse each file's spec, keep only the keys its kind's schema reads — a key the loader
+          drops (UNKNOWN_SPEC_KEY) is no design, and the gate identity, which digests the loaded
+          specs, never sees it either, so the per-spec digests and the gate cannot disagree over one
+          — and project it to its design view — implementation_spec.designView, type_spec.designView
+          or component_spec.designView for those kinds, every other kind with createdAt and
+          updatedAt dropped — then canonicalize it (stable key order) and digest it, keying by the
+          path relative to the project root (a part's file under `members/<alias>/…`). A file that
+          does not parse is digested in the content reading instead, so it is still recorded and any
+          edit to it still shows
         type: local
       - stepNumber: 3
         description: >-
@@ -59,14 +62,15 @@ methods:
         outcome: unapproved
       - stepNumber: 4
         description: >-
-          Digest the tree as it stands in the reading the record names — design digests when its
-          specsReading is `design`, raw-content digests (CRLF normalized) when it names none, a
-          record written before format 3 — and compare against the digests the record carries: a
-          path the record does not cover is added, one whose digest differs is changed, one the
-          record covers that is gone is removed, and the rest are unchanged; then pair each added
-          path with a removed one of the same digest (in path order, each used once) as a move —
-          storage moved, content did not — taking both out of added and removed and counting the new
-          path as unchanged
+          Digest the tree as it stands in the reading the record names — design digests (schema-read
+          keys only) when its specsReading is `design`, raw-content digests (CRLF normalized) when
+          it names none, a record written before format 3 — and compare against the digests the
+          record carries: a path the record does not cover is added, one whose digest differs is
+          changed (a design digest recorded over a key the schema does not read still matches the
+          file as it stands), one the record covers that is gone is removed, and the rest are
+          unchanged; then pair each added path with a removed one of the same digest (in path order,
+          each used once) as a move — storage moved, content did not — taking both out of added and
+          removed and counting the new path as unchanged
         type: local
       - stepNumber: 5
         description: 'Answer with the lists: added, changed, removed, unchanged and moved'
@@ -270,4 +274,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-07T06:24:03.950Z'
+updatedAt: '2026-10-07T11:36:10.392Z'
