@@ -1,6 +1,7 @@
+<!-- wairon-root-start -->
 # Wairon SDD Project
 <!-- wairon-guide-start -->
-<!-- wairon-version: 5.1.1-dev.109 -->
+<!-- wairon-version: 5.1.1-dev.110 -->
 ## Wairon — Spec-Driven Development (you are operating inside it)
 
 This project uses **wairon**. System specs live under `.wai/specs/` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → Narrative); agent topology and code are derived from it.
@@ -38,3 +39,4 @@ This project uses **wairon**. System specs live under `.wai/specs/` (L0 System �
 * **Variants**: `gateway`, a Portal that authenticates, authorizes, validates or rate-limits before it dispatches. Logic is an Orchestrator, and `dependencyClass: pure | read` bounds what it may depend on (unset = a workflow). Specialist and Gateway are retired stereotypes.
 * Use `owns` for private member containment (exactly one hop) and `dependsOn` for collaborators. Never use generic suffixes like "Manager", "Helper", or "Utils".
 <!-- wairon-guide-end -->
+<!-- wairon-root-end -->
