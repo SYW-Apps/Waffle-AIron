@@ -239,8 +239,15 @@ describe('r5 (platform W2, lib-and-app R5-29): an Orchestrator\'s unnarrated wri
 });
 
 describe('r5 (solo-app D22): a Portal calling a workflow verb its narrative never names', () => {
-  it('`this.habits.archive(id)` inside checkIn → UNDECLARED_WRITE_CALL on the Portal, --ci exits 1', async () => {
-    const r = await sb.run(['validate', '--ci'], fresh(habitly({ portal: { body: 'this.habits.archive(id);', field: NO_FIELD, head: '' } })));
+  // archive declares `effect: write` here: since round 6 a verb that declares
+  // no effect has it read off its own narrative, and this fixture's archive
+  // narrative only returns — an inferred read (trials-r6-conformance covers
+  // the inference itself).
+  it('`this.habits.archive(id)` inside checkIn, archive a write → UNDECLARED_WRITE_CALL on the Portal, --ci exits 1', async () => {
+    const tree = habitly({ portal: { body: 'this.habits.archive(id);', field: NO_FIELD, head: '' } });
+    const orchestrator = (tree.interfaces ?? []).find((i) => i.id === 'ihabit_orchestrator') as { methods: Array<Record<string, unknown>> };
+    orchestrator.methods.find((m) => m.name === 'archive')!.effect = 'write';
+    const r = await sb.run(['validate', '--ci'], fresh(tree));
     expect(r.code, transcript(r)).toBe(1);
     expect(r.all).toMatch(/\[habit_portal_http\] \[UNDECLARED_WRITE_CALL\] Method "checkIn"[^\n]*habit_orchestrator\.archive/);
   });

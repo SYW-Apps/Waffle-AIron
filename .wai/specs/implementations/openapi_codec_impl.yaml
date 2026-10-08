@@ -20,9 +20,11 @@ methods:
         error: InvalidSurfaceDocumentError
       - stepNumber: 4
         description: >-
-          Map operations to contract methods: parameters/requestBody to structured params, responses
-          to returns, method+path to endpoints — a document's x-wairon-base-path taken back off each
-          path and set as the entry's basePath, and the parameter an operation's
+          Map operations to contract methods: parameters/requestBody to structured params, the first
+          2xx response in code order to returns (no JSON body, as a 204, reads void) — and a
+          `default`, 4XX or 5XX response with a JSON body makes it `result<T, E>` with E that body's
+          type — method+path to endpoints — a document's x-wairon-base-path taken back off each path
+          and set as the entry's basePath, and the parameter an operation's
           x-wairon-credential-param names put back first among its params — each schema read back
           into its canonical type expression's text (an inline anonymous enum as string, its values
           listed in the description)
@@ -41,8 +43,8 @@ methods:
           Read components.securitySchemes back into the entry's auth, symmetric with the x-wairon-*
           handling: map the document's declared security scheme to a PortalAuth on the entry (scheme
           kind, in/name, bearerFormat, oauth2 authorizationUrl/tokenUrl/refreshUrl/scopes/flow,
-          openIdConnectUrl) so an OpenAPI-format exchange round-trips auth; a document with no
-          security yields no auth.
+          openIdConnectUrl; an http scheme `custom` a custom auth) so an OpenAPI-format exchange
+          round-trips auth; a document with no security yields no auth.
         type: local
       - stepNumber: 7
         description: >-
@@ -87,20 +89,26 @@ methods:
         description: >-
           Render this partition as a standalone OpenAPI 3.1 document over only its own entries: map
           each contract method to an operation at openApiPath(the Portal's basePath, the endpoint
-          path) — basePath joined in, `:name` placeholders as `{name}`; leave out the parameter
-          credentialParam names (the security scheme carries the credential) and name it under
-          x-wairon-credential-param; each param named by a path placeholder a parameter in: path,
-          required, and the rest parameters in: query on a verb without a body or requestBody
-          properties on POST/PUT/PATCH; returns to responses, guarantees and effect noted as
-          extensions; each param and return type parsed (type_expression.parse) and rendered from
-          its canonical expression; render the embedded type closure as JSON-Schema components, then
-          every pinned external type a schema reached (`alias::name`, from the context's pinned
-          snapshot, as `<alias>.<id>`, resolving the names it uses inside that producer's own
-          closure) until none is left unrendered; derive components.securitySchemes from the
-          entries' projected auth (deduplicating identical schemes, attaching each requirement —
-          with oauth2 scopes — to its operations); name the basePath once as x-wairon-base-path and
-          declare no servers; and set the info block from the portal's name, the context's declared
-          version (else the snapshot's, else 0.0.0), the StateId and generatedAt.
+          path) — basePath joined in, `:name` placeholders as `{name}` — refusing with
+          OpenApiRouteCollisionError, naming both operations, the verb and the path, an operation
+          whose verb and path (placeholders compared by position) an earlier operation of the
+          partition already holds; leave out the parameter credentialParam names (the security
+          scheme carries the credential) and name it under x-wairon-credential-param; each param
+          named by a path placeholder a parameter in: path, required, and the rest parameters in:
+          query on a verb without a body or requestBody properties on POST/PUT/PATCH; the success
+          response under the verb's conventional code (204 with no content for a method returning
+          nothing, else 201 for POST, else 200) and, for a `result<T, E>` returns, a `default`
+          response whose body is E's schema; guarantees and effect noted as extensions; each param
+          and return type parsed (type_expression.parse) and rendered from its canonical expression;
+          render the embedded type closure as JSON-Schema components, then every pinned external
+          type a schema reached (`alias::name`, from the context's pinned snapshot, as
+          `<alias>.<id>`, resolving the names it uses inside that producer's own closure) until none
+          is left unrendered; derive components.securitySchemes from the entries' projected auth
+          (deduplicating identical schemes, attaching each requirement — with oauth2 scopes — to its
+          operations; a custom scheme an apiKey only where auth.name names its header or parameter,
+          else an http scheme `custom`); name the basePath once as x-wairon-base-path and declare no
+          servers; and set the info block from the portal's name, the context's declared version
+          (else the snapshot's, else 0.0.0), the StateId and generatedAt.
         type: local
       - stepNumber: 7
         description: >-
@@ -169,4 +177,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-07T22:16:15.001Z'
+updatedAt: '2026-10-08T08:30:32.614Z'

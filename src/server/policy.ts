@@ -13,7 +13,7 @@ import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import * as packs from './packs.js';
 import * as hostCore from './adapters/core.js';
 import * as hostValidator from './adapters/validator.js';
-import { computeGateStateId } from './adapters/validator.js';
+import { computeGateStateId, familyApprovals } from './adapters/validator.js';
 import type {
   AuditEvent,
   AuditLevel,
@@ -1180,6 +1180,27 @@ export function reconcileProjectPolicy(
 }
 
 /**
+ * Whether the bound project's approval is IN FORCE — the lock verdict both
+ * configuration views report. "locked" means in force, not merely that a
+ * record exists: a stale record freezes nothing (promotion refuses, and the
+ * tree already moved past it), so reporting it as locked claimed a freeze that
+ * was not real. A record stale only because the wairon release moved is judged
+ * by the shared release verdict (family_validator.releaseVerdict, read on the
+ * project's own approval entry): the approved design re-validated clean at the
+ * --ci standard carries the approval over, exactly as the local lock-check and
+ * status say — hosted and local never disagree about one project.
+ */
+function lockVerdictAt(root: string): { locked: boolean; lockStale: boolean } {
+  return runWithProjectRoot(root, () => {
+    const lockStatus = hostCore.readLockState(computeGateStateId());
+    if (lockStatus.state !== 'stale') return { locked: lockStatus.state === 'locked', lockStale: false };
+    const own = familyApprovals(0).find((a) => a.key === '');
+    const carried = own?.release?.carried === true;
+    return { locked: carried, lockStale: !carried };
+  });
+}
+
+/**
  * Authenticate the caller, authorize project:read over the target project, bind
  * its isolated root, and return the project's configuration view AND whether it is
  * genuinely in force: the configuration's projectType (project-level architectural
@@ -1213,12 +1234,7 @@ export function getProjectConfig(
   // repair path is reconcileProjectPolicy / setProjectType.
   const classified = classifyProfile(projectType, packs.executeApprovedListProjectProfiles(cfg, projectId, config));
 
-  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState(computeGateStateId()));
-  // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
-  // record freezes nothing (promotion refuses, and the tree already moved past it),
-  // so reporting it as locked claimed a freeze that was not real.
-  const locked = lockStatus.state === 'locked';
-  const lockStale = lockStatus.state === 'stale';
+  const { locked, lockStale } = lockVerdictAt(root);
   const overriding = overridingSubsystemIds(root);
 
   const view: ProjectConfigView = {
@@ -1279,12 +1295,7 @@ export function setProjectType(
   recordProfileSelectionAt(root, folded);
   const remainder = folded.profileIds.slice(1);
 
-  const lockStatus = runWithProjectRoot(root, () => hostCore.readLockState(computeGateStateId()));
-  // "locked" means the lock is IN FORCE, not merely that a record exists: a stale
-  // record freezes nothing (promotion refuses, and the tree already moved past it),
-  // so reporting it as locked claimed a freeze that was not real.
-  const locked = lockStatus.state === 'locked';
-  const lockStale = lockStatus.state === 'stale';
+  const { locked, lockStale } = lockVerdictAt(root);
   const overriding = overridingSubsystemIds(root);
 
   const view: ProjectConfigView = {

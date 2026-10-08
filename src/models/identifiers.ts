@@ -203,7 +203,10 @@ function alternative(text: string, casing: string | undefined): string {
  */
 export function reservedWordProblem(text: string, kind: IdentifierKind, targetLanguage?: string, casing?: string): string | null {
   if (kind !== 'method' && kind !== 'param' && kind !== 'field') return null;
-  const table = targetLanguage ? ownGet(LANGUAGES, targetLanguage.trim().toLowerCase()) : undefined;
+  // No targetLanguage: judged as TypeScript — the convention whose camelCase
+  // the tree is already judged by (methodCasingFor), so the two never disagree.
+  const declared = targetLanguage?.trim() ? targetLanguage.trim().toLowerCase() : undefined;
+  const table = ownGet(LANGUAGES, declared ?? 'typescript');
   if (!table) return null;
   const reserved = (table.kinds.has(kind) && table.reserved.has(text)) || (table.extra?.[kind]?.has(text) ?? false);
   if (!reserved) return null;
@@ -211,5 +214,8 @@ export function reservedWordProblem(text: string, kind: IdentifierKind, targetLa
   const why = kind === 'method' && text === 'constructor'
     ? `in ${table.label} a class method named "constructor" is the class's constructor, so no ${what} can be named so`
     : `"${text}" is a word ${table.label} reserves, so no ${table.label} ${what} can be named so`;
-  return `"${text}": ${why} (targetLanguage ${targetLanguage!.trim().toLowerCase()}) — choose another, e.g. "${alternative(text, kind === 'method' ? casing : undefined)}"`;
+  const language = declared !== undefined
+    ? `targetLanguage ${declared}`
+    : 'no targetLanguage is declared, so the tree is judged as TypeScript, the convention its camelCase method casing follows';
+  return `"${text}": ${why} (${language}) — choose another, e.g. "${alternative(text, kind === 'method' ? casing : undefined)}"`;
 }

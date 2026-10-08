@@ -190,7 +190,9 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadComponentSpecs
       - stepNumber: 2
-        description: Rename the component and rewrite every reference to it via the core client adapter
+        description: >-
+          Rename the component and rewrite every reference to it via the core client adapter — or,
+          with dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameComponent
@@ -717,7 +719,9 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadTypeSpec
       - stepNumber: 2
-        description: Rename the type and rewrite every reference to it via the core client adapter
+        description: >-
+          Rename the type and rewrite every reference to it via the core client adapter — or, with
+          dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameType
@@ -738,12 +742,26 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadTypeSpec
       - stepNumber: 2
-        description: Rename the field and respell every reference to it via the core client adapter
+        description: >-
+          Read the projects that consume the bound project — the family in reach, members included,
+          and the consumer checkouts in the searched folders — before anything moves, each with the
+          names and members its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the field and respell every reference to it via the core client adapter — or, with
+          dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameField
-      - stepNumber: 3
-        description: 'Shape the tool response from the report: the type, from and to, and the specs rewritten'
+      - stepNumber: 4
+        description: >-
+          Shape the tool response from the report: the type, from and to, the specs rewritten,
+          publishedIn, and `breaks` — every consumer read above whose specs reach a member of a
+          public name that carries the field (external_consumer.reaches), narrowed to those names
+          and members (external_consumer.narrowedTo)
         type: return
         outcome: FieldRename
   - name: renameParam
@@ -757,17 +775,30 @@ methods:
         targetComponent: mcp_core_adapter
         targetMethod: loadComponentSpecs
       - stepNumber: 2
-        description: Rename the parameter of the contract method via the core client adapter
+        description: >-
+          Read the projects that consume the bound project — the family in reach, members included,
+          and the consumer checkouts in the searched folders — before anything moves, each with the
+          names and methods its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the parameter of the contract method via the core client adapter — or, with dryRun,
+          ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameParam
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Shape the tool response from the report: the component, method, from and to, the
-          interfaces it moved in and the placeholders respelled
+          interfaces it moved in, the placeholders respelled (its followers' through signatureFrom
+          included), publishedIn, and `breaks` — every consumer read above whose specs call the
+          method on a public name the report says publishes it (external_consumer.reaches), narrowed
+          to that method (external_consumer.narrowedTo)
         type: return
         outcome: ParamRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-07T22:00:14.622Z'
+updatedAt: '2026-10-08T08:25:57.021Z'

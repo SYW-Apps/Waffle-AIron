@@ -14,7 +14,7 @@ import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../uti
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree, checkApproval, holdsNoDesign } from '../commands/lock.js';
+import { runLock as lockTree, checkApproval, holdsNoDesign, treeVerdict } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
@@ -76,8 +76,12 @@ import {
 async function runLock(options: LockOptions): Promise<void> {
   assertProjectInitialized();
 
-  if (!pathExists(AI_PATHS.specsSystem())) {
-    logger.error('No SDD spec tree found (.wai/specs). Nothing to lock.');
+  // Steps 1-3: no L0 that reads — said as `lock-check` and `validate` say it
+  // (a missing or unreadable L0 with specs below it is a tree whose root is
+  // gone, never "no tree"); nothing is written.
+  const tree = treeVerdict(true);
+  if (tree) {
+    logger.error(tree.state === 'no-tree' ? 'No SDD spec tree here (.wai/specs holds no L0): there is no design to lock. Nothing was written.' : `${tree.message} Nothing was written.`);
     process.exit(1);
   }
 
@@ -367,6 +371,10 @@ export async function runAgent(action: string, id: string): Promise<void> {
       if (brief.codeFence) {
         logger.info(brief.codeFence.length > 0 ? 'Code write fence:' : 'Code write fence: none declared yet (name the planned files when spawning)');
         for (const p of brief.codeFence) logger.info(`  ${p}`);
+      }
+      if (brief.sharedPaths && brief.sharedPaths.length > 0) {
+        logger.info('Shared (touch only for this component\'s needs; a new shared responsibility is a design change):');
+        for (const p of brief.sharedPaths) logger.info(`  ${p}`);
       }
       if (brief.readPaths && brief.readPaths.length > 0) {
         logger.info('Read paths:');

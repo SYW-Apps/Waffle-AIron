@@ -244,21 +244,23 @@ methods:
       warning for a wildcard cycle, which resolves to its union. Every entry names a source and an
       item that exist, that the source exports and, for an own type, that the level owns (a
       subsystem-owned type at L1, a project-level type with no subsystem for an L0 `{ typeDef }`
-      without `from`), under a public name of [a-z0-9-_]+ (EXPORT_INVALID) — a named re-export whose
-      source renamed the item names the new name. Every exported component can serve what its role
-      promises (EXPORT_UNCONSUMABLE, at L0 and for L1 re-exports): an entry consumers call must be a
-      Portal (a gateway being a Portal variant) or an Observer for events, and an entry consumers
-      implement (role implement, an extension point) may also be an Adapter whose realization
-      consumers supply. An L0 entry that re-exports a member's or an external's export never
-      declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a re-export can
-      narrow reach, never widen it. An own L0 entry exported to `department` is a notice
-      (EXPORT_AUDIENCE_NARROW): outside a hosted instance only the project's family sees it, and a
-      sibling checkout or git consumer — read at `instance` — is refused; whether its consumers are
-      hosted cannot be told from the tree, so it never fails the gate. An entry's export kind is
-      derived from its backing Portal's transport and no longer authored, so no rule compares an
-      authored kind with the stereotype; the retired public-surface-declared-type rule and its codes
-      are gone. The rule judges the facts the export resolver recorded in the scan, for the bound
-      root's table and every contained member's, and resolves nothing itself.
+      without `from`), under a public name of [a-z0-9-_]+, and an L0 wildcard re-export reaches at
+      least one name — a subsystem or project that exports nothing publishes nothing through it
+      (EXPORT_INVALID) — a named re-export whose source renamed the item names the new name. Every
+      exported component can serve what its role promises (EXPORT_UNCONSUMABLE, at L0 and for L1
+      re-exports): an entry consumers call must be a Portal (a gateway being a Portal variant) or an
+      Observer for events, and an entry consumers implement (role implement, an extension point) may
+      also be an Adapter whose realization consumers supply. An L0 entry that re-exports a member's
+      or an external's export never declares a wider audience than that export has
+      (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. An own L0 entry
+      exported to `department` is a notice (EXPORT_AUDIENCE_NARROW): outside a hosted instance only
+      the project's family sees it, and a sibling checkout or git consumer — read at `instance` — is
+      refused; whether its consumers are hosted cannot be told from the tree, so it never fails the
+      gate. An entry's export kind is derived from its backing Portal's transport and no longer
+      authored, so no rule compares an authored kind with the stereotype; the retired
+      public-surface-declared-type rule and its codes are gone. The rule judges the facts the export
+      resolver recorded in the scan, for the bound root's table and every contained member's, and
+      resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -681,4 +683,4 @@ methods:
           identifier
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-07T21:44:18.517Z'
+updatedAt: '2026-10-08T08:31:47.600Z'

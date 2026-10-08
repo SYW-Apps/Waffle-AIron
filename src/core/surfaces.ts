@@ -1553,16 +1553,64 @@ export function diff(against?: string): SurfaceDiff {
   // Steps 2-4: the baseline — a saved snapshot file, else the tree at the revision.
   let baseline: SurfaceSnapshot;
   let label: string;
+  // What the baseline's own table already published nothing through: a saved
+  // snapshot carries no table, so every such entry now reads as new against it.
+  let carriedEmpty = new Set<string>();
   if (against !== undefined && fs.existsSync(against) && fs.statSync(against).isFile()) {
-    baseline = SurfaceSnapshotSchema.parse(parseYaml(fs.readFileSync(against, 'utf8'), against));
+    baseline = savedSnapshot(against);
     label = `the saved surface ${path.resolve(against)}`;
   } else {
     const revision = approvedRevision(against);
     baseline = runWithProjectRoot(revision.directory, () => projectOwnSurface('project'));
+    carriedEmpty = new Set(runWithProjectRoot(revision.directory, () => entriesPublishingNothing()));
     label = revision.label;
   }
-  // Step 5: the changes.
-  return { project: current.projectId ?? current.projectName, against: label, changes: surfaceChanges(current, baseline) };
+  // Step 7: the changes, and every L0 entry now publishing nothing the baseline did not already carry.
+  const changes = surfaceChanges(current, baseline);
+  for (const detail of entriesPublishingNothing()) {
+    if (carriedEmpty.has(detail)) continue;
+    changes.push({ kind: 'added', name: 'L0 export table', detail: `export entry added, but it publishes nothing — it ${detail} (EXPORT_INVALID in \`wairon validate\`)` });
+  }
+  return { project: current.projectId ?? current.projectName, against: label, changes };
+}
+
+/**
+ * Step 3 of diff: a saved file read as a native snapshot, or refused in one
+ * sentence — an OpenAPI document, or anything else the native schema does not
+ * read, names what --against takes instead of dumping the schema's errors.
+ */
+function savedSnapshot(file: string): SurfaceSnapshot {
+  const body = fs.readFileSync(file, 'utf8');
+  const shown = path.resolve(file);
+  if (isOpenApiDocument(body)) {
+    throw new Error(`${shown} is an OpenAPI document; --against compares with a native surface snapshot (\`wairon surface export --format native --out <file>\`) or a git revision, never an OpenAPI document. Nothing was compared.`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(body, file);
+  } catch (e) {
+    throw new Error(`${shown} does not parse as YAML or JSON (${e instanceof Error ? e.message.split('\n')[0] : String(e)}); --against takes a native surface snapshot or a git revision. Nothing was compared.`);
+  }
+  const read = SurfaceSnapshotSchema.safeParse(parsed);
+  if (!read.success) {
+    const first = read.error.issues[0];
+    const where = first && first.path.length ? ` (at ${first.path.join('.')}: ${first.message})` : first ? ` (${first.message})` : '';
+    throw new Error(`${shown} is not a native surface snapshot${where}; --against takes one written by \`wairon surface export --format native --out <file>\`, or a git revision. Nothing was compared.`);
+  }
+  return read.data;
+}
+
+/**
+ * The L0 entries of the bound project's export table that publish nothing:
+ * each invalid problem of the resolved table that bound no public name (a
+ * wildcard over a level that exports nothing, a named item gone from its
+ * source), by its detail.
+ */
+function entriesPublishingNothing(): string[] {
+  const table = resolveProjectExports();
+  return table.problems
+    .filter((p) => p.kind === 'invalid' && (p.publicName === undefined || !table.entries.some((e) => e.publicName === p.publicName)))
+    .map((p) => p.detail);
 }
 
 // ---------------------------------------------------------------------------

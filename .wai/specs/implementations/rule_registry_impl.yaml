@@ -530,94 +530,99 @@ methods:
         targetComponent: conformance_rules
         targetMethod: exportConformance
       - stepNumber: 105
+        description: Register binding-modules
+        type: register
+        targetComponent: conformance_rules
+        targetMethod: bindingModules
+      - stepNumber: 106
         description: Register coupling-health
         type: register
         targetComponent: heuristic_rules
         targetMethod: couplingHealth
-      - stepNumber: 106
+      - stepNumber: 107
         description: Register narrative-language-constructs
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeLanguageConstructs
-      - stepNumber: 107
+      - stepNumber: 108
         description: Register technology-binding
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBinding
-      - stepNumber: 108
+      - stepNumber: 109
         description: Register technology-boundaries
         type: register
         targetComponent: heuristic_rules
         targetMethod: technologyBoundaries
-      - stepNumber: 109
+      - stepNumber: 110
         description: Register naming-conventions
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingConventions
-      - stepNumber: 110
+      - stepNumber: 111
         description: Register complexity-and-metadata
         type: register
         targetComponent: heuristic_rules
         targetMethod: complexityAndMetadata
-      - stepNumber: 111
+      - stepNumber: 112
         description: Register narrative-complexity
         type: register
         targetComponent: heuristic_rules
         targetMethod: narrativeComplexity
-      - stepNumber: 112
+      - stepNumber: 113
         description: Register naming-discipline
         type: register
         targetComponent: heuristic_rules
         targetMethod: namingDiscipline
-      - stepNumber: 113
+      - stepNumber: 114
         description: Register method-cohesion
         type: register
         targetComponent: heuristic_rules
         targetMethod: methodCohesion
-      - stepNumber: 114
+      - stepNumber: 115
         description: Register signature-source-suggestions
         type: register
         targetComponent: heuristic_rules
         targetMethod: signatureSourceSuggestions
-      - stepNumber: 115
+      - stepNumber: 116
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 116
+      - stepNumber: 117
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 117
+      - stepNumber: 118
         description: Register pack-requirements
         type: register
         targetComponent: extension_rules
         targetMethod: packRequirements
-      - stepNumber: 118
+      - stepNumber: 119
         description: Register pack-deprecations
         type: register
         targetComponent: extension_rules
         targetMethod: packDeprecations
-      - stepNumber: 119
+      - stepNumber: 120
         description: >-
           Register carried-debt (the rule index later moves it, with lint-allows, after any pack
           rules)
         type: register
         targetComponent: conformance_rules
         targetMethod: carriedDebt
-      - stepNumber: 120
+      - stepNumber: 121
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 121
+      - stepNumber: 122
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 122
-      - stepNumber: 122
+        endStep: 123
+      - stepNumber: 123
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -658,4 +663,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-10-07T21:44:33.046Z'
+updatedAt: '2026-10-08T08:22:56.481Z'

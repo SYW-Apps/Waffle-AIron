@@ -131,21 +131,35 @@ methods:
           top-level container; and unresolved when the code made the call land nowhere this analysis
           can name — no declaration answers because the receiver or the callee is typed any, unknown
           or not at all, or no declaration of the project does because a computed key names no
-          single member (anything but a literal, or an expression the checker types as one literal)
-          or the receiver as written is cast to a type with an index signature — together with, for
-          an unresolved call, the project classes its receiver's ORIGINAL type lands on: the
-          receiver with every cast, assertion, non-null mark and parenthesis taken off, each class
-          that type is or that realizes the interface or shape it is, as receivers. A call into a
-          dependency or the language library records no target and is not unresolved. Beside the
-          calls, record each REFERENCE the code takes as a value — a property access, element access
-          or name in an argument, an initializer, an assigned, returned or spread value, an array
-          element, a concise arrow body, or the receiver of .bind (or of .call/.apply not invoked on
-          the spot) — whose symbol is a callable function or method of the project, as a
-          ResolvedCallFact marked reference with the same targets and enclosing body. Then resolve
-          the calls of every project source file those calls and references land in that is no root
-          of the run — a helper module no spec names — transitively, and keep them apart as reached
-          calls. A program the compiler cannot build leaves every file without resolved calls, and
-          the rules fall back to the shape facts
+          single member (anything but a literal, or an expression the checker types as one literal —
+          whose VALUE then names the member, never the variable holding it) or the receiver as
+          written is cast to a type with an index signature — together with, for an unresolved call,
+          the project classes its receiver's ORIGINAL type lands on: the receiver with every cast,
+          assertion, non-null mark and parenthesis taken off, each class that type is or that
+          realizes the interface or shape it is, as receivers. A call into a dependency or the
+          language library records no target and is not unresolved. Beside the calls, record each
+          REFERENCE the code takes as a value — a property access, element access or name in an
+          argument, an initializer, an assigned, returned or spread value, an array element, a
+          concise arrow body, or the receiver of .bind (or of .call/.apply not invoked on the spot)
+          — whose symbol is a callable function or method of the project, as a ResolvedCallFact
+          marked reference with the same targets and enclosing body. Beside both, record each
+          ELEMENT ACCESS in any other position than a callee whose receiver's ORIGINAL type — every
+          cast taken off, a type with members of its own — is a project class or a shape project
+          classes realize, when what it reads is no declaration the checker can name (its key names
+          no single member, or a literal key is read off a receiver cast to any, unknown or an index
+          signature): a ResolvedCallFact marked reference and unresolved, under the literal's name
+          or none, with those classes as receivers — a literal key naming a method of the receiver
+          as written is a plain reference with that method's targets. Then resolve the calls of
+          every project source file those calls and references land in that is no root of the run —
+          a helper module no spec names — transitively, and keep them apart as reached calls. A
+          program the compiler cannot build leaves every file without resolved calls, and the rules
+          fall back to the shape facts. Last, for every project source file of the program — the
+          roots and every project file they pull in — record what it imports: each specifier of an
+          import, an export-from, an import-equals, a require or a dynamic import, resolved by the
+          compiler's module resolution under the same options; a specifier resolving to a project
+          source file (no declaration file, nothing under node_modules) is kept as that file's
+          canonical key, and a bare one that does not (never a relative path or a node: builtin) as
+          a package
         type: local
       - stepNumber: 9
         description: >-
@@ -157,7 +171,9 @@ methods:
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
           root-file list the unclaimed-source rule judges, the local-package map every import
           resolution reads, and — where the checker reached project files the run holds no facts for
-          — their resolved calls as reachedCalls, keyed by canonical path
+          — their resolved calls as reachedCalls, keyed by canonical path, and — where the checker
+          was loaded — what every own file of the program imports as reachedImports (ModuleImports:
+          the project files and the packages), keyed by canonical path
         type: return
         outcome: CodeModel
   - name: findTestsReferencing
@@ -230,4 +246,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-07T22:01:59.986Z'
+updatedAt: '2026-10-08T08:30:17.363Z'

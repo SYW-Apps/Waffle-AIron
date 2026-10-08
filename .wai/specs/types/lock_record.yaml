@@ -127,7 +127,44 @@ fields:
       proving the design unchanged (doctor --fix), instead of a human re-approving it: who approved
       and when stay the human's.
     optional: true
-methods: []
+  - name: gateParts
+    type: map<string, string>?
+    description: >-
+      The digest of each input of the certified gate identity, as computed beside it
+      (StateId.parts): what lets a later check name the input that moved, and judge a change of the
+      wairon release alone by re-validation instead of by digest. Absent on a record written before
+      this release; such a record is judged by its validatorVersion, its per-spec digests and its
+      members' pins.
+    optional: true
+  - name: restamped
+    type: LockRestamp?
+    description: >-
+      Present when `wairon lock` refreshed the record's release stamp after the approved, unchanged
+      design re-validated clean under a newer release, instead of a human re-approving it.
+    optional: true
+methods:
+  - name: approvalStamp
+    signature: 'approvalStamp(): string'
+    returns: string
+    description: >-
+      `<lockedAt> by <approver>` as every verdict names an approval, with `at an unrecorded time` /
+      `an unrecorded approver` for a record that carries no lockedAt or no usable lockedBy — never
+      `undefined by unknown`. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: approvalStamp
+  - name: movedGateParts
+    signature: 'movedGateParts(current: map<string, string>): list<string>?'
+    params:
+      - name: current
+        type: map<string, string>
+        description: The current identity's parts
+    returns: list<string>?
+    description: >-
+      The names of the gate parts that differ between this record's gateParts and `current` (an
+      input present on one side only counts as moved), sorted; null when the record carries no
+      gateParts. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: movedGateParts
 componentClass: lock_store
 invariants:
   - id: single-record-per-project
@@ -137,4 +174,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-06T10:07:18.244Z'
+updatedAt: '2026-10-08T08:35:56.515Z'

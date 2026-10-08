@@ -1,0 +1,42 @@
+kind: value-object
+id: binding_declaration
+name: BindingDeclaration
+description: >-
+  One exported declaration of a binding module: a function with its parameter names, or an
+  interface, class, object type or enum with the members it declares — what binding conformance
+  compares with a pinned snapshot.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: The declared name as the binding spells it.
+    optional: false
+  - name: kind
+    type: string
+    description: >-
+      function, interface, class, type (an object type alias, whose members are its fields), alias
+      (any other type alias — a union, a primitive, a reference — compared by name only) or enum.
+    optional: false
+  - name: params
+    type: list<string>
+    description: A function's parameter names in order; absent for any other kind.
+    optional: true
+  - name: members
+    type: list<BindingMember>
+    description: The members an interface, class or object type declares; empty for a function or an enum.
+    optional: false
+  - name: tag
+    type: string
+    description: >-
+      The `alias::name` its leading doc comment names (`/** geo::tiles */`), when it names one: the
+      producer interface or type the author says it mirrors, which the comparison then takes instead
+      of matching by name.
+    optional: true
+  - name: line
+    type: int
+    description: The 1-based line the declaration starts on, for the finding to point at.
+    optional: false
+methods: []
+sourcePath: src/core/binding-modules.ts
+createdAt: '2026-10-08T08:21:24.570Z'
+updatedAt: '2026-10-08T08:24:05.143Z'

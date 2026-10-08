@@ -455,8 +455,10 @@ function closureIds(snapshot: SurfaceSnapshot, method: MethodSignature): string[
  * differently; else the types it names whose shape moved — null when every one
  * of them is an exported type whose own shape change the changelog lists.
  */
-function signatureChange(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: MethodSignature, now: MethodSignature): string | null {
-  if (shownSignature(was) !== shownSignature(now)) return `signature ${shownSignature(was)} → ${shownSignature(now)}`;
+function signatureChange(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: MethodSignature, now: MethodSignature, undoneNow: MethodSignature = now): string | null {
+  // A rename is its own row: the signature reads differently only when it
+  // still does with the method's own name and the traced renames undone.
+  if (shownSignature(was) !== shownSignature(underName(undoneNow, was.name))) return `signature ${shownSignature(was)} → ${shownSignature(now)}`;
   const oldDefs = new Map(older.types.map((d) => [d.id, d] as const));
   const newDefs = new Map(newer.types.map((d) => [d.id, d] as const));
   const ids = [...new Set([...closureIds(older, was), ...closureIds(newer, now)])].sort();
@@ -470,6 +472,89 @@ function signatureChange(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: Me
   if (moved.length > 0 && unlisted.length === 0) return null;
   const named = (unlisted.length > 0 ? unlisted : moved).map((id) => `"${id}"`).join(', ');
   return named ? `signature reads the same, but a type it names changed shape: ${named}` : 'signature reads the same, but a type it names changed shape';
+}
+
+/** A method read under another name: its name, and the name its prose signature opens with. */
+function underName(method: MethodSignature, name: string): MethodSignature {
+  if (method.name === name) return method;
+  const signature = typeof method.signature === 'string' && method.signature.startsWith(`${method.name}(`)
+    ? `${name}${method.signature.slice(method.name.length)}`
+    : method.signature;
+  return { ...method, name, ...(signature !== undefined ? { signature } : {}) } as MethodSignature;
+}
+
+/**
+ * A newer snapshot with every traced rename against an older one undone: each
+ * closure type renamed per its trace (`formerly`) read back under its old id,
+ * each reference to another project's type that only changed alias
+ * (`a::name` → `b::name`, the same local name) read under the older
+ * spelling, and each field renamed per its trace read back under its old
+ * name — so a rename is counted once, as its rename, and never again as a
+ * shape change of everything that names it. Pure.
+ */
+function withRenamesUndone(newer: SurfaceSnapshot, older: SurfaceSnapshot): SurfaceSnapshot {
+  const olderIds = new Set(older.types.map((d) => d.id));
+  const newerIds = new Set(newer.types.map((d) => d.id));
+  const back = new Map<string, string>();
+  for (const def of newer.types) {
+    if (olderIds.has(def.id)) continue;
+    const from = (def.formerly ?? []).find((n) => olderIds.has(n) && !newerIds.has(n));
+    if (from !== undefined) back.set(def.id, from);
+  }
+  // Every qualified identifier each side spells, for alias respellings.
+  const spelled = (snapshot: SurfaceSnapshot): Set<string> => {
+    const out = new Set<string>(snapshot.types.map((d) => d.id).filter((id) => id.includes('::')));
+    const add = (text: unknown): void => {
+      if (typeof text !== 'string') return;
+      for (const token of text.match(TYPE_IDENTIFIER) ?? []) if (token.includes('::')) out.add(token.replace(/^::/, ''));
+    };
+    for (const e of snapshot.interfaces) for (const m of e.methods) { for (const p of m.params ?? []) add(p.type); add(m.returns); add(m.signature); }
+    for (const d of snapshot.types) { for (const x of d.fields) add(x.type); for (const p of d.params ?? []) add(p.type); add(d.returns); add(d.holds); }
+    return out;
+  };
+  const was = spelled(older);
+  const now = spelled(newer);
+  const local = (id: string): string => id.slice(id.lastIndexOf('::') + 2);
+  for (const id of now) {
+    if (was.has(id) || back.has(id)) continue;
+    const candidates = [...was].filter((w) => !now.has(w) && local(w) === local(id));
+    if (candidates.length === 1) back.set(id, candidates[0]);
+  }
+  const respell = <T>(text: T): T => (typeof text === 'string' && back.size > 0
+    ? text.replace(TYPE_IDENTIFIER, (token) => {
+      const bare = token.replace(/^::/, '');
+      const to = back.get(bare);
+      return to === undefined ? token : `${token.startsWith('::') ? '::' : ''}${to}`;
+    }) as T
+    : text);
+  const olderDefs = new Map(older.types.map((d) => [d.id, d] as const));
+  const types = newer.types.map((d) => {
+    const id = back.get(d.id) ?? d.id;
+    const respelled: SurfaceTypeDef = {
+      ...d,
+      id,
+      fields: d.fields.map((x) => ({ ...x, type: respell(x.type) })),
+      ...(d.params ? { params: d.params.map((p) => ({ ...p, type: respell(p.type) })) } : {}),
+      ...(d.returns !== undefined ? { returns: respell(d.returns) } : {}),
+      ...(d.holds !== undefined ? { holds: respell(d.holds) } : {}),
+    };
+    const was = olderDefs.get(id);
+    return was ? withFieldsRenamedBack(respelled, fieldRenames(was, respelled)) : respelled;
+  });
+  return {
+    ...newer,
+    types,
+    interfaces: newer.interfaces.map((e) => ({
+      ...e,
+      methods: e.methods.map((m) => ({
+        ...m,
+        ...(m.params ? { params: m.params.map((p) => ({ ...p, type: respell(p.type) })) } : {}),
+        returns: respell(m.returns),
+        ...(typeof m.signature === 'string' ? { signature: respell(m.signature) } : {}),
+      })),
+    })),
+    ...(newer.exportedTypes ? { exportedTypes: newer.exportedTypes.map((t) => ({ ...t, type: back.get(t.type) ?? t.type })) } : {}),
+  };
 }
 
 /**
@@ -486,16 +571,18 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
   const oldEntries = new Map(older.interfaces.map((e) => [e.id, e] as const));
   const oldTypes = new Map((older.exportedTypes ?? []).map((t) => [t.id, t] as const));
   const consumed = new Set<string>();
+  // Every row past a rename is judged with the traced renames undone.
+  const undone = withRenamesUndone(newer, older);
   const formerOf = (formerly: string[] | undefined, has: (n: string) => boolean): string | undefined =>
     (formerly ?? []).find((f) => has(f) && !consumed.has(f));
   // Contract entries: added, renamed, changed member by member.
-  for (const entry of newer.interfaces) {
+  newer.interfaces.forEach((entry, entryIndex) => {
     let before = oldEntries.get(entry.id);
     if (!before) {
       const from = formerOf(entry.formerly, (n) => oldEntries.has(n) && !newer.interfaces.some((e) => e.id === n));
       if (from === undefined) {
         out.push({ kind: 'added', name: entry.id, detail: `added: ${entry.type} contract with ${entry.methods.length} method(s), audience ${entry.audience}` });
-        continue;
+        return;
       }
       consumed.add(from);
       before = oldEntries.get(from)!;
@@ -508,13 +595,13 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     }
     const oldMethods = new Map(before.methods.map((m) => [m.name, m] as const));
     const usedOld = new Set<string>();
-    for (const method of entry.methods) {
+    entry.methods.forEach((method, methodIndex) => {
       let was = oldMethods.get(method.name);
       if (!was) {
         const from = (method.formerly ?? []).find((f) => oldMethods.has(f) && !entry.methods.some((m) => m.name === f));
         if (from === undefined) {
           out.push({ kind: 'added', name: entry.id, member: method.name, detail: `method added: ${shownSignature(method)}` });
-          continue;
+          return;
         }
         was = oldMethods.get(from)!;
         out.push({ kind: 'renamed', name: entry.id, member: method.name, from, detail: `method renamed from "${from}"` });
@@ -522,10 +609,13 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       usedOld.add(was.name);
       const a = memberDigest(older, before.id, was.name);
       const b = memberDigest(newer, entry.id, method.name);
-      // A rename alone moves the digest's name; compare the shape under one name.
-      const sameShape = a === b || memberDigest({ ...newer, interfaces: newer.interfaces.map((e) => (e !== entry ? e : { ...e, id: before!.id, methods: e.methods.map((m) => (m === method ? { ...m, name: was!.name } : m)) })) }, before.id, was.name) === a;
+      // A rename alone moves the digest's name, and a traced type or field
+      // rename the shapes of its closure: compare under the old names.
+      const undoneMethod = undone.interfaces[entryIndex].methods[methodIndex];
+      const underOld = (snapshot: SurfaceSnapshot, m: MethodSignature): string | null => memberDigest({ ...snapshot, interfaces: snapshot.interfaces.map((e, i) => (i !== entryIndex ? e : { ...e, id: before!.id, methods: e.methods.map((x) => (x === m ? underName(x, was!.name) : x)) })) }, before!.id, was!.name);
+      const sameShape = a === b || underOld(newer, method) === a || underOld(undone, undoneMethod) === a;
       if (!sameShape) {
-        const changed = signatureChange(older, newer, was, method);
+        const changed = signatureChange(older, undone, was, method, undoneMethod);
         if (changed !== null) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: changed });
       }
       for (const r of paramRenames(was, method)) {
@@ -534,11 +624,11 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       if (factValue(was.effect) !== factValue(method.effect)) {
         out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `effect ${shownEffect(was.effect)} → ${shownEffect(method.effect)}` });
       }
-    }
+    });
     for (const m of before.methods) {
       if (!usedOld.has(m.name)) out.push({ kind: 'removed', name: entry.id, member: m.name, detail: `method removed: ${shownSignature(m)}` });
     }
-  }
+  });
   // Exported types: added, renamed, changed in shape.
   for (const t of newer.exportedTypes ?? []) {
     let before = oldTypes.get(t.id);
@@ -563,10 +653,9 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       // the anonymous shape row stays only for what the renames do not explain.
       const renames = oldDef && newDef ? fieldRenames(oldDef, newDef) : [];
       for (const r of renames) out.push({ kind: 'renamed', name: t.id, member: r.to, from: r.from, detail: `field "${r.from}" renamed to "${r.to}"` });
-      const back: SurfaceSnapshot | null = renames.length && newDef
-        ? { ...newer, types: newer.types.map((d) => (d === newDef ? withFieldsRenamedBack(d, renames) : d)) }
-        : null;
-      if (!back || memberDigest(back, t.id, 'type') !== a) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
+      // Judged with every traced rename undone, so a type embedding a renamed
+      // type or field is no shape change of its own.
+      if (memberDigest(undone, t.id, 'type') !== a) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
     }
     // A type's own methods are carried for bindings, never digested: a change drifts a pin.
     if (oldDef && newDef && factValue(typeMethods(oldDef)) !== factValue(typeMethods(newDef))) out.push({ kind: 'changed', name: t.id, detail: 'type methods changed (a method added, removed, or its params or returns)' });

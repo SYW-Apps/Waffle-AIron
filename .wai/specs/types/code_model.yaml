@@ -45,6 +45,14 @@ fields:
       found — keyed by canonical path. What lets a rule read unowned code as part of whoever calls
       it. Absent where no type checker was loaded
     optional: true
+  - name: reachedImports
+    type: map<string, ModuleImports>
+    description: >-
+      What each of the project's own source files the type checker read imports — the run's files
+      and every project file they pull in, a helper module no spec names included — keyed by
+      canonical path. What lets a rule read an unowned module's imports as its importer's. Absent
+      where no type checker was loaded
+    optional: true
 methods:
   - name: pathKey
     signature: 'pathKey(path: string): string'
@@ -60,4 +68,4 @@ methods:
       analyzed no such path
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-10-07T21:58:56.151Z'
+updatedAt: '2026-10-08T08:30:20.935Z'

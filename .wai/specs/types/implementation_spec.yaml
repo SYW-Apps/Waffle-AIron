@@ -126,6 +126,20 @@ fields:
       declared publication, not an undeclared crossing. Outside the approval, like every linkage
       field
     optional: true
+  - name: bindings
+    type: list<string>
+    description: >-
+      The hand-written binding modules (project-relative, shareable N:1) through which this
+      realization reaches another project's code — a typed binding to a native library, a client
+      stub declaring a producer's functions and types — the one place where the consumer's code
+      spells the producer's names. Code linkage, outside the approval like sourcePath: naming or
+      moving one never reopens it. Binding conformance compares each with the pinned snapshots of
+      the externals this implementation's component reaches (function and method names, their
+      parameter names and arity, type field names), so a re-pin that renames, removes or reshapes a
+      name the binding still declares is reported with the rename the snapshot traces. A binding
+      named by one component's implementations alone is in that component's brief fence; one several
+      components name is listed as shared.
+    optional: true
 methods:
   - name: sourceFiles
     signature: 'sourceFiles(): string[]'
@@ -154,4 +168,4 @@ methods:
     symbol: implementationDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T23:03:28.099Z'
+updatedAt: '2026-10-08T08:21:08.624Z'

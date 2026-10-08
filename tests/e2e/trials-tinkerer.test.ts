@@ -282,13 +282,13 @@ describe('tinkerer: lock messages say what they approve', () => {
     // where lock named the network declaration: both now print the one sentence.
     const check = await sb.run(['lock-check'], dir);
     expectExit(check, 1);
-    expect(check.all).toContain('No own spec file and no direct member\'s approval moved, so what changed is an input the gate identity covers');
+    expect(check.all).toContain('No own spec file and no direct member\'s approval moved, so what changed is the network declaration');
     expect(check.all).toContain('the network declaration');
     expect(check.all).not.toContain('a declared input or `composition`.');
 
     const lock = await sb.run(['lock', '--yes'], dir);
     expectExit(lock, 0);
-    expect(lock.all).toContain('No spec changed since the last approval, but what the design is approved under did: an input the gate identity covers');
+    expect(lock.all).toContain('No spec changed since the last approval, but what the design is approved under did: the network declaration');
     expect(lock.all).toContain('the network declaration');
     expect(lock.all).not.toContain('Nothing has changed since the last approval');
 

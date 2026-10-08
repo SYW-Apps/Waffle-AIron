@@ -32,7 +32,13 @@ fields:
       Every edit the rename made to the debt register: an entry anchored on the type. Empty when the
       register names none
     optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when this report is a dry run: what the rename would rewrite, keep and rekey, with
+      nothing written.
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-04T13:52:12.770Z'
-updatedAt: '2026-10-04T13:52:15.792Z'
+updatedAt: '2026-10-08T08:24:03.709Z'

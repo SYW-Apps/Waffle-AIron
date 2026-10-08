@@ -166,6 +166,33 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     expect(back?.simPath).toBe('packages/core/sim/orch.sim.ts');
   });
 
+  it("re-expresses the moved implementations' binding-module paths against the new root and back (round 6)", () => {
+    seed();
+    saveInterfaceSpec({
+      id: 'icore_orch', name: 'icore_orch', description: 'd', component: 'core_orch',
+      methods: [{ name: 'run', description: 'd', signature: 'run(): void', returns: 'void' }],
+      createdAt: now, updatedAt: now,
+    } as any);
+    saveImplementationSpec({
+      id: 'core_orch_impl', name: 'impl', description: 'd', contract: 'icore_orch',
+      sourcePath: 'packages/core/src/orch.ts',
+      bindings: ['packages/core/src/geo_binding.ts'],
+      methods: [{ name: 'run', narrative: [] }],
+      createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    externalizeSubsystem('core', 'packages/core', 'project');
+    invalidateSpecCache();
+    const own = workspaceFor(path.join(root, 'packages', 'core')).loadImplementationSpec('core_orch_impl') as any;
+    expect(own?.bindings).toEqual(['src/geo_binding.ts']);
+
+    internalizeMember('core', { home: '' });
+    invalidateSpecCache();
+    const back = loadImplementationSpec('core_orch_impl') as any;
+    expect(back?.bindings).toEqual(['packages/core/src/geo_binding.ts']);
+  });
+
   it("re-expresses each method's own sourcePath against the new root and back, leaving an absolute one alone", () => {
     seed();
     saveInterfaceSpec({

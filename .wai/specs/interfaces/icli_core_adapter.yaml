@@ -590,7 +590,7 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.renameField: rename a field of a type and every reference
       to it
-    signature: 'renameField(typeId: string, field: string, newName: string): FieldRename'
+    signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
     returns: FieldRename
     params:
       - name: typeId
@@ -602,13 +602,17 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
   - name: renameParam
     description: >-
       Forward to spec_maintenance_portal.renameParam: rename a parameter of a contract method,
       keeping its old name in the parameter's rename trace
     signature: >-
-      renameParam(componentId: string, methodName: string, param: string, newName: string):
-      ParamRename
+      renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
+      bool): ParamRename
     returns: ParamRename
     params:
       - name: componentId
@@ -623,6 +627,10 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
   - name: renameMethod
     description: >-
       Forward to spec_maintenance_portal.renameMethod: rename a contract method and every reference
@@ -659,6 +667,15 @@ methods:
     returns: void
     params: []
     effect: write
+  - name: staleDerivedDocs
+    description: >-
+      The derived context documents whose content a regenerate would change, for `wairon doctor`.
+      Forwarded to the core portal.
+    signature: 'staleDerivedDocs(): list<string>'
+    returns: list<string>
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T22:40:40.566Z'
+updatedAt: '2026-10-08T08:41:06.940Z'

@@ -1502,6 +1502,7 @@ function childRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string,
     ...spec,
     ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
     ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+    ...(spec.bindings ? { bindings: spec.bindings.map(reexpress) } : {}),
     methods: spec.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: reexpress(m.sourcePath) } : m)),
   };
 }
@@ -1519,6 +1520,7 @@ function partRelativeFilePaths(spec: ImplementationSpec, authoringRoot: string, 
     ...spec,
     ...(spec.sourcePath ? { sourcePath: reexpress(spec.sourcePath) } : {}),
     ...(spec.simPath ? { simPath: reexpress(spec.simPath) } : {}),
+    ...(spec.bindings ? { bindings: spec.bindings.map(reexpress) } : {}),
     methods: spec.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: reexpress(m.sourcePath) } : m)),
   };
 }
@@ -3035,10 +3037,22 @@ export function ineffectiveDeltaPaths(
       // A narrative whose delta inserts or deletes renumbers everything after
       // the mutation point; no path through it can be compared honestly.
       if (field === 'narrative' && d.some(carriesEditMarker)) return;
+      // A list of plain values merges value by value: each value named must be
+      // in the written list, and one every value of which was held already
+      // changed nothing.
+      const plain = d.filter((x) => typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean');
+      if (plain.length > 0) {
+        const text = (v: unknown): string => (v && typeof v === 'object' ? String((v as Record<string, unknown>).description ?? JSON.stringify(v)) : String(v));
+        const holds = (list: unknown, x: unknown): boolean => Array.isArray(list) && list.some((y) => text(y) === String(x));
+        if (plain.some((x) => !holds(m, x))) say(path, 'the level does not keep this value, so the write dropped it');
+        else if (plain.every((x) => holds(s, x)) && d.every((x) => plain.includes(x))) say(path, 'the stored spec already held this value');
+        if (d.every((x) => plain.includes(x) || carriesEditMarker(x))) return;
+      }
       for (const element of d) {
         if (carriesEditMarker(element)) continue;      // its own refusals and notices cover it
+        if (plain.includes(element)) continue;           // judged above, value by value
         const key = reportIdentityOf(field, element);
-        if (key === null) {                             // a plain-string list: replaced wholesale
+        if (key === null) {                             // no identity: compared as written
           if (!same(m, d)) say(path, 'the level does not keep this value, so the write dropped it');
           else if (same(s, d)) say(path, 'the stored spec already held this value');
           return;
@@ -3707,6 +3721,8 @@ export class SpecWorkspace {
           }
           // A part's simulation harness is named from the part's root too.
           if (baseDir !== raw.dir && parsed.simPath) parsed.simPath = normalizeSourcePath(parsed.simPath);
+          // And its binding modules, named like its source files.
+          if (parsed.bindings) parsed.bindings = parsed.bindings.map(normalizeSourcePath);
           keep('implementation', index.implementations, parsed, file);
         } else if ('kind' in doc) {
           if ((doc as { kind?: unknown }).kind === 'group') {
@@ -4421,18 +4437,39 @@ export class SpecWorkspace {
   loadSystemSpec(): SystemSpec | null {
     const p = this.paths.specsSystem();
     if (!pathExists(p)) return null;
-    try {
-      const raw = readSpecFile(p);
-      return SystemSpecSchema.parse(raw);
-    } catch (e: any) {
-      this.loaderIssues.push({
-        severity: 'error',
-        code: 'SCHEMA_VALIDATION_ERROR',
-        message: `Failed to parse system spec: ${e.message || String(e)}`,
-        specId: 'system',
-      });
-      return null;
+    const problem = this.systemSpecProblem();
+    if (problem === null) return SystemSpecSchema.parse(readSpecFile(p));
+    // One line that says what is wrong, said once however often the L0 is read.
+    const message = `The L0 System spec (.wai/specs/.index.yaml) cannot be read: ${problem}. Restore it from version control (\`git checkout -- .wai/specs/.index.yaml\`) or fix it by hand.`;
+    if (!this.loaderIssues.some((i) => i.specId === 'system' && i.message === message)) {
+      this.loaderIssues.push({ severity: 'error', code: 'SCHEMA_VALIDATION_ERROR', message, specId: 'system' });
     }
+    return null;
+  }
+
+  /**
+   * Why the L0 file that is there cannot be read as an L0, in one line —
+   * empty, null, not YAML, or failing its schema (each complaint as
+   * `path: message`) — or null when it reads (or is absent).
+   */
+  systemSpecProblem(): string | null {
+    const p = this.paths.specsSystem();
+    if (!pathExists(p)) return null;
+    let raw: unknown;
+    try {
+      raw = readSpecFile(p);
+    } catch (e) {
+      const first = String((e as Error)?.message ?? e).split('\n')[0];
+      return `it is not valid YAML (${first})`;
+    }
+    if (raw === undefined || raw === null || raw === '') {
+      const text = fs.readFileSync(p, 'utf8');
+      return text.trim() === '' ? 'the file is empty' : 'it holds null, not an L0 mapping';
+    }
+    if (typeof raw !== 'object' || Array.isArray(raw)) return `it holds ${Array.isArray(raw) ? 'a list' : `a ${typeof raw}`}, not an L0 mapping`;
+    const parsed = SystemSpecSchema.safeParse(raw);
+    if (parsed.success) return null;
+    return parsed.error.issues.map((i) => `${i.path.length ? i.path.join('.') : '(the document)'}: ${i.message}`).join('; ');
   }
 
   saveSystemSpec(spec: SystemSpec): void {
@@ -5568,10 +5605,15 @@ export class SpecWorkspace {
   findOrphanedSpecFiles(): string[] {
     const specsDir = this.paths.specsDir();
     if (!pathExists(specsDir)) return [];
-    if (pathExists(this.paths.specsSystem()) || pathExists(path.join(specsDir, 'system.yaml'))) return [];
+    // An L0 that is there but does not read as one (empty, null, not YAML,
+    // failing its schema) leaves the tree as unjudged as a deleted one.
+    const l0 = this.paths.specsSystem();
+    const readable = (pathExists(l0) && this.systemSpecProblem() === null) || pathExists(path.join(specsDir, 'system.yaml'));
+    if (readable) return [];
     const root = this.paths.root();
     const projectRoot = path.dirname(root);
     return listSpecFiles(specsDir)
+      .filter((f) => path.resolve(f) !== path.resolve(l0))
       .map((f) => path.relative(projectRoot, f).split(path.sep).join('/'))
       .sort();
   }
@@ -5880,6 +5922,75 @@ export class SpecWorkspace {
       }
     };
 
+    /**
+     * A list of plain values — owns, dependsOn, guarantees, previousNames, a
+     * technology's matches, the L0's requirements written as text — MERGES like
+     * every other list (F-r6 M1). It used to be replaced wholesale, so a delta
+     * naming one requirement silently deleted every other one while the tool
+     * promised that arrays upsert. Now each value the delta names that the
+     * list does not hold is appended, every value it holds is kept, and a
+     * value leaves only by an explicit removal marker `{ value, action:
+     * 'delete' }` (or `remove: true`) — a requirement also by `{ description,
+     * action: 'delete' }`, since a requirement written as text and one written
+     * as `{ description }` are the same requirement. `[]` still clears.
+     */
+    const isPlainValue = (v: unknown): v is string | number | boolean =>
+      typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+    /** A requirement written as an object: its text is its identity. */
+    const isRequirementObject = (field: string, v: unknown): boolean =>
+      field === 'globalRequirements' && !!v && typeof v === 'object' && !Array.isArray(v)
+      && typeof (v as Record<string, unknown>).description === 'string';
+    /** A removal (or addition) marker addressing a plain value: `{ value, action?, remove? }`. */
+    const isValueMarker = (v: unknown): boolean =>
+      !!v && typeof v === 'object' && !Array.isArray(v) && isPlainValue((v as Record<string, unknown>).value)
+      // Only the marker's own keys: a switch case carries `value` too, and is an element, not a marker.
+      && Object.keys(v as Record<string, unknown>).every((k) => k === 'value' || k === 'action' || k === 'remove');
+    /** The identity a plain-value list matches by: the value as text, a requirement object by its description. */
+    const plainKeyOf = (field: string, v: unknown): string | null => {
+      if (isPlainValue(v)) return String(v);
+      if (isValueMarker(v)) return String((v as Record<string, unknown>).value);
+      if (isRequirementObject(field, v)) return String((v as Record<string, unknown>).description);
+      return null;
+    };
+    /** Whether a stored list and a delta for it are a list of plain values (requirements: text or objects). */
+    const isPlainValueList = (field: string, stored: unknown, delta: unknown[]): boolean => {
+      if (stored !== undefined && !Array.isArray(stored)) return false;
+      const before = (stored ?? []) as unknown[];
+      const plain = (v: unknown): boolean => isPlainValue(v) || isRequirementObject(field, v);
+      if (!before.every(plain)) return false;
+      if (!delta.every((d) => plain(d) || isValueMarker(d))) return false;
+      // A list of requirement objects with a delta of them is the identified merge's already.
+      if (field !== 'globalRequirements') return delta.some((d) => isPlainValue(d) || isValueMarker(d)) || before.some(isPlainValue);
+      return true;
+    };
+    /** A plain-value list merged: values the delta names appended when absent, a marked value removed, nothing else lost. */
+    const mergePlainValues = (field: string, stored: unknown[], delta: unknown[]): unknown[] => {
+      const out = [...stored];
+      for (const deltaItem of delta) {
+        const key = plainKeyOf(field, deltaItem);
+        if (key === null) continue;
+        assertDeltaMarkers(deltaItem, `${field} value "${key}"`);
+        const isDelete = !!deltaItem && typeof deltaItem === 'object'
+          && ((deltaItem as Record<string, unknown>).remove === true || (deltaItem as Record<string, unknown>).action === 'delete');
+        const at = out.findIndex((v) => plainKeyOf(field, v) === key);
+        if (isDelete) {
+          if (at < 0) {
+            throw new Error(
+              `Refusing to delete ${field} value "${key}": the list does not hold it. `
+              + (out.length ? `It holds: ${out.map((v) => `"${plainKeyOf(field, v)}"`).join(', ')}.` : 'The list is empty.'),
+            );
+          }
+          out.splice(at, 1);
+          continue;
+        }
+        if (at >= 0) continue; // held already: restating a value never loses or duplicates it
+        out.push(isValueMarker(deltaItem) ? (deltaItem as Record<string, unknown>).value
+          : isRequirementObject(field, deltaItem) ? { description: (deltaItem as Record<string, unknown>).description }
+            : deltaItem);
+      }
+      return out;
+    };
+
     /** Keys whose merge the enclosing level performs itself, so the generic one must not. */
     const NO_NESTED_MERGE: ReadonlySet<string> = new Set(['ext', 'narrative', 'unset']);
 
@@ -5906,6 +6017,10 @@ export class SpecWorkspace {
         // a delete marker addressed at an empty collection a refusal rather than
         // a marker the writer strips while reporting success.
         const stored = Array.isArray(before) ? before : [];
+        if (isPlainValueList(key, stored, value)) {
+          out[key] = mergePlainValues(key, stored, value);
+          continue;
+        }
         if (!isIdentifiedArray(key, stored, value)) continue;
         out[key] = mergeIdentifiedArray(key, stored, value);
       }
@@ -6376,6 +6491,10 @@ export class SpecWorkspace {
           res.dispatch = mergeKeyedArray(existing.dispatch, value, b => String(b?.capability));
         } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
           res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
+        } else if (Array.isArray(value) && isPlainValueList(key, existing[key], value)) {
+          // A list of plain values merges: values appended when absent, a marked
+          // value removed, nothing the delta did not name lost.
+          res[key] = mergePlainValues(key, existing[key] ?? [], value);
         } else if (Array.isArray(value) && value.length > 0 && Array.isArray(existing[key])
                    && isIdentifiedArray(key, existing[key], value)) {
           // Every other array whose elements carry an identity: upsert by it and
@@ -6408,6 +6527,10 @@ export class SpecWorkspace {
       const prefix = this.writePrefixFor(id);
       const q = (ref: unknown): unknown =>
         typeof ref === 'string' ? this.bindReference(prefix, ref) : ref;
+      const qualifyListItem = (item: unknown): unknown =>
+        (item && typeof item === 'object' && typeof (item as Record<string, unknown>).value === 'string'
+          ? { ...(item as Record<string, unknown>), value: q((item as Record<string, unknown>).value) }
+          : q(item));
       const out: Record<string, any> = { ...d };
       switch (kind) {
         case 'subsystem': {
@@ -6429,8 +6552,9 @@ export class SpecWorkspace {
         }
         case 'component':
           if (typeof out.subsystem === 'string') out.subsystem = q(out.subsystem);
-          if (Array.isArray(out.owns)) out.owns = out.owns.map(q);
-          if (Array.isArray(out.dependsOn)) out.dependsOn = out.dependsOn.map(q);
+          // A removal marker names the reference as its `value`: qualified the same way.
+          if (Array.isArray(out.owns)) out.owns = out.owns.map(qualifyListItem);
+          if (Array.isArray(out.dependsOn)) out.dependsOn = out.dependsOn.map(qualifyListItem);
           if (Array.isArray(out.dispatch)) {
             out.dispatch = out.dispatch.map((b: any) =>
               (typeof b?.component === 'string' ? { ...b, component: q(b.component) } : b));

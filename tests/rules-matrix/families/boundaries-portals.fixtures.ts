@@ -384,4 +384,65 @@ export default [
       ],
     },
   }),
+  // -------------------------------------------------------------------------
+  // ENDPOINT_ROUTE_DUPLICATE
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'ENDPOINT_ROUTE_DUPLICATE',
+    severity: 'error',
+    anchoredTo: 'ibooking_api',
+    expectFire: true,
+    scenario: 'The booking portal binds getBooking to GET /bookings/{bookingId} and, after a rebinding slip, getBookingHistory to GET /bookings/:id: the same route in the Express spelling, so a router can dispatch only one of them.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [{ id: 'booking_portal', componentType: 'Portal', transport: 'HTTP', basePath: '/v1', invokedBy: { kind: 'entry', caller: 'The patient web app and the clinic front desk, over HTTPS' }, description: 'The booking API.' }],
+      interfaces: [{
+        id: 'ibooking_api', component: 'booking_portal', methods: [
+          { name: 'getBooking', description: 'Read one booking.', params: [{ name: 'bookingId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/bookings/{bookingId}' } },
+          { name: 'getBookingHistory', description: 'Read a booking history.', params: [{ name: 'id', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/bookings/:id' } },
+        ],
+      }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'ENDPOINT_ROUTE_DUPLICATE',
+    severity: 'error',
+    anchoredTo: 'islot_api',
+    expectFire: true,
+    scenario: 'Two Portals of the clinic both mount under basePath /api and both bind GET /slots/{slotId}: behind the one /api prefix they share, the route is bound twice.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [
+        { id: 'slot_portal', componentType: 'Portal', transport: 'HTTP', basePath: '/api', invokedBy: { kind: 'entry', caller: 'The patient web app and the clinic front desk, over HTTPS' }, description: 'The slot API.' },
+        { id: 'admin_portal', componentType: 'Portal', transport: 'HTTP', basePath: '/api/', invokedBy: { kind: 'entry', caller: 'Clinic administrators in the back-office console, over HTTPS' }, description: 'The admin API.' },
+      ],
+      interfaces: [
+        { id: 'islot_api', component: 'slot_portal', methods: [{ name: 'getSlot', description: 'Read one slot.', params: [{ name: 'slotId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/slots/{slotId}' } }] },
+        { id: 'iadmin_api', component: 'admin_portal', methods: [{ name: 'inspectSlot', description: 'Inspect one slot.', params: [{ name: 'slotId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/slots/{slotId}' } }] },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'ENDPOINT_ROUTE_DUPLICATE',
+    expectFire: false,
+    reason: 'Each route binds one verb: the same path under two verbs, and the same path in two Portals that declare no shared basePath (two services), are distinct routes.',
+    scenario: 'The booking portal binds GET and DELETE /bookings/{bookingId}; a separate billing portal with no basePath also binds GET /bookings/{bookingId} on its own service.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [
+        { id: 'booking_portal', componentType: 'Portal', transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'The patient web app and the clinic front desk, over HTTPS' }, description: 'The booking API.' },
+        { id: 'billing_portal', componentType: 'Portal', transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'The insurers billing system, over HTTPS on its own host' }, description: 'The billing API.' },
+      ],
+      interfaces: [
+        { id: 'ibooking_api', component: 'booking_portal', methods: [
+          { name: 'getBooking', description: 'Read one booking.', params: [{ name: 'bookingId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/bookings/{bookingId}' } },
+          { name: 'cancelBooking', description: 'Cancel one booking.', params: [{ name: 'bookingId', type: 'string' }], returns: 'void', endpoint: { transport: 'HTTP', method: 'DELETE', path: '/bookings/{bookingId}' } },
+        ] },
+        { id: 'ibilling_api', component: 'billing_portal', methods: [{ name: 'billBooking', description: 'Read the bill of one booking.', params: [{ name: 'bookingId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/bookings/{bookingId}' } }] },
+      ],
+    },
+  }),
 ];

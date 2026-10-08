@@ -147,13 +147,24 @@ export const AgentBriefSchema = z.object({
   typeMapping: z.array(z.string()).optional(),
 
   /**
-   * Where an implementing agent may write CODE: each source file its
-   * implementations name, plus the folder they share below the project root as
-   * `<folder>/**`. Empty when nothing names a file yet (the instructions then
-   * ask the spawning session to name the planned files); absent for an agent
-   * that implements nothing.
+   * Where an implementing agent may write CODE, as exact files and never a
+   * folder glob: every file the specs name for its components alone (their
+   * implementations', methods', simPath and binding files, and the files of
+   * the types it owns), existing or planned. Empty when nothing names a file
+   * yet (the instructions then ask the spawning session to name the planned
+   * files); absent for an agent that implements nothing.
    */
   codeFence: z.array(z.string()).optional(),
+
+  /**
+   * The files an implementing agent may touch but does not own: those its
+   * specs name that other components' specs name too, and — as they exist —
+   * the setup files from the project root down to its code, the package roots
+   * there and the unnamed source files beside its own. The instructions state
+   * the rule: only for this component's needs, a shared responsibility is a
+   * design change to report. Absent when there is none.
+   */
+  sharedPaths: z.array(z.string()).optional(),
 
   /**
    * Set only on a brief for a member's agent (an id qualified `<alias>::`): the

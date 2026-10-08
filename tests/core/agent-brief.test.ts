@@ -177,7 +177,7 @@ describe('composeAgentBrief (live delegation briefs)', () => {
     } finally { proj.cleanup(); }
   });
 
-  it("a subsystem owner's fence holds the project's shared setup files; a consumer's brief names the externals it uses", () => {
+  it("a subsystem owner's brief lists the project's setup files as shared; a consumer's brief names the externals it uses", () => {
     const proj = createTempProject();
     proj.writeSpec('subsystem', 'beta', SUB.replace(/alpha/g, 'beta').replace('Alpha', 'Beta'));
     proj.writeSpec('component', 'planner', 'id: planner\nname: Planner\ndescription: d\nsubsystem: beta\ncomponentType: Orchestrator\ndependsOn: [geo::distance]');
@@ -189,14 +189,17 @@ describe('composeAgentBrief (live delegation briefs)', () => {
     proj.activate();
     try {
       const owner = composeAgentBrief('beta-owner');
-      expect(owner.codeFence).toEqual(expect.arrayContaining(['package.json', 'tsconfig.json']));
-      expect(owner.instructions).toContain('Shared with the other subsystem owners');
+      // Shared, never fenced: the setup belongs to no single agent.
+      expect(owner.sharedPaths).toEqual(expect.arrayContaining(['package.json', 'tsconfig.json']));
+      expect(owner.codeFence).not.toContain('package.json');
+      expect(owner.instructions).toContain('Shared, owned by no single agent');
       const planner = composeAgentBrief('planner');
       expect(planner.instructions).toContain('## Externals used');
       expect(planner.instructions).toContain('`geo::distance` (transport InProcess, abi c)');
       expect(planner.readPaths).toContain('.wai/externals/geo.yaml');
-      // A component implementer is not a subsystem owner: the setup files are not its fence.
+      // The setup is shared for an implementer too (its module setup must not stop it), never its fence.
       expect(planner.codeFence).not.toContain('package.json');
+      expect(planner.sharedPaths).toEqual(expect.arrayContaining(['package.json', 'tsconfig.json']));
     } finally { proj.cleanup(); }
   });
 
@@ -381,14 +384,14 @@ describe('briefs carry a code write fence, and every component has a brief witho
     return proj;
   }
 
-  it('the subsystem owner\'s brief fences its source files and the folder they share', () => {
+  it('the subsystem owner\'s brief fences exactly its source files, never their folder', () => {
     const proj = billingProject();
     proj.activate();
     try {
       const brief = composeAgentBrief('alpha-owner');
-      expect(brief.codeFence).toEqual(['src/alpha/billing.ts', 'src/alpha/ledger.ts', 'src/alpha/**']);
+      expect(brief.codeFence).toEqual(['src/alpha/billing.ts', 'src/alpha/ledger.ts']);
       expect(brief.instructions).toContain('## Code write fence');
-      expect(brief.instructions).toContain('- `src/alpha/**`');
+      expect(brief.instructions).not.toContain('**`');
     } finally { proj.cleanup(); }
   });
 
@@ -400,7 +403,7 @@ describe('briefs carry a code write fence, and every component has a brief witho
         const brief = composeAgentBrief(id);
         expect(brief.agentId).toBe('billing-implementer');
         expect(brief.template).toBe('implementer');
-        expect(brief.codeFence).toEqual(['src/alpha/billing.ts', 'src/alpha/**']);
+        expect(brief.codeFence).toEqual(['src/alpha/billing.ts']);
       }
     } finally { proj.cleanup(); }
   });
@@ -452,6 +455,88 @@ describe('briefs carry a code write fence, and every component has a brief witho
       const brief = composeAgentBrief('billing');
       expect(brief.instructions).toContain('(planned — create it)');
       expect(brief.typeMapping).toBeDefined();
+    } finally { proj.cleanup(); }
+  });
+
+  // The fence design (trials r2-r6): exact files, the component's own types,
+  // shared files named apart with the rule that governs them, and readPaths
+  // that carry the contract's types and the dependencies' contracts and code.
+  function paymentsProject() {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'payments', 'schemaVersion: 1.0.0\nid: payments\nname: Payments\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'payment_store', 'id: payment_store\nname: Payment Store\ndescription: d\nsubsystem: payments\ncomponentType: Store\ndurability: durable');
+    proj.writeSpec('component', 'refund_workflow', 'id: refund_workflow\nname: Refund Workflow\ndescription: d\nsubsystem: payments\ncomponentType: Orchestrator\ndependsOn: [payment_store]');
+    proj.writeSpec('interface', 'ipayment_store', [
+      'id: ipayment_store', 'name: IPaymentStore', 'description: d', 'component: payment_store', 'methods:',
+      '  - name: put', '    description: d', '    params: [{ name: payment, type: payment }]', '    returns: void',
+      '  - name: get', '    description: d', '    params: [{ name: id, type: payment_id }]', '    returns: payment?',
+    ].join('\n'));
+    proj.writeSpec('interface', 'irefund_workflow', [
+      'id: irefund_workflow', 'name: IRefundWorkflow', 'description: d', 'component: refund_workflow', 'methods:',
+      '  - name: refund', '    description: d', '    params: [{ name: id, type: payment_id }]', '    returns: void',
+    ].join('\n'));
+    proj.writeSpec('implementation', 'payment_store_impl', 'id: payment_store_impl\nname: Payment Store\ndescription: d\ncontract: ipayment_store\nsourcePath: services/payments/src/persistence/payment-store.ts\nmethods: []');
+    proj.writeSpec('implementation', 'refund_workflow_impl', 'id: refund_workflow_impl\nname: Refund Workflow\ndescription: d\ncontract: irefund_workflow\nsourcePath: services/payments/src/refunds/refund-workflow.ts\nmethods: []');
+    // payment: only the store's contract uses it — the store's own type. payment_id: both contracts — shared.
+    proj.writeSpec('type', 'payment', 'kind: entity\nid: payment\nname: Payment\nsubsystem: payments\nsourcePath: services/payments/src/domain/payment.ts\nfields:\n  - { name: amount, type: money }\nmethods: []');
+    proj.writeSpec('type', 'money', 'kind: value-object\nid: money\nname: Money\nsourcePath: libs/contracts/src/money.ts\nfields: []\nmethods: []');
+    proj.writeSpec('type', 'payment_id', 'kind: value-object\nid: payment_id\nname: PaymentId\nsubsystem: payments\nholds: string\nsourcePath: services/payments/src/domain/ids.ts\nfields: []\nmethods: []');
+    proj.writeFile('package.json', '{"type":"commonjs"}');
+    proj.writeFile('services/payments/package.json', '{"type":"module"}');
+    proj.writeFile('services/payments/src/persistence/payment-store.ts', 'export {};\n');
+    proj.writeFile('services/payments/src/persistence/sql-client.ts', 'export {};\n');
+    proj.writeFile('services/payments/src/persistence/payment-store.test.ts', 'export {};\n');
+    return proj;
+  }
+
+  it('fences exactly the files a component alone names — planned ones and its own types included — and lists the shared ones apart', () => {
+    const proj = paymentsProject();
+    proj.activate();
+    try {
+      const store = composeAgentBrief('payment_store');
+      // Its own file, and the planned file of the type only its contract uses (no copy of Payment in the store).
+      expect(store.codeFence).toEqual(expect.arrayContaining([
+        'services/payments/src/persistence/payment-store.ts', 'services/payments/src/domain/payment.ts',
+      ]));
+      expect(store.codeFence!.some((p) => /[*?]/.test(p))).toBe(false);
+      // A type both contracts use is nobody's alone: shared, created at its planned home.
+      expect(store.codeFence).not.toContain('services/payments/src/domain/ids.ts');
+      expect(store.sharedPaths).toEqual(expect.arrayContaining([
+        'services/payments/src/domain/ids.ts',
+        // The module setup on the way to its code: the service's own manifest, not only the root's.
+        'package.json', 'services/payments/package.json',
+        // An unnamed helper beside its file; the test file is not listed (tests sit beside code anyway).
+        'services/payments/src/persistence/sql-client.ts',
+      ]));
+      expect(store.sharedPaths).not.toContain('services/payments/src/persistence/payment-store.test.ts');
+      expect(store.instructions).toContain('- `services/payments/src/domain/payment.ts` (planned — create it)');
+      expect(store.instructions).toContain('never redeclared in your own file');
+      expect(store.instructions).toContain('that is a design change: stop and report it');
+      // Its readPaths: the contract's types and the types their fields name.
+      expect(store.readPaths).toEqual(expect.arrayContaining([
+        '.wai/specs/types/payment.yaml', '.wai/specs/types/payment_id.yaml', '.wai/specs/types/money.yaml',
+      ]));
+
+      const refund = composeAgentBrief('refund_workflow');
+      expect(refund.codeFence).toEqual(['services/payments/src/refunds/refund-workflow.ts']);
+      // What it calls: the store's contract and the file realizing it.
+      expect(refund.readPaths).toEqual(expect.arrayContaining([
+        '.wai/specs/interfaces/ipayment_store.yaml', 'services/payments/src/persistence/payment-store.ts',
+      ]));
+      // Two fences never claim one path.
+      expect(refund.codeFence!.filter((p) => store.codeFence!.includes(p))).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('the gateway variant\'s guidance lets the gateway check the credential its auth declares, and sends policy to Orchestrators', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'routing', 'schemaVersion: 1.0.0\nid: routing\nname: Routing\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'route_portal', 'id: route_portal\nname: Route Portal\ndescription: d\nsubsystem: routing\ncomponentType: Portal\ntransport: HTTP\nvariant: gateway');
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('route_portal');
+      expect(brief.instructions).not.toContain('hold NO verification logic');
+      expect(brief.instructions).toContain('the gateway\'s own admission step');
     } finally { proj.cleanup(); }
   });
 

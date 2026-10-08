@@ -6,8 +6,12 @@
   guidance: >-
     A Portal that authenticates, authorizes, validates or rate-limits inbound
     requests before dispatching them. Declare its inbound authentication in
-    `auth`, and hold NO verification logic in its own steps: CALL that logic —
-    read or pure Orchestrators, or one ingress Orchestrator when the admission
-    sequence carries its own policy — and return early on a rejection, before
-    anything is dispatched. Once a request is admitted, dispatch it as any
-    Portal does.
+    `auth`. Checking the credential `auth` declares — reading it from the
+    request and verifying it (a token comparison, a signature check) — is the
+    gateway's own admission step and may be a step of its own narrative. A
+    check that needs state or policy (the caller's grants, a quota, a
+    revocation list) is CALLED instead — read or pure Orchestrators, or one
+    ingress Orchestrator when the admission sequence carries its own policy.
+    Return early on a rejection, before anything is dispatched. Once a request
+    is admitted, dispatch it as any Portal does; writes still route through
+    Orchestrators.

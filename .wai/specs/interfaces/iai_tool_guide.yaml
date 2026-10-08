@@ -62,8 +62,14 @@ methods:
       - idempotent
   - name: writeDelegator
     description: >-
-      Write the repository-root file that points a tool at the real guide inside the project, so the
-      root stays a one-line pointer rather than a second copy to keep in step.
+      Write wairon's block of the repository-root file that points a tool at the real guide inside
+      the project (CLAUDE.md for claude, GEMINI.md for gemini/agy with the guide inlined,
+      .cursorrules, .github/copilot-instructions.md, .codexrules), between its own markers, so the
+      root stays a pointer rather than a second copy to keep in step. The root file is usually the
+      user's own: every byte outside wairon's markers is kept exactly, nothing a person wrote there
+      is ever deleted, and the file is written only when its wairon block changed. A root file that
+      holds the unmarked pointer an earlier release wrote (alone, or with the user's text after it)
+      is recognised and migrated into the marked block, keeping whatever follows it.
     signature: 'writeDelegator(projectRoot: string, targetType: string): void'
     returns: void
     params:
@@ -123,4 +129,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-10-07T21:51:11.989Z'
+updatedAt: '2026-10-08T08:26:06.209Z'

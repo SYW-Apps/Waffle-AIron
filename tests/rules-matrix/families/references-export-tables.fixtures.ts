@@ -216,6 +216,19 @@ export default [
   }),
   defineRuleFixture({
     code: 'EXPORT_INVALID',
+    severity: 'error',
+    anchoredTo: 'ParcelHub',
+    expectFire: true,
+    scenario:
+      'The project exports everything the pricing subsystem exports at L0, but pricing publishes nothing yet: the entry reads as a published API and publishes nothing.',
+    tree: {
+      system: { ...SYSTEM, publicInterfaces: [{ from: 'pricing', audience: 'external' }] },
+      subsystems: [{ ...PRICING, publicInterfaces: [] }],
+      components: [QUOTE_PORTAL],
+    },
+  }),
+  defineRuleFixture({
+    code: 'EXPORT_INVALID',
     expectFire: false,
     reason: 'Pricing publishes the quote portal, so the storefront re-exports something its source exports, and the L0 entry names its source.',
     scenario:

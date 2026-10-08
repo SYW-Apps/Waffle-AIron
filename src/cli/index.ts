@@ -1042,9 +1042,11 @@ const typeCmd = program
 
 typeCmd
   .command('rename-field <type> <field> <new-name>')
-  .description("Rename a field of a type and respell every reference to it (a foreign key's `references: <type>.<field>`); the old name joins the field's rename trace (previousNames, `formerly` in the design export)")
-  .action(async (typeId: string, field: string, newName: string) => {
-    await runTypeRenameField(typeId, field, newName);
+  .description("Rename a field of a type and respell every reference to it (a foreign key's `references: <type>.<field>`); the old name joins the field's rename trace (previousNames, `formerly` in the design export) and every consumer reaching an export that carries the field is named")
+  .option('--dry-run', 'Print what the rename would respell and break, and write nothing')
+  .option('--search <dirs...>', 'Folders to scan for consumer checkouts outside the family')
+  .action(async (typeId: string, field: string, newName: string, opts: { dryRun?: boolean; search?: string[] }) => {
+    await runTypeRenameField(typeId, field, newName, { dryRun: opts.dryRun, search: opts.search });
   });
 
 // ---------------------------------------------------------------------------
@@ -1067,9 +1069,11 @@ methodCmd
 
 methodCmd
   .command('rename-param <component> <method> <param> <new-name>')
-  .description("Rename a parameter of a contract method; the old name joins the parameter's rename trace (previousNames, `formerly` in the design export), each signature is re-derived and an HTTP path placeholder that bound it is respelled")
-  .action(async (componentId: string, method: string, param: string, newName: string) => {
-    await runMethodRenameParam(componentId, method, param, newName);
+  .description("Rename a parameter of a contract method; the old name joins the parameter's rename trace (previousNames, `formerly` in the design export), each signature is re-derived, an HTTP path placeholder that bound it is respelled (on its followers through signatureFrom too) and every consumer calling it through an export is named")
+  .option('--dry-run', 'Print what the rename would move, respell and break, and write nothing')
+  .option('--search <dirs...>', 'Folders to scan for consumer checkouts outside the family')
+  .action(async (componentId: string, method: string, param: string, newName: string, opts: { dryRun?: boolean; search?: string[] }) => {
+    await runMethodRenameParam(componentId, method, param, newName, { dryRun: opts.dryRun, search: opts.search });
   });
 
 // ---------------------------------------------------------------------------

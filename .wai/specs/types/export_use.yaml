@@ -28,7 +28,15 @@ fields:
       The consumer's specs whose references reach the name, sorted — so a pin can name who uses a
       member the snapshot no longer carries.
     optional: true
+  - name: memberSpecs
+    type: map<string, list<string>>
+    description: >-
+      Per member reached, the consumer's specs whose references reach THAT member, sorted — so a
+      rename of one method or a type names the specs it breaks, not every spec that reaches the
+      public name. A spec that only depends on the entry (a dependsOn with no call through it)
+      reaches no member and is in no list here.
+    optional: true
 methods: []
 sourcePath: src/models/exports.ts
 createdAt: '2026-09-26T17:40:30.206Z'
-updatedAt: '2026-10-07T06:38:10.923Z'
+updatedAt: '2026-10-08T08:23:49.036Z'

@@ -56,6 +56,8 @@ export {
   syncContextFiles,
   hasContext,
   derivedDocPaths,
+  // `wairon doctor`: the derived documents a regenerate would change in content.
+  staleDerivedDocs,
   getStatusReport,
   approvalVerdict,
   findLegacySpecFiles,

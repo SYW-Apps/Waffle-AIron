@@ -1,0 +1,39 @@
+kind: value-object
+id: release_verdict
+name: ReleaseVerdict
+description: >-
+  The verdict on an approval whose gate identity no longer matches ONLY because the wairon release
+  changed — the built-in design doctrine moved while the approved design and every input the project
+  itself decides (its own specs, rule tuning, packs, network, composition, consumed contract pins,
+  members' approvals) are as approved. Such an approval is judged by re-validating the approved
+  design under the current rules, never by digest: clean at the `--ci` standard it carries over
+  (approved, nothing written), else it is stale for exactly the findings the new release reports.
+  One verdict, decided in family_validator.releaseVerdict, read by lock-check, status,
+  sdd_get_status, validate and the family view alike.
+fields:
+  - name: from
+    type: string
+    description: The release the approval was taken under (the record's validatorVersion)
+    optional: false
+  - name: to
+    type: string
+    description: The release that re-validated it
+    optional: false
+  - name: carried
+    type: bool
+    description: >-
+      True when the re-validation is clean at the --ci standard (no error, no warning but the
+      draft-related ones --ci waives; notices never count): the approval carries over
+    optional: false
+  - name: count
+    type: int
+    description: How many findings fail the --ci standard; 0 when carried
+    optional: true
+  - name: findings
+    type: list<string>
+    description: The first few of those findings, each `CODE [spec] message`; empty when carried
+    optional: true
+methods: []
+sourcePath: src/models/lock.ts
+createdAt: '2026-10-08T08:35:35.516Z'
+updatedAt: '2026-10-08T08:35:37.629Z'

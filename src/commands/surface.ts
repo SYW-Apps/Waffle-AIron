@@ -12,6 +12,9 @@ import {
 } from './adapters/surfaces.js';
 // cli_lock_adapter.checkApproval: the one approval verdict the tool has (lock-check's).
 import { checkApproval } from './lock.js';
+// cli_validator_adapter.validateProject: the owner's gate an export is judged by.
+import { validateProject } from './validate.js';
+import { loadProjectConfig } from './adapters/core.js';
 import { SURFACE_AUDIENCES, SurfaceOrigin, type DesignApproval, type DesignExport, type SurfaceChange } from '../models/index.js';
 import type { SurfaceDiff } from '../core/surfaces.js';
 
@@ -39,6 +42,31 @@ export interface SurfaceOptions {
   against?: string;
   /** diff: print the structured answer. */
   json?: boolean;
+}
+
+/**
+ * A status line of `surface export`, on stderr: stdout carries the document
+ * and nothing else, so `wairon surface export --format openapi > api.json`
+ * writes JSON.
+ */
+function status(mark: 'ok' | 'warn' | 'info', message: string): void {
+  const icon = mark === 'ok' ? chalk.green('✔') : mark === 'warn' ? chalk.yellow('⚠') : chalk.cyan('ℹ');
+  process.stderr.write(`${icon}  ${mark === 'warn' ? chalk.yellow(message) : message}\n`);
+}
+
+/**
+ * Step 3 of export: the codes of every error the owner's gate finds in the
+ * bound project (cli_validator_adapter.validateProject), one entry per
+ * finding; empty when the design passes or there is nothing to judge.
+ */
+function exportGateErrors(): string[] {
+  try {
+    const config = loadProjectConfig();
+    const result = validateProject({ rules: config?.rules, projectType: config?.projectType }, config?.projectType);
+    return result.issues.filter((i) => i.severity === 'error').map((i) => i.code);
+  } catch {
+    return [];
+  }
 }
 
 /** One changelog line per change, grouped by kind as release notes read. */
@@ -82,39 +110,51 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       try {
         result = exportSurface(audience, format, options.out, options.portal);
       } catch (e) {
-        if (e instanceof Error && e.name === 'OpenApiNotApplicableError') throw new WaironError(e.message);
+        if (e instanceof Error && (e.name === 'OpenApiNotApplicableError' || e.name === 'OpenApiRouteCollisionError')) throw new WaironError(e.message);
         throw e;
       }
       // An OpenAPI export with no HTTP Portal to describe: say so, never print the native entries as if they were it.
       if (format === 'openapi' && (result.renderedSet ?? []).length === 0) {
         throw new WaironError(`OpenAPI does not apply to "${result.snapshot.projectName}": it exposes no HTTP Portal at audience ≥ ${audience}${result.snapshot.interfaces.length ? ` — its ${result.snapshot.interfaces.length} exported interface(s) are ${[...new Set(result.snapshot.interfaces.map((e) => e.type))].join(', ')}, which no OpenAPI document describes` : ''}. Export the native snapshot (\`--format native\`) instead.`);
       }
-      logger.success(
-        `Projected surface of "${result.snapshot.projectName}": ${result.snapshot.interfaces.length} interface(s), ${result.snapshot.types.length} type(s) at audience ≥ ${audience}.`,
-      );
+      // Step 3: the owner's gate — an export of a design the gate refuses never reads as a success.
+      const gateErrors = exportGateErrors();
+      // Step 4: every status line on stderr, so a document printed to stdout is the document alone.
+      const projected = `Projected surface of "${result.snapshot.projectName}": ${result.snapshot.interfaces.length} interface(s), ${result.snapshot.types.length} type(s) at audience ≥ ${audience}`;
+      if (result.snapshot.interfaces.length === 0 && result.snapshot.types.length === 0) {
+        status('warn', `${projected} — it publishes nothing at that audience: no entry of the L0 export table resolves to a component or a type (\`wairon validate\` names an entry that publishes nothing as EXPORT_INVALID). Publish a Portal or a type in a subsystem's publicInterfaces and export it at L0, or widen --audience.`);
+      } else if (gateErrors.length > 0) {
+        status('warn', `${projected} — from a design the gate refuses.`);
+      } else {
+        status('ok', `${projected}.`);
+      }
+      if (gateErrors.length > 0) {
+        const codes = [...new Set(gateErrors)].map((c) => `${c}${gateErrors.filter((x) => x === c).length > 1 ? ` ×${gateErrors.filter((x) => x === c).length}` : ''}`).join(', ');
+        status('warn', `The design has ${gateErrors.length} error(s) (${codes}): the exported document describes a design \`wairon validate\` refuses — it may name what no server can serve. Fix them, then export again.`);
+      }
 
       // Report EVERY written path: a multi-portal OpenAPI export writes one file
       // per portal, and naming only the first would silently hide the other APIs.
       const written = result.writtenPaths ?? (result.writtenTo ? [result.writtenTo] : []);
       if (written.length === 1) {
-        logger.info(`Written to ${written[0]}`);
+        status('info', `Written to ${written[0]}`);
       } else if (written.length > 1) {
-        logger.info(`Written ${written.length} document(s) — one per portal:`);
-        for (const p of written) logger.info(`  ${p}`);
+        status('info', `Written ${written.length} document(s) — one per portal:`);
+        for (const p of written) status('info', `  ${p}`);
       } else if (result.rendered) {
         process.stdout.write(`${result.rendered}\n`);
       } else if (result.renderedSet && result.renderedSet.length > 1) {
         // An OpenAPI document IS one API. With several portals and no selection
         // there is no single document to print — name them so the caller can pick.
-        logger.info(
+        status('info',
           `This project publishes ${result.renderedSet.length} portals — pick one with \`--portal <id>\` (or use --out to write them all):`,
         );
         for (const spec of result.renderedSet) {
-          logger.info(`  ${chalk.cyan(spec.portalId)} — ${spec.name}`);
+          status('info', `  ${chalk.cyan(spec.portalId)} — ${spec.name}`);
         }
       } else {
         for (const entry of result.snapshot.interfaces) {
-          logger.info(`  ${chalk.cyan(entry.id)} (${entry.type}, ${entry.audience}) — ${entry.methods.length} method(s)`);
+          status('info', `  ${chalk.cyan(entry.id)} (${entry.type}, ${entry.audience}) — ${entry.methods.length} method(s)`);
         }
       }
       return;

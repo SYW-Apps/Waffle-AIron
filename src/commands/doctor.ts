@@ -29,6 +29,7 @@ import {
   // store's to state, not a list this command spells out for itself.
   syncContextFiles,
   derivedDocPaths,
+  staleDerivedDocs,
   // The filename migration, the chained-subproject repair and the pack
   // diagnosis are sdd_core's too, and reach it the same way.
   findLegacySpecFiles,
@@ -46,7 +47,7 @@ import { computeGateStateId, validateFamily } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
-import { describeApprover } from '../models/lock.js';
+import { approvalStamp } from '../models/lock.js';
 // cli_lock_adapter.reexpressApproval: the write behind --fix's approval step.
 import { checkApproval, reexpressLock } from './lock.js';
 import {
@@ -409,6 +410,11 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // ── Generated context files ─────────────────────────────────────────────────
   console.log(chalk.bold(`Generated files ${chalk.gray('(stale = older than installed)')}`));
+  // A file stamped by this release can still be stale in CONTENT (the project
+  // context it embeds, the domain map): never called current while a
+  // regenerate would rewrite it.
+  let contentStale: Set<string>;
+  try { contentStale = new Set(staleDerivedDocs().map((f) => path.resolve(f))); } catch { contentStale = new Set(); }
   for (const p of derivedDocPaths()) {
     const label = path.relative(getProjectRoot(), p).replace(/\\/g, '/');
     if (!pathExists(p)) {
@@ -416,6 +422,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       continue;
     }
     const { mark, note } = stampVerdict(readFileOrNull(p));
+    if (mark === 'ok' && contentStale.has(path.resolve(p))) {
+      line(tally, 'warn', `${label} (${note}) — stale: its content differs from what \`wairon generate\` writes now (run \`wairon generate\` or \`wairon doctor --fix\`)`);
+      continue;
+    }
     line(tally, mark, `${label} (${note})`);
   }
 
@@ -462,25 +472,21 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       const lock = readLockState(computeGateStateId());
       if (lock.state === 'locked') {
         console.log(chalk.bold('Lock'));
-        line(tally, 'ok', `approved at ${lock.record!.lockedAt} by ${describeApprover(lock.record!.lockedBy)}`);
+        line(tally, 'ok', `approved at ${approvalStamp(lock.record!)}`);
         if (!lock.record!.specs) {
           line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
         } else if (lock.record!.specsReading !== 'design') {
           line(tally, 'warn', 'this lock predates lock format 3 and still holds — `wairon doctor --fix` re-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it');
         }
         logger.blank();
-      } else if (lock.state === 'stale' && lock.record!.stateId.algorithm !== lock.current.algorithm) {
-        // Taken under an earlier gate identity: lock-check's verdict says
-        // whether any own spec moved, and when none did, that the gate it was
-        // judged under moved — never the design.
-        console.log(chalk.bold('Lock'));
-        line(tally, 'warn', `stale — ${checkApproval(false).message}`);
-        logger.blank();
       } else if (lock.state === 'stale') {
+        // lock-check's own verdict, word for word: an approval a change of the
+        // release carried over reads approved (re-validated under this release),
+        // one the release finds issues in names them, and any other stale
+        // approval says what moved — the inputs by name when the record has them.
+        const verdict = checkApproval(false);
         console.log(chalk.bold('Lock'));
-        line(tally, 'warn',
-          `stale — the design or something it was approved under changed since ${lock.record!.lockedAt}, so the approval no longer covers it. `
-          + 'Run `wairon lock` to approve the current design (`wairon status` names the specs that moved).');
+        line(tally, verdict.approved ? 'ok' : 'warn', verdict.approved ? verdict.message : `stale — ${verdict.message}`);
         logger.blank();
       }
     } catch (e) {
@@ -700,13 +706,13 @@ function reexpressApproval(): void {
     const carried = reexpressLock();
     if (carried && carried.stateId.algorithm === carried.reexpressed?.fromAlgorithm) {
       // The reading carried, the claim kept: no spec file moved, the gate did.
-      console.log(`  ${icon('ok')} Re-expressed the approval of ${carried.lockedAt} by ${describeApprover(carried.lockedBy)} in the design reading `
+      console.log(`  ${icon('ok')} Re-expressed the approval of ${approvalStamp(carried)} in the design reading `
         + '(lock format 3): no spec file moved since it was taken, so from now on adding or moving a sourcePath never drifts it. '
         + `It still reads stale because the gate it was judged under moved (wairon ${carried.validatorVersion} took it; the design rules of this `
         + 'release, or the project\'s rule tuning, `composition`, network declaration, consumed contracts or a member\'s approval differ now), '
         + 'so one `wairon lock` re-approves the unchanged design. Commit .wai/lock.json.');
     } else if (carried) {
-      console.log(`  ${icon('ok')} Re-expressed the approval of ${carried.lockedAt} by ${describeApprover(carried.lockedBy)} in the current reading `
+      console.log(`  ${icon('ok')} Re-expressed the approval of ${approvalStamp(carried)} in the current reading `
         + '(lock format 3) — the design is provably the one approved, so no review was needed; from now on adding or moving a sourcePath, or promoting a status, never drifts it. Commit .wai/lock.json.');
     }
   } catch (e) {

@@ -205,6 +205,7 @@ methods:
     signatureFrom: export_index.pinnedUsage
     guarantees:
       - idempotent
+    effect: read
   - name: subsystemPath
     description: >-
       The file a subsystem's spec lives in, under the bound tree: where the spec loads from and
@@ -258,6 +259,12 @@ methods:
     signatureFrom: spec_index.retiredReachFacts
     guarantees:
       - idempotent
+  - name: typePath
+    description: >-
+      The file a type's spec lives in, under the bound tree; its subsystem and group place one that
+      is not stored yet. A brief's readPaths name the specs of the types a contract uses through it.
+    signatureFrom: spec_index.typePath
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T18:31:03.106Z'
+updatedAt: '2026-10-08T08:43:51.898Z'

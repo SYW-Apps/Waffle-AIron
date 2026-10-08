@@ -115,7 +115,9 @@ methods:
         label: subsystem-source
         description: >-
           Bind against the source subsystem's table — a named entry by its target (leniently, as for
-          a subsystem table), a wildcard under every name the table exports
+          a subsystem table), a wildcard under every name the table exports; a wildcard over a
+          subsystem that exports nothing is an invalid problem naming that subsystem, since the
+          entry would publish nothing while reading as a published API
         type: jump
         toStep: 11
       - stepNumber: 9
@@ -124,10 +126,11 @@ methods:
           Bind against the producing project's table from the sources — the member's or the
           external's, by alias: only its public names can be bound, and a named item it no longer
           exports is an invalid problem carrying the alias and, when the producer's rename trace
-          records the item, the public name it was renamed to; a producer present as null (still on
-          this resolution path) is a named-cycle problem naming the projects on the loop and binds
-          nothing; an entry whose declared audience (default instance) ranks wider than the producer
-          export's audience is a widens problem naming both
+          records the item, the public name it was renamed to; a wildcard over a producer table that
+          exports nothing is an invalid problem as for a subsystem; a producer present as null
+          (still on this resolution path) is a named-cycle problem naming the projects on the loop
+          and binds nothing; an entry whose declared audience (default instance) ranks wider than
+          the producer export's audience is a widens problem naming both
         type: jump
         toStep: 11
       - stepNumber: 10
@@ -166,4 +169,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-10-07T10:54:51.277Z'
+updatedAt: '2026-10-08T08:28:13.079Z'

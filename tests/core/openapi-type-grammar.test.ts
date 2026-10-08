@@ -88,10 +88,12 @@ describe('toOpenApiSet — every form from its parsed expression', () => {
 
   it('unwraps async on a returns, and an async void has no response body', () => {
     const doc = JSON.parse(singlePortalDocument(snapshotOf([], 'async list<Invoice>')));
-    expect(doc.paths['/op'].post.responses['200'].content['application/json'].schema)
+    // Round 6: a POST answers its conventional 201, and a method returning nothing 204 with no content.
+    expect(doc.paths['/op'].post.responses['201'].content['application/json'].schema)
       .toEqual({ type: 'array', items: { $ref: '#/components/schemas/invoice' } });
     const none = JSON.parse(singlePortalDocument(snapshotOf([], 'async void')));
-    expect(none.paths['/op'].post.responses['200'].content).toBeUndefined();
+    expect(none.paths['/op'].post.responses['204'].content).toBeUndefined();
+    expect(none.paths['/op'].post.responses['200']).toBeUndefined();
   });
 
   it("renders a named scalar as its primitive's schema under the type's name", () => {

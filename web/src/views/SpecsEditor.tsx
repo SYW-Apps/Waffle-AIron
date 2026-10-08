@@ -16,6 +16,7 @@ import {
   type Async,
 } from '../ui';
 import type { AvailableProfile } from '../types';
+import { buildDelta, type SpecKind } from './specDelta';
 
 /**
  * Stage F — the project Specs VALUE-editor.
@@ -34,7 +35,6 @@ import type { AvailableProfile } from '../types';
 
 // ── Kinds ────────────────────────────────────────────────────────────────────
 
-type SpecKind = 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
 
 interface Selected {
   kind: SpecKind;
@@ -84,21 +84,6 @@ const PRIMITIVES = [
   'string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration', 'void', 'any',
   'list<string>', 'map<string, string>', 'string?', 'async void',
 ];
-
-/** Top-level scalar/enum fields editable per kind (values only). */
-const SCALAR_FIELDS: Record<SpecKind, string[]> = {
-  system: ['vision'],
-  subsystem: ['name', 'description', 'status', 'profile', 'designDepth', 'targetLanguage'],
-  component: ['name', 'description', 'status', 'componentType', 'transport', 'basePath', 'durability'],
-  interface: ['name', 'description'],
-  implementation: ['name', 'description', 'status', 'detail', 'conformance'],
-  type: ['name', 'description', 'kind'],
-};
-
-/** Optional enum fields the delta merge cannot UNSET (JSON drops undefined; the
- *  merge spreads, so '' would fail schema). Changing to a real value works;
- *  clearing a previously-set value is a no-op (documented). */
-const OPTIONAL_ENUM_FIELDS = new Set(['profile', 'designDepth', 'transport', 'durability', 'detail', 'conformance']);
 
 /**
  * Validation-rail field map — `sdd_validate_tree` issue code → the editable
@@ -180,7 +165,6 @@ interface ProjectConfigResp {
 }
 
 const byLabel = (a: GraphNode, b: GraphNode) => a.label.localeCompare(b.label);
-const jeq = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
 // ── Small controls ─────────────────────────────────────────────────────────────
@@ -679,198 +663,6 @@ function withCurrent(groups: { label: string; options: { value: string; label: s
   if (!value) return groups;
   const known = groups.some((g) => g.options.some((o) => o.value === value));
   return known ? groups : [{ label: 'Current', options: [{ value, label: value }] }, ...groups];
-}
-
-// ── Delta builder ───────────────────────────────────────────────────────────────
-
-function scalarDelta(kind: SpecKind, orig: Record<string, unknown>, draft: Record<string, unknown>): Record<string, unknown> {
-  const delta: Record<string, unknown> = {};
-  for (const f of SCALAR_FIELDS[kind]) {
-    const nv = draft[f];
-    const ov = orig[f];
-    if (nv === ov) continue;
-    if ((nv === '' || nv === undefined) && ov === undefined) continue; // no-op
-    if (nv === undefined) continue;
-    if (nv === '' && OPTIONAL_ENUM_FIELDS.has(f)) continue; // merge cannot unset optional enums
-    delta[f] = nv;
-  }
-  return delta;
-}
-
-/** Interface method value deltas (merged by name; nested arrays/objects replace
- *  wholesale, so params/guarantees/endpoint are sent complete). */
-function interfaceMethodsDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const dm of draft.methods ?? []) {
-    const om = (orig.methods ?? []).find((m: any) => m.name === dm.name);
-    if (!om) continue;
-    const ch: any = {};
-    if (dm.description !== om.description) ch.description = dm.description;
-    // A method with params or a signatureFrom shows a DERIVED signature, which
-    // is never written back; only a prose method's signature is edited.
-    if (dm.signature !== om.signature && !dm.signatureFrom && !(dm.params ?? []).length) ch.signature = dm.signature;
-    if (dm.returns !== om.returns && !dm.signatureFrom) ch.returns = dm.returns;
-    if ((dm.signatureFrom ?? '') !== (om.signatureFrom ?? '')) {
-      if (dm.signatureFrom) {
-        // Adopting a source: the method states no params or returns of its own.
-        ch.signatureFrom = dm.signatureFrom;
-        if (!om.signatureFrom) ch.unset = ['params', 'returns', 'signature'];
-      } else {
-        // Dropping the source: the method keeps the signature it showed, as its own.
-        const resolved = (draft.resolvedSignatures ?? []).find((r: any) => r.method === dm.name);
-        ch.unset = ['signatureFrom'];
-        if (resolved?.params) ch.params = resolved.params;
-        ch.returns = resolved?.returns ?? dm.returns ?? 'unknown';
-        if (!resolved?.params) ch.signature = resolved?.signature ?? `${dm.name}(): ${ch.returns}`;
-      }
-    }
-    if ((dm.effect ?? '') !== (om.effect ?? '') && dm.effect) ch.effect = dm.effect;
-    if (!jeq(dm.guarantees ?? [], om.guarantees ?? [])) ch.guarantees = dm.guarantees ?? [];
-    if (!dm.signatureFrom && !om.signatureFrom && !jeq(dm.params ?? [], om.params ?? [])) ch.params = dm.params ?? [];
-    if (!jeq(dm.endpoint, om.endpoint)) ch.endpoint = dm.endpoint;
-    if (Object.keys(ch).length) out.push({ name: dm.name, ...ch });
-  }
-  return out;
-}
-
-/** Implementation method value deltas (merged by name; narrative untouched). */
-function implMethodsDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const dm of draft.methods ?? []) {
-    const om = (orig.methods ?? []).find((m: any) => m.name === dm.name);
-    if (!om) continue;
-    const ch: any = {};
-    if ((dm.detail ?? '') !== (om.detail ?? '') && dm.detail) ch.detail = dm.detail;
-    if ((dm.conformance ?? '') !== (om.conformance ?? '') && dm.conformance) ch.conformance = dm.conformance;
-    if ((dm.intent ?? '') !== (om.intent ?? '')) ch.intent = dm.intent ?? '';
-    if (Object.keys(ch).length) out.push({ name: dm.name, ...ch });
-  }
-  return out;
-}
-
-/** Enum value deltas (merged by name): a value's description; its name is its identity. */
-function enumValuesDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const dv of draft.values ?? []) {
-    const ov = (orig.values ?? []).find((v: any) => v.name === dv.name);
-    if (!ov) continue;
-    if ((dv.description ?? '') !== (ov.description ?? '')) out.push({ name: dv.name, description: dv.description ?? '' });
-  }
-  return out;
-}
-
-/** Type field value deltas (merged by name). */
-function typeFieldsDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const df of draft.fields ?? []) {
-    const of = (orig.fields ?? []).find((f: any) => f.name === df.name);
-    if (!of) continue;
-    const ch: any = {};
-    if (df.type !== of.type) ch.type = df.type;
-    if ((df.description ?? '') !== (of.description ?? '')) ch.description = df.description ?? '';
-    if (!!df.optional !== !!of.optional) ch.optional = !!df.optional;
-    if ((df.key ?? '') !== (of.key ?? '') && df.key) ch.key = df.key; // cannot unset
-    if ((df.references ?? '') !== (of.references ?? '')) ch.references = df.references ?? '';
-    if (Object.keys(ch).length) out.push({ name: df.name, ...ch });
-  }
-  return out;
-}
-
-/**
- * publicInterfaces value deltas. The server merges an entry by its identity:
- * component+interface for an own item, source+item+alias for a re-export — so
- * every identity field the entry carries goes back with the change, or a
- * re-export's edit would land as a new own entry.
- */
-function piDelta(orig: any, draft: any, kind: SpecKind): any[] {
-  const out: any[] = [];
-  const list = draft.publicInterfaces ?? [];
-  for (let i = 0; i < list.length; i++) {
-    const dpi = list[i];
-    const opi = (orig.publicInterfaces ?? [])[i];
-    if (!opi) continue;
-    const ch: any = {};
-    if ((dpi.type ?? '') !== (opi.type ?? '') && dpi.type) ch.type = dpi.type;
-    if ((dpi.details ?? '') !== (opi.details ?? '')) ch.details = dpi.details ?? '';
-    if (kind === 'system') {
-      if ((dpi.name ?? '') !== (opi.name ?? '')) ch.name = dpi.name ?? '';
-      if ((dpi.audience ?? '') !== (opi.audience ?? '') && dpi.audience) ch.audience = dpi.audience;
-    }
-    if (Object.keys(ch).length) {
-      out.push({
-        ...(opi.from !== undefined ? { from: opi.from } : {}),
-        ...(opi.component !== undefined ? { component: opi.component } : {}),
-        ...(opi.typeDef !== undefined ? { typeDef: opi.typeDef } : {}),
-        ...(opi.interface !== undefined ? { interface: opi.interface } : {}),
-        ...(opi.as !== undefined ? { as: opi.as } : {}),
-        ...ch,
-      });
-    }
-  }
-  return out;
-}
-
-/** Subsystem lifecycle deltas — description only (phase+component+method are the
- *  merge identity, so they are never changed here). */
-function lifecycleDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  const list = draft.lifecycle ?? [];
-  for (let i = 0; i < list.length; i++) {
-    const dl = list[i];
-    const ol = (orig.lifecycle ?? [])[i];
-    if (!ol) continue;
-    if ((dl.description ?? '') !== (ol.description ?? '')) {
-      out.push({ phase: ol.phase, component: ol.component, method: ol.method, description: dl.description ?? '' });
-    }
-  }
-  return out;
-}
-
-function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unknown> {
-  const delta = scalarDelta(kind, orig, draft);
-  if (kind === 'component' && !jeq(draft.externalLinks ?? [], orig.externalLinks ?? [])) {
-    delta.externalLinks = draft.externalLinks ?? [];
-  }
-  if (kind === 'component' && !jeq(draft.auth ?? null, orig.auth ?? null)) {
-    delta.auth = draft.auth ?? { scheme: 'none' };
-  }
-  if (kind === 'implementation' && !jeq(draft.technologies ?? [], orig.technologies ?? [])) {
-    delta.technologies = draft.technologies ?? [];
-  }
-  if (kind === 'interface') {
-    const md = interfaceMethodsDelta(orig, draft);
-    if (md.length) delta.methods = md;
-  }
-  if (kind === 'implementation') {
-    const md = implMethodsDelta(orig, draft);
-    if (md.length) delta.methods = md;
-  }
-  if (kind === 'type') {
-    // A named scalar's holds: set, changed, or cleared (an unset, since '' would be a type position).
-    if ((draft.holds ?? '') !== (orig.holds ?? '')) {
-      if (draft.holds) delta.holds = draft.holds;
-      else delta.unset = ['holds'];
-    }
-    const fd = typeFieldsDelta(orig, draft);
-    if (fd.length) delta.fields = fd;
-    const vd = enumValuesDelta(orig, draft);
-    if (vd.length) delta.values = vd;
-  }
-  if (kind === 'subsystem' || kind === 'system') {
-    const pd = piDelta(orig, draft, kind);
-    if (pd.length) delta.publicInterfaces = pd;
-  }
-  if (kind === 'system') {
-    // boundaries/globalRequirements are non-special-cased top-level arrays, so
-    // the merge replaces them wholesale — send the full list on any change.
-    if (!jeq(draft.boundaries ?? [], orig.boundaries ?? [])) delta.boundaries = draft.boundaries ?? [];
-    if (!jeq(draft.globalRequirements ?? [], orig.globalRequirements ?? [])) delta.globalRequirements = draft.globalRequirements ?? [];
-  }
-  if (kind === 'subsystem') {
-    const ld = lifecycleDelta(orig, draft);
-    if (ld.length) delta.lifecycle = ld;
-  }
-  return delta;
 }
 
 // ── Endpoint editor (interface methods) ─────────────────────────────────────────

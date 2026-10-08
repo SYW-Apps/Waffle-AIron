@@ -471,6 +471,13 @@ export interface RuleContext {
    */
   pinnedExternals: PinnedExternal[];
   /**
+   * Every binding module the bound project's implementations name
+   * (implementation_spec.bindings), read once by the validator through the
+   * binding module adapter: what binding conformance compares with
+   * pinnedExternals. Absent on a candidate run and a reach-only run.
+   */
+  bindingModules?: import('../binding-modules.js').BindingModule[];
+  /**
    * The validated root's identity, resolved by the validator from its project
    * configuration against the id its lock recorded, so the project-identity
    * rule does no I/O. Absent when the root has no readable configuration, and

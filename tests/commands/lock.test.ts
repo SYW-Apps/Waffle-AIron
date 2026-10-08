@@ -141,7 +141,8 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
     // …and it is exactly the validator's gate identity, the one readLockState
     // is later handed to compare against.
-    expect(record!.stateId).toEqual(computeGateStateId());
+    const { algorithm, digest } = computeGateStateId();
+    expect(record!.stateId).toEqual({ algorithm, digest });
     // Whoever git says is authoring here, or user@host when git has no identity —
     // never a bare OS username, which names nobody in CI.
     expect(['git', 'os']).toContain(record!.lockedBy.source);

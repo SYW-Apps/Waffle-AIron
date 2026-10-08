@@ -267,7 +267,11 @@ function withoutGuideSection(content: string): string {
   return start === -1 || end === -1 ? content : content.slice(0, start) + content.slice(end + GUIDE_END.length);
 }
 
-/** The root pointer `wairon generate` writes for claude, as a template to recognise it by (CLAUDE.md). */
+/** The markers around wairon's block of a root pointer file (as `wairon generate` writes them). */
+const ROOT_START = '<!-- wairon-root-start -->';
+const ROOT_END = '<!-- wairon-root-end -->';
+
+/** The root pointer an earlier `wairon generate` wrote for claude, unmarked, as a template to recognise it by (CLAUDE.md). */
 const CLAUDE_POINTER_HEAD = '@.claude/CLAUDE.md';
 
 /** A file's text with its line endings normalized and trailing space trimmed. */
@@ -332,7 +336,21 @@ function removeDemotedScaffold(alias: string): void {
   }
   // CLAUDE.md: the root pointer generate writes — removed only when it is exactly that.
   const pointer = nodePath.join(dir, 'CLAUDE.md');
-  if (pathExists(pointer)) {
+  const raw = pathExists(pointer) ? fs.readFileSync(pointer, 'utf-8') : null;
+  const rootStart = raw === null ? -1 : raw.indexOf(ROOT_START);
+  const rootEnd = raw === null || rootStart < 0 ? -1 : raw.indexOf(ROOT_END, rootStart);
+  if (raw !== null && rootStart >= 0 && rootEnd > rootStart) {
+    // wairon's marked block goes; the file only when nothing but it was there.
+    const after = raw.slice(rootEnd + ROOT_END.length).replace(/^\r?\n/, '');
+    const rest = raw.slice(0, rootStart) + after;
+    if (rest.trim() === '') {
+      fs.rmSync(pointer);
+      removed.push(shown(pointer));
+    } else {
+      fs.writeFileSync(pointer, rest);
+      kept.push(`${shown(pointer)} (the wairon block removed; someone else's text is in it)`);
+    }
+  } else if (raw !== null) {
     const text = normalizedText(pointer);
     if (text.startsWith(CLAUDE_POINTER_HEAD) && text.includes('# Wairon SDD Project') && text.split('\n').length <= 12) {
       fs.rmSync(pointer);

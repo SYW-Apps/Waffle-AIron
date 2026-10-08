@@ -105,6 +105,8 @@ export interface ExportUse {
   members: string[];
   /** The consumer's specs whose references reach the name, sorted. */
   specs?: string[];
+  /** Per member reached, the consumer's specs whose references reach THAT member, sorted. */
+  memberSpecs?: Record<string, string[]>;
 }
 
 /**

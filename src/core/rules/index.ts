@@ -272,6 +272,8 @@ export interface BuildContextOptions {
   typeSpellingFacts?: import('../../models/type-grammar.js').TypeSpellingFacts;
   /** The bound project's declared externals with their lock entries and pinned snapshots (see RuleContext.pinnedExternals). */
   pinnedExternals?: PinnedExternal[];
+  /** The binding modules the implementations name, as read (see RuleContext.bindingModules); absent on a candidate run. */
+  bindingModules?: import('../binding-modules.js').BindingModule[];
   /** Source-code model for structural conformance; empty when not built. */
   codeModel?: CodeModel;
   /** The writer's round-trip dry-run findings for the in-scope specs, gathered by the caller (see RuleContext.roundTripIssues). */
@@ -1061,6 +1063,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(opts.signatureFacts ? { signatureFacts: opts.signatureFacts } : {}),
     ...(opts.typeSpellingFacts ? { typeSpellingFacts: opts.typeSpellingFacts } : {}),
     pinnedExternals,
+    ...(opts.bindingModules ? { bindingModules: opts.bindingModules } : {}),
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,
     lintAllows,

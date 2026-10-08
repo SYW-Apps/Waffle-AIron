@@ -76,7 +76,22 @@ fields:
       sdd_get_status, `wairon lock-check` and `wairon lock` all read the same entry, so none of them
       can call the project approved while another says the approval is owed.
     optional: true
+  - name: release
+    type: ReleaseVerdict?
+    description: >-
+      Set when the identity no longer matches only because the wairon release changed
+      (family_validator.releaseVerdict): carried — the entry is approved, re-validated under this
+      release — or not, the entry drifted for exactly the findings it carries. Never set together
+      with upgraded.
+    optional: true
+  - name: inputsMoved
+    type: list<string>?
+    description: >-
+      On a drifted entry whose record carries gateParts: the inputs of its gate identity that moved
+      (lock_record.movedGateParts), so every verdict names the one that did — the network
+      declaration, the rule tuning, a consumed contract's pin — instead of listing every candidate.
+    optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-07T18:32:14.889Z'
+updatedAt: '2026-10-08T08:35:42.963Z'

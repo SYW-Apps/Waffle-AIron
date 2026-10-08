@@ -713,7 +713,11 @@ methods:
         condition: against names a file on disk
         onFalseStep: 5
       - stepNumber: 3
-        description: Read the saved snapshot and parse it through the snapshot schema as the baseline
+        description: >-
+          Read the saved file as the baseline: parsed through the native snapshot schema; a file
+          that is an OpenAPI document, or that does not parse as a native snapshot, is refused in
+          one sentence naming what --against takes (a native snapshot from `surface export --format
+          native`, or a git revision), never a raw schema error
         type: local
       - stepNumber: 4
         description: Compare with it
@@ -736,7 +740,12 @@ methods:
         label: compare
         description: >-
           Compare the baseline with the surface now: surface_snapshot.changesSince (added, removed,
-          renamed per the trace, changed)
+          renamed per the trace, changed); then each L0 export entry of the table now that publishes
+          nothing — an invalid problem of the resolved table that bound no public name (a wildcard
+          over a level that exports nothing, a named item that no longer exists) — and that the
+          baseline's table did not already carry, as an added change whose detail says it publishes
+          nothing and why, so a table that went from empty to an entry resolving to nothing never
+          reads as no change
         type: local
       - stepNumber: 8
         description: Answer the project, what it was compared with, and the changes
@@ -790,4 +799,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-07T22:36:58.699Z'
+updatedAt: '2026-10-08T08:31:25.615Z'

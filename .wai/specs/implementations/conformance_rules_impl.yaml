@@ -268,17 +268,19 @@ methods:
           module that declares it, past the forwarding module (an Adapter re-exporting its provider)
           the file imports on purpose. A call of the Portal's own code that resolves to nothing — a
           resolved call marked unresolved (its receiver or callee typed any, unknown or nothing, a
-          cast to either or to an index signature included, or its member picked by a computed key;
-          the checker's own error type, a name from a package with no typings in reach, is not such
-          a receiver), or, without a type checker, a site whose receiver nothing declares, binds or
-          aliases — under the name of a write- or lifecycle-effect method of a data component —
-          candidatesOf narrowed to data components: where the checker recorded the receiver's
-          original type, before any cast, a write of the data component it lands on, every one of
-          its writes when a computed key names none; else one of that name in the Portal's own
-          subsystem or a subsystem it depends into — which no implementation of the Portal claims,
-          is PORTAL_CALL_UNRESOLVED (warning; site `<fromPath> -> <name>`, or the candidates when no
-          name was written): the analysis could not follow it, and fails closed rather than passing
-          it
+          cast to either or to an index signature included, or its member picked by a computed key —
+          and a member read by a key that names no single member off a receiver that was a data
+          component before any cast, invoked on the spot or taken as a value and invoked later,
+          however the receiver or the key is cast; the checker's own error type, a name from a
+          package with no typings in reach, is not such a receiver), or, without a type checker, a
+          site whose receiver nothing declares, binds or aliases — under the name of a write- or
+          lifecycle-effect method of a data component — candidatesOf narrowed to data components:
+          where the checker recorded the receiver's original type, before any cast, a write of the
+          data component it lands on, every one of its writes when a computed key names none; else
+          one of that name in the Portal's own subsystem or a subsystem it depends into — which no
+          implementation of the Portal claims, is PORTAL_CALL_UNRESOLVED (warning; site `<fromPath>
+          -> <name>`, or the candidates when no name was written): the analysis could not follow it,
+          and fails closed rather than passing it
         type: local
       - stepNumber: 20
         description: >-
@@ -296,7 +298,12 @@ methods:
         type: loop
         over: >-
           each mapped path and each bare (package) specifier among its runtime imports and type-only
-          bindings, local packages of this repository excluded
+          bindings, and the bare specifiers of the UNOWNED modules it imports
+          (ctx.codeModel.reachedImports: a module no component realizes is read as if inlined in its
+          importer, transitively through the project files each import resolves to, to a depth of
+          eight, each specifier carrying the modules it was reached through; a module a component
+          realizes stops the walk, its imports judged as its own), local packages of this repository
+          excluded
         endStep: 22
       - stepNumber: 22
         description: >-
@@ -305,7 +312,8 @@ methods:
           TECH_LEAKAGE_IN_CODE (warning; site `<path> -> <package>`) naming the technology and its
           home: move the vendor call behind the component that binds it — or, for a technology with
           an empty home, saying that no implementation binds it: bind it on the data-layer component
-          that owns the vendor call
+          that owns the vendor call. A package reached through unowned modules names them, in order,
+          as the hops it was imported through
         type: local
     symbol: check
     exportedVia: dependencyConformanceRule
@@ -976,7 +984,8 @@ methods:
       - stepNumber: 4
         description: >-
           claimed = every file the specs name, as canonical keys: each implementation's
-          sourceFiles() and its simPath, then each type's sourceFiles()
+          sourceFiles(), its simPath and the binding modules it declares in bindings (code linkage:
+          the files through which it reaches another project's code), then each type's sourceFiles()
         type: local
       - stepNumber: 5
         description: >-
@@ -1170,7 +1179,16 @@ methods:
           contract methods (by name or per-method symbol) of the components those classes' files
           realize, the one its name names or every one when a computed key names none; otherwise, by
           name, those of the components in the caller's own subsystem or one its component depends
-          into
+          into. verbEffect(component, method) = what a workflow verb does to state where its
+          contract does not say, read off its own narrative transitively and memoized: a declared
+          effect is the answer (write, lifecycle and io change state, read and none do not); an
+          undeclared one on an Orchestrator, Supervisor or Actor is what its claims reach (its
+          narrative call steps or its declared calls, claimsOf) — any claim reaching a method that
+          changes state makes it write, only reads or nothing at all read — and what the design
+          leaves unsaid is unknown, never guessed: a verb with no narrative and no declared calls, a
+          dispatch step (a runtime table names no method), a target outside this tree, a
+          non-workflow method declaring no effect. A verb already on the path (a cycle) adds
+          nothing, and an answer read inside a cycle is not kept
         type: local
       - stepNumber: 2
         label: methodLoop
@@ -1325,7 +1343,11 @@ methods:
           unresolved answer is about, else elsewhere carrying the files it did land in. A claim the
           type checker did not land on its target keeps this answer: the checker's landing on a
           declaration says what a receiver is TYPED as (a type literal, an interface no class
-          realizes), never where the call went instead, so it accuses nothing
+          realizes), never where the call went instead, so it accuses nothing. An unresolved miss
+          whose target component has no code yet — code.holdsAny over every file its implementations
+          name is false, the normal state after the first component of a service is implemented from
+          its brief through a port to a collaborator still planned — is appended to plannedClaims
+          instead: planned, not unresolved
         type: local
       - stepNumber: 14
         label: unrealizedReport
@@ -1343,14 +1365,20 @@ methods:
       - stepNumber: 15
         label: unresolvedReport
         description: >-
-          When missed holds an unresolved entry, report CALL_ORIGIN_UNRESOLVED (warning; spec
-          impl.id; draft context the entry's draftContext), one finding per method listing each such
-          claim with the shape its call sites were written in: the target name IS called inside
-          fnSymbol, but from no site this analysis can resolve to a file — so the claim is neither
-          proven realized nor accused of being missing, and no working call is asked to be rewritten
-          to suit the analysis. The finding names its sites and says that much and no more; which
-          receiver forms resolve and which do not is the code's summary and the rule's description,
-          stated ONCE where `wairon rules list` reads it, never repeated per finding
+          When plannedClaims is non-empty, report CALL_TARGET_PLANNED (notice; spec impl.id; draft
+          context the entry's draftContext), one finding per method naming each such claim, the
+          shape its call was written in and the files the target plans: the call is in the function
+          by name through a receiver nothing written yet realizes — planned, not missing, said as
+          SOURCE_FILE_PLANNED says it — and it is judged like any other claim once the target's
+          realization begins. When missed holds an unresolved entry, report CALL_ORIGIN_UNRESOLVED
+          (warning; spec impl.id; draft context the entry's draftContext), one finding per method
+          listing each such claim with the shape its call sites were written in: the target name IS
+          called inside fnSymbol, but from no site this analysis can resolve to a file — so the
+          claim is neither proven realized nor accused of being missing, and no working call is
+          asked to be rewritten to suit the analysis. The finding names its sites and says that much
+          and no more; which receiver forms resolve and which do not is the code's summary and the
+          rule's description, stated ONCE where `wairon rules list` reads it, never repeated per
+          finding
         type: local
       - stepNumber: 16
         description: >-
@@ -1397,21 +1425,23 @@ methods:
           method (its name or a per-method symbol) of a component other than this one whose effect
           is write or lifecycle — or, when this component is a Portal and its function is not a body
           a non-Portal component's modelled method is anchored to (sharedBodies), on a verb of an
-          Orchestrator, Supervisor or Actor whose effect is not declared read or none, since a
-          Portal changes state only by dispatching to such a verb — which is claimed nowhere. A
-          landing on a MODULE function (no container) is never a method the callee reaches through
-          an exportedVia handle, the same-named object member in a shared file being another body.
-          Claimed are: what declared names, what every modelled method sharing this very body (the
-          same file and anchor, N:1 identity) claims, and every landing a claimed target IS or
-          forwards to by identity — its own files under its accepted names and targetForwards of it,
-          since an Adapter re-exporting its provider's function is called under the Adapter's claim
-          while the checker resolves the call past it. unresolvedWrites = the same calls marked
-          unresolved, each with candidatesOf(call, component) left unclaimed. Left out of both: a
-          call from a Portal into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE and
-          PORTAL_CALL_UNRESOLVED judge it), an Adapter's call on a Portal reached over an
-          out-of-process transport (the link the design models), and, as for crossings, every call
-          of a function that forwards by identity to a modelled method written in another file. A
-          same-file target is the colocated direction's subject and never counted twice
+          Orchestrator, Supervisor or Actor whose verbEffect is not read — write, whether declared
+          or read off its own narrative, or unknown, kept apart as undecided since nothing settles
+          it — since a Portal changes state only by dispatching to such a verb — which is claimed
+          nowhere. A landing on a MODULE function (no container) is never a method the callee
+          reaches through an exportedVia handle, the same-named object member in a shared file being
+          another body. Claimed are: what declared names, what every modelled method sharing this
+          very body (the same file and anchor, N:1 identity) claims, and every landing a claimed
+          target IS or forwards to by identity — its own files under its accepted names and
+          targetForwards of it, since an Adapter re-exporting its provider's function is called
+          under the Adapter's claim while the checker resolves the call past it. unresolvedWrites =
+          the same calls marked unresolved, each with candidatesOf(call, component) left unclaimed.
+          Left out of both: a call from a Portal into a data component
+          (PORTAL_WRITE_SHORTCUT_IN_CODE and PORTAL_CALL_UNRESOLVED judge it), an Adapter's call on
+          a Portal reached over an out-of-process transport (the link the design models), and, as
+          for crossings, every call of a function that forwards by identity to a modelled method
+          written in another file. A same-file target is the colocated direction's subject and never
+          counted twice
         type: local
       - stepNumber: 20
         label: writeReport
@@ -1425,7 +1455,10 @@ methods:
           same spec and draft context), one finding per method naming each candidate write and the
           call as written: the call goes through a receiver the analysis cannot follow, so it is
           neither proven an unnarrated write nor cleared, and fails closed until the receiver
-          carries its declared type. Each carried like its siblings, one unit per component.method
+          carries its declared type. Each carried like its siblings, one unit per component.method.
+          A workflow verb in undecided is named in the same finding as an unnarrated call to it
+          whose effect is undeclared, never as a change of state: declare the verb's effect (read or
+          none when it changes nothing), or narrate the call
         type: local
     symbol: check
     exportedVia: callConformanceRule
@@ -1800,7 +1833,12 @@ methods:
           root or transport handles whatever wires the component up supplies. Only a LEADING run is
           dropped, and only names the implementation actually declared: an injected name appearing
           after the contract's own parameters is not wiring, it is an argument in the middle of the
-          caller's list
+          caller's list. Then, where the code still takes more than the contract declares, set aside
+          the parameters whose name starts with an underscore — front first, as many as the surplus,
+          and never one the contract itself names under that spelling: a leading underscore is the
+          universal mark of a parameter the signature must take but does not use (the request and
+          URL a transport hands a handler), so it is never paired with a declared argument, and one
+          still past the declared list is never reported as undeclared
         type: local
       - stepNumber: 4
         description: >-
@@ -1844,7 +1882,11 @@ methods:
           type matching through its code-level name); with no dialect for the file's language, or
           where the code annotates no type or the dialect cannot read it, say nothing about the name
           — without it a rename cannot be told from a substitution, and a guess about somebody's
-          signature is worse than silence
+          signature is worse than silence. An EXTERNAL type (alias::name) answers to the name its
+          pinned snapshot gives it under that public name (ctx.pinnedExternals), else to its public
+          name's last segment in the code's type casing, so a rename is reported the same whether
+          the parameter's type is the project's own, a producer's or a primitive; and names are
+          compared without their leading underscores (`_id` names the argument `id` does)
         type: local
       - stepNumber: 8
         description: >-
@@ -2051,6 +2093,75 @@ methods:
     detail: full
     symbol: check
     exportedVia: asyncConformanceRule
+  - name: bindingModules
+    sourcePath: src/core/rules/conformance/binding-modules.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each binding module in ctx.bindingModules, collect the implementations naming it and
+          the aliases their components reach (a dependsOn, owns, narrative call, declared call or
+          implements naming `alias::name`), keeping the aliases ctx.pinnedExternals holds a snapshot
+          for, and the aliases naming a member project of the bound root (ctx.projectFamily) — whose
+          surface is its L0 export table in ctx.exportTables read live: each exported component's
+          contract methods (narrowed to the exported interface) with their params' previousNames and
+          their own, each exported type's fields with their previousNames
+        type: loop
+        over: ctx.bindingModules
+        endStep: 8
+      - stepNumber: 2
+        description: Can it be compared?
+        type: branch
+        condition: the module was read and at least one reached alias is pinned or is a member project
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Report BINDING_UNREAD (notice) once for the module, naming why — not on disk yet, escapes
+          the root, unreadable, a language the reader does not read, or no pinned external and no
+          member project reached — and move on
+        type: jump
+        toStep: 1
+      - stepNumber: 4
+        description: >-
+          Match each declaration: by its doc comment's `alias::name`, else by nameKey against a
+          pinned interface's id or name or a pinned type's id or name (an Api, Port or Client suffix
+          ignored), else for an interface by the pinned interface most of its member names (current
+          or former) belong to; an exported function against the methods of every pinned interface.
+          An unmatched declaration is the binding's own plumbing
+        type: local
+      - stepNumber: 5
+        description: >-
+          For each member of a declaration matched to a pinned interface, and each matched function:
+          a name that is a pinned method's former name is drift with the rename to follow; a name
+          the matched interface does not hold is drift (no longer exported); otherwise compare the
+          parameter list's arity and names by nameKey with the pinned method's params, a param's
+          previousNames giving the rename
+        type: local
+      - stepNumber: 6
+        description: >-
+          For a declaration matched to a pinned type: each field the type does not declare is drift
+          (with the rename when a pinned field was formerly that name), and each pinned field the
+          binding lacks and no rename explains is drift
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report BINDING_DRIFT (warning) per drifted declaration, anchored on the first
+          implementation naming the module (draft context when it is draft), naming the module, the
+          line, the alias, whether it was compared with a pin or with the member project's live
+          export table, and every difference with the rename to follow
+        type: local
+      - stepNumber: 8
+        description: Next module
+        type: jump
+        toStep: 1
+      - stepNumber: 9
+        description: 'Done: every binding module judged'
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-07T22:20:11.009Z'
+updatedAt: '2026-10-08T12:19:26.735Z'

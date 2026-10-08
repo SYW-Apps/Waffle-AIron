@@ -37,8 +37,11 @@ fields:
   - name: readPaths
     type: list<string>
     description: >-
-      Spec paths the subagent should read first (system spec, component/interface/implementation
-      specs) — richer than the generated files ever carried.
+      What the subagent reads before any edit. For a component's implementer: the system spec, the
+      component's own spec, contracts and implementations; the spec of every type its contracts use
+      (params and returns, and the types those types' fields name, within this project); its
+      dependencies' contracts and the files that realize them (the code it will call); and the
+      pinned snapshot of each external it reaches. Other agents read the whole tree (`**`).
     optional: true
   - name: instructions
     type: string
@@ -79,15 +82,36 @@ fields:
   - name: codeFence
     type: list<string>
     description: >-
-      Where an implementing agent may write CODE: each source file the agent's implementations name
-      (sourcePath, per-method sourcePaths), and the folder those files share as `<folder>/**` when
-      they share one below the project root — the subsystem's code folder, so a first file beside
-      the existing ones is inside the fence. Also folded into instructions as a '## Code write
-      fence' section, which says plainly when nothing names a code location yet (the parent then
-      names the planned files). Absent for an agent that implements nothing (the architect, a
-      delegating member owner).
+      Where an implementing agent may write CODE, as exact files and never a folder glob: every file
+      the specs name for this agent's components ALONE — the implementations' and their methods'
+      sourcePaths, simPath harnesses and binding modules, and the sourcePaths of the types the agent
+      owns (a component's: the types whose componentClass it is, and the types only its own
+      contracts use; a subsystem owner's: the types its subsystem owns) — existing or planned. A
+      file the specs of another component (or, for an owner, another subsystem) also name is no
+      single agent's and is listed under sharedPaths instead, so two fences never claim one path.
+      Also folded into instructions as a '## Code write fence' section, which marks each planned
+      file `(planned — create it)` and says plainly when nothing names a code location yet (the
+      parent then declares the planned sourcePath — code linkage, no re-lock). Absent for an agent
+      that implements nothing (the architect, a delegating member owner).
+    optional: true
+  - name: sharedPaths
+    type: list<string>
+    description: >-
+      The files an implementing agent may touch but does not own, each existing or planned: the
+      files its specs name that other components' (or subsystems') specs name too — a shared type
+      module, a shared binding module — and, as they exist, the project's setup on the way to its
+      code (package.json and its lockfile, tsconfig.json, Cargo.toml, pyproject.toml, go.mod, from
+      the project root down to each folder of its files), the package or crate roots in those
+      folders (index.ts, lib.rs, main.rs, mod.rs, __init__.py), and the source files beside its own
+      that no spec names (shared helpers, a composition root), capped so the brief stays small.
+      Folded into the '## Code write fence' section with the rule that governs them: create or
+      extend one only for this component's needs — a planned shared type exactly as its spec
+      declares it, never redeclared locally — and a file no spec names that would need a
+      responsibility of its own (domain logic, held state, a decision the design does not make) is a
+      design change: stop and report it. Absent when there is none, and for an agent that implements
+      nothing.
     optional: true
 methods: []
 sourcePath: src/models/agent.ts
 createdAt: '2026-08-08T11:11:36.097Z'
-updatedAt: '2026-10-05T23:38:35.548Z'
+updatedAt: '2026-10-08T08:20:33.745Z'

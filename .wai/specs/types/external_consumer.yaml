@@ -84,11 +84,28 @@ methods:
     description: >-
       This consumer as a rename of `member` on one of `publicNames` breaks it: only those public
       names, each with that one member, its names narrowed alike, so a rename dry run
-      (sdd_rename_method's `breaks`) names what breaks — as the CLI dry run's "N consumer(s) call
-      <method>" does — rather than the consumer's whole use of the producer. Its specs stay the ones
-      that reach the public name. Pure.
+      (sdd_rename_method's, sdd_rename_param's and sdd_rename_field's `breaks`) names what breaks —
+      as the CLI dry run's "N consumer(s) call <method>" does — rather than the consumer's whole use
+      of the producer. Its specs narrow to the ones whose references reach THAT member (the use's
+      memberSpecs entry for it); a use recorded without per-member specs keeps the specs that reach
+      the public name. Pure.
     sourcePath: src/models/project-family.ts
     symbol: narrowedToMember
+  - name: narrowedToUses
+    signature: 'narrowedToUses(published: list<ExportUse>): ExternalConsumer?'
+    params:
+      - name: published
+        type: list<ExportUse>
+        description: Each public name a rename moves something on, with the members that carry it
+    returns: ExternalConsumer?
+    description: >-
+      This consumer as a rename that moves something on several public names and members breaks it
+      (a field rename reaches a consumer through every exported type embedding it and every exported
+      method naming one): narrowedTo applied to each (public name, member) pair the consumer reaches
+      (reaches), the narrowed uses merged — or none when it reaches no pair, so it is not one the
+      rename breaks. Pure.
+    sourcePath: src/models/project-family.ts
+    symbol: narrowedToUses
 sourcePath: src/models/project-family.ts
 createdAt: '2026-10-06T23:03:22.646Z'
-updatedAt: '2026-10-07T21:59:47.153Z'
+updatedAt: '2026-10-08T08:27:52.524Z'

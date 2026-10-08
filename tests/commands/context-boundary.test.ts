@@ -331,7 +331,7 @@ describe('the Portal publishes three context operations, not a module', () => {
   it('no longer star-exports the context module', () => {
     const text = source('src/core/index.ts');
     expect(text).not.toContain("export * from './context.js';");
-    expect(text).toContain("export { syncContextFiles, hasContext, derivedDocPaths } from './context.js';");
+    expect(text).toContain("export { syncContextFiles, hasContext, derivedDocPaths, staleDerivedDocs } from './context.js';");
   });
 
   it('republishes each one by identity, so the Portal method and the function are one function', () => {

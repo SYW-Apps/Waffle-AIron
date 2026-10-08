@@ -77,39 +77,46 @@ methods:
         targetComponent: validator_surfaces_adapter
         targetMethod: listPinnedExternals
       - stepNumber: 10
+        description: >-
+          Read the binding modules the implementations name through the binding module adapter,
+          identical to validateProject
+        type: call
+        targetComponent: binding_module_adapter
+        targetMethod: readBindingModules
+      - stepNumber: 11
         description: Build the source code model via the source analysis adapter, identical to validateProject
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 11
+      - stepNumber: 12
         description: Gather the round-trip findings for the rule context, identical to validateProject
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 12
+      - stepNumber: 13
         description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Read the bound project's configuration through the core adapter for its by-name pack
           selections, identical to validateProject
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Build the rule context and run the same rule sequence as validateProject at full
           strictness — the owner's gate alone: a contained member's specs are its own lock's, never
           this one's
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Digest the code analyzer's doctrine: the rules of the sequence that judge code and the
           project's rules.conformance tuning
         type: call
         targetComponent: gate_identity
         targetMethod: analyzer
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Summarize the code half into the result's `analysis`: the codes declared by the rules that
           judge code, the counts per severity among the issues carrying them, and the analyzer
@@ -118,7 +125,7 @@ methods:
           is removed from the issues: callers other than the lock see the run unchanged, and the
           lock partitions it with ValidationResult.designOnly
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
@@ -305,27 +312,36 @@ methods:
         targetComponent: gate_identity
         targetMethod: compute
       - stepNumber: 13
+        description: >-
+          Digest each input of that identity on its own and carry them as the answer's `parts`: the
+          lock records them (gateParts), and a later check compares them input by input — to name
+          the input that moved, and to judge a change of the wairon release alone by re-validation
+          rather than by digest
+        type: call
+        targetComponent: gate_identity
+        targetMethod: parts
+      - stepNumber: 14
         label: readOwnRecord
         description: Read the bound project's own lock record, to know which gate algorithm it was taken under
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Was it taken under the previous, full-content gate algorithm
           (`sha256+content+doctrine+inputs+members`, a format-2 record)? Then it must be judged as
           it was taken, never forced into a re-lock of an unchanged design
         type: branch
         condition: the record exists and its stateId.algorithm is the full-content gate algorithm
-        onFalseStep: 18
-      - stepNumber: 15
+        onFalseStep: 19
+      - stepNumber: 16
         description: >-
           Compute the full-content identity of the own specs (code linkage included), the content
           reading that record was taken in
         type: call
         targetComponent: validator_core_adapter
         targetMethod: computeOwnStateId
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           Recompute the gate identity from that full-content identity and the SAME doctrine, inputs,
           gate config and members' subjects — gate_identity.compute marks it with the previous
@@ -334,11 +350,11 @@ methods:
         type: call
         targetComponent: gate_identity
         targetMethod: compute
-      - stepNumber: 17
+      - stepNumber: 18
         description: That record is judged; answer
         type: jump
-        toStep: 22
-      - stepNumber: 18
+        toStep: 23
+      - stepNumber: 19
         label: earlierDesign
         description: >-
           Was it taken in the earlier design reading (`sha256+design+doctrine+inputs+members`,
@@ -346,18 +362,18 @@ methods:
           as approved, so a tree in which nothing but a status moved still matches it
         type: branch
         condition: the record exists and its stateId.algorithm is the earlier design gate algorithm
-        onFalseStep: 22
-      - stepNumber: 19
+        onFalseStep: 23
+      - stepNumber: 20
         description: Recover each own spec's approved status from the record's design digests
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvedStatuses
-      - stepNumber: 20
+      - stepNumber: 21
         description: Compute the own design identity in the earlier reading, statuses put back as approved
         type: call
         targetComponent: validator_core_adapter
         targetMethod: computeOwnDesignIdAsRecorded
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Recompute the gate identity from it and the SAME doctrine, inputs, gate config and
           members' subjects — gate_identity.compute marks it with the earlier design gate algorithm
@@ -365,7 +381,7 @@ methods:
         type: call
         targetComponent: gate_identity
         targetMethod: compute
-      - stepNumber: 22
+      - stepNumber: 23
         label: answer
         description: >-
           Return the gate identity, with asRecorded when the record on disk was taken under an
@@ -548,6 +564,16 @@ methods:
         targetComponent: validator_surfaces_adapter
         targetMethod: listPinnedExternals
       - stepNumber: 22
+        label: bindings
+        description: >-
+          Read the binding modules the bound project's implementations name
+          (implementation_spec.bindings) through the binding module adapter, each once, contained
+          within the project root — what binding conformance compares with the pins just read; a
+          reach-only run reads none
+        type: call
+        targetComponent: binding_module_adapter
+        targetMethod: readBindingModules
+      - stepNumber: 23
         description: >-
           Build the source code model via the source analysis adapter — every distinct source path
           of the bound project's own implementations (a contained member's paths are relative to its
@@ -556,7 +582,7 @@ methods:
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Read, through the core adapter, the spec files unchanged since the approval — the specs
           the rules are shown as complete (none when the tree was never approved, and an unreadable
@@ -564,12 +590,12 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: settledSpecPaths
-      - stepNumber: 24
+      - stepNumber: 25
         description: Relate each settled file to the spec stored in it through the core adapter's spec index
         type: call
         targetComponent: validator_core_adapter
         targetMethod: scanAllSpecs
-      - stepNumber: 25
+      - stepNumber: 26
         description: >-
           Integrate the loader's schema and parse diagnostics, read through the core adapter — only
           those on the bound project's own files: a diagnostic on a contained member's file is that
@@ -577,19 +603,19 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: getLoaderIssues
-      - stepNumber: 26
+      - stepNumber: 27
         description: >-
           Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
           the known subsystems) and return early
         type: local
-      - stepNumber: 27
+      - stepNumber: 28
         description: >-
           Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
           and pattern definitions — to populate the rule context's ext for this run
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectExtensions
-      - stepNumber: 28
+      - stepNumber: 29
         description: >-
           Gather the round-trip findings: dry-run every in-scope spec through the writer's
           relativization and schema pipeline via the core adapter (no I/O) and keep the findings for
@@ -597,24 +623,24 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 29
+      - stepNumber: 30
         description: Seed the built-in SDD conformance rule set into the in-memory rule set
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 30
+      - stepNumber: 31
         description: >-
           Register the loaded programmatic pack rules after the built-ins (project pack order is
           precedence)
         type: call
         targetComponent: rule_repository
         targetMethod: registerPackRules
-      - stepNumber: 31
+      - stepNumber: 32
         description: Read the composed, ordered rule run sequence to execute
         type: call
         targetComponent: rule_repository
         targetMethod: ruleSequence
-      - stepNumber: 32
+      - stepNumber: 33
         description: >-
           Gather the known issue codes of every registered rule and declarative assertion for the
           lint-allows audit, with each code's default severity (so the audit can tell an allow
@@ -623,7 +649,7 @@ methods:
         type: call
         targetComponent: rule_repository
         targetMethod: knownIssueCodes
-      - stepNumber: 33
+      - stepNumber: 34
         description: >-
           Read the bound project's configuration through the core adapter for its by-name pack
           selections and its identity; its rule severities and projectType are supplied by the
@@ -631,33 +657,33 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 34
+      - stepNumber: 35
         description: >-
           Read the bound root's lock record through the core adapter for the project id it recorded;
           an unlocked root, or a record written before project ids existed, records none
         type: call
         targetComponent: validator_core_adapter
         targetMethod: readLockRecord
-      - stepNumber: 35
+      - stepNumber: 36
         description: >-
           Resolve the project's identity with project_config.identity(the lock's projectId) — the
           effective id, where it came from, and its problems (defaulted, ambiguous, changed) — for
           the project-identity rule. A root with no readable configuration carries no identity
         type: local
-      - stepNumber: 36
+      - stepNumber: 37
         description: >-
           Load the component-variant registry through the core adapter, for the variant rules in the
           rule context
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectVariants
-      - stepNumber: 37
+      - stepNumber: 38
         description: For each loaded subsystem
         type: loop
         loopKind: forEach
         over: the loaded subsystems
-        endStep: 38
-      - stepNumber: 38
+        endStep: 39
+      - stepNumber: 39
         label: subsystem-exports
         description: >-
           Read the subsystem's resolved export table through the core adapter — the resolver's
@@ -665,12 +691,12 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: resolveSubsystemExports
-      - stepNumber: 39
+      - stepNumber: 40
         description: Read the project's resolved L0 export table through the core adapter
         type: call
         targetComponent: validator_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 40
+      - stepNumber: 41
         label: project-family
         description: >-
           Read the project graph of this scan through the core adapter: the bound project and the
@@ -681,13 +707,13 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
-      - stepNumber: 41
+      - stepNumber: 42
         description: For each contained member
         type: loop
         loopKind: forEach
         over: the graph's nodes other than the bound root
-        endStep: 42
-      - stepNumber: 42
+        endStep: 43
+      - stepNumber: 43
         label: member-exports
         description: >-
           Read the member's resolved L0 export table through the core adapter: its public names are
@@ -696,15 +722,15 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 43
+      - stepNumber: 44
         description: >-
           For each pair of projects the graph's cross-project references connect whose consumer is
           the bound project
         type: loop
         loopKind: forEach
         over: the distinct (bound project, producer) pairs of the graph's cross-project references
-        endStep: 44
-      - stepNumber: 44
+        endStep: 45
+      - stepNumber: 45
         label: pair-usage
         description: >-
           Map the bound project's references into the producer onto the producer's public names
@@ -712,7 +738,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: exportUsage
-      - stepNumber: 45
+      - stepNumber: 46
         label: signature-facts
         description: >-
           Read what the scan's signature resolution recorded through the core adapter: the sources
@@ -721,7 +747,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: signatureFacts
-      - stepNumber: 46
+      - stepNumber: 47
         label: type-spelling-facts
         description: >-
           Read what the scan's type canonicalisation recorded through the core adapter: the stored
@@ -730,7 +756,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: typeSpellingFacts
-      - stepNumber: 47
+      - stepNumber: 48
         description: >-
           Read the retired reachability forms the scan met while it read them compatibly
           (portalType, listener mounts, retired invokedBy kinds) through the core adapter, for the
@@ -738,7 +764,7 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: retiredReachFacts
-      - stepNumber: 48
+      - stepNumber: 49
         description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
           the signature facts, the type-spelling facts, the foreign surface snapshots, the pinned
@@ -756,25 +782,25 @@ methods:
           never read here: a parent's requirements do not reach any member's own gate, and whether
           members adopt this project's requirements is the family run's question
         type: local
-      - stepNumber: 49
+      - stepNumber: 50
         description: For each rule in the run sequence
         type: loop
         loopKind: forEach
         over: the rule run sequence read in step 20 (built-ins, then pack rules, lint-allows last)
-        endStep: 50
-      - stepNumber: 50
+        endStep: 51
+      - stepNumber: 51
         label: run-rule
         description: >-
           Run the rule's check against the rule context; the rule reports its findings through
           ctx.addIssue
         type: local
-      - stepNumber: 51
+      - stepNumber: 52
         label: hint
         description: Does the project declare externals?
         type: branch
         condition: the pinned externals read in step 10 are not empty
-        onFalseStep: 53
-      - stepNumber: 52
+        onFalseStep: 54
+      - stepNumber: 53
         description: >-
           Add the one-line hint to the result: its externals were judged against their pins alone;
           the advisory live comparison beside this verdict reads their live producers (offline), and
@@ -782,7 +808,7 @@ methods:
           the verdict — and it never sends a project without members to `validate --family`, which
           composes nothing more for it
         type: local
-      - stepNumber: 53
+      - stepNumber: 54
         label: code-reading
         description: >-
           Ask which compiler an exact-grade analysis read the code with, through the source analysis
@@ -793,7 +819,7 @@ methods:
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: compilerIdentity
-      - stepNumber: 54
+      - stepNumber: 55
         label: done
         description: Return the project's verdict — the same from every root
         type: return
@@ -820,6 +846,23 @@ methods:
         type: return
         outcome: the project's own reach model
     symbol: ownReachModel
+  - name: validateDesign
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Run the owner's gate with the options given, each spec judged at the status it is authored
+          with (the run validateProject makes)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Summarise its code half with the analyzer that took it — the codes the code-judging rules
+          declare, counted per severity, with the analyzer's doctrine digest and the weakest grade —
+          exactly as validateAsComplete does
+        type: local
+      - stepNumber: 3
+        description: Answer the result with its analysis
+        type: return
+        outcome: ValidationResult
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -835,4 +878,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T21:50:22.985Z'
+updatedAt: '2026-10-08T08:36:42.671Z'

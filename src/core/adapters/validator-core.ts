@@ -32,6 +32,9 @@ export {
   computeOwnDesignIdAsRecorded,
   approvedStatuses,
   approvalRecord,
+  // The own spec files that moved since the approval: what a record from
+  // before gate parts proves about its design (family_validator.releaseVerdict).
+  diffAgainstApproval,
   consumedContractInputs,
   settledSpecPaths,
   readLockRecord,

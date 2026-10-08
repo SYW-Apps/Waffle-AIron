@@ -138,7 +138,7 @@ const NOT_A_REFERENCE: Record<string, string> = {
   'interface.methods.endpoint.command': 'a CLI command', 'interface.methods.endpoint.address': 'an address',
   'interface.methods.guarantees': 'guarantee tokens', 'interface.methods.invokedBy.caller': 'prose', 'interface.methods.findings.code': 'a finding code',
   'interface.methods.findings.summary': 'prose', 'interface.methods.previousNames': 'a rename trace, carried verbatim',
-  'implementation.simPath': 'a code path', 'implementation.technologies': 'a technology', 'implementation.technologies.name': 'a technology',
+  'implementation.simPath': 'a code path', 'implementation.bindings': 'code paths', 'implementation.technologies': 'a technology', 'implementation.technologies.name': 'a technology',
   'implementation.technologies.matches': 'match tokens', 'implementation.injectedParams': 'parameter names',
   'implementation.methods.narrative.label': 'a step label', 'implementation.methods.narrative.targetMethod': 'a method name (sdd_rename_method)',
   'implementation.methods.narrative.capability': 'a capability key of the target portal', 'implementation.methods.narrative.auth.note': 'prose',

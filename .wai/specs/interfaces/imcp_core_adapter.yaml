@@ -65,7 +65,7 @@ methods:
       - idempotent
   - name: renameComponent
     description: 'Forward to core_portal.renameComponent: rename a component and every reference to it'
-    signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
+    signature: 'renameComponent(componentId: string, newId: string, dryRun?: bool): ComponentRename'
     returns: ComponentRename
     params:
       - name: componentId
@@ -74,6 +74,10 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
   - name: renameMethod
     description: 'Forward to core_portal.renameMethod: rename a contract method and every reference to it'
     signature: >-
@@ -225,7 +229,7 @@ methods:
       - idempotent
   - name: renameType
     description: 'Forward to core_portal.renameType: rename a type and every reference to it'
-    signature: 'renameType(typeId: string, newId: string): TypeRename'
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: typeId
@@ -234,6 +238,10 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
   - name: setNetwork
     description: >-
       Calls setNetwork on the core portal: declare or remove the bound project's network (the
@@ -245,7 +253,7 @@ methods:
     description: >-
       Forward to spec_maintenance_portal.renameField: rename a field of a type and every reference
       to it
-    signature: 'renameField(typeId: string, field: string, newName: string): FieldRename'
+    signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
     returns: FieldRename
     params:
       - name: typeId
@@ -257,23 +265,29 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
   - name: reinjectLocalGuides
     description: >-
       Calls reinjectLocalGuides on the agent context portal: the project-local guides and root
       pointer of a project a family migration made, for its own sessions.
     signatureFrom: agent_context_portal.reinjectLocalGuides
+    effect: write
   - name: registerProjectServer
     description: >-
       Calls registerProjectServer on the agent context portal: the portable .mcp.json of a project a
       family migration made, for its own sessions.
     signatureFrom: agent_context_portal.registerProjectServer
+    effect: io
   - name: renameParam
     description: >-
       Forward to spec_maintenance_portal.renameParam: rename a parameter of a contract method,
       keeping its old name in the parameter's rename trace
     signature: >-
-      renameParam(componentId: string, methodName: string, param: string, newName: string):
-      ParamRename
+      renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
+      bool): ParamRename
     returns: ParamRename
     params:
       - name: componentId
@@ -288,6 +302,10 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:41:14.527Z'
+updatedAt: '2026-10-08T08:25:31.236Z'

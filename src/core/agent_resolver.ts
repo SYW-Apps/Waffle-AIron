@@ -27,12 +27,14 @@ import {
   getComponentPath,
   getInterfacePath,
   getImplementationPath,
+  getTypePath,
   resolveSubprojectForNamespace,
   // The members this layer declares (stage 3: a member is not a subsystem), each
   // collapsing to one delegating owner.
   graph,
 } from './specs.js';
-import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec } from '../models/specs.js';
+import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type TypeSpec } from '../models/specs.js';
+import { fieldTypeRefs, methodTypeRefs, typeMatchesRef } from '../models/type-references.js';
 import { languageOfSourcePath } from '../models/code-model.js';
 import { typeMappingFor } from '../models/type-dialects.js';
 import { readYamlFile } from '../utils/yaml.js';
@@ -425,6 +427,9 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
           const files = codeLocationsOf(impl);
           if (files.length > 0) hasExplicitSource = true;
           for (const file of files) {
+            // A file the specs of another subsystem name too is no single
+            // owner's: the brief lists it as shared instead.
+            if ((namedBy.get(file)?.size ?? 0) > 1) continue;
             if (!ownedPaths.includes(file)) ownedPaths.push(file);
           }
         }
@@ -501,6 +506,10 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
 
   // 3. Component Implementers
   if (config.rules.generateComponentImplementers || implementers) {
+    // Which components' specs name each code file: a file one component's
+    // specs alone name is that component's fence; one several name is shared.
+    const claims = componentClaims(components, interfaces, implementations, types);
+    const rel = (p: string): string => path.relative(getProjectRoot(), p).replace(/\\/g, '/');
     for (const comp of components) {
       // Find contract interfaces for this component
       const compInterfaces = interfaces.filter((i) => i.component === comp.id);
@@ -510,20 +519,23 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
       const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
 
       const ownedPaths: string[] = [];
-      for (const impl of compImpls) {
-        // Existing or PLANNED: implementation and method files and the simPath harness.
-        for (const file of codeLocationsOf(impl)) {
-          if (!ownedPaths.includes(file)) ownedPaths.push(file);
-        }
+      const add = (file: string): void => {
+        if (!ownedPaths.includes(file)) ownedPaths.push(file);
+      };
+      // Existing or PLANNED: every file this component's specs ALONE name —
+      // implementation and method files, the simPath harness, binding modules,
+      // and the types only its own contracts use.
+      for (const [file, owners] of claims) {
+        if (owners.size === 1 && owners.has(comp.id)) add(file);
       }
-      // The types this component realizes (its componentClass) are its code too.
+      // The types this component realizes (its componentClass) are its code
+      // too, whoever else's contract uses them.
       for (const type of types.filter((t) => t.componentClass === comp.id && t.subsystem === comp.subsystem)) {
-        for (const file of typeSourceFiles(type)) {
-          if (!ownedPaths.includes(file)) ownedPaths.push(file);
-        }
+        for (const file of typeSourceFiles(type)) add(file);
       }
 
-      if (ownedPaths.length === 0) {
+      const namesAny = compImpls.some((impl) => codeLocationsOf(impl).length > 0);
+      if (ownedPaths.length === 0 && !namesAny) {
         const inferred = inferSourcePathForComponent(comp, subsystems);
         if (inferred) {
           ownedPaths.push(inferred);
@@ -532,13 +544,23 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
 
       const dependencies = comp.dependsOn.map((depId) => `${depId}-implementer`);
 
-      // An implementer needs to read specs, interfaces, and direct dependency component files
-      const readPaths = [
-        path.relative(getProjectRoot(), AI_PATHS.specsSystem()).replace(/\\/g, '/'),
-        path.relative(getProjectRoot(), getComponentPath(comp.id, comp.subsystem)).replace(/\\/g, '/'),
-        ...compInterfaces.map((i) => path.relative(getProjectRoot(), getInterfacePath(i.id, comp.id)).replace(/\\/g, '/')),
-        ...compImpls.map((impl) => path.relative(getProjectRoot(), getImplementationPath(impl.id, impl.contract)).replace(/\\/g, '/')),
-      ];
+      // An implementer reads its own specs, the specs of the types its
+      // contracts use, and the contracts — and the code — of what it calls.
+      const deps = components.filter((c) => c.id !== comp.id && (comp.dependsOn.includes(c.id) || (comp.owns ?? []).includes(c.id)));
+      const depInterfaces = interfaces.filter((i) => deps.some((d) => d.id === i.component));
+      const depFiles = implementations
+        .filter((impl) => depInterfaces.some((i) => i.id === impl.contract))
+        .flatMap((impl) => implementationSourceFiles(impl))
+        .filter((file) => fs.existsSync(path.resolve(getProjectRoot(), file)));
+      const readPaths = [...new Set([
+        rel(AI_PATHS.specsSystem()),
+        rel(getComponentPath(comp.id, comp.subsystem)),
+        ...compInterfaces.map((i) => rel(getInterfacePath(i.id, comp.id))),
+        ...compImpls.map((impl) => rel(getImplementationPath(impl.id, impl.contract))),
+        ...contractTypes(compInterfaces, types).map((t) => rel(getTypePath(t.id, t.subsystem, t.group))),
+        ...depInterfaces.map((i) => rel(getInterfacePath(i.id, i.component))),
+        ...depFiles,
+      ])];
 
       agents.push({
         id: `${comp.id}-implementer`,
@@ -643,25 +665,30 @@ export function composeAgentBrief(agentId: string): AgentBrief {
 
   // Step 13 (part): the code write fence — where this agent may write CODE —
   // ahead of the user's own guidance, which stays the last word.
-  const ownFence = codeFenceOf(record);
-  // A subsystem owner also owns what the whole project shares and no
-  // component claims — the manifest, the compiler settings, the crate or
-  // package root, the files of system-level types — so setup work has an owner.
-  const shared = ownFence && isSubsystemOwner(record) ? sharedProjectFiles(ownFence) : [];
-  const codeFence = ownFence ? [...ownFence, ...shared] : ownFence;
+  // Exact files, never a folder glob: what this agent's specs alone name.
+  const codeFence = codeFenceOf(record);
+  // The files it may touch but does not own: the ones its specs name that
+  // other components' specs name too, the project setup on the way to its
+  // code, the package roots there and the unnamed files beside its own — so
+  // a first implementation (module setup, composition root, test setup) is
+  // never blocked, and is never silent either.
+  const sharedPaths = codeFence ? sharedFilesOf(record, codeFence) : [];
   if (codeFence) {
     // A planned file (named, not on disk yet) is marked, so the implementer
     // writes it rather than looks for it.
-    const shown = (p: string): string => (/[*?]/.test(p) || fs.existsSync(path.resolve(getProjectRoot(), p))
+    const shown = (p: string): string => (fs.existsSync(path.resolve(getProjectRoot(), p))
       ? `- \`${p}\``
       : `- \`${p}\` (planned — create it)`);
-    const own = ownFence ?? [];
-    const sharedSection = shared.length > 0
-      ? `\nShared with the other subsystem owners (the project's setup and shared code; coordinate edits):\n\n${shared.map(shown).join('\n')}\n`
+    const ownSection = codeFence.length > 0
+      ? `Write code only in these files (and tests beside them, as the project lays tests out):\n\n${codeFence.map(shown).join('\n')}\n`
+      : sharedPaths.length > 0 && namesAnyCode(record)
+        ? 'Every file this agent\'s specs name is named by another component\'s specs too, so none is this agent\'s alone: they are listed as shared below.\n'
+        : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n';
+    const sharedSection = sharedPaths.length > 0
+      ? `\nShared, owned by no single agent — create or extend these only for what this component needs (an import, a wiring line, a module setting), and name each one you touch in your report. A shared type file is created at its planned home exactly as its spec declares it, never redeclared in your own file:\n\n${sharedPaths.map(shown).join('\n')}\n`
       : '';
-    instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${own.length > 0
-      ? `Write code only here (and tests beside it, as the project lays tests out):\n\n${own.map(shown).join('\n')}\n`
-      : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n'}${sharedSection}`;
+    const rule = '\nA file no spec names — a shared helper, the composition root, test setup, a module manifest beside your code — may be created or extended the same way, for this component\'s needs only. If a shared or unnamed file would need a responsibility of its own (domain logic, held state, a decision the design does not make), that is a design change: stop and report it instead of writing it.\n';
+    instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${ownSection}${sharedSection}${rule}`;
   }
 
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
@@ -688,7 +715,11 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   const externals = externalsUsedBy(record);
   let readPaths = record.readPaths;
   if (externals.length > 0) {
-    instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot, never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n`;
+    const bindings = bindingModulesOf(record);
+    const bindingNote = bindings.length > 0
+      ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as the pin has them (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.\n`
+      : '\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as `bindings` — code linkage, no re-lock — so `validate` compares it with the pin.\n';
+    instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot, never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
     readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
   }
 
@@ -709,6 +740,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     variantGuidance: record.variantGuidance || undefined,
     ...(typeMapping ? { typeMapping } : {}),
     ...(codeFence ? { codeFence } : {}),
+    ...(sharedPaths.length > 0 ? { sharedPaths } : {}),
     profile: budget ? profile : undefined,
     budget,
   };
@@ -733,36 +765,78 @@ function componentImplementer(agentId: string): AgentRecord | null {
 function codeLocationsOf(impl: ImplementationSpec): string[] {
   const files = implementationSourceFiles(impl);
   if (impl.simPath && !files.includes(impl.simPath)) files.push(impl.simPath);
+  for (const binding of impl.bindings ?? []) if (!files.includes(binding)) files.push(binding);
   return files;
 }
 
 /**
- * The code write fence of a record that implements components: each code
- * location it owns (existing or planned), plus the folder they share below the project root as
- * `<folder>/**` — the subsystem's code folder, so a first file beside the
- * existing ones is inside the fence. Empty when the record implements
- * components but no implementation names a file yet; null for a record that
- * implements nothing (the architect, a delegating member owner, a
+ * The named types a set of contracts uses — their params and returns — and,
+ * transitively, the types those types' fields name, within the loaded tree.
+ */
+function contractTypes(contracts: InterfaceSpec[], types: TypeSpec[]): TypeSpec[] {
+  const found: TypeSpec[] = [];
+  const pending = contracts.flatMap((c) => c.methods.flatMap((m) => methodTypeRefs(m)));
+  while (pending.length > 0) {
+    const ref = pending.shift()!;
+    if (ref.includes('::')) continue; // another project's: its pin is read instead
+    const type = types.find((t) => !t.id.includes('::') && typeMatchesRef(t, ref));
+    if (!type || found.includes(type)) continue;
+    found.push(type);
+    for (const field of type.fields ?? []) pending.push(...fieldTypeRefs(type, field.type));
+  }
+  return found;
+}
+
+/**
+ * Which components' specs name each code file, existing or planned: an
+ * implementation's files (its own, its methods', its simPath, its bindings)
+ * through the component owning its contract, and a type's files through its
+ * componentClass — or, when it has none, through every component whose
+ * contracts use it. A file one component alone names is that component's to
+ * fence; a file several name is shared.
+ */
+function componentClaims(
+  components: ComponentSpec[],
+  interfaces: InterfaceSpec[],
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+): Map<string, Set<string>> {
+  const local = new Set(components.map((c) => c.id));
+  const claims = new Map<string, Set<string>>();
+  const claim = (file: string, component: string | undefined): void => {
+    if (!component || !local.has(component)) return;
+    const owners = claims.get(file) ?? new Set<string>();
+    owners.add(component);
+    claims.set(file, owners);
+  };
+  const contractOwner = new Map(interfaces.map((i) => [i.id, i.component]));
+  for (const impl of implementations) for (const file of codeLocationsOf(impl)) claim(file, contractOwner.get(impl.contract));
+  const users = new Map<string, Set<string>>();
+  for (const contract of interfaces) {
+    for (const type of contractTypes([contract], types)) {
+      const set = users.get(type.id) ?? new Set<string>();
+      set.add(contract.component);
+      users.set(type.id, set);
+    }
+  }
+  for (const type of types) {
+    const owners = type.componentClass ? [type.componentClass] : [...(users.get(type.id) ?? [])];
+    for (const file of typeSourceFiles(type)) for (const owner of owners) claim(file, owner);
+  }
+  return claims;
+}
+
+/**
+ * The code write fence of a record that implements components: exactly the
+ * code files it owns, existing or planned — never a folder glob, so two
+ * fences never overlap and nothing outside the named files is claimed. Empty
+ * when the record implements components but owns no file yet; null for a
+ * record that implements nothing (the architect, a delegating member owner, a
  * free-standing domain).
  */
 function codeFenceOf(record: AgentRecord): string[] | null {
-  const implementsComponents = record.template === 'implementer'
-    || (record.template === 'domain-owner' && record.creationReason.startsWith('Automatically inferred from L1'));
-  if (!implementsComponents) return null;
-  const files = record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/') && !/[*?]/.test(p));
-  if (files.length === 0) return [];
-  const dirs = files.map((f) => path.posix.dirname(f.replace(/\\/g, '/')));
-  let shared = dirs[0].split('/');
-  for (const dir of dirs.slice(1)) {
-    const parts = dir.split('/');
-    let i = 0;
-    while (i < shared.length && i < parts.length && shared[i] === parts[i]) i++;
-    shared = shared.slice(0, i);
-  }
-  const folder = shared.join('/');
-  const fence = [...files];
-  if (folder !== '' && folder !== '.') fence.push(`${folder}/**`);
-  return fence;
+  if (!implementsComponents(record)) return null;
+  return record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/') && !/[*?]/.test(p));
 }
 
 /**
@@ -825,6 +899,7 @@ function throughMount(brief: AgentBrief, alias: string, relative: string): Agent
     agentId: `${alias}::${brief.agentId}`,
     ownedPaths: brief.ownedPaths.map(under),
     ...(brief.codeFence ? { codeFence: brief.codeFence.map(under) } : {}),
+    ...(brief.sharedPaths ? { sharedPaths: brief.sharedPaths.map(under) } : {}),
     ...(brief.readPaths ? { readPaths: brief.readPaths.map(under) } : {}),
     root: brief.root ? under(brief.root) : relative,
   };
@@ -855,35 +930,95 @@ function isSubsystemOwner(record: AgentRecord): boolean {
   return record.template === 'domain-owner' && record.creationReason.startsWith('Automatically inferred from L1');
 }
 
-/** The project setup files a subsystem owner shares with the others when they exist: manifests, lockfiles, compiler settings. */
+/** The project setup files a folder may hold: manifests, lockfiles, compiler settings. */
 const SHARED_SETUP_FILES = [
   'package.json', 'package-lock.json', 'tsconfig.json', 'Cargo.toml', 'Cargo.lock',
   'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', 'go.mod',
 ];
 
-/** The crate or package roots a project's components are reached through, when they exist. */
-const SHARED_ROOT_FILES = ['src/lib.rs', 'src/main.rs', 'src/index.ts', 'src/__init__.py'];
+/** The crate or package roots a folder's modules are reached through. */
+const SHARED_ROOT_FILES = ['index.ts', 'index.js', 'lib.rs', 'main.rs', 'mod.rs', '__init__.py'];
+
+/** Source extensions an unnamed sibling file is recognised by. */
+const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.java', '.kt', '.cs']);
+
+/** At most this many unnamed sibling files are listed, so the brief stays small. */
+const MAX_UNNAMED_SIBLINGS = 8;
+
+/** Whether any implementation of the record's components names a code file at all. */
+function namesAnyCode(record: AgentRecord): boolean {
+  const ids = new Set(scopeComponents(record).map((c) => c.id));
+  const contracts = new Set(loadInterfaceSpecs().filter((i) => ids.has(i.component)).map((i) => i.id));
+  return loadImplementationSpecs().some((impl) => contracts.has(impl.contract) && codeLocationsOf(impl).length > 0);
+}
+
+/** The components a record implements: its one component for an implementer, its subsystem's local components for an owner. */
+function scopeComponents(record: AgentRecord): ComponentSpec[] {
+  const components = loadComponentSpecs().filter((c) => !c.id.includes('::'));
+  if (record.template === 'implementer') return components.filter((c) => `${c.id}-implementer` === record.id);
+  return components.filter((c) => c.subsystem === record.domainRoot);
+}
 
 /**
- * The files the whole project shares and no component claims: the setup files
- * and the crate or package root that exist, and the files of system-level
- * types (planned or written) — each one no implementation names and the
- * owner's own fence does not already hold.
+ * The files a record may touch but does not own, existing or planned: the
+ * files its components' specs name that are not in its fence (another
+ * component's specs name them too), the system-level types' files for an
+ * owner, and — where they exist — the setup files from the project root down
+ * to each folder of its own files, the package or crate roots in those
+ * folders, and up to MAX_UNNAMED_SIBLINGS source files beside its own that no
+ * spec names.
  */
-function sharedProjectFiles(fence: string[]): string[] {
+function sharedFilesOf(record: AgentRecord, fence: string[]): string[] {
   const root = getProjectRoot();
-  const claimed = new Set<string>(fence);
-  for (const impl of loadImplementationSpecs()) for (const file of implementationSourceFiles(impl)) claimed.add(file);
+  const comps = scopeComponents(record);
+  const ids = new Set(comps.map((c) => c.id));
+  const interfaces = loadInterfaceSpecs();
+  const implementations = loadImplementationSpecs();
+  const types = loadTypeSpecs();
+  const owned = new Set(fence);
   const out: string[] = [];
   const add = (file: string): void => {
-    if (!claimed.has(file) && !out.includes(file)) out.push(file);
+    if (!owned.has(file) && !out.includes(file)) out.push(file);
   };
-  for (const file of [...SHARED_SETUP_FILES, ...SHARED_ROOT_FILES]) {
-    if (fs.existsSync(path.join(root, file))) add(file);
+  // The files its specs name that are another's too.
+  const claims = componentClaims(loadComponentSpecs().filter((c) => !c.id.includes('::')), interfaces, implementations, types);
+  for (const [file, owners] of claims) if ([...owners].some((o) => ids.has(o))) add(file);
+  if (isSubsystemOwner(record)) {
+    for (const type of types) if (!type.subsystem) for (const file of typeSourceFiles(type)) add(file);
   }
-  for (const type of loadTypeSpecs()) {
-    if (type.subsystem) continue;
-    for (const file of typeSourceFiles(type)) add(file);
+  // The folders its code lives in, and every folder from the root down to them.
+  const ownFolders = [...new Set([...fence, ...out].map((f) => path.posix.dirname(f.replace(/\\/g, '/'))))];
+  const chain = new Set<string>(['.']);
+  for (const folder of ownFolders) {
+    const parts = folder === '.' ? [] : folder.split('/');
+    for (let i = 1; i <= parts.length; i++) chain.add(parts.slice(0, i).join('/'));
+  }
+  const join = (dir: string, file: string): string => (dir === '.' ? file : `${dir}/${file}`);
+  for (const dir of [...chain].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
+    for (const file of SHARED_SETUP_FILES) if (fs.existsSync(path.join(root, dir, file))) add(join(dir, file));
+  }
+  for (const dir of ownFolders) {
+    for (const file of SHARED_ROOT_FILES) if (fs.existsSync(path.join(root, dir, file))) add(join(dir, file));
+  }
+  // The unnamed source files beside its own: shared helpers, a composition root.
+  const named = new Set<string>(claims.keys());
+  for (const type of types) for (const file of typeSourceFiles(type)) named.add(file);
+  let siblings = 0;
+  for (const dir of ownFolders) {
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+    } catch {
+      continue; // a planned folder: nothing beside it yet
+    }
+    for (const entry of entries.filter((e) => e.isFile()).sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = join(dir, entry.name);
+      if (siblings >= MAX_UNNAMED_SIBLINGS) break;
+      if (!SOURCE_EXTENSIONS.has(path.extname(entry.name)) || named.has(file) || owned.has(file) || out.includes(file)) continue;
+      if (/\.(test|spec)\.[a-z]+$/.test(entry.name)) continue;
+      add(file);
+      siblings++;
+    }
   }
   return out;
 }
@@ -961,6 +1096,13 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
     out.push({ alias, names: [...names].sort(), pin, pinned, bindings });
   }
   return out;
+}
+
+/** The binding modules the implementations of a record's components name, in first-seen order. */
+function bindingModulesOf(record: AgentRecord): string[] {
+  const ids = new Set(implementedComponents(record).map((c) => c.id));
+  const contracts = new Set(loadInterfaceSpecs().filter((i) => ids.has(i.component)).map((i) => i.id));
+  return [...new Set(loadImplementationSpecs().filter((impl) => contracts.has(impl.contract)).flatMap((impl) => impl.bindings ?? []))];
 }
 
 /** One external as the brief's section lists it. */

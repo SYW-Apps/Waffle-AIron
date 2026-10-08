@@ -55,7 +55,7 @@ describe('renameParam', () => {
   it('renames the parameter, keeps its trace and re-derives the signature', () => {
     project();
     const result = renameParam('habit-api', 'create', 'frequency', 'cadence');
-    expect(result).toEqual({ component: 'habit-api', method: 'create', from: 'frequency', to: 'cadence', movedIn: ['ihabit-api'], rewritten: [] });
+    expect(result).toEqual({ component: 'habit-api', method: 'create', from: 'frequency', to: 'cadence', movedIn: ['ihabit-api'], rewritten: [], publishedIn: [] });
     invalidateSpecCache();
     const method = loadInterfaceSpec('ihabit-api')!.methods[0];
     expect(method.params![1]).toMatchObject({ name: 'cadence', type: 'string', description: 'How often', previousNames: ['frequency'] });

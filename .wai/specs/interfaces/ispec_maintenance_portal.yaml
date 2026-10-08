@@ -93,7 +93,7 @@ methods:
       - idempotent
   - name: renameComponent
     description: 'Forward to core_orchestrator.renameComponent: rename a component and every reference to it'
-    signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
+    signature: 'renameComponent(componentId: string, newId: string, dryRun?: bool): ComponentRename'
     returns: ComponentRename
     params:
       - name: componentId
@@ -102,6 +102,10 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
   - name: retireSpecialists
     description: >-
       Forward to core_orchestrator.retireSpecialists: plan, and with apply write, the migration off
@@ -367,4 +371,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-07T22:40:33.531Z'
+updatedAt: '2026-10-08T08:25:21.796Z'

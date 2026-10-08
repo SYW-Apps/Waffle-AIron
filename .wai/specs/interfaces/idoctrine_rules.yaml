@@ -14,7 +14,11 @@ methods:
       free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the
       method's parameters, so each must be closed, appear once and name a parameter of the method or
       a field of a parameter's type (a method that states no structured params is not judged on
-      names).
+      names). One HTTP route binds one verb: two methods bound to the same HTTP method and path —
+      the Portal's basePath joined in, placeholders compared by position whatever their name or
+      spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that
+      declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI
+      document holds one operation per path and verb.
     signature: 'portalEndpoints(ctx: RuleContext): void'
     returns: void
     params:
@@ -33,6 +37,11 @@ methods:
         summary: >-
           An HTTP endpoint path holds an unclosed placeholder, one placeholder twice, or a
           placeholder that names no parameter of its method
+      - code: ENDPOINT_ROUTE_DUPLICATE
+        severity: error
+        summary: >-
+          Two methods bound to the same HTTP method and path (placeholders compared by position)
+          within one Portal, or across Portals declaring the same basePath
   - name: nonPortalEndpoints
     description: >-
       Rule non-portal-endpoints. Only a Portal may carry endpoints: a method on a non-Portal
@@ -519,4 +528,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-07T22:57:04.786Z'
+updatedAt: '2026-10-08T08:28:33.816Z'

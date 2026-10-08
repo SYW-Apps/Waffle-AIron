@@ -112,6 +112,16 @@ methods:
         targetComponent: cli_validator_adapter
         targetMethod: adviseExternals
       - stepNumber: 12
+        description: >-
+          The approval line: read the bound project's own approval entry (depth 0). When its
+          approval was taken under another wairon release, say so in one line beside the findings —
+          carried: `approved under <old>, re-validated under <new>: still approved`; not carried:
+          `the new release finds N issue(s) in the approved design`, naming them — the very verdict
+          `lock-check` exits on. Informational: it is never part of the failure decision
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 13
         label: render
         description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
@@ -162,4 +172,4 @@ methods:
         targetMethod: adviseExternals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T21:48:51.453Z'
+updatedAt: '2026-10-08T08:52:28.360Z'

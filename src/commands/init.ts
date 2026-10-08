@@ -11,6 +11,7 @@ import {
   findSystemRoot,
   getProjectRootOverride,
   setProjectRoot,
+  pathExists,
 } from '../utils/fs.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/paths.js';
@@ -407,6 +408,20 @@ async function runInitInteractive(): Promise<void> {
 // Execution — creates all files after confirmation
 // ---------------------------------------------------------------------------
 
+/**
+ * Write wairon's block of one target's repository-root pointer file and say
+ * what happened: a new file created, or the block written into the user's own
+ * file with every line of theirs kept (ai_tool_guide.writeDelegator never
+ * deletes text a person wrote there).
+ */
+function rootPointer(projectRoot: string, target: string, file: string, what: string): void {
+  const existed = pathExists(path.join(projectRoot, file));
+  writeRootGuideDelegator(projectRoot, target);
+  logger.success(existed
+    ? `Wrote wairon's block into the existing root ${file} (${what}) — your own text in it is kept as it was`
+    : `Created root ${file} ${what}`);
+}
+
 async function executeInit(
   projectName: string,
   projectConfig: ProjectConfig,
@@ -467,8 +482,7 @@ async function executeInit(
     const p = localGuideFilePath(projectRoot, 'claude')!;
     injectGuide(p, 'local');
     logger.success(`Injected wairon guide into ${path.relative(cwd, p)}`);
-    writeRootGuideDelegator(projectRoot, 'claude');
-    logger.success(`Created root CLAUDE.md delegator pointing to .claude/CLAUDE.md`);
+    rootPointer(projectRoot, 'claude', 'CLAUDE.md', 'pointing to .claude/CLAUDE.md');
   }
   if (guidePlan.geminiGlobal) {
     const p = globalGuideFilePath('gemini')!;
@@ -479,22 +493,18 @@ async function executeInit(
     const p = localGuideFilePath(projectRoot, 'gemini')!;
     injectGuide(p, 'local');
     logger.success(`Injected wairon guide into ${path.relative(cwd, p)}`);
-    writeRootGuideDelegator(projectRoot, 'gemini');
-    logger.success(`Created root GEMINI.md delegator pointing to .gemini/GEMINI.md`);
+    rootPointer(projectRoot, 'gemini', 'GEMINI.md', 'carrying the wairon guide');
   }
 
   // Root instructions/rules for other targets if active
   if (targetTypes.includes('cursor')) {
-    writeRootGuideDelegator(projectRoot, 'cursor');
-    logger.success(`Created root .cursorrules pointing to .cursor/rules/`);
+    rootPointer(projectRoot, 'cursor', '.cursorrules', 'pointing to .cursor/rules/');
   }
   if (targetTypes.includes('copilot')) {
-    writeRootGuideDelegator(projectRoot, 'copilot');
-    logger.success(`Created root .github/copilot-instructions.md pointing to .github/prompts/`);
+    rootPointer(projectRoot, 'copilot', '.github/copilot-instructions.md', 'pointing to .github/prompts/');
   }
   if (targetTypes.includes('codex')) {
-    writeRootGuideDelegator(projectRoot, 'codex');
-    logger.success(`Created root .codexrules pointing to .codex/agents/`);
+    rootPointer(projectRoot, 'codex', '.codexrules', 'pointing to .codex/agents/');
   }
 
   // Register MCP server locally for Claude Code target
@@ -566,6 +576,21 @@ async function executeInit(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * The id a new project starts with: its name slugified, or — when the id
+ * grammar refuses that slug (a Windows device name, the reserved `super`) or
+ * the name yields none — the slug with `-project` appended (`project` for an
+ * empty one), with one line saying why the name was not usable as it is.
+ */
+export function initialProjectId(name: string): string {
+  const id = effectiveProjectId({ name });
+  if (id !== null) return id;
+  const slug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/[^a-z0-9]+$/, '').slice(0, 48);
+  const fallback = effectiveProjectId({ name: slug ? `${slug}-project` : 'project' }) ?? 'project';
+  logger.warn(`The name "${name}" gives no usable project id (${slug ? `"${slug}" is a name the id grammar refuses — a device name or a reserved word` : 'it holds no letter or digit'}), so the project id is "${fallback}". Change it with \`wairon project rename <id>\` before anything else consumes it.`);
+  return fallback;
+}
+
 /** Compose a new project's configuration. Its pack selections are seeded only
  *  when the configuration is actually created (see executeInit). */
 function buildProjectConfig(
@@ -574,12 +599,13 @@ function buildProjectConfig(
   now: string,
   projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' | 'fullstack',
 ): ProjectConfig {
-  // The project's id is its name slugified; a name that yields none writes no
-  // id, and validate reports that (PROJECT_ID_AMBIGUOUS) instead of inventing one.
-  const id = effectiveProjectId({ name });
+  // The project's id is its name slugified; a slug the id grammar refuses (a
+  // device name such as con, the reserved `super`, nothing at all) takes
+  // `-project`, said once, so a new project never starts without an id.
+  const id = initialProjectId(name);
   return {
     schemaVersion: '1.0.0',
-    ...(id !== null ? { id } : {}),
+    id,
     name,
     projectType,
     targets,

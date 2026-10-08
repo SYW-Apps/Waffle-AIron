@@ -46,6 +46,12 @@ export interface StateId {
    * algorithm and digest alone.
    */
   asRecorded?: StateId;
+  /**
+   * On a gate identity only: the digest of each input it covers, taken on its
+   * own (gate_identity.parts). Never part of the digest; a lock records them
+   * as gateParts, so a later check can name the input that moved.
+   */
+  parts?: Record<string, string>;
 }
 
 /** Algorithm marker for the CONTENT identity: the spec tree alone. */

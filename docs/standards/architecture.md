@@ -510,11 +510,13 @@ Repository whose Store it reads (`UNOWNED_QUERY`).
 
 ### gateway: a Portal variant
 > A gateway is a **Portal** with the built-in `gateway` variant: a Portal that
-> **authenticates, authorizes, validates or rate-limits before it dispatches**, by
-> calling that logic, and declares its inbound authentication in `auth`. The
-> checks are Orchestrators it depends on — typically read logic that gathers the
-> caller's grants and pure logic that rules on them — never members it owns. A
-> Portal with no ingress checks needs no variant.
+> **authenticates, authorizes, validates or rate-limits before it dispatches**, and
+> declares its inbound authentication in `auth`. Checking the credential `auth`
+> declares — reading it from the request and verifying it — is the gateway's own
+> admission step and may be a step of its narrative. A check that needs state or
+> policy is logic it calls: Orchestrators it depends on — typically read logic
+> that gathers the caller's grants and pure logic that rules on them — never
+> members it owns. A Portal with no ingress checks needs no variant.
 >
 > Inside a declared **network**, the gateway is also the only Portal that may be
 > entered from outside it, and the only one a modelled call from outside may land
@@ -576,7 +578,7 @@ can sit in either class, which is why the class is a field and not a variant.
 | `projector` | Orchestrator | `pure` when handed its source, `read` when it loads it | source model → self-contained derived view (snapshot, graph, artifact, digest) | ≤1 read facade or parameters-only; recomputed per call, owns nothing, writes nothing. NOT an Index: an Index is a maintained read model over an owned Store (or, exceptionally, over another Index of the same Repository) |
 | `composer` | Orchestrator | `pure` when handed its values, `read` when it loads them | templates + values → authored text/file map | returns content, never writes or executes it; degrades gracefully on missing optional inputs |
 | `codec` | Orchestrator | `pure` | format ↔ format, bidirectional | pure whole-value translation; inbound half validates + safety-checks; both directions in one component so the round-trip stays testable |
-| `gateway` | Portal | — | a Portal that authenticates, authorizes, validates or rate-limits before dispatching | calls that logic before it dispatches; declares its inbound auth in `auth`; writes still route through Orchestrators |
+| `gateway` | Portal | — | a Portal that authenticates, authorizes, validates or rate-limits before dispatching | checks the credential its `auth` declares itself and calls logic needing state or policy, before it dispatches; writes still route through Orchestrators |
 
 A variant is **promoted to a first-class stereotype** only when independent
 projects/packs keep re-registering it, or when its edge rules exceed what guidance

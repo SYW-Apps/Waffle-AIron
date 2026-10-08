@@ -49,7 +49,10 @@ fields:
       resolved the callee to no declaration because its receiver (or the callee itself) is typed
       any, unknown or not at all; or it reaches no declaration of this project because a computed
       key names no single member, or its receiver is cast to an index-signature type — neither a
-      landing nor its absence means anything
+      landing nor its absence means anything. A reference is unresolved too when it reads a member
+      by such a key — or a literal key off a receiver cast to any, unknown or an index signature —
+      off a receiver that was a project class before any cast: taken as a value, it can be invoked
+      as any of that class's members
     optional: true
   - name: receivers
     type: list<CallTargetFact>
@@ -66,9 +69,11 @@ fields:
       True when this is no call but a REFERENCE to a function or method of this project the code
       takes as a value at this site — passes as an argument, assigns, returns, binds, or hands to
       Reflect.apply — rather than invoking it where it is written. A use all the same: what the
-      reference lands on can be invoked anywhere the value travels
+      reference lands on can be invoked anywhere the value travels. A member read by element access
+      off a receiver that was a project class before any cast is one too when it names no single
+      member, recorded unresolved
     optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-07T18:28:29.773Z'
-updatedAt: '2026-10-07T21:58:55.321Z'
+updatedAt: '2026-10-08T08:30:21.720Z'

@@ -28,14 +28,11 @@ import {
   type StateId,
 } from '../core/index.js';
 import { effectiveProjectId, projectIdentity } from '../models/project.js';
-// The approver's own projection, taken from the models rather than from the
-// core barrel: rendering a name is the value object's behaviour, not a Portal
-// method, and it travels with the type.
-import { describeApprover } from '../models/lock.js';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { AI_PATHS } from '../config/paths.js';
 import { WaironError } from '../utils/errors.js';
 import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
-import { designOnly, memberPinOf, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
+import { approvalStamp, describeGateParts, designOnly, movedGateParts, memberPinOf, type CodeAnalysis, type ProjectApproval, type ReleaseVerdict } from '../models/lock.js';
 import { ownGet } from '../utils/own.js';
 import { canonicalize } from '../utils/canonical-json.js';
 
@@ -132,14 +129,21 @@ export interface ApprovalCheck {
 export function treeVerdict(strict: boolean): ApprovalCheck | null {
   // Steps 1-2.
   if (loadSystemSpec()) return null;
-  // Steps 3-5.
+  // Steps 3-5: a missing L0, or one that is there but cannot be read (empty,
+  // null, not YAML, failing its schema) — a broken root is never "no tree".
   const orphaned = findOrphanedSpecFiles();
-  if (orphaned.length > 0) {
+  const unreadable = pathExists(AI_PATHS.specsSystem());
+  if (orphaned.length > 0 || unreadable) {
+    const what = unreadable
+      ? 'is there but cannot be read as an L0 (empty, null, not YAML, or failing its schema — `wairon validate` names why)'
+      : 'is missing';
+    const below = orphaned.length > 0
+      ? `, but ${orphaned.length} spec file(s) remain below it (${orphaned.slice(0, 3).join(', ')}${orphaned.length > 3 ? ', …' : ''}): the design is still there and cannot be judged`
+      : ': the design cannot be judged';
     return {
       state: 'unlocked',
       approved: false,
-      message: `The L0 System spec (.wai/specs/.index.yaml) is missing, but ${orphaned.length} spec file(s) remain below it `
-        + `(${orphaned.slice(0, 3).join(', ')}${orphaned.length > 3 ? ', …' : ''}): the design is still there and cannot be judged, so it is not approved. `
+      message: `The L0 System spec (.wai/specs/.index.yaml) ${what}${below}, so it is not approved. `
         + 'Fix: restore it from version control (`git checkout -- .wai/specs/.index.yaml`).',
     };
   }
@@ -190,34 +194,21 @@ export function checkApproval(strict: boolean): ApprovalCheck {
     };
   }
 
-  // Steps 10-13: the project id against the one the approval recorded. The
-  // gate identity does not cover the id, so it is judged by the very
-  // resolution the project-identity rule reports PROJECT_ID_CHANGED and
-  // PROJECT_ID_RENAMED by — `validate`, `lock` and this gate cannot disagree.
-  const idMoved = record ? projectIdVerdict(record) : null;
-  if (idMoved) return idMoved;
-
-  // Steps 14-15: an external the approval owes — never pinned, or used beyond
-  // what its pin records. `wairon lock` refuses both, so passing here would
-  // approve what the lock will not; it is the same entry status prints.
-  if (record && ownEntry?.owed !== undefined) {
-    return {
-      state: 'stale',
-      approved: false,
-      message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) does not cover what this design is judged against: ${ownEntry.owed}. `
-        + 'Nothing records what a producer that broke these uses would be judged against, and `wairon lock` refuses until it does. '
-        + 'Fix: pin first (`wairon externals pin`), then run `wairon lock`, and commit .wai/lock.json with the pin.',
-    };
-  }
+  // Steps 10-12: what the approval owes beside its identity — a moved id, an
+  // external to pin, or the findings a change of the release turned up.
+  const owed = record ? coverageVerdict(record, ownEntry) : null;
+  if (owed) return owed;
+  const release = lock.state === 'stale' ? ownEntry?.release : undefined;
+  const state = release?.carried ? 'locked' : lock.state;
 
   // A stale verdict under an earlier identity still refuses — nothing proves
   // the design unchanged — but it says so plainly, with whether any own spec
   // file moved. (LockStatus.upgraded: stale, and the record's algorithm is not
   // the current one.) A format-2 record reaches here only when it no longer
   // matches even under its own algorithm.
-  if (lock.state === 'stale' && record!.stateId.algorithm !== lock.current.algorithm) return upgradedCheck(record!);
+  if (state === 'stale' && record!.stateId.algorithm !== lock.current.algorithm) return upgradedCheck(record!);
 
-  switch (lock.state) {
+  switch (state) {
     case 'locked': {
       // Steps 15-16: --strict asks for an approved family; a member never
       // approved by anyone fails it.
@@ -247,7 +238,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
         state: 'locked',
         approved: true,
         message: (never.length > 0 ? 'This project\'s own design is the approved design — ' : 'The design in this tree is the approved design — ')
-          + `approved ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}.${family}${carry}`,
+          + `approved ${approvalStamp(record!)}.${release?.carried ? ` ${carriedLine(release)}` : ''}${family}${carry}`,
       };
     }
     case 'stale': {
@@ -260,7 +251,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
           message: `Member project(s) were re-approved at their own roots since this project's approval was taken: ${repinned.join(', ')}. `
             + 'That is how a member\'s approval is meant to move — its own approver signed its new design off — so the member is not in question. '
             + 'What is stale is this project\'s pin of it: the approval on record '
-            + `(${record!.lockedAt} by ${describeApprover(record!.lockedBy)}) still names the member's earlier approval, `
+            + `(${approvalStamp(record!)}) still names the member's earlier approval, `
             + 'so it does not cover the member design about to merge. No own spec file changed. '
             + 'Fix: run `wairon lock` here to pin the member(s)\' new approval (the same lock records anything else the gate identity covers that moved alongside), and commit the updated .wai/lock.json.',
         };
@@ -270,7 +261,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
         state: 'stale',
         approved: false,
         message: 'The design, or something it was approved under, changed after it was approved '
-          + `(the approval on record is ${record!.lockedAt} by ${describeApprover(record!.lockedBy)}). `
+          + `(the approval on record is ${approvalStamp(record!)}). `
           + `${whatMoved(record!, lock.current)} `
           + 'Nothing says a human has seen what is about to merge. '
           + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
@@ -304,6 +295,11 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   }
 }
 
+/** The line every surface prints for an approval a release change carried over. */
+export function carriedLine(release: ReleaseVerdict): string {
+  return `Approved under wairon ${release.from}, re-validated under ${release.to}: still approved (the design and every input the project decides are as approved, and the new release finds no issue in it). \`wairon lock\` refreshes the record's release stamp without a re-approval.`;
+}
+
 /**
  * What `lock`, `lock-check` and `status` say of a tree that holds the L0 and
  * nothing below it and was never approved: there is no design to approve yet.
@@ -324,6 +320,53 @@ export function holdsNoDesign(): boolean {
   const record = readLockRecord();
   // Step 4.
   return subsystems.length === 0 && members.length === 0 && record === null;
+}
+
+/**
+ * cli_lock_adapter.coverageVerdict — what the approval on record owes beside
+ * its gate identity, as a merge-gate refusal: the project id moved since it,
+ * an external never pinned or used beyond its pin (the own entry's owed), or a
+ * change of the release whose re-validation found issues in the approved
+ * design (its release verdict, not carried). Null when nothing is owed.
+ */
+export function coverageVerdict(record: LockRecord, own: ProjectApproval | undefined): ApprovalCheck | null {
+  // Steps 10-13: the project id against the one the approval recorded. The
+  // gate identity does not cover the id, so it is judged by the very
+  // resolution the project-identity rule reports PROJECT_ID_CHANGED and
+  // PROJECT_ID_RENAMED by — `validate`, `lock` and this gate cannot disagree.
+  const idMoved = projectIdVerdict(record);
+  if (idMoved) return idMoved;
+
+  // Steps 14-15: an external the approval owes — never pinned, or used beyond
+  // what its pin records. `wairon lock` refuses both, so passing here would
+  // approve what the lock will not; it is the same entry status prints.
+  if (own?.owed !== undefined) {
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The approval on record (${approvalStamp(record)}) does not cover what this design is judged against: ${own.owed}. `
+        + 'Nothing records what a producer that broke these uses would be judged against, and `wairon lock` refuses until it does. '
+        + 'Fix: pin first (`wairon externals pin`), then run `wairon lock`, and commit .wai/lock.json with the pin.',
+    };
+  }
+
+  // Steps 14-16: only the wairon release moved — judged by re-validating the
+  // approved design (family_validator.releaseVerdict), never by digest. A
+  // carried approval passes as locked, saying so; a release that finds issues
+  // is stale for exactly them.
+  // Set only when the identity does not match: the stale case.
+  const release = own?.release;
+  if (release && !release.carried) {
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The approval on record (${approvalStamp(record)}) was taken under wairon ${release.from}, and the new release (${release.to}) finds ${release.count ?? 0} issue(s) in the approved design: `
+        + `${(release.findings ?? []).join('; ')}${(release.count ?? 0) > (release.findings ?? []).length ? '; …' : ''}. `
+        + 'Nothing else moved: the design and every input the project decides are as approved. '
+        + 'Fix: resolve those findings (`wairon validate` lists them) and run `wairon lock`, then commit .wai/lock.json.',
+    };
+  }
+  return null;
 }
 
 /**
@@ -349,7 +392,7 @@ function projectIdVerdict(record: LockRecord): ApprovalCheck | null {
     return {
       state: 'stale',
       approved: false,
-      message: `The project id changed after the approval: the approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) `
+      message: `The project id changed after the approval: the approval on record (${approvalStamp(record)}) `
         + `approved "${record.projectId}", and .wai/project.yaml now resolves to ${now} (PROJECT_ID_CHANGED) — everything keyed on the approved id `
         + 'no longer finds this project, and `wairon lock` refuses it. '
         + `Fix: restore \`id: ${record.projectId}\` in .wai/project.yaml; to change the id, run \`wairon project rename <id>\` and re-lock.`,
@@ -360,7 +403,7 @@ function projectIdVerdict(record: LockRecord): ApprovalCheck | null {
       state: 'stale',
       approved: false,
       message: `The project was renamed from "${record.projectId}" to ${now} after the approval (PROJECT_ID_RENAMED): the approval on record `
-        + `(${record.lockedAt} by ${describeApprover(record.lockedBy)}) still names the former id. `
+        + `(${approvalStamp(record)}) still names the former id. `
         + 'Fix: run `wairon lock` to approve the design under the new id, and commit the updated .wai/lock.json.',
     };
   }
@@ -490,7 +533,7 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     return {
       state: 'stale',
       approved: false,
-      message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}, taken by wairon `
+      message: `The approval on record (${approvalStamp(record)}, taken by wairon `
         + `${record.validatorVersion}) no longer matches, but ${GATE_MOVED}, and commit the updated .wai/lock.json.`
         + (record.format === 2 ? ' (`wairon doctor --fix` first carries this format-2 record into the design reading, so code linkage never drifts it again.)' : ''),
     };
@@ -501,7 +544,7 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     return {
       state: 'stale',
       approved: false,
-      message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) is a format-2 lock `
+      message: `The approval on record (${approvalStamp(record)}) is a format-2 lock `
         + 'taken before code linkage (sourcePath, symbol, simPath and the like) left the approval, and something it '
         + 'covered moved since — the design, or only code linkage, which this record can no longer tell apart. '
         + `${specs} Fix: one \`wairon lock\` clears it for good — from then on linkage never drifts the approval — `
@@ -511,7 +554,7 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
   return {
     state: 'stale',
     approved: false,
-    message: `The approval on record (${record.lockedAt} by ${describeApprover(record.lockedBy)}) was taken under an `
+    message: `The approval on record (${approvalStamp(record)}) was taken under an `
       + `earlier gate identity (written by wairon ${record.validatorVersion})${diff ? ', and the design moved since' : ''}: ${specs} `
       + (diff ? '`wairon status` names them. Fix: review them, ' : 'Fix: ')
       + 're-lock once (`wairon lock`) and commit the updated .wai/lock.json.',
@@ -570,6 +613,12 @@ function inputsMoved(previous: LockRecord | null, captured: StateId, projectId: 
     moved.push(`the project id (${previous.projectId} → ${projectId})`);
   }
   const sameIdentity = previous.stateId.algorithm === captured.algorithm && previous.stateId.digest === captured.digest;
+  // A record with gate parts names exactly the inputs that moved.
+  const parts = sameIdentity ? null : movedGateParts(previous, captured.parts);
+  if (parts && parts.length > 0 && moved.length === 0) {
+    moved.push(describeGateParts(parts));
+    return moved;
+  }
   if (!sameIdentity && moved.length === 0) {
     moved.push(previous.stateId.algorithm !== captured.algorithm
       ? `the gate identity this wairon release computes (approved by wairon ${previous.validatorVersion ?? 'an earlier release'})`
@@ -618,7 +667,7 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
     // existing record would tell the human nothing was approved before.
     const previous = readLockRecord();
     if (previous) {
-      logger.info(`Replacing the approval on record (${previous.lockedAt} by ${describeApprover(previous.lockedBy)}, `
+      logger.info(`Replacing the approval on record (${approvalStamp(previous)}, `
         + `wairon ${previous.validatorVersion ?? 'unknown'}). It records no per-spec digests, so the whole spec tree `
         + 'becomes the approved baseline.');
     } else {
@@ -672,24 +721,41 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
 }
 
 /**
- * cli_lock_adapter.lockTree — record this project's approval: summarize,
- * honour composition.requireApprovedMembers, confirm with the human (skipped
- * under --yes), re-confirm the identity the caller captured BEFORE validating,
- * and write a format-2 record. Writes one file, this project's .wai/lock.json,
- * and never `children`, never anything in the spec tree or below the project.
- * Returns the written record, or null when the human declined.
- *
- * `gate` is the as-complete result the caller gated on (its design half is
- * counted as validationResult, its analysis recorded as `code`); `captured` is
- * the gate identity the caller took before validating — what the record
- * certifies.
+ * cli_lock_adapter.restampRelease — refresh the record's release stamp when
+ * the own approval carried a change of the release over (the approved design
+ * unchanged and re-validated clean under this release), without a review:
+ * new stateId, gateParts and validatorVersion, `restamped` provenance,
+ * lockedAt and lockedBy kept. Null when there is nothing to refresh.
  */
-export async function runLock(options: LockOptions, gate: ValidationResult, captured: StateId): Promise<LockRecord | null> {
-  // Steps 1-3: what is being approved, and each direct member at its own root.
-  const members = familyApprovals(1).filter((a) => a.parent === '');
-  summarize(gate, members, captured, options);
+export function restampRelease(own: ProjectApproval | undefined, captured: StateId, options: LockOptions): LockRecord | null {
+  // Steps 3-6: an approval a change of the release carried over — the design
+  // and every input the project decides as approved, re-validated clean under
+  // this release — has its release stamp refreshed without a re-approval.
+  if (own?.release?.carried && !options.subsystem) {
+    const onFile = readLockRecord();
+    if (onFile) {
+      const restampedRecord: LockRecord = {
+        ...onFile,
+        stateId: { algorithm: captured.algorithm, digest: captured.digest },
+        ...(captured.parts ? { gateParts: captured.parts } : {}),
+        validatorVersion: WAIRON_VERSION,
+        restamped: { at: new Date().toISOString(), fromVersion: own.release.from, toVersion: own.release.to, by: 'wairon lock' },
+      };
+      writeLockRecord(restampedRecord);
+      logger.info(`The approval of ${approvalStamp(onFile)} was taken under wairon ${own.release.from} and re-validated clean under ${own.release.to}: `
+        + 'its design and every input the project decides are as approved, so the record\'s release stamp is refreshed — no review needed, the approval stays the approver\'s.');
+      return restampedRecord;
+    }
+  }
+  return null;
+}
 
-  // Steps 4-6: the configuration, and a parent that requires approved members.
+/**
+ * cli_lock_adapter.assertApprovable — refuse, writing nothing, what no lock
+ * may approve: a project requiring approved members with a member project not
+ * approved, an external never pinned, or a use its pin does not record.
+ */
+export function assertApprovable(members: ProjectApproval[]): void {
   const config = loadProjectConfig();
   // A PROJECT member only: a part has no approval of its own — this lock is its approval.
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
@@ -718,6 +784,33 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
         + `Re-pin first (\`wairon externals pin ${unrecorded.map(([alias]) => alias).join(' ')}\`), then lock. Nothing was written.`,
     );
   }
+}
+
+/**
+ * cli_lock_adapter.lockTree — record this project's approval: summarize,
+ * honour composition.requireApprovedMembers, confirm with the human (skipped
+ * under --yes), re-confirm the identity the caller captured BEFORE validating,
+ * and write a format-2 record. Writes one file, this project's .wai/lock.json,
+ * and never `children`, never anything in the spec tree or below the project.
+ * Returns the written record, or null when the human declined.
+ *
+ * `gate` is the as-complete result the caller gated on (its design half is
+ * counted as validationResult, its analysis recorded as `code`); `captured` is
+ * the gate identity the caller took before validating — what the record
+ * certifies.
+ */
+export async function runLock(options: LockOptions, gate: ValidationResult, captured: StateId): Promise<LockRecord | null> {
+  // Steps 1-3: what is being approved, and each direct member at its own root.
+  const approvals = familyApprovals(1);
+  const members = approvals.filter((a) => a.parent === '');
+  // Steps 3-5: an approval a change of the release carried over has its
+  // release stamp refreshed without a re-approval.
+  const restamped = restampRelease(approvals.find((a) => a.key === ''), captured, options);
+  if (restamped) return restamped;
+  summarize(gate, members, captured, options);
+  // Step 9: what no lock may approve, refused before anything is written.
+  assertApprovable(members);
+  const config = loadProjectConfig();
   logger.blank();
   logger.warn('This records the current design as approved in .wai/lock.json (no spec file is rewritten) and refreshes the generated outputs of this project.');
 
@@ -801,6 +894,9 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     ...(projectId !== null ? { projectId } : {}),
     specs,
     specsReading: 'design',
+    // Each input of the certified identity on its own: what lets a later check
+    // name the one that moved, and judge a change of the release by re-validation.
+    ...(captured.parts ? { gateParts: captured.parts } : {}),
     members: memberPins(members),
     ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };

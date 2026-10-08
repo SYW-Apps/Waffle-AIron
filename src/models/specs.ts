@@ -1538,6 +1538,16 @@ export const ImplementationSpecSchema = z.object({
    */
   simPath: z.string().optional(),
   /**
+   * The hand-written binding modules (project-relative, N:1 sharing allowed)
+   * through which this realization reaches another project's code: a typed
+   * binding to a native library, a client stub declaring a producer's
+   * functions and types. Code linkage, outside the approval like sourcePath.
+   * Binding conformance compares each with the pinned snapshots of the
+   * externals the component reaches, so a re-pin that renames, removes or
+   * reshapes a name the binding still declares is reported.
+   */
+  bindings: z.array(z.string()).optional(),
+  /**
    * External technologies (vendor, engine, SDK, service) this implementation
    * binds to — e.g. ["mysql"], ["sendgrid"]. Declaring one makes this
    * component's ownership tree the technology's home: references anywhere
@@ -1970,7 +1980,7 @@ export function typeSourceFiles(
 /** Each schema's fields, split into the design (approved), the code linkage and the readiness (neither approved). */
 export const DESIGN_VIEW_FIELDS = {
   implementation: {
-    linkage: ['sourcePath', 'simPath', 'router', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
+    linkage: ['sourcePath', 'simPath', 'bindings', 'router', 'injectedParams', 'conformance', 'createdAt', 'updatedAt'],
     readiness: ['status'],
     design: ['id', 'name', 'description', 'contract', 'technologies', 'methods', 'detail', 'previousIds', 'lint', 'ext'],
   },

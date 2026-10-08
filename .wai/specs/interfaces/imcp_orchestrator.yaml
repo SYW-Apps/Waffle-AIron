@@ -102,8 +102,8 @@ methods:
   - name: renameComponent
     description: >-
       Resolve the namespaced component id against the bound tree, then rename it through the core
-      adapter
-    signature: 'renameComponent(id: string, newId: string): ComponentRename'
+      adapter — or, with dryRun, answer what the rename would do and write nothing
+    signature: 'renameComponent(id: string, newId: string, dryRun?: bool): ComponentRename'
     returns: ComponentRename
     params:
       - name: id
@@ -112,6 +112,10 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, rewrite, keep and rekey, and write nothing
+        optional: true
   - name: renameMethod
     description: >-
       Resolve the namespaced component id against the bound tree, read the projects that consume the
@@ -361,8 +365,8 @@ methods:
   - name: renameType
     description: >-
       Resolve the type id, qualified by its owner if needed, against the bound tree, then rename it
-      through the core adapter
-    signature: 'renameType(id: string, newId: string): TypeRename'
+      through the core adapter — or, with dryRun, answer what the rename would do and write nothing
+    signature: 'renameType(id: string, newId: string, dryRun?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: id
@@ -371,11 +375,20 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        optional: true
   - name: renameField
     description: >-
-      Resolve the type id, qualified by its owner if needed, against the bound tree, then rename the
-      field through the core adapter
-    signature: 'renameField(id: string, field: string, newName: string): FieldRename'
+      Resolve the type id, qualified by its owner if needed, against the bound tree, read the
+      projects that consume the bound project (the family in reach — members included — and the
+      searched folders' consumer checkouts), then rename the field through the core adapter — or,
+      with dryRun, answer what the rename would do and write nothing — and name every consumer whose
+      specs reach a public name carrying the field: the ones whose code reading the old name breaks
+    signature: >-
+      renameField(id: string, field: string, newName: string, dryRun?: bool, search?: list<string>):
+      FieldRename
     returns: FieldRename
     params:
       - name: id
@@ -387,11 +400,26 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would respell and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
   - name: renameParam
     description: >-
-      Resolve the component id against the bound tree, then rename the parameter of its contract
-      method through the core adapter
-    signature: 'renameParam(id: string, method: string, param: string, newName: string): ParamRename'
+      Resolve the component id against the bound tree, read the projects that consume the bound
+      project (the family in reach — members included — and the searched folders' consumer
+      checkouts), then rename the parameter of its contract method through the core adapter — or,
+      with dryRun, answer what the rename would do and write nothing — and name every consumer whose
+      specs call the method through an export publishing it
+    signature: >-
+      renameParam(id: string, method: string, param: string, newName: string, dryRun?: bool,
+      search?: list<string>): ParamRename
     returns: ParamRename
     params:
       - name: id
@@ -406,6 +434,16 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, respell and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-07T18:41:16.393Z'
+updatedAt: '2026-10-08T08:25:46.495Z'

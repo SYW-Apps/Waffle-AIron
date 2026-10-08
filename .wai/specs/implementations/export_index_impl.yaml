@@ -65,13 +65,15 @@ methods:
         label: count
         description: >-
           Count each reference that bound to a public name under that name, with the member it
-          reaches (its contract method or capability, or `type`); every reference that bound to none
-          — unexported, or undeclared — is unexported
+          reaches (its contract method or capability, or `type`) and, per member, the referring spec
+          (memberSpecs) — so a rename of one member names the specs that reach it, not every spec
+          that reaches the name; every reference that bound to none — unexported, or undeclared — is
+          unexported
         type: local
       - stepNumber: 6
         description: >-
-          Answer the usage, names sorted, each name's members sorted and each name's referring specs
-          sorted
+          Answer the usage, names sorted, each name's members sorted, each name's referring specs
+          sorted and each member's referring specs sorted
         type: return
         outcome: ExportUsage
     detail: full
@@ -98,8 +100,9 @@ methods:
           step's, declared call's or dispatch binding's method, a capability as `capability:<name>`,
           `type` at a type position, each method an `implements` of the extension point uses
           (project_family_index.implementedMethods), nothing for a bare dependsOn — and the
-          referring specs (sorted), so a pin can name who uses a member the snapshot no longer
-          carries
+          referring specs (sorted), name-wide and per member reached (memberSpecs), so a pin can
+          name who uses a member the snapshot no longer carries and a rename names who reaches the
+          member it moves
         type: local
       - stepNumber: 4
         description: >-
@@ -110,12 +113,12 @@ methods:
         targetMethod: implementedMethods
       - stepNumber: 5
         description: >-
-          Answer the usage with no unexported references, names sorted and each name's members
-          sorted
+          Answer the usage with no unexported references, names sorted, each name's members sorted
+          and each member's referring specs sorted
         type: return
         outcome: ExportUsage
     detail: full
     symbol: pinnedUsageOf
 status: complete
 createdAt: '2026-09-26T16:09:07.864Z'
-updatedAt: '2026-10-07T10:54:30.098Z'
+updatedAt: '2026-10-08T08:27:03.257Z'

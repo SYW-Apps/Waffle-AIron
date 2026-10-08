@@ -303,8 +303,37 @@ export function consumerReaches(consumer: ExternalConsumer, publicNames: readonl
 export function narrowedToMember(consumer: ExternalConsumer, publicNames: readonly string[], member: string): ExternalConsumer {
   const uses = (consumer.uses ?? [])
     .filter((u) => publicNames.includes(u.publicName) && u.members.includes(member))
-    .map((u) => ({ ...u, members: [member] }));
+    .map((u) => {
+      // The specs that reach THIS member, when the use records them per member.
+      const reaching = u.memberSpecs?.[member];
+      const { memberSpecs: _perMember, ...rest } = u;
+      return { ...rest, members: [member], ...(reaching !== undefined ? { specs: [...reaching] } : {}) };
+    });
   return { ...consumer, names: consumer.names.filter((n) => uses.some((u) => u.publicName === n)), uses };
+}
+
+/**
+ * external_consumer.narrowedToUses — this consumer as a rename that moves
+ * something on several public names and members breaks it: narrowedTo applied
+ * to each (public name, member) pair it reaches, the narrowed uses merged;
+ * null when it reaches no pair. Pure.
+ */
+export function narrowedToUses(consumer: ExternalConsumer, published: readonly ExportUse[]): ExternalConsumer | null {
+  const merged = new Map<string, ExportUse>();
+  for (const use of published) {
+    for (const member of use.members) {
+      if (!consumerReaches(consumer, [use.publicName], member)) continue;
+      for (const u of narrowedToMember(consumer, [use.publicName], member).uses ?? []) {
+        const held = merged.get(u.publicName);
+        merged.set(u.publicName, held
+          ? { ...held, members: [...new Set([...held.members, ...u.members])].sort(), specs: [...new Set([...(held.specs ?? []), ...(u.specs ?? [])])].sort() }
+          : u);
+      }
+    }
+  }
+  if (merged.size === 0) return null;
+  const uses = [...merged.values()].sort((a, b) => (a.publicName < b.publicName ? -1 : a.publicName > b.publicName ? 1 : 0));
+  return { ...consumer, names: consumer.names.filter((n) => merged.has(n)), uses };
 }
 
 /** A directory as a comparable key: resolved, and case-folded where the filesystem folds case. */

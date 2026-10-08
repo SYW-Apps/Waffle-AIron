@@ -651,6 +651,26 @@ export interface CodeModel {
    * Absent where no type checker was loaded.
    */
   reachedCalls?: Record<string, ResolvedCallFact[]>;
+  /**
+   * What each of the project's own source files the type checker read
+   * imports — the run's files and every project file they pull in, a helper
+   * module no spec names included — keyed by canonical path. What lets a rule
+   * read an unowned module's imports as its importer's. Absent where no type
+   * checker was loaded.
+   */
+  reachedImports?: Record<string, ModuleImports>;
+}
+
+/**
+ * module_imports — what one source file imports, as the type checker's module
+ * resolution answers it: the project files its specifiers resolve to, and the
+ * bare package specifiers that resolve to none of them.
+ */
+export interface ModuleImports {
+  /** Each bare package specifier the file names (an import, an export-from, a require or a dynamic import), as written; never a relative path or a node: builtin. */
+  packages: string[];
+  /** Each project source file an import of the file resolves to, by canonical key. */
+  files: string[];
 }
 
 /**

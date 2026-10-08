@@ -200,6 +200,9 @@ rules:
       - web/src/views/Roles.tsx
       - web/src/views/Sharing.tsx
       - web/src/views/SpecsEditor.tsx
+      # The Specs editor's save delta, split out of SpecsEditor.tsx (no new code
+      # responsibility: the same view's logic, kept free of React for its round-trip test).
+      - web/src/views/specDelta.ts
       - web/src/views/ThemeBuilder.tsx
       - web/src/views/Tokens.tsx
       - web/src/views/Units.tsx

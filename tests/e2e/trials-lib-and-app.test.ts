@@ -510,7 +510,7 @@ describe('journey: an unpinned external is never approved (EXTERNAL_UNPINNED + l
     const stale = await sb.run(['lock-check'], p.studio);
     expect(stale.code, transcript(stale)).toBe(1);
     // The same words the lock prints for it: a consumed contract's pin.
-    expect(stale.all).toMatch(/an input the gate identity covers — .*a consumed contract's pin/);
+    expect(stale.all).toMatch(/what changed is a consumed contract's pin/); // round 6: the input that moved is named
     const lock = await sb.run(['lock', '--yes'], p.studio);
     expect(lock.code, transcript(lock)).toBe(0);
     // Round 3 (solo-app): the lock opened with a bare "Nothing has changed since the last approval" here.

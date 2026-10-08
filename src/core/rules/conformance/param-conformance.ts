@@ -111,6 +111,11 @@ interface Judgement {
   optionality: Map<string, ParamFinding>;
 }
 
+/** A name read without the leading underscores that mark it unused: `_id` names the argument `id` does. */
+function bare(name: string): string {
+  return name.replace(/^_+/, '') || name;
+}
+
 /** Steps 3 through 8 against one candidate body. */
 function judge(
   declared: MethodParam[],
@@ -126,7 +131,28 @@ function judge(
   let wiring = 0;
   while (wiring < realized.length && realized[wiring].name !== undefined
     && injected.has(realized[wiring].name as string)) wiring++;
-  let taken = realized.slice(wiring);
+  // Each parameter kept with the position it occupies in the signature as
+  // written, which is how one with no name is named.
+  let taken = realized.map((param, at) => ({ param, at })).slice(wiring);
+
+  // ---- 3a. what the signature must take but does not use ----
+  // A leading underscore is the universal mark of a parameter imposed on the
+  // signature and left unused — the request and URL a transport hands a
+  // handler — so it is never an argument the design failed to mention. Where
+  // the code takes more than the contract declares, such parameters are set
+  // aside first, front first, so a handler's `(_req, _url, params)` never has
+  // its request read as the contract's first argument; one the contract
+  // itself names under that spelling is the contract's.
+  const declaredNames = new Set(declared.map(param => param.name));
+  const imposed = (param: ParameterFact): boolean =>
+    param.name !== undefined && param.name.startsWith('_') && !declaredNames.has(param.name);
+  let excess = taken.length - declared.length;
+  if (excess > 0) {
+    taken = taken.filter(entry => {
+      if (excess > 0 && imposed(entry.param)) { excess--; return false; }
+      return true;
+    });
+  }
 
   // ---- 3b. a leading surplus the NAMES prove ----
   // When the code takes more than the contract declares and its trailing
@@ -137,8 +163,8 @@ function judge(
   // argument. Only every declared name agreeing settles it; anything less
   // keeps the front alignment below.
   const surplus = taken.length - declared.length;
-  const named = (offset: number): boolean => declared.every((param, i) => taken[offset + i]?.name === param.name);
-  let leading: ParameterFact[] = [];
+  const named = (offset: number): boolean => declared.every((param, i) => taken[offset + i]?.param.name === param.name);
+  let leading: Array<{ param: ParameterFact; at: number }> = [];
   if (surplus > 0 && declared.length > 0 && named(surplus) && !named(0)) {
     leading = taken.slice(0, surplus);
     taken = taken.slice(surplus);
@@ -162,23 +188,20 @@ function judge(
   for (const param of declared.slice(matched)) {
     found.unrealized.set(param.name, { unit: param.name, told: `"${param.name}"` });
   }
-  leading.forEach((param, index) => {
-    const unit = unitOf(param, wiring + index);
+  for (const { param, at } of [...leading, ...taken.slice(matched)]) {
+    if (imposed(param)) continue;
+    const unit = unitOf(param, at);
     found.undeclared.set(unit, { unit, told: `"${unit}"` });
-  });
-  taken.slice(matched).forEach((param, index) => {
-    const unit = unitOf(param, wiring + leading.length + matched + index);
-    found.undeclared.set(unit, { unit, told: `"${unit}"` });
-  });
+  }
 
   for (let position = 0; position < matched; position++) {
     const param = declared[position];
-    const at = taken[position];
+    const at = taken[position].param;
     // ---- 7. a name that differs where the declared type agrees ----
     // The type agreeing is what makes this a rename rather than a different
     // argument. Where the code annotates no type, nothing is said about the
     // name at all.
-    if (at.name !== undefined && at.name !== param.name && typeAgrees(param, at)) {
+    if (at.name !== undefined && bare(at.name) !== bare(param.name) && typeAgrees(param, at)) {
       found.renamed.set(`${param.name}→${at.name}`, {
         unit: param.name,
         told: `"${param.name}" (the code calls it "${at.name}")`,
@@ -217,7 +240,7 @@ function agreed(judgements: Judgement[], reading: keyof Judgement): ParamFinding
 export const paramConformanceRule: SddRule = {
   name: 'param-conformance',
   judges: 'code',
-  description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. Types agree when the code\'s annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract\'s canonical type — so `string[]` in the code agrees with `list<string>` in the contract, TypeScript\'s `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing. Where the code takes more parameters than the contract declares and its TRAILING ones carry the contract\'s names one for one while its leading ones do not, the leading surplus is what is undeclared — an inserted first argument is named, never the declared one it pushed along. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
+  description: 'Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract\'s version. Parameters are matched by POSITION against the tail of the realization\'s list, and the declared type is what tells a rename from a dropped argument: `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one parameter under two names, which anything matching on names alone reads as a parameter the code lost. Types agree when the code\'s annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract\'s canonical type — so `string[]` in the code agrees with `list<string>` in the contract, TypeScript\'s `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing; a named type agrees through its code-level name, an EXTERNAL one (`alias::name`) through the name its pinned snapshot gives it, else its public name\'s last segment in the code\'s type casing — so a rename is reported the same whether the parameter\'s type is the project\'s own, a producer\'s or a primitive. A parameter whose name starts with an underscore is the universal mark of one the signature must take but does not use — the request and URL a transport hands a handler — so it is never undeclared: where the code takes more than the contract declares, underscore-named parameters are set aside first, front first, so they are never paired with a declared argument, and a name compared for a rename is read without its leading underscores. Where the code takes more parameters than the contract declares and its TRAILING ones carry the contract\'s names one for one while its leading ones do not, the leading surplus is what is undeclared — an inserted first argument is named, never the declared one it pushed along. What a realization takes BEFORE the contract\'s own parameters is wiring, and it is declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument. A method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here.',
   codes: [
     {
       code: 'UNREALIZED_PARAM',
@@ -261,6 +284,28 @@ export const paramConformanceRule: SddRule = {
       codeNameOf.set(type.id, named);
       if (type.subsystem) codeNameOf.set(`${type.subsystem}.${type.id}`, named);
     }
+    // An EXTERNAL type answers to the name its producer gives it — the
+    // pinned snapshot's, under the public name a consumer writes
+    // (`alias::name`) — so a parameter typed by a producer's type is judged
+    // exactly as one typed by the project's own: a rename is a rename
+    // whichever project declared the type.
+    for (const pin of ctx.pinnedExternals) {
+      const snapshot = pin.snapshot;
+      if (!snapshot) continue;
+      const nameOf = new Map(snapshot.types.map(type => [type.id, type.name] as const));
+      for (const type of snapshot.types) codeNameOf.set(`${pin.alias}::${type.id}`, type.name);
+      for (const exported of snapshot.exportedTypes ?? []) {
+        const named = nameOf.get(exported.type);
+        if (named) codeNameOf.set(`${pin.alias}::${exported.id}`, named);
+      }
+    }
+    /**
+     * The code name an external type no pin names answers to: its public
+     * name's last segment in the code's type casing (`geo::tile_coord` is
+     * TileCoord) — the spelling every brief hands an implementer.
+     */
+    const externalCodeName = (ref: string): string =>
+      (ref.split('::').pop() ?? ref).split(/[_-s]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
     /**
      * Whether the two sides are describing the same type, read through the
      * file's dialect (type_dialect.agrees): the code's annotation in the
@@ -275,7 +320,11 @@ export const paramConformanceRule: SddRule = {
       if (!realized.type || !dialect) return false;
       const stated = parseTypePosition(declared.type, 'param', !!declared.optional);
       if (!stated.expression) return false;
-      return dialect.agrees(realized.type, stated.expression, codeNameOf);
+      const names = new Map(codeNameOf);
+      for (const ref of declared.type.match(/[A-Za-z0-9_-]+::[A-Za-z0-9_:.-]+/g) ?? []) {
+        if (!names.has(ref)) names.set(ref, externalCodeName(ref));
+      }
+      return dialect.agrees(realized.type, stated.expression, names);
     };
 
     for (const { implementation, method, sourceFile, draftContext } of ctx.implementationMethods()) {

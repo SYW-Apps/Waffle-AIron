@@ -121,7 +121,27 @@ methods:
         type: return
         outcome: doctrine digest (hex)
     symbol: analyzerDigest
+  - name: parts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Project the doctrine as compute does, and split the payload compute digests into its
+          inputs: the own content digest; the built-in design rules' identity; the project type with
+          the design rule config; the extensions' doctrine (packs, profiles, languages, patterns,
+          guarantees, assertions, pack rules); the network declaration when one is declared; the
+          composition block; the sorted consumed contract inputs; the members' subjects by alias
+        type: local
+      - stepNumber: 2
+        description: 'Digest each input on its own: sha256 over its canonical form, in hex'
+        type: local
+      - stepNumber: 3
+        description: >-
+          Answer the digests keyed design, release, rules, packs, network (only when declared),
+          composition, contracts and members
+        type: return
+        outcome: map<string, string>
+    symbol: gateParts
 detail: full
 status: complete
 createdAt: '2026-09-15T17:55:53.605Z'
-updatedAt: '2026-10-07T06:30:12.169Z'
+updatedAt: '2026-10-08T08:36:39.215Z'
