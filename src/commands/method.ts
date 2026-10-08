@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { projectConfigExists, renameMethod, renameParam } from './adapters/core.js';
 import { listConsumers } from './adapters/surfaces.js';
-import { consumerReaches, type ExternalConsumer } from '../models/index.js';
+import { consumerReaches, narrowedToUses, type ExternalConsumer } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // `wairon method …` — edits to one contract method of the bound project's spec
@@ -83,17 +83,18 @@ export async function runMethodRenameParam(componentId: string, methodName: stri
   const consumers = listConsumers(options.search?.map((d) => path.resolve(d)));
   // Step 3: the rename, or what it would do.
   const result = renameParam(componentId, methodName, param, newName, options.dryRun);
-  // Step 4: the consumers that call the method on a public name publishing it.
-  const breaks = result.publishedIn.length > 0 ? consumers.filter((c) => consumerReaches(c, result.publishedIn, methodName)) : [];
+  // Step 4: the consumers that call the method (or a follower verb forwarding it) on a public name publishing it.
+  const breaks = consumers.map((c) => narrowedToUses(c, result.published ?? [])).filter((c): c is ExternalConsumer => c !== null);
   // Step 5: what moved, and who must follow.
   if (result.from === result.to) {
     logger.info(`Parameter "${result.from}" of "${result.component}.${result.method}" already has that name — nothing to do.`);
     return;
   }
   const would = result.dryRun ? 'would move' : 'moved';
+  if (result.routedFrom) logger.info(`"${result.routedFrom}" takes its signature from "${result.component}.${result.method}", so the parameter is renamed there and reaches "${result.routedFrom}" through its signatureFrom.`);
   logger.success(`${result.dryRun ? 'Dry run: renaming' : 'Renamed'} parameter "${result.from}" of "${result.component}.${result.method}" to "${result.to}" — ${would} in ${result.movedIn.join(', ')}; "${result.from}" joins its rename trace (previousNames; \`formerly\` in the design export).`);
   if (result.rewritten.length > 0) logger.info(`Endpoint path placeholders ${result.dryRun ? 'it would respell' : 'respelled'}: ${result.rewritten.join('; ')} (the URL a caller sends is unchanged).`);
-  reportBreaks(result.publishedIn, breaks, `call "${result.method}"`, options);
+  reportBreaks(result.publishedIn, breaks, `call "${result.method}"${result.publishedIn.length > 0 && result.published?.some((u) => !u.members.includes(result.method)) ? ' (or a published verb forwarding it)' : ''}`, options);
   if (result.dryRun) logger.info('Nothing was written.');
   else logger.info('The approval reads the contract as changed until the next `wairon lock`, as with any design edit.');
 }

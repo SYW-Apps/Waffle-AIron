@@ -146,6 +146,13 @@ methods:
         type: call
         targetComponent: family_validator
         targetMethod: implementsProblem
+  - name: introducedFindings
+    narrative:
+      - stepNumber: 1
+        description: Forward the in-tree candidate judgement to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: introducedFindings
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:51:00.419Z'
+updatedAt: '2026-10-08T18:50:38.862Z'

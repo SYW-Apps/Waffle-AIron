@@ -39,11 +39,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Hand the delete to the workflow, which removes the spec and reports the tests a removed
-          method invalidated
+          Hand the delete, with the caller's dry-run and force requests, to the workflow, which
+          plans the subtree, refuses a referenced one unless forced, and reports what went and the
+          tests a removed method invalidated
         type: call
         targetComponent: authoring_orchestrator
         targetMethod: deleteSpec
 status: complete
 createdAt: '2026-09-18T21:43:28.738Z'
-updatedAt: '2026-09-24T22:22:07.337Z'
+updatedAt: '2026-10-08T18:52:17.040Z'

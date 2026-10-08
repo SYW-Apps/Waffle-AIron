@@ -164,7 +164,7 @@ describe('a release change is judged by re-validation (round 6)', () => {
     expect(own.inputsMoved).toEqual(['release', 'rules']);
   });
 
-  it('a record from before gate parts, taken by an older release over an unchanged design, is re-validated too', async () => {
+  it('a record from before gate parts is never carried (round 7): it cannot prove its own inputs unchanged', async () => {
     root = project(true);
     await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     const record = readLockRecord()!;
@@ -172,8 +172,8 @@ describe('a release change is judged by re-validation (round 6)', () => {
     writeLockRecord({ ...legacy, stateId: { ...record.stateId, digest: 'd'.repeat(64) }, validatorVersion: '5.1.1-dev.109' });
     invalidateSpecCache();
     const check = checkApproval(true);
-    expect(check.approved).toBe(true);
-    expect(check.message).toContain('Approved under wairon 5.1.1-dev.109');
+    expect(check.approved).toBe(false);
+    expect(check.message).toContain('Approved under wairon 5.1.1-dev.109 before wairon recorded its inputs separately — re-lock once to record them; later upgrades then carry over.');
   });
 });
 

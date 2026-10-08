@@ -41,9 +41,10 @@ fields:
   - name: publishedIn
     type: list<string>
     description: >-
-      The public names of the export entries (L0 and L1) whose contract carries the method:
-      consumers calling it on one of them see a parameter renamed. Empty when the contract is not
-      exported.
+      The public names of the export entries (L0 and L1) that carry the method — its own contract's
+      entries, and the entries publishing every follower whose signatureFrom takes its signature (a
+      published Portal verb forwarding it): consumers calling it on one of them see a parameter
+      renamed. Empty when nothing publishing it is exported.
     optional: false
   - name: dryRun
     type: bool
@@ -53,10 +54,28 @@ fields:
     type: list<ExternalConsumer>
     description: >-
       The consumers — family members and pinned externals in reach, and checkouts in the searched
-      folders — whose specs call the method on a public name that publishes it, each narrowed to
-      that method: the ones that must follow the rename. Filled by the caller that read them.
+      folders — whose specs call the method (or a follower's verb) on a public name that publishes
+      it, each narrowed to what it calls there, its call by a former method name included: the ones
+      that must follow the rename. Filled by the caller that read them.
+    optional: true
+  - name: published
+    type: list<ExportUse>
+    description: >-
+      publishedIn method-granular: each public name with the method names a consumer calls the
+      parameter's method by there — the method itself on its own contract's entries, each follower's
+      verb on the entries publishing that follower — and their former names (formerMembers), so a
+      consumer whose call no longer resolves since a method rename is still named. What the breaks
+      are computed from. Absent when publishedIn is empty.
+    optional: true
+  - name: routedFrom
+    type: string
+    description: >-
+      Set when the request named a method that takes its signature from another of this project's
+      contract methods (a Portal verb with signatureFrom): `<component>.<method>` as asked. The
+      rename was made on the source the signature comes from — component and method name it — and
+      reached the asking method through its signatureFrom.
     optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-07T06:24:46.657Z'
-updatedAt: '2026-10-08T08:23:55.249Z'
+updatedAt: '2026-10-08T18:59:58.996Z'

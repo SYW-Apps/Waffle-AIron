@@ -1,0 +1,18 @@
+id: migration_validator_adapter
+name: Migration Validator Client Adapter
+description: >-
+  Local client adapter in sdd_migrations for the outward hop into sdd_validator: the validator's run
+  at whatever root the caller has bound — a copy of a project as it stands, or the rehearsal copy —
+  and its rule set, so a plan can name the findings its result will have before anything is applied.
+  In-process import seam today, swappable for a remote validator without changing the verbs. It
+  exists because only a client Adapter may cross a subsystem boundary, and the hop runs outward:
+  sdd_validator knows nothing of the migrations, so there is no mutual coupling to acknowledge.
+subsystem: sdd_migrations
+componentType: Adapter
+owns: []
+dependsOn:
+  - validator_portal
+transport: InProcess
+status: complete
+createdAt: '2026-10-08T18:56:03.127Z'
+updatedAt: '2026-10-08T20:10:14.640Z'

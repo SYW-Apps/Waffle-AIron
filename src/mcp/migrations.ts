@@ -17,8 +17,8 @@ import type { FamilyMigrationReport, MigrationRequest } from '../migrations/type
 
 /** imcp_migration_orchestrator.run — plan, then apply or drop. Never locks. */
 export function run(request: MigrationRequest, dryRun?: boolean): FamilyMigrationReport {
-  // Step 1.
-  const planned = migrations.plan(request);
+  // Step 1: the plan, announcing the findings its result will have.
+  const planned = migrations.plan({ ...request, announce: true });
   // Steps 2-4: a dry run, a refused plan or an empty one is answered as the plan, not applied.
   if (dryRun === true || planned.refusals.length > 0 || planned.changes.length === 0) {
     migrations.discard(planned);

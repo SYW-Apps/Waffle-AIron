@@ -201,7 +201,7 @@ methods:
         endStep: 14
         catches:
           - error: a core writer's refusal
-            step: 22
+            step: 24
       - stepNumber: 6
         description: Which writer?
         type: switch
@@ -297,6 +297,31 @@ methods:
         type: return
         outcome: refused plan
       - stepNumber: 19
+        label: findings-before
+        description: >-
+          When the request asks for it (announce — the CLI and MCP doors do; an internal re-plan
+          does not), judge each project the plan changes by its own gate (the family run at
+          memberDepth 0) on the rehearsal copy (as the plan leaves them) and — only when that run
+          reports an error or a warning — on an unwritten copy of the same .wai trees (the projects
+          as they stand). Both sides are copies, so neither reads code and the live sources are
+          never analysed for it
+        type: call
+        targetComponent: migration_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 20
+        description: >-
+          Read the rule set, and keep each run's design half: drop every finding whose code a
+          code-judging rule declares, and keep error and warning severity. Name each finding the
+          result has that the project does not report now — counted by project, code and spec, so a
+          path that differs between two copies never reads as new — as one plan note per severity:
+          `after <verb>: N new error(s) the projects it changes do not report now: CODE [spec]
+          message; …` (the first few, then a count). The plan then announces what its result will
+          report — an approved project that would turn red is never a surprise after apply. A run
+          that throws names nothing and refuses nothing
+        type: call
+        targetComponent: migration_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 21
         label: relock
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock.
@@ -309,7 +334,7 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           For a storage move (every planned edit a move or a delete), compare each such owner's
           rehearsed tree with its approval: an owner whose diff names no added, changed or removed
@@ -317,17 +342,17 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: diffAgainstApproval
-      - stepNumber: 21
+      - stepNumber: 23
         description: Answer the plan with its rehearsal, file changes and re-lock list
         type: return
         outcome: rehearsed plan
-      - stepNumber: 22
+      - stepNumber: 24
         label: refused-on-copy
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 23
+      - stepNumber: 25
         description: >-
           Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
           its message
@@ -416,4 +441,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-07T18:37:12.796Z'
+updatedAt: '2026-10-08T20:19:45.568Z'

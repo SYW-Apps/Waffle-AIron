@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { INVISIBLE_CHARACTERS, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
+import { fieldTypeRefs, methodTypeRefs, signatureTypeRefs, typeMatchesRef } from './type-references.js';
 
 // ---------------------------------------------------------------------------
 // Common Identifier Schema
@@ -2526,6 +2527,14 @@ export const SurfaceContractEntrySchema = z.object({
   abi: z.string().optional(),
   /** The entry's export role, call (the default) or implement. */
   role: z.string().optional(),
+  /**
+   * On a PINNED snapshot only: the method names an earlier pin of this entry
+   * held that the producer has since removed (gone, and in no method's
+   * `formerly`), carried forward while they stay absent — so a binding still
+   * declaring a removed verb is told so. Provenance: no digest, no carried
+   * fact and no drift comparison reads it; a fresh projection never has it.
+   */
+  retired: z.array(z.string()).optional(),
 });
 export type SurfaceContractEntry = z.infer<typeof SurfaceContractEntrySchema>;
 
@@ -2907,3 +2916,181 @@ export const GroupSpecSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type GroupSpec = z.infer<typeof GroupSpecSchema>;
+
+// ---------------------------------------------------------------------------
+// spec_index.subtreeOf / spec_index.referencesTo — what a deletion takes, and
+// what it would leave dangling. Pure, over the index a scan read, so the
+// authoring seam can plan a delete (and answer a dry run) before anything goes.
+// ---------------------------------------------------------------------------
+
+/** sdd_core::SpecRef — one spec addressed by its kind and id. */
+export interface SpecRef {
+  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+  id: string;
+}
+
+/** sdd_core::SpecReference — one reference a spec holds to another: who holds it, where, and what it names. */
+export interface SpecReference {
+  kind: SpecRef['kind'];
+  id: string;
+  /** Where the reference sits, as a dotted path (dependsOn, publicInterfaces, methods.run.narrative.step 3). */
+  position: string;
+  target: SpecRef;
+}
+
+/** The specs of an index the two methods read; the L0 is not in a scan's index, so it is passed beside it. */
+export interface SpecTreeIndex {
+  subsystems: ReadonlyArray<SubsystemSpec>;
+  components: ReadonlyArray<ComponentSpec>;
+  interfaces: ReadonlyArray<InterfaceSpec>;
+  implementations: ReadonlyArray<ImplementationSpec>;
+  types: ReadonlyArray<TypeSpec>;
+}
+
+/**
+ * spec_index.subtreeOf — every spec deleting this one takes with it, the spec
+ * itself last and its content innermost first: an implementation is only
+ * itself; a contract takes its implementations; a component takes its
+ * contracts (each with its implementations) and the members it owns, each with
+ * its own subtree; a subsystem takes its components and the types it owns.
+ * Empty when no spec of the kind holds the id. A type is addressed by its id
+ * or by `subsystem::id`.
+ */
+export function specIndexSubtreeOf(index: SpecTreeIndex, kind: SpecRef['kind'], id: string): SpecRef[] {
+  const out: SpecRef[] = [];
+  const seen = new Set<string>();
+  const add = (ref: SpecRef): void => {
+    const key = `${ref.kind}:${ref.id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(ref);
+  };
+  const contract = (contractId: string): void => {
+    for (const impl of index.implementations) if (impl.contract === contractId) add({ kind: 'implementation', id: impl.id });
+    add({ kind: 'interface', id: contractId });
+  };
+  const visiting = new Set<string>();
+  const component = (componentId: string): void => {
+    const spec = index.components.find((c) => c.id === componentId);
+    if (!spec || visiting.has(componentId)) return;
+    visiting.add(componentId);
+    for (const member of spec.owns ?? []) component(member);
+    for (const intf of index.interfaces) if (intf.component === componentId) contract(intf.id);
+    add({ kind: 'component', id: componentId });
+  };
+  switch (kind) {
+    case 'implementation':
+      if (index.implementations.some((i) => i.id === id)) add({ kind, id });
+      break;
+    case 'interface':
+      if (index.interfaces.some((i) => i.id === id)) contract(id);
+      break;
+    case 'component':
+      component(id);
+      break;
+    case 'subsystem':
+      if (!index.subsystems.some((s) => s.id === id)) break;
+      for (const comp of index.components) if (comp.subsystem === id) component(comp.id);
+      for (const type of index.types) if (type.subsystem === id) add({ kind: 'type', id: type.id });
+      add({ kind, id });
+      break;
+    case 'type': {
+      const type = index.types.find((t) => t.id === id || (t.subsystem !== undefined && `${t.subsystem}::${t.id}` === id));
+      if (type) add({ kind, id: type.id });
+      break;
+    }
+    default:
+      break;
+  }
+  return out;
+}
+
+/** What one spec's references are noted against while referencesTo walks it. */
+type ReferenceNote = (position: string, target: SpecRef) => void;
+
+/**
+ * spec_index.referencesTo — every reference a spec OUTSIDE the targets holds
+ * to one of them, each with its position: a component's subsystem, owns,
+ * dependsOn and dispatch; a contract's component and the head of a signature
+ * source; an implementation's contract, a step's target and a declared call; a
+ * subsystem's published interfaces, lifecycle entrypoints and trusted links;
+ * the L0's export table; and every type position naming a target type by its
+ * name or id. A reference from one target to another leaves with both.
+ */
+export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArray<SpecRef>, system?: SystemSpec | null): SpecReference[] {
+  const inTargets = (kind: SpecRef['kind'], id: string): boolean => targets.some((t) => t.kind === kind && t.id === id);
+  const ids = (kind: SpecRef['kind']): Set<string> => new Set(targets.filter((t) => t.kind === kind).map((t) => t.id));
+  const subsystems = ids('subsystem');
+  const components = ids('component');
+  const interfaces = ids('interface');
+  const targetTypes = index.types.filter((t) => inTargets('type', t.id));
+  const out: SpecReference[] = [];
+  const holder = (kind: SpecRef['kind'], id: string): ReferenceNote => (position, target) => { out.push({ kind, id, position, target }); };
+  const types = (note: ReferenceNote, position: string, refs: string[]): void => {
+    for (const ref of new Set(refs)) {
+      const hit = targetTypes.find((t) => t.name === ref || typeMatchesRef(t, ref));
+      if (hit) note(position, { kind: 'type', id: hit.id });
+    }
+  };
+  const component = (note: ReferenceNote, position: string, ref: string | undefined): void => {
+    if (ref !== undefined && components.has(ref)) note(position, { kind: 'component', id: ref });
+  };
+  const published = (note: ReferenceNote, entries: ReadonlyArray<Record<string, unknown>> | undefined): void => {
+    for (const entry of entries ?? []) {
+      const text = (key: string): string | undefined => (typeof entry[key] === 'string' ? entry[key] as string : undefined);
+      const from = text('from');
+      if (from !== undefined && subsystems.has(from)) note('publicInterfaces.from', { kind: 'subsystem', id: from });
+      component(note, 'publicInterfaces', text('component'));
+      const intf = text('interface');
+      if (intf !== undefined && interfaces.has(intf)) note('publicInterfaces', { kind: 'interface', id: intf });
+      const typeDef = text('typeDef');
+      if (typeDef !== undefined) types(note, 'publicInterfaces.typeDef', [typeDef]);
+    }
+  };
+
+  if (system) published(holder('system', 'system'), system.publicInterfaces as unknown as ReadonlyArray<Record<string, unknown>>);
+  for (const sub of index.subsystems) {
+    if (inTargets('subsystem', sub.id)) continue;
+    const note = holder('subsystem', sub.id);
+    published(note, sub.publicInterfaces as unknown as ReadonlyArray<Record<string, unknown>>);
+    for (const entry of sub.lifecycle ?? []) component(note, 'lifecycle', entry.component);
+    for (const link of sub.trustedLinks ?? []) if (subsystems.has(link.subsystem)) note('trustedLinks', { kind: 'subsystem', id: link.subsystem });
+  }
+  for (const comp of index.components) {
+    if (inTargets('component', comp.id)) continue;
+    const note = holder('component', comp.id);
+    if (subsystems.has(comp.subsystem)) note('subsystem', { kind: 'subsystem', id: comp.subsystem });
+    for (const ref of comp.owns ?? []) component(note, 'owns', ref);
+    for (const ref of comp.dependsOn ?? []) component(note, 'dependsOn', ref);
+    for (const binding of comp.dispatch ?? []) component(note, 'dispatch', binding.component);
+  }
+  for (const intf of index.interfaces) {
+    if (inTargets('interface', intf.id)) continue;
+    const note = holder('interface', intf.id);
+    component(note, 'component', intf.component);
+    for (const method of intf.methods) {
+      const source = method.signatureFrom;
+      const cut = source?.lastIndexOf('.') ?? -1;
+      if (source !== undefined && cut > 0) component(note, `methods.${method.name}.signatureFrom`, source.slice(0, cut));
+      types(note, `methods.${method.name}`, methodTypeRefs(method));
+    }
+  }
+  for (const impl of index.implementations) {
+    if (inTargets('implementation', impl.id)) continue;
+    const note = holder('implementation', impl.id);
+    if (interfaces.has(impl.contract)) note('contract', { kind: 'interface', id: impl.contract });
+    for (const method of impl.methods) {
+      for (const step of method.narrative ?? []) component(note, `methods.${method.name}.narrative.step ${step.stepNumber}`, step.targetComponent);
+      for (const entry of method.calls ?? []) component(note, `methods.${method.name}.calls`, parseDeclaredCall(entry)?.compId);
+    }
+  }
+  for (const type of index.types) {
+    if (inTargets('type', type.id)) continue;
+    const note = holder('type', type.id);
+    if (type.subsystem !== undefined && subsystems.has(type.subsystem)) note('subsystem', { kind: 'subsystem', id: type.subsystem });
+    for (const field of type.fields ?? []) types(note, `fields.${field.name}`, fieldTypeRefs(type, field.type));
+    types(note, 'signature', signatureTypeRefs(type));
+    for (const method of type.methods ?? []) types(note, `methods.${method.name}`, methodTypeRefs(method));
+  }
+  return out;
+}

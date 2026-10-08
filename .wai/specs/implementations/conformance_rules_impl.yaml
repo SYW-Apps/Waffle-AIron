@@ -283,6 +283,22 @@ methods:
           and fails closed rather than passing it
         type: local
       - stepNumber: 20
+        label: portWrite
+        description: >-
+          A call of the Portal's own code that the checker lands only on a PORT no written class
+          realizes (resolved_call_fact.port: every landing a member of an interface or type shape no
+          project class realizes, none of them in a file where a component's contract answers for
+          it), under the name of a write- or lifecycle-effect method of a data component in the
+          Portal's own subsystem or one it depends into that no implementation of the Portal claims,
+          and under a name no narrative step or declared call of the Portal names on any component
+          (a port to a planned Orchestrator verb is the claim it realizes), is
+          PORTAL_CALL_UNRESOLVED too (warning; site `<fromPath> -> <name>`): the design says what
+          the port will be before the code realizing it exists, and the finding names a data
+          component whose code is not written yet (code.holdsAny over its implementations' files is
+          false) as planned. Once its code is written, the port lands on it and the call is judged
+          as any other
+        type: local
+      - stepNumber: 21
         description: >-
           Build each technology's home: for every implementation declaring technologies, its
           component, the components it owns and the pattern that owns it, keyed by every package the
@@ -292,7 +308,7 @@ methods:
           implementation binds gets an EMPTY home under its packages: the design never says where it
           lives, so every importer is outside it
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         label: techLoop
         description: Every package a mapped file imports
         type: loop
@@ -304,8 +320,8 @@ methods:
           eight, each specifier carrying the modules it was reached through; a module a component
           realizes stops the walk, its imports judged as its own), local packages of this repository
           excluded
-        endStep: 22
-      - stepNumber: 22
+        endStep: 23
+      - stepNumber: 23
         description: >-
           When the specifier's package name (`@scope/name` or its first segment) equals a technology
           token exactly and no component realized at the file is in that technology's home, report
@@ -314,6 +330,18 @@ methods:
           an empty home, saying that no implementation binds it: bind it on the data-layer component
           that owns the vendor call. A package reached through unowned modules names them, in order,
           as the hops it was imported through
+        type: local
+      - stepNumber: 24
+        label: crossProjectImports
+        description: >-
+          For every file of the code model, report each of its source_file_facts.crossProjectImports
+          as CROSS_PROJECT_IMPORT_UNRESOLVED (warning; spec the first of
+          realization.implementationsAt(file); site `<file> -> <specifier>#<name>`, or the specifier
+          alone when the module itself is gone): an import, runtime or type-only, from ANOTHER
+          project's source that the checker resolves to nothing, naming the line, the other project,
+          and — for a type-only import — that it is erased at run time so no test notices. Follow
+          the producer's rename, or reach its code through a binding module the implementation
+          declares, which is compared with the pin
         type: local
     symbol: check
     exportedVia: dependencyConformanceRule
@@ -1191,19 +1219,37 @@ methods:
           nothing, and an answer read inside a cycle is not kept
         type: local
       - stepNumber: 2
+        label: workflowClassStop
+        description: >-
+          reach stops at one more kind of target: a member of the CLASS a workflow component
+          (Orchestrator, Supervisor, Actor) is realized by — a class in that file holding one of the
+          component's modelled methods (source_file_facts.functionBodies under a contract name or
+          per-method symbol, in that class) — which is none of its modelled methods and is not the
+          calling component's own. It is that component's code under a name its contract does not
+          declare, never unowned code read as the caller's: the reached call records it (into: the
+          component and the member) and its body is not walked. So a claimed call the function
+          answers by calling such a member instead — the shape a rename made in the code alone
+          leaves — misses with that member named (CALL_STEP_UNREALIZED: the function calls it on the
+          component's code instead, a rename made in the code only?), never as a write the caller
+          makes through that body; and a Portal's call to one no missed claim names is kept apart as
+          an undeclared member, reported with the method's unnarrated writes (UNDECLARED_WRITE_CALL:
+          a method of a workflow component's code its contract does not declare, whose effect no
+          narrative settles)
+        type: local
+      - stepNumber: 3
         label: methodLoop
         description: >-
           Judge each method's narrative call steps against the calls its realized function makes,
           and those calls against its narrative
         type: loop
         over: methods
-        endStep: 20
-      - stepNumber: 3
+        endStep: 21
+      - stepNumber: 4
         description: >-
           tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
           facts = code.factsAt(the entry's sourceFile) when it names one
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           The conformance dial off skips, only exact analysis grade fires (weaker grades never
           guess), and a method that CLAIMS no call is this rule's subject in neither direction —
@@ -1214,8 +1260,8 @@ methods:
         condition: >-
           tier is not off, implMethod.narrative or implMethod.calls is non-empty, the entry names a
           sourceFile, and facts exist with status analyzed at analysisGrade exact
-        onFalseStep: 2
-      - stepNumber: 5
+        onFalseStep: 3
+      - stepNumber: 6
         description: >-
           fnSymbol = implMethod.symbol ?? implMethod.name; colocated = modelledAt at that file;
           sites = the private closedCallSites(code, file, fnSymbol, exportedVia): the ONE body the
@@ -1240,20 +1286,20 @@ methods:
           reference that is not <component>.<method> names no target (MALFORMED_DECLARED_CALL
           reports exactly that): neither becomes a claim. Start an empty missed list
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           The function has no body here at all — UNREALIZED_METHOD's find when the name is absent,
           METHOD_BODY_NOT_FOUND's when it is a bodyless declaration: continue with the next method
         type: branch
         condition: sites is present
-        onFalseStep: 2
-      - stepNumber: 7
+        onFalseStep: 3
+      - stepNumber: 8
         label: stepLoop
         description: Check each call the method claims
         type: loop
         over: claims
-        endStep: 13
-      - stepNumber: 8
+        endStep: 14
+      - stepNumber: 9
         description: >-
           A target this tree does not contain is cross-tree-references' finding, and
           surface-reference-backing's once it resolves; and an Adapter's claim on a verb of a Portal
@@ -1266,8 +1312,8 @@ methods:
         condition: >-
           ctx.componentMap has claim.component, and it is not an Adapter's claim on a Portal whose
           transport is out of process
-        onFalseStep: 7
-      - stepNumber: 9
+        onFalseStep: 8
+      - stepNumber: 10
         description: >-
           target = the private resolveCallTarget over the implementations of each interface in
           ctx.interfacesByComponent.get(claim.component): accepted = claim.method plus the symbol
@@ -1276,7 +1322,7 @@ methods:
           names there (its symbol, qualified as <exportedVia>.<symbol> when it is reached through a
           handle) — the ONE body that realizes the target in each file
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           N:1 identity forwarding — the caller's own realized function IS the target's: the same
           body in the same file (target.bodies holds this file paired with the caller's own anchor),
@@ -1297,8 +1343,8 @@ methods:
           the next claim
         type: branch
         condition: target.bodies lacks this file paired with the caller's own anchor
-        onFalseStep: 7
-      - stepNumber: 11
+        onFalseStep: 8
+      - stepNumber: 12
         description: >-
           matching = the sites whose name is in accepted. reached = the union of
           code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
@@ -1313,7 +1359,7 @@ methods:
           may name a landing from: widening what a call reached can accept a claim, it must never
           accuse one
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           A target naming no file of its own has nothing to resolve AGAINST (MISSING_SOURCE_PATH
           reports exactly that), so it falls back to the name membership this check has always had.
@@ -1333,8 +1379,8 @@ methods:
           the claim is unrealized: target.files is empty and matching is empty, or target.files is
           non-empty, no call of forwardReach lands on the target, and reached meets none of
           target.files
-        onFalseStep: 7
-      - stepNumber: 13
+        onFalseStep: 8
+      - stepNumber: 14
         label: appendMissed
         description: >-
           Append to missed: the claim's stepNumber when it has one, its target (component.method),
@@ -1349,7 +1395,7 @@ methods:
           its brief through a port to a collaborator still planned — is appended to plannedClaims
           instead: planned, not unresolved
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         label: unrealizedReport
         description: >-
           When missed holds an entry whose miss is NOT unresolved, report CALL_STEP_UNREALIZED
@@ -1362,7 +1408,7 @@ methods:
           `calls` entry verbatim. Only what RESOLVED may accuse, so an unresolved miss is never
           counted here
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         label: unresolvedReport
         description: >-
           When plannedClaims is non-empty, report CALL_TARGET_PLANNED (notice; spec impl.id; draft
@@ -1380,7 +1426,7 @@ methods:
           rule's description, stated ONCE where `wairon rules list` reads it, never repeated per
           finding
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           declared = every targetComponent.targetMethod any narrative step of the method names,
           together with every entry of its declared `calls`. A dispatch or register step asserts
@@ -1396,15 +1442,15 @@ methods:
           exportedVia)) to a modelled method written in ANOTHER file: the body read here is that
           method's, carried across the forwarding, and its calls are its own narrative's subject
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           A call to a same-file PRIVATE helper is no modelled method and never appears among the
           crossings, so a rule's internal factoring is never a finding: continue with the next
           method
         type: branch
         condition: crossings is non-empty
-        onFalseStep: 19
-      - stepNumber: 18
+        onFalseStep: 20
+      - stepNumber: 19
         label: colocatedReport
         description: >-
           Report UNDECLARED_COLOCATED_CALL (warning; spec impl.id; draft context the entry's
@@ -1413,7 +1459,7 @@ methods:
           component boundary nothing imports, which no file-level check can see. Narrate the call,
           declare it in `calls`, or move the code so the boundary is real
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         label: writeCalls
         description: >-
           writes = the calls and references reach answers for the file's
@@ -1443,7 +1489,7 @@ methods:
           written in another file. A same-file target is the colocated direction's subject and never
           counted twice
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         label: writeReport
         description: >-
           When writes is non-empty, report UNDECLARED_WRITE_CALL (warning; spec impl.id; draft
@@ -1833,29 +1879,29 @@ methods:
           root or transport handles whatever wires the component up supplies. Only a LEADING run is
           dropped, and only names the implementation actually declared: an injected name appearing
           after the contract's own parameters is not wiring, it is an argument in the middle of the
-          caller's list. Then, where the code still takes more than the contract declares, set aside
-          the parameters whose name starts with an underscore — front first, as many as the surplus,
-          and never one the contract itself names under that spelling: a leading underscore is the
-          universal mark of a parameter the signature must take but does not use (the request and
-          URL a transport hands a handler), so it is never paired with a declared argument, and one
-          still past the declared list is never reported as undeclared
+          caller's list. Then set aside every parameter whose name starts with an underscore that
+          the analyzer proves UNUSED (parameter_fact.unused: no identifier of its name in the body
+          or another parameter's default value, no read of `arguments`), unless its bare name is the
+          contract's own: a leading underscore means unused, and it is believed only where it is
+          true — a used `_secret` is a credential like any other, and is judged like any other
+          parameter
         type: local
       - stepNumber: 4
         description: >-
-          Match what remains against the declared parameters FROM THE FRONT, position by position.
-          Position, not name, is the correspondence a signature has: a caller passes arguments in
-          order, so the first remaining parameter IS the first declared one, whatever either side
-          calls it — with ONE exception the names prove: when the code takes more than the contract
-          declares and its TRAILING parameters carry the declared names one for one while its
-          leading ones do not, the leading surplus is what was inserted, and it is set aside as
-          undeclared before matching (`fulfillOrder(requester, orderId)` for a contract
-          `fulfillOrder(orderId)` names requester, never orderId). A leading parameter the names do
-          not prove therefore shows up as a shift and is reported by the count, never blamed on a
-          guess — aligning from the back instead would accuse the wrong argument and rename-report
-          every position after it. Where a name has several candidate signatures, judge each and
-          report only what they ALL agree on: a wider answer can only narrow what this rule accuses,
-          which is the stance the field-type facts already take when one name has several
-          declarations
+          Pair what remains with the declared parameters in ORDER, as many pairs as the shorter side
+          holds — a caller passes arguments in order, so the pairing keeps both sides' order. Among
+          the order-keeping pairings take the one where the most names agree (read without their
+          leading underscores), then the most declared types agree, then the most kinds of value
+          agree (parameter_fact.kind, counted only for a parameter the code annotates, against the
+          kind the contract's type is: a primitive's, a list, a map or set as an object, an enum as
+          a string, a named scalar as what it holds, a record type as an object, a signature as a
+          function), and on a tie the one aligned against the TAIL of the realization's list — so an
+          inserted first argument is the one left over (`planRoute(apiKey, req)` for
+          `planRoute(request)` leaves apiKey), never the declared one it pushed along. A name with
+          several bodies is judged on each of them but a member of a PRIVATE table — an object
+          literal the file neither exports nor declares as a shape, like a router's dispatch table
+          keyed by the same verb names — and only what they ALL agree on is reported: a wider answer
+          can only narrow what this rule accuses
         type: local
       - stepNumber: 5
         description: Decide which side has more
@@ -1866,27 +1912,33 @@ methods:
       - stepNumber: 6
         label: count
         description: >-
-          Report the surplus on whichever side has it: a declared parameter with no position to
-          occupy is one the code would never receive, and a realized parameter past the last
-          declared one is an argument a caller must supply that the design never mentions — the
-          shape that hid a credential in a signature nobody had read against its contract
+          Report the surplus on whichever side has it: a declared parameter with no pair is one the
+          code would never receive, and a realized parameter with no pair is an argument a caller
+          must supply that the design never mentions — the shape that hid a credential in a
+          signature nobody had read against its contract. Where parameters left over (or
+          substituted) stand ahead of every kept pair under a name transports give their handles
+          (req, request, res, response, reply, url, ctx, context, next, event, socket), the finding
+          names the one green path for them: the handles in the implementation's injectedParams, the
+          contract's own parameters after them in order — spelled out as the method's signature —
+          the router unpacking the path, query and body into them
         type: local
       - stepNumber: 7
         label: compare
         description: >-
-          For each matched position, report a name that differs while the declared type agrees. The
-          type agreeing is what makes this a rename rather than a different argument, and a rename
-          is worth saying: the contract, the ERD and every brief carry one word and the code answers
-          to another. Agreement is read through the file's dialect (source_file_facts.dialect, then
-          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
-          type matching through its code-level name); with no dialect for the file's language, or
-          where the code annotates no type or the dialect cannot read it, say nothing about the name
-          — without it a rename cannot be told from a substitution, and a guess about somebody's
-          signature is worse than silence. An EXTERNAL type (alias::name) answers to the name its
-          pinned snapshot gives it under that public name (ctx.pinnedExternals), else to its public
-          name's last segment in the code's type casing, so a rename is reported the same whether
-          the parameter's type is the project's own, a producer's or a primitive; and names are
-          compared without their leading underscores (`_id` names the argument `id` does)
+          For each pair whose names differ: where both kinds of value are settled (the code's
+          annotated) and differ, and the dialect does not say the types agree, the code holds a
+          DIFFERENT argument in the declared one's place — a substitution: report the declared
+          parameter as unrealized and the code's as undeclared, saying which kind each is
+          (`getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` is never a
+          silent pairing). Otherwise report a rename where the declared type agrees: through the
+          file's dialect (source_file_facts.dialect, then type_dialect.agrees on the code's
+          annotation and the contract's canonical type, a named type matching through its code-level
+          name), or as the same primitive kind of value (string, number, boolean) of an annotated
+          parameter. An EXTERNAL type (alias::name) answers to the name its pinned snapshot gives it
+          under that public name (ctx.pinnedExternals), else to its public name's last segment in
+          the code's type casing. With no dialect, no annotation and no settled kind, say nothing
+          about the name — without it a rename cannot be told from a substitution, and a guess about
+          somebody's signature is worse than silence
         type: local
       - stepNumber: 8
         description: >-
@@ -1912,7 +1964,9 @@ methods:
       - stepNumber: 1
         description: >-
           For each Portal implementation that names a router entry, find the routes the analyzer
-          read from that function in the Portal's files. A Portal with no router entry is served
+          read (source_file_facts.functionRoutes) from that function and from the functions of its
+          own file it calls by name, in the Portal's files: a router delegating its matching to a
+          helper that reads a route table is one router. A Portal with no router entry is served
           method by method, and has no router of its own to read
         type: local
       - stepNumber: 2
@@ -1938,14 +1992,16 @@ methods:
       - stepNumber: 5
         label: compare
         description: >-
-          Complete each route from the Portal's own endpoints: a leading segment the router never
-          checks is the one whatever serves the Portal routes on, so it is completed with each first
-          segment of the Portal's HTTP endpoint paths. Match routes against the Portal's HTTP
-          endpoints by verb and path. A template parameter in an endpoint matches a segment the
-          router leaves unconstrained, and only that: a literal the router compares against is a
-          distinct handler, and a template endpoint beside it does not declare it, or the one route
-          this check exists to find would hide behind its neighbour. A route that pins no segment
-          count also covers a longer path with the same leading segments
+          Read each route against the Portal's own endpoints: a route whose leading segments are the
+          Portal's basePath is read beneath it, where the contract writes its endpoint paths; a
+          route that does not state the whole path (route_fact.fullPath unset) and leaves its
+          leading segment unconstrained has it completed with each first segment of the Portal's
+          HTTP endpoint paths — the one whatever serves the Portal routes on. Match routes against
+          the Portal's HTTP endpoints by verb and path. A template parameter in an endpoint matches
+          a segment the router leaves unconstrained, and only that: a literal the router compares
+          against is a distinct handler, and a template endpoint beside it does not declare it, or
+          the one route this check exists to find would hide behind its neighbour. A route that pins
+          no segment count also covers a longer path with the same leading segments
         type: local
       - stepNumber: 6
         description: >-
@@ -2100,49 +2156,60 @@ methods:
         label: gather
         description: >-
           For each binding module in ctx.bindingModules, collect the implementations naming it and
-          the aliases their components reach (a dependsOn, owns, narrative call, declared call or
-          implements naming `alias::name`), keeping the aliases ctx.pinnedExternals holds a snapshot
-          for, and the aliases naming a member project of the bound root (ctx.projectFamily) — whose
-          surface is its L0 export table in ctx.exportTables read live: each exported component's
-          contract methods (narrowed to the exported interface) with their params' previousNames and
-          their own, each exported type's fields with their previousNames
+          the first segments of every `alias::name` their components write — a dependsOn, owns,
+          narrative call, declared call or implements, and every named type their contracts' params
+          and returns write, followed through the bound project's own types those name; resolve each
+          segment to the alias ctx.pinnedExternals holds a snapshot for, or to a contained member
+          project of the bound root (ctx.projectFamily: its alias, or its project id as the bound
+          references spell it) — whose surface is its L0 export table in ctx.exportTables read live:
+          each exported component's contract methods (narrowed to the exported interface) with their
+          params' previousNames and their own, each exported type's fields with their previousNames
+          and the type's previousIds
         type: loop
         over: ctx.bindingModules
         endStep: 8
       - stepNumber: 2
         description: Can it be compared?
         type: branch
-        condition: the module was read and at least one reached alias is pinned or is a member project
+        condition: >-
+          the module was read, declares at least one exported declaration, and at least one reached
+          project is pinned or is a member project exporting something
         onTrueStep: 4
         onFalseStep: 3
       - stepNumber: 3
         description: >-
           Report BINDING_UNREAD (notice) once for the module, naming why — not on disk yet, escapes
-          the root, unreadable, a language the reader does not read, or no pinned external and no
-          member project reached — and move on
+          the root, unreadable, a language the reader does not read, nothing it declares that the
+          reader compares (with each unread export form it met), a reached member that exports
+          nothing (told to export there, never to pin), an external with no pin (told to pin it), or
+          no other project reached — and move on
         type: jump
         toStep: 1
       - stepNumber: 4
         description: >-
-          Match each declaration: by its doc comment's `alias::name`, else by nameKey against a
-          pinned interface's id or name or a pinned type's id or name (an Api, Port or Client suffix
-          ignored), else for an interface by the pinned interface most of its member names (current
-          or former) belong to; an exported function against the methods of every pinned interface.
-          An unmatched declaration is the binding's own plumbing
+          Match each declaration: by its doc comment's `alias::name` (the alias or a member's
+          project id), else by nameKey against a reached interface's id or name or a reached type's
+          id or name (an Api, Port or Client suffix ignored) or a type's former id, else for an
+          interface by the reached interface most of its member names (current or former) belong to;
+          an exported function against its tagged interface alone, else the methods of every reached
+          interface, else a pinned entry's retired names. An unmatched declaration is the binding's
+          own plumbing
         type: local
       - stepNumber: 5
         description: >-
-          For each member of a declaration matched to a pinned interface, and each matched function:
-          a name that is a pinned method's former name is drift with the rename to follow; a name
-          the matched interface does not hold is drift (no longer exported); otherwise compare the
-          parameter list's arity and names by nameKey with the pinned method's params, a param's
-          previousNames giving the rename
+          For each member of a declaration matched to an interface, and each matched function: a
+          name that is a method's former name is drift with the rename to follow; a name the matched
+          interface does not hold (a tagged function's included, and any name a pinned entry's
+          retired list holds) is drift, removed; otherwise compare the parameter list's arity and
+          names by nameKey with the method's params, a param's previousNames giving the rename
         type: local
       - stepNumber: 6
         description: >-
-          For a declaration matched to a pinned type: each field the type does not declare is drift
-          (with the rename when a pinned field was formerly that name), and each pinned field the
-          binding lacks and no rename explains is drift
+          For a declaration matched to a type: a declaration named by the type's former id is drift
+          with the new name; each field the type does not declare is drift (with the rename when a
+          field was formerly that name), each field the binding lacks and no rename explains is
+          drift, and each field whose declared type names a type the producer renamed (a reached
+          type's former id) is drift with the new name
         type: local
       - stepNumber: 7
         description: >-
@@ -2164,4 +2231,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-08T12:19:26.735Z'
+updatedAt: '2026-10-08T19:37:12.284Z'

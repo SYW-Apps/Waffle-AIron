@@ -100,7 +100,6 @@ const KINDS: Record<string, KindSpec> = {
     updateSpecOnly: {
       auth: 'Portal auth scheme, added when the surface is designed',
       patterns: 'pack-declared pattern refs, resolved against loaded packs',
-      variant: 'variant registry reference',
       externalLinks: 'documented external URLs',
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',

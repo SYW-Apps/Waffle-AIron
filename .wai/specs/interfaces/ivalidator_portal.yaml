@@ -252,6 +252,29 @@ methods:
         type: string
         description: The `alias::name` the contract would implement
     effect: read
+  - name: introducedFindings
+    description: >-
+      Judge one component or contract about to be written in its tree: the doctrine edges and route
+      collisions the write itself introduces, split by severity. sdd_authoring's gated workflow
+      calls it through its own client adapter on a create and on a delta, and refuses the write when
+      the verdict holds an error.
+    signature: >-
+      introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
+      CandidateOptions): CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: >-
+          The kind of spec written; a kind other than component or interface answers an empty
+          verdict
+      - name: candidate
+        type: ComponentSpec | InterfaceSpec
+        description: The spec about to be written, merged and carried
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:50:52.673Z'
+updatedAt: '2026-10-08T18:56:34.442Z'

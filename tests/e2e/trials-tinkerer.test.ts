@@ -294,7 +294,7 @@ describe('tinkerer: lock messages say what they approve', () => {
 
     const again = await sb.run(['lock', '--yes'], dir);
     expectExit(again, 0);
-    expect(again.all).toContain('Nothing has changed since the last approval — this re-records the approval');
+    expect(again.all).toContain('Nothing has changed since the last approval — the approval on record stays as it is');
     expectExit(await sb.run(['lock-check', '--strict'], dir), 0);
   });
 

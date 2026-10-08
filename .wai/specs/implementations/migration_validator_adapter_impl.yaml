@@ -1,0 +1,26 @@
+id: migration_validator_adapter_impl
+name: Migration Validator Adapter Implementation
+description: >-
+  sdd_migrations' client hop into sdd_validator, in a module of its own: an identity re-export of
+  the validator portal's family run. The orchestrator imports this module, so its calls into the
+  validator land here.
+contract: imigration_validator_adapter
+sourcePath: src/migrations/adapters/validator.ts
+methods:
+  - name: validateFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's family run at the bound root
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateFamily
+  - name: listRules
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's rule listing at the bound root
+        type: call
+        targetComponent: validator_portal
+        targetMethod: listRules
+status: complete
+createdAt: '2026-10-08T18:56:07.806Z'
+updatedAt: '2026-10-08T19:02:56.572Z'

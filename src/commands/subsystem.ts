@@ -226,8 +226,8 @@ export interface MigrationCommandOptions {
  * apply it all or nothing, printing the projects to re-lock. Never locks.
  */
 export async function runMigration(request: MigrationRequest, options: MigrationCommandOptions): Promise<void> {
-  // Step 1: plan the request from the current project.
-  const planned = migrations.plan(request);
+  // Step 1: plan the request from the current project, announcing the findings its result will have.
+  const planned = migrations.plan({ ...request, announce: true });
   // Step 2: print the plan.
   printPlan(planned);
   // Steps 3-5: report only, refused or empty — nothing is written.

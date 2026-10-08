@@ -450,6 +450,47 @@ function closureIds(snapshot: SurfaceSnapshot, method: MethodSignature): string[
   return [...seen].sort();
 }
 
+/** The closure type ids a type definition reaches, itself included, sorted. */
+function closureOfDef(snapshot: SurfaceSnapshot, def: SurfaceTypeDef): string[] {
+  const byId = new Map(snapshot.types.map((d) => [d.id, d] as const));
+  const seen = new Set<string>();
+  const queue = [def.id];
+  while (queue.length) {
+    const next = byId.get(queue.shift()!);
+    if (!next || seen.has(next.id)) continue;
+    seen.add(next.id);
+    for (const expr of typeDefExprs(next)) queue.push(...extractTypeIdentifiers(canonicalTypeRef(snapshot, expr)));
+  }
+  return [...seen].sort();
+}
+
+/**
+ * Every traced rename of the newer closure against the older, per type id:
+ * the type's own (`type "old" renamed to "new"`) and each of its fields'
+ * (`field "type.old" renamed to "new"`).
+ */
+function closureRenames(newer: SurfaceSnapshot, older: SurfaceSnapshot): Map<string, string[]> {
+  const olderDefs = new Map(older.types.map((d) => [d.id, d] as const));
+  const newerIds = new Set(newer.types.map((d) => d.id));
+  const notes = new Map<string, string[]>();
+  for (const def of newer.types) {
+    const traced = olderDefs.has(def.id) ? undefined : (def.formerly ?? []).find((f) => olderDefs.has(f) && !newerIds.has(f));
+    const was = olderDefs.get(def.id) ?? (traced !== undefined ? olderDefs.get(traced) : undefined);
+    if (!was) continue;
+    const said = [
+      ...(traced !== undefined ? [`renamed type "${traced}" → "${def.id}"`] : []),
+      ...fieldRenames(was, def).map((r) => `renamed field "${def.id}.${r.from}" → "${r.to}"`),
+    ];
+    if (said.length > 0) notes.set(def.id, said);
+  }
+  return notes;
+}
+
+/** The renames a set of closure ids carries, in id order. */
+function renamesIn(ids: string[], notes: Map<string, string[]>): string[] {
+  return ids.flatMap((id) => notes.get(id) ?? []);
+}
+
 /**
  * How a method whose digest moved changed: its signature, when it reads
  * differently; else the types it names whose shape moved — null when every one
@@ -573,6 +614,7 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
   const consumed = new Set<string>();
   // Every row past a rename is judged with the traced renames undone.
   const undone = withRenamesUndone(newer, older);
+  const notes = closureRenames(newer, older);
   const formerOf = (formerly: string[] | undefined, has: (n: string) => boolean): string | undefined =>
     (formerly ?? []).find((f) => has(f) && !consumed.has(f));
   // Contract entries: added, renamed, changed member by member.
@@ -617,6 +659,13 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       if (!sameShape) {
         const changed = signatureChange(older, undone, was, method, undoneMethod);
         if (changed !== null) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: changed });
+      } else if (a !== b) {
+        // Moved only through renames of types it names: said on the method when
+        // no row of this surface lists them (a type it exports under no name —
+        // another project's type expanded into it).
+        const exported = new Set((newer.exportedTypes ?? []).map((t) => t.type));
+        const embedded = renamesIn(closureIds(newer, method).filter((id) => !exported.has(id)), notes);
+        if (embedded.length > 0) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `signature reads the same, but it names renamed types: ${embedded.join('; ')}` });
       }
       for (const r of paramRenames(was, method)) {
         out.push({ kind: 'renamed', name: entry.id, member: method.name, from: r.from, detail: `parameter "${r.from}" renamed to "${r.to}"` });
@@ -634,7 +683,10 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     let before = oldTypes.get(t.id);
     if (!before) {
       const def = newer.types.find((d) => d.id === t.type);
-      const from = formerOf(def?.formerly, (n) => oldTypes.has(n) && !(newer.exportedTypes ?? []).some((x) => x.id === n));
+      const gone = (n: string): boolean => oldTypes.has(n) && !(newer.exportedTypes ?? []).some((x) => x.id === n);
+      // Traced (the definition's rename trace), or the same definition under a new public name.
+      const from = formerOf(def?.formerly, gone)
+        ?? (older.exportedTypes ?? []).find((x) => x.type === t.type && gone(x.id) && !consumed.has(x.id))?.id;
       if (from === undefined) {
         out.push({ kind: 'added', name: t.id, detail: `type added (${def?.kind ?? 'type'}), audience ${t.audience}` });
         continue;
@@ -648,14 +700,20 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     const b = memberDigest(newer, t.id, 'type');
     const oldDef = older.types.find((d) => d.id === before!.type);
     const newDef = newer.types.find((d) => d.id === t.type);
-    if (a !== b && before.id === t.id) {
-      // A field renamed with a trace reads as the rename, with its new name;
-      // the anonymous shape row stays only for what the renames do not explain.
-      const renames = oldDef && newDef ? fieldRenames(oldDef, newDef) : [];
-      for (const r of renames) out.push({ kind: 'renamed', name: t.id, member: r.to, from: r.from, detail: `field "${r.from}" renamed to "${r.to}"` });
-      // Judged with every traced rename undone, so a type embedding a renamed
-      // type or field is no shape change of its own.
-      if (memberDigest(undone, t.id, 'type') !== a) out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
+    // A field renamed with a trace reads as the rename, with its new name —
+    // beside the type's own rename, never folded into it.
+    const renames = oldDef && newDef ? fieldRenames(oldDef, newDef) : [];
+    for (const r of renames) out.push({ kind: 'renamed', name: t.id, member: r.to, from: r.from, detail: `field "${r.from}" renamed to "${r.to}"` });
+    if (a !== b) {
+      // Judged with every traced rename undone: the anonymous shape row stays
+      // only for what the renames do not explain, and a type whose shape moved
+      // only through renames it embeds says which.
+      if (memberDigest(undone, t.id, 'type') !== a) {
+        out.push({ kind: 'changed', name: t.id, detail: 'type shape changed (fields, values, held primitive or a type it names)' });
+      } else if (renames.length === 0 && newDef) {
+        const embedded = renamesIn(closureOfDef(newer, newDef).filter((id) => id !== newDef.id), notes);
+        if (embedded.length > 0) out.push({ kind: 'changed', name: t.id, detail: `embeds ${embedded.join('; ')}` });
+      }
     }
     // A type's own methods are carried for bindings, never digested: a change drifts a pin.
     if (oldDef && newDef && factValue(typeMethods(oldDef)) !== factValue(typeMethods(newDef))) out.push({ kind: 'changed', name: t.id, detail: 'type methods changed (a method added, removed, or its params or returns)' });

@@ -14,8 +14,8 @@
  *  - An undeclared workflow verb's effect is read off its own narrative: a
  *    Portal's unnarrated call to a verb that only reads is no unnarrated
  *    mutation (UNDECLARED_WRITE_CALL quiet).
- *  - An underscore-named parameter is imposed and unused, never undeclared
- *    (UNDECLARED_PARAM quiet on a node:http handler).
+ *  - An underscore-named parameter the analysis proves unused is set aside,
+ *    never undeclared (UNDECLARED_PARAM quiet on a node:http handler).
  *  - A technology package imported by an unowned helper module is its
  *    importer's (TECH_LEAKAGE_IN_CODE).
  */
@@ -106,9 +106,9 @@ export default [
   defineRuleFixture({
     code: 'UNDECLARED_PARAM',
     expectFire: false,
-    reason: 'The leading request and URL are underscore-named: imposed by the router and unused.',
-    scenario: 'The habit Portal\'s check-in is a node:http handler `(_req, _url, params)` realizing `checkIn(id)`.',
-    tree: tree({ portal: portalFile({ signature: '_req: object, _url: URL, params: Record<string, string>', field: NO_FIELD, head: '', dispatch: "params.id ?? ''" }) }),
+    reason: 'The leading request and URL are underscore-named and provably unused, and the handler takes the contract\'s own id after them.',
+    scenario: 'The habit Portal\'s check-in is a node:http handler `(_req, _url, id)` realizing `checkIn(id)`, the router unpacking the id.',
+    tree: tree({ portal: portalFile({ signature: '_req: object, _url: URL, id: string', field: NO_FIELD, head: '' }) }),
   }),
   defineRuleFixture({
     code: 'UNDECLARED_PARAM',

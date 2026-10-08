@@ -38,7 +38,10 @@ import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
-import { ciBlockingIssues, describeGateParts, designOnly, movedGateParts, type PinState, type ProjectApproval, type ReleaseVerdict } from '../models/lock.js';
+import {
+  approvalSubject, ciBlockingIssues, describeGateParts, designOnly, gatePartsProblem, movedGateParts, releaseStampAgainst, stampRecordsGateParts,
+  usableGateParts, GATE_PARTS_SINCE, type PinState, type ProjectApproval, type ReleaseVerdict,
+} from '../models/lock.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import type { NetworkDeclaration } from '../models/project.js';
 import type { ReachFinding, ReachModel } from '../models/reach.js';
@@ -747,6 +750,11 @@ function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): 
       entry.key);
   }
   if (entry.state === 'drifted' && entry.release && !entry.release.carried) {
+    if (entry.release.reason) {
+      return finding(config, 'MEMBER_DRIFTED',
+        `The member ${named(entry.key)} is not covered by its approval under this release: ${entry.release.reason} (At its own root: \`wairon lock\` there.)`,
+        entry.key);
+    }
     return finding(config, 'MEMBER_DRIFTED',
       `The member ${named(entry.key)} was approved under wairon ${entry.release.from}, and this release (${entry.release.to}) finds ${entry.release.count ?? 0} issue(s) in its approved design: ${(entry.release.findings ?? []).join('; ')}. Fix them at its own root, then \`wairon lock\` there.`,
       entry.key);
@@ -866,9 +874,9 @@ function unreachedReexports(family: ProjectFamily, config: ProjectConfig | null)
 // about a project is the same whichever root asked (status-agrees). Reads each
 // project's own tree once and writes nothing.
 
-/** A StateId rendered as a composition subject. */
+/** A record's composition subject: what its APPROVAL stands for (lock_record.approvalSubject) — a restamp keeps the approval's. */
 function subjectOf(record: LockRecord): string {
-  return `${record.stateId.algorithm}:${record.stateId.digest}`;
+  return approvalSubject(record);
 }
 
 /** Steps 4-7: one loaded project's own state, bound to its own root. */
@@ -896,8 +904,11 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
     if (!record) return base;
     const same = (id: StateId | undefined): boolean => !!id && record.stateId.algorithm === id.algorithm && record.stateId.digest === id.digest;
     const matches = same(current) || same(current.asRecorded);
-    // Step 7: the inputs that moved, named, when the record carries gate parts.
-    const moved = matches ? null : movedGateParts(record, current.parts);
+    // Step 7: the inputs that moved, named, when the record carries gate parts
+    // that break down its identity; parts that do not are ignored, said once.
+    const partsIgnored = gatePartsProblem(record, current) ?? undefined;
+    const parts = usableGateParts(record, current);
+    const moved = matches || !parts ? null : movedGateParts({ gateParts: parts }, current.parts);
     // Step 8: a change of the release alone is judged by re-validation.
     const release = matches ? undefined : releaseVerdict(record, current);
     // Steps 9-12: what the approval still owes although its identity may
@@ -912,6 +923,7 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
       ...(release ? { release } : {}),
       ...(moved && moved.length > 0 && !release ? { inputsMoved: moved } : {}),
       ...(owed !== undefined ? { owed } : {}),
+      ...(partsIgnored !== undefined ? { partsIgnored } : {}),
     };
   });
 }
@@ -924,40 +936,52 @@ const revalidating = new Set<string>();
 
 /**
  * ifamily_validator.releaseVerdict — THE verdict on an approval whose gate
- * identity no longer matches only because the wairon release changed: its
- * approved design re-validated under the current rules, in the same command.
- * Clean at the --ci standard it carries over (approved, nothing written);
- * otherwise it is stale for exactly the findings the new release reports.
- * Undefined when what moved is not the release alone. Bound to the project's
- * own root by the caller.
+ * identity no longer matches because the wairon release changed. Only a
+ * record that PROVES the project's own inputs unchanged — gate parts that
+ * break down its identity, every part but `release` as it stands, an older or
+ * the same valid stamp — is re-validated under the current rules, in the same
+ * command: clean at the --ci standard it carries over (approved, nothing
+ * written); otherwise it is stale for exactly the findings the new release
+ * reports. A record that cannot prove it (no parts, ignored parts, a newer or
+ * invalid stamp) over an unmoved design is stale with one sentence
+ * (`reason`). Undefined when what moved is not the release. Bound to the
+ * project's own root by the caller.
  */
 export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVerdict | undefined {
   const root = path.resolve(getProjectRoot());
-  const moved = movedGateParts(record, current.parts);
-  if (moved !== null) {
-    // Steps 1-2: a record with gate parts — only the release's part moved.
+  // Step 1: what the record can prove — parts that break down its identity, and its stamp.
+  const problem = gatePartsProblem(record, current);
+  const parts = usableGateParts(record, current);
+  const stamp = releaseStampAgainst(record, WAIRON_VERSION);
+  const from = typeof record.validatorVersion === 'string' && record.validatorVersion !== '' ? record.validatorVersion : 'an unrecorded release';
+  if (parts) {
+    // Steps 2-3: a record with gate parts — only the release's part moved.
+    const moved = movedGateParts({ gateParts: parts }, current.parts) ?? [];
     if (moved.length !== 1 || moved[0] !== 'release') return undefined;
+    // Steps 4-5: only an older (or the same) valid stamp is a change of the release this one may judge.
+    if (stamp === 'newer' || stamp === 'invalid') return { from, to: WAIRON_VERSION, carried: false, reason: stampReason(record, stamp) };
   } else {
-    // Steps 3-5: a record from before gate parts — another release took it,
-    // no own spec file moved, and every direct member's pin is unchanged.
-    if (!record.validatorVersion || record.validatorVersion === WAIRON_VERSION) return undefined;
+    // Steps 6-8: a record that cannot prove its own inputs unchanged — over a
+    // design no own spec file and no member approval of which moved (else the
+    // caller names what did).
     const diff = diffAgainstApproval();
     if (!diff || diff.added.length + diff.changed.length + diff.removed.length > 0) return undefined;
     if (!membersAsPinned(record)) return undefined;
+    // Steps 9-10: stale with the one sentence, never re-validated.
+    return { from, to: WAIRON_VERSION, carried: false, reason: unprovenReason(record, stamp, problem) };
   }
-  // Steps 6-7: decided once per record and identity in a process.
+  // Steps 11-12: decided once per record and identity in a process.
   const key = `${root}|${record.stateId.digest}|${current.digest}`;
   if (releaseVerdicts.has(key)) return releaseVerdicts.get(key) ?? undefined;
   if (revalidating.has(root)) return undefined;
   revalidating.add(root);
   try {
-    // Steps 8-9: the approved design re-validated under the current rules.
+    // Steps 13-14: the approved design re-validated under the current rules.
     const config = configOrNull();
     const result = designOnly(validateDesign({ rules: config?.rules, projectType: config?.projectType, memberDepth: 0 }));
-    // Step 10: what would fail `validate --ci`.
+    // Step 15: what would fail `validate --ci`.
     const blocking = ciBlockingIssues(result);
-    const from = record.validatorVersion || 'an earlier release';
-    // Steps 11-13.
+    // Steps 16-18.
     const verdict: ReleaseVerdict = blocking.length === 0
       ? { from, to: WAIRON_VERSION, carried: true }
       : {
@@ -969,6 +993,29 @@ export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVer
   } finally {
     revalidating.delete(root);
   }
+}
+
+/** Step 5: why a newer or invalid release stamp is no change of the release this wairon may judge. */
+function stampReason(record: LockRecord, stamp: 'newer' | 'invalid'): string {
+  if (stamp === 'newer') {
+    return `It was written by a newer wairon (${record.validatorVersion}) than this one (${WAIRON_VERSION}): this release cannot re-judge an approval a newer one took. Run that wairon (or a newer one), or re-lock to approve the design under this one.`;
+  }
+  return typeof record.validatorVersion === 'string' && record.validatorVersion !== ''
+    ? `Its release stamp "${record.validatorVersion}" is no wairon version, so a change of the release cannot be told apart from an edited record — re-lock once to approve the design under this release.`
+    : 'It carries no release stamp, so a change of the release cannot be told apart from an edited record — re-lock once to approve the design under this release.';
+}
+
+/** Step 9: the one sentence for a record that cannot prove the project's own inputs unchanged. */
+function unprovenReason(record: LockRecord, stamp: ReturnType<typeof releaseStampAgainst>, problem: string | null): string {
+  if (problem !== null) {
+    return `Its gate parts do not break down its identity (${problem}), so they are ignored, and whether only the release moved cannot be told — re-lock once to record them; later upgrades then carry over.`;
+  }
+  if (stamp === 'newer' || stamp === 'invalid') return stampReason(record, stamp);
+  const old = record.validatorVersion as string;
+  if (stampRecordsGateParts(old)) {
+    return `Its stamp says wairon ${old} took it, but it carries no gate parts, which every record from wairon ${GATE_PARTS_SINCE} on carries: an earlier wairon took it (the stamp was edited), so the release moved since, and whether the project's own inputs moved too cannot be told — re-lock once to record them; later upgrades then carry over.`;
+  }
+  return `Approved under wairon ${old} before wairon recorded its inputs separately — re-lock once to record them; later upgrades then carry over.`;
 }
 
 /** Whether every direct member's recorded subject is the one the identity reads now (a record from before gate parts). */

@@ -1,0 +1,18 @@
+kind: value-object
+id: spec_ref
+name: SpecRef
+description: 'One spec addressed by its kind and id: what a deletion takes away, and what a reference lands on.'
+subsystem: sdd_core
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: The spec kind
+    optional: false
+  - name: id
+    type: string
+    description: The spec id; a type within its owner as subsystem::id, system for the L0
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-08T18:49:57.847Z'
+updatedAt: '2026-10-08T18:49:58.519Z'

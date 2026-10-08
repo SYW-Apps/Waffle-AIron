@@ -196,6 +196,37 @@ methods:
         type: ValidationOptions
         description: The project's own rules and projectType
         optional: true
+  - name: introducedFindings
+    description: >-
+      Judge one spec about to be written IN its tree (a component or a contract; any other kind
+      answers an empty verdict): the design findings the write itself introduces, and nothing the
+      tree already held. The dependency-edge doctrine and the route-collision rules run twice over
+      the bound tree, read through the core adapter, — as stored, and with the candidate in place of
+      the spec it re-authors (added when new) — and only the findings the second run raises and the
+      first did not are kept, restricted to those no later write in the sanctioned authoring order
+      can cure without undoing this one: an edge between two existing blocks whose stereotypes
+      forbid it (the ARCHITECTURE_VIOLATION_*_DEP codes, an Index's ownership-dependent allowance
+      excepted) and two bound methods sharing one HTTP route (ENDPOINT_ROUTE_DUPLICATE).
+      Completeness findings never run here, so a component authored before its collaborators is
+      never refused for it. The project's severity overrides apply as they do in validate, so a code
+      tuned down is a warning here too.
+    signature: >-
+      introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
+      CandidateOptions): CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: >-
+          The kind of spec written; a kind other than component or interface answers an empty
+          verdict
+      - name: candidate
+        type: ComponentSpec | InterfaceSpec
+        description: The spec about to be written, merged and carried
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:36:41.267Z'
+updatedAt: '2026-10-08T18:56:33.042Z'

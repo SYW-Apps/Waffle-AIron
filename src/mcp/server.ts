@@ -617,6 +617,23 @@ function renderChangeReport(report: SpecChangeReport): string {
   return lines.join('\n');
 }
 
+/** A deletion as one answer: what went (or would), what still references it, and the tests to revisit. */
+function renderDeletion(deletion: SpecDeletion): string {
+  const others = deletion.removed.filter((r) => !(r.kind === deletion.kind && r.id === deletion.id));
+  const lines = [deletion.dryRun
+    ? `DRY RUN — nothing was deleted. Deleting ${deletion.kind} "${deletion.id}" would remove ${deletion.removed.length} spec${deletion.removed.length === 1 ? '' : 's'}.`
+    : `Successfully deleted ${deletion.kind} spec "${deletion.id}"${others.length ? ` and ${others.length} spec${others.length === 1 ? '' : 's'} it contained` : ''}.`];
+  if (others.length) lines.push(...others.map((r) => `- ${deletion.dryRun ? 'would remove' : 'removed'} ${r.kind} "${r.id}"`));
+  if (deletion.references.length) {
+    lines.push('', deletion.dryRun
+      ? 'STILL REFERENCED — the deletion would be refused unless forced (force: true leaves these dangling):'
+      : 'LEFT DANGLING (forced) — validate reports each:');
+    lines.push(...deletion.references.map((r) => `- ${r.kind} "${r.id}" (${r.position}) -> ${r.target.kind} "${r.target.id}"`));
+  }
+  lines.push(...renderTestsToRevisit(deletion.testsToRevisit));
+  return lines.join('\n');
+}
+
 /** The kinds a spec write addresses, as the receipt and the change report name them. */
 const SPEC_KINDS = ['system', 'subsystem', 'component', 'interface', 'implementation', 'type'] as const;
 type SpecKind = typeof SPEC_KINDS[number];
@@ -737,7 +754,10 @@ function writeReceipt(sentence: string, receipt: SpecWriteReceipt): CallToolResu
 const specDeletionOutput = {
   kind: z.enum(SPEC_KINDS).describe('The spec kind deleted.'),
   id: z.string().describe('The id the spec was stored under.'),
-  deleted: z.boolean().describe('True when a spec document was removed.'),
+  deleted: z.boolean().describe('True when the spec and its subtree were removed; false on a dry run and when nothing held the id.'),
+  dryRun: z.boolean().describe('True when only the plan was asked for: nothing was removed.'),
+  removed: z.array(z.object({ kind: z.string(), id: z.string() })).describe('Every spec the deletion removes (or would), innermost first and the addressed spec last.'),
+  references: z.array(z.object({ kind: z.string(), id: z.string(), position: z.string(), target: z.object({ kind: z.string(), id: z.string() }) })).describe('Every reference a spec outside the removed set holds to it: why a deletion is refused, or what a forced one left dangling.'),
   testsToRevisit: testsToRevisitOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecDeletion | keyof typeof staleServerOutput, z.ZodTypeAny>;
@@ -745,10 +765,10 @@ const specDeletionOutput = {
 /** ONE change a write made, field for field as core reports it. */
 const specChangeOutput = {
   path: z.string().describe('The dotted path the change addresses, with names and indexes.'),
-  change: z.enum(['set', 'added', 'removed', 'cleared', 'renumbered', 'relocated']).describe(
+  change: z.enum(['set', 'added', 'removed', 'cleared', 'renumbered', 'relocated', 'reordered']).describe(
     'What happened at that path. A narrative is compared by step identity: `renumbered` is a run of unchanged '
     + 'steps shifted by an insert or delete (before/after name the ranges), `relocated` a jump field that '
-    + 'followed its target to the target\'s new number.',
+    + 'followed its target to the target\'s new number; `reordered` a list holding the same elements in a new order.',
   ),
   before: z.string().optional().describe('The previous value, summarized; absent when there was none.'),
   after: z.string().optional().describe('The new value, summarized; absent when there is none.'),
@@ -2095,7 +2115,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ alias: string; path: string; description?: string; dryRun?: boolean }>(server,
     'sdd_attach_member',
     {
-      description: "Make an existing project at the path a member of the bound project, keeping its L0, subsystems, packs and lock (sdd_add_member scaffolds a new one instead). Refused when its id collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
+      description: "Make an existing project at the path a member of the bound project, keeping its L0, subsystems, packs and lock (sdd_add_member scaffolds a new one instead). The path reads as sdd_add_member reads a location: inside this project, or a sibling with a leading ../ — any other way out is not-contained. Refused when its id collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
       inputSchema: {
         alias: z.string().describe('The alias to declare ([a-z0-9-_]+)'),
         path: z.string().describe("The project's root, relative to the bound project"),
@@ -2267,7 +2287,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; param: string; newName: string; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_param',
     {
-      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` (or `/:old`) is respelled on the method\'s own binding and on every method whose signatureFrom takes its signature (the URL a caller sends is unchanged). Prose is never rewritten. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component), a method no contract of the component declares (method-missing), a parameter the method does not declare or takes from a signatureFrom (param-missing), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Returns the component, method, from and to, the interfaces it moved in, the placeholders respelled, `publishedIn` (the export entries carrying the method) and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) that call it there. With dryRun it answers all of that and writes nothing. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
+      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` (or `/:old`) is respelled on the method\'s own binding and on every method whose signatureFrom takes its signature (the URL a caller sends is unchanged). Prose is never rewritten. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component), a method no contract of the component declares (method-missing), a parameter the method does not declare, or takes from another project\x27s method or a signature type (param-missing, naming that source), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Asked of a method that takes its signature from another of this project\x27s contract methods (a Portal verb with signatureFrom), the rename is made on that source and reaches the asked method through its signatureFrom; `routedFrom` names the method asked for. Returns the component, method, from and to, the interfaces it moved in, the placeholders respelled, `publishedIn` (the export entries carrying the method, and every published verb forwarding it), `published` (the same, method-granular, with former names) and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) that call it there — a call by a former method name included. With dryRun it answers all of that and writes nothing. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
       inputSchema: {
         id: z.string().describe('The component whose contract method\'s parameter is renamed (namespaced if needed)'),
         method: z.string().describe('The contract method'),
@@ -2284,9 +2304,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // The consumers, before anything moves — the family in reach, members included.
         const consumers = externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d)));
         const report = renameParam(qualifiedComponentId(id), method, param, newName, dryRun);
-        const breaks = report.publishedIn.length > 0
-          ? consumers.filter((c) => consumerReaches(c, report.publishedIn, method)).map((c) => narrowedToMember(c, report.publishedIn, method))
-          : [];
+        // Every entry publishing the method or a follower verb forwarding it,
+        // a call by a former name included: who must follow.
+        const breaks = consumers.map((c) => narrowedToUses(c, report.published ?? [])).filter((c): c is ExternalConsumer => c !== null);
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
         return errText(String(e));
@@ -2358,18 +2378,19 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           description: z.string().optional(),
         }).strict()).optional().describe('Topics this component consumes (typical on Observers) — every subscription needs an emitter somewhere in the tree (UNSOURCED_SUBSCRIPTION).'),
         ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data (namespaced keys, e.g. "mypack:priority") — preserved verbatim, never validated or interpreted by the core'),
+        variant: z.string().optional().describe('A declared specialization of the componentType, e.g. "gateway" on a Portal that authenticates, authorizes, validates or rate-limits before it dispatches (UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). Omitted on a re-authoring, the stored variant is carried; sdd_update_spec {"unset": ["variant"]} removes it'),
     status: statusInput,
   };
   const componentInputFields = Object.keys(componentInput);
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; transport?: Transport; abi?: string; invokedBy?: { kind: 'entry'; caller?: string; scope?: 'outside' | 'network' }; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; transport?: Transport; abi?: string; invokedBy?: { kind: 'entry'; caller?: string; scope?: 'outside' | 'network' }; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; variant?: string; status?: StatedStatus }>(server,
     'sdd_add_component',
     {
-      description: 'Add an L2 Component under a subsystem. A Portal states its `transport` (the retired portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess, and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its scope; the tool never defaults an entry, because a blanket entry the author did not decide would hide unreached verbs. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (set variant with sdd_update_spec). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read), plus a Query for computed reads over the Store, owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, variant, patterns and externalLinks are carried forward — edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
+      description: 'Add an L2 Component under a subsystem. A Portal states its `transport` (the retired portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess, and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its scope; the tool never defaults an entry, because a blanket entry the author did not decide would hide unreached verbs. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (state `variant: gateway` here). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read), plus a Query for computed reads over the Store, owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, patterns and externalLinks — and a variant this input leaves out — are carried forward; edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
       inputSchema: componentInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, transport, abi, invokedBy, basePath, dispatch, durability, dependencyClass, emits, subscribesTo, ext, status }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, transport, abi, invokedBy, basePath, dispatch, durability, dependencyClass, emits, subscribesTo, ext, variant, status }) => {
       try {
         // A scope says where a NETWORK verb's callers come from; on a local or
         // in-process transport no network is crossed, so it is refused here
@@ -2411,8 +2432,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             ...(emits ? { emits } : {}),
             ...(subscribesTo ? { subscribesTo } : {}),
             ...(ext ? { ext } : {}),
+            ...(variant ? { variant } : {}),
           } as unknown as ComponentSpec,
-          fields: componentInputFields,
+          // A variant left out is carried, as it always was; stated, it is replaced.
+          fields: variant === undefined ? componentInputFields.filter((field) => field !== 'variant') : componentInputFields,
           status,
         };
         // Step 2: the seam requires the subsystem and judges the candidate —
@@ -3015,25 +3038,26 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     }
   );
 
-  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string }>(server,
+  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; dryRun?: boolean; force?: boolean }>(server,
     'sdd_delete_spec',
     {
-      description: 'Delete a specification file from the spec tree and clean up any empty parent directories. Answers with a structured deletion beside the sentence: whether a spec was removed, and the tests that encode a method the deletion took away (when the project declares test roots).',
+      description: 'Delete a spec and everything it contains — a contract with its implementations, a component with its contracts and owned members, a subsystem with its components and types — pruning the folders left empty. Refused, naming every reference, while a spec that stays still references what would go (the invalid references the deletion would introduce); force: true deletes anyway and leaves them for validate to report. dryRun answers the same plan and removes nothing. The structured answer lists every spec removed, every reference, and the tests that encode a removed method (when the project declares test roots).',
       inputSchema: {
         kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of spec to delete'),
         id: z.string().describe('The ID of the spec to delete'),
+        dryRun: z.boolean().optional().describe('Answer with the plan — every spec that would be removed, every reference that would be left — and remove nothing'),
+        force: z.boolean().optional().describe('Delete even though specs that stay still reference what goes, leaving those references for validate to report. Without it such a deletion is refused'),
       },
       outputSchema: specDeletionOutput,
     },
-    ({ kind, id }) => {
+    ({ kind, id, dryRun, force }) => {
       try {
         // mcp_orchestrator.deleteSpec step 1: through the authoring seam, which
         // reports the tests a removed method invalidated.
-        const deletion = deleteSpec(kind, id);
+        const deletion = deleteSpec(kind, id, dryRun, force);
         // Step 2: "was never there" is not a failure, but it is not a deletion.
-        if (!deletion.deleted) return errText(`Spec of kind "${kind}" with ID "${id}" could not be deleted (file may not exist).`);
-        const testsBlock = renderTestsToRevisit(deletion.testsToRevisit).join('\n');
-        return structured(`Successfully deleted ${kind} spec "${id}".${testsBlock ? `\n${testsBlock}` : ''}`, deletion);
+        if (deletion.removed.length === 0) return errText(`Spec of kind "${kind}" with ID "${id}" could not be deleted (file may not exist).`);
+        return structured(renderDeletion(deletion), deletion);
       } catch (e) {
         return errText(String(e));
       }
@@ -3043,12 +3067,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any>; dryRun?: boolean }>(server,
     'sdd_update_spec',
     {
-      description: 'Update/patch an existing SDD specification (subsystem, component, interface, implementation, or type) using a granular delta. Updates fields, appends/merges array elements, or inserts/deletes narrative steps. Answers with exactly what changed, and with every path the delta named that the write did not act on. Type positions (the type of a param, a returns, the type of a field, the params and returns of a signature) are written in the neutral type grammar: an alias the delta writes (string[], T | null, boolean, Promise<T>) is stored canonical and listed under `respellings`, and a stored alias at a position the write keeps is respelled with it; a position the delta writes that has no canonical spelling (number — int or float?, an inline object or function type, a literal union, a union mixing in a primitive) is refused, naming the replacement, while one the stored spec already held is left alone. Pass dryRun to be told what it would do without writing it.',
+      description: 'Patch an existing spec (system, subsystem, component, interface, implementation or type) with a granular delta, and answer with exactly what changed — and, under NO EFFECT, every path the delta named that the write did not act on. Type positions use the neutral type grammar: an alias (string[], T | null, Promise<T>) is stored canonical and listed under `respellings`; a position with no canonical spelling (number, an inline object, a literal union) is refused, naming the replacement. A delta edits what a spec says, never which spec it is: its id, createdAt, a component\'s or a type\'s subsystem, a contract\'s component and an implementation\'s contract are refused, naming the tool that owns the change. A component or contract write is judged in its tree too: a doctrine edge (a Portal depending on a Store) or a route another method binds is refused, as validate would report it. dryRun takes the same path as the write — the gate and the writer\'s parse included — and is refused exactly when the write would be; it only skips the disk.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports, and a legacy {id, subsystem} reads as {as, from})'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The partial fields to merge into the spec. ARRAYS UPSERT, they do not replace: an array whose elements carry an identity is merged element-by-element, so a delta naming ONE element leaves the others intact. Identity is "name" or "id" by default, and per field: dispatch by "capability", lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by "subsystem", a subsystem\'s publicInterfaces by component+interface (or type+details for an entry not yet bound to a component, and by from+item+interface+as for a re-export or a type export), invariants and patterns by "id", lint.allow by "code" AND "at" (an allow covers one occurrence, so several may share a code on one spec), an interface method\'s findings by "code", boundaries by "name", globalRequirements by "description", switch cases by "value", try catches by "error". Identity merging applies at EVERY depth, including an array INSIDE an element (a method\'s params, a step\'s catches). Add "action: \'delete\'" (or "remove: true") alongside that identity to REMOVE an element — including a stale lint allow. Arrays of plain VALUES (owns, dependsOn, guarantees, globalRequirements written as text) merge too: each value the delta names that the list lacks is appended and every value it holds is kept, so restating a list never loses one; REMOVE a value with a marker element { \"value\": <the value>, \"action\": \"delete\" } (a requirement also { \"description\": <its text>, \"action\": \"delete\" }); pass [] to clear any array outright. To REMOVE an optional field entirely, list it in "unset": e.g. {"unset": ["basePath", "variant"]} — passing null/undefined means "no change" (they are skipped), and writing "" would leave the field present but empty, which is a different and usually wrong spec. Unsetting a required field is refused by schema validation, which names it. For narrative steps, match by "stepNumber" and use "action: \'insert\'" (shifts subsequent steps up) or "action: \'delete\'" (shifts subsequent steps down and removes it). Step entries apply in ASCENDING stepNumber order, each against the numbering the earlier entries of the SAME delta left behind — delete step 3 and step 7 becomes step 6 — so prefer labels, and restate the step\'s "label" or "description" on a delete to have it checked against the step actually addressed. Renumbering RELOCATES every flow jump field (onTrueStep/onFalseStep/cases.step/defaultStep/endStep/catches.step/finallyStep/toStep) in the same narrative. Only STORED jumps relocate: a jump the delta itself writes (on an inserted, appended or edited step) names its target in the numbering the WHOLE delta leaves behind, after all of its inserts and deletes, and no later step of the same delta moves it. A method the delta ADDS without a narrative is an intent-level method with none ([]). An element the delta NAMES merges field by field: a field it leaves out, or passes as null, keeps its stored value at EVERY depth (a method named without "narrative" keeps its steps, a step named without "catches" keeps them), while "narrative": [] CLEARS that method\'s steps \u2014 so leave a method you are not editing out of the delta. A delete is REJECTED when the narrative has no such step, when a jump still targets it (retarget the referrers first), when a restated label/description does not match, or when it is a loop/try/parallel header whose body would be left standing (retype the header first to dissolve the region, then delete it). Changing a step\'s "type" REBUILDS it for the new type: its description and label are kept and every field the new type cannot carry is dropped (returned as a NOTICE); a delta that retypes AND sets such a field is refused. A step delta is also refused when it carries a marker the merge does not recognise: a non-boolean "remove", an "action" that is neither "insert" nor "delete", a "captureJumps" outside an insert, or no "stepNumber" to address. Inserting AT a jump target relocates those jumps past the inserted step by default (a NOTICE is returned) — add "captureJumps": true on the inserted step to retarget entry jumps onto it (loop/try endStep region tails always relocate with the body and are never captured). Every jump field has a "*Label" twin (toLabel, onFalseLabel, endLabel, …, and "label" on a cases/catches entry) resolved against step labels AFTER the merge, so a delta may anchor on a label only pre-existing steps carry; a label the delta supplies REPLACES the stored number it twins, while setting the number and its label together in one delta is refused as a contradiction. Reference ids in deltas may use LOCAL names — they are qualified against the spec\'s namespace exactly as the loader would. Per-spec lint suppression: set "lint: { allow: [{ code, at, covers, reason }] }" to silence a WARNING or NOTICE code on this spec only (errors always surface; stale allows are flagged). An allow covers EXACTLY the occurrence it names: "at" is the site the finding names (a contract method, an import edge "from -> to", a declared edge "component -> target") and is REQUIRED for a code whose findings report one, while a finding that reports no site is covered only by an allow that names none; "covers" lists the units an aggregating finding reports, and the allow silences it only when every one is listed. This delta is deliberately OPEN below its top level — the shapes nest further than a schema here should restate — so a key that is not a field at its depth is not refused, it is NAMED BACK under NO EFFECT in the answer, together with any value the spec already held and any "unset" that removed nothing. Read that list: it is where a nested typo shows up.'),
-        dryRun: z.boolean().optional().describe('Ask what this delta WOULD do instead of doing it. The whole write runs, the candidate gate included, and the answer is the change report it would have produced — marked DRY RUN, with nothing stamped and not one byte of the stored file moved. Use it before a delta that renumbers a long narrative.'),
+        delta: z.record(z.any()).describe('The fields to merge. LISTS UPSERT by identity at every depth: naming one element leaves the others, and a named element merges field by field — a field left out, or null, keeps its stored value (a method named without "narrative" keeps its steps). Identity is name or id by default; dispatch by capability, lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by subsystem, publicInterfaces by component+interface (a re-export by from+item+interface+as), lint.allow by code+at, findings by code, boundaries by name, globalRequirements by description, cases by value, catches by error. Plain-value lists (owns, dependsOn, guarantees, technologies, requirements written as text) append what they lack and keep what they hold. Restating a list with exactly its stored elements in another order REORDERS it. Remove an element with "action": "delete" (or "remove": true) beside its identity, a plain value as {"value": …, "action": "delete"}; [] clears a list; {"unset": ["basePath"]} removes an optional field (null means no change). NARRATIVE steps are addressed by stepNumber, applied in ascending order against the numbering earlier entries of the same delta left: "action": "insert" shifts later steps up, "delete" shifts them down — refused when a jump still targets the step, when a restated label or description does not match it, or for a loop/try/parallel header whose body stands. Stored jumps relocate; a jump the delta writes names the final numbering; "captureJumps": true on an insert lands entry jumps on the new step. Every jump field has a *Label twin (toLabel, onFalseLabel, endLabel, a case or catch "label") resolved after the merge. Retyping a step rebuilds it for its new type and names the fields dropped. lint: {"allow": [{code, at, covers, reason}]} silences a warning or notice on this spec: "at" is the site the finding reports and is required when it reports one, "covers" lists an aggregating finding\'s units; errors never silence. Local ids are qualified as the loader qualifies them. A key that is not a field at its depth is named back under NO EFFECT: read that list.'),
+        dryRun: z.boolean().optional().describe('Ask what this delta WOULD do: the whole write runs — the gate and the writer\'s parse included — and answers the report it would produce, marked DRY RUN, with not one byte written.'),
       },
       outputSchema: specChangeReportOutput,
     },
@@ -3283,7 +3307,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ against?: string }>(server,
     'sdd_surface_diff',
     {
-      description: 'The bound project\'s public-surface changelog: its export table now against the same table at its last committed approval (the last commit that changed .wai/lock.json) — or at a named git revision, or in a saved native surface snapshot file — as names and contract methods added, removed, renamed (from the rename trace) and changed in signature. What a producer writes release notes from and weighs a breaking change by (pair it with sdd_list_consumers). A read: writes nothing.',
+      description: 'The bound project\'s public-surface changelog: its export table now against the same table at its last committed approval (the last commit that changed .wai/lock.json) — or at a named git revision, or in a saved native surface snapshot file — as names and contract methods added, removed, renamed (from the rename trace) and changed in signature. Against a revision it also covers the project\'s own HTTP Portals (its service API, exported or not), and every type its shapes name from a pinned external or a member project is expanded from the pin or member of each side — so a re-pin that reshapes the project\'s own wire format is a change here. A field rename keeps its row beside a type rename, and a type reshaped only by a rename it embeds says which. What a producer writes release notes from and weighs a breaking change by (pair it with sdd_list_consumers). A read: writes nothing.',
       inputSchema: {
         against: z.string().optional().describe('A git revision (branch, tag, commit) or a saved native surface snapshot file to compare with; the last committed approval when omitted'),
       },

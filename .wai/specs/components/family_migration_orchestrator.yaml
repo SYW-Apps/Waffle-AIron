@@ -24,6 +24,7 @@ dependsOn:
   - chaining_migration_orchestrator
   - family_transaction
   - migration_core_adapter
+  - migration_validator_adapter
 status: complete
 createdAt: '2026-09-30T20:35:31.532Z'
-updatedAt: '2026-10-01T16:59:44.494Z'
+updatedAt: '2026-10-08T18:56:09.397Z'

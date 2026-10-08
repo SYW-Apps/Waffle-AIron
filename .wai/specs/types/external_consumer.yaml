@@ -101,11 +101,15 @@ methods:
     description: >-
       This consumer as a rename that moves something on several public names and members breaks it
       (a field rename reaches a consumer through every exported type embedding it and every exported
-      method naming one): narrowedTo applied to each (public name, member) pair the consumer reaches
-      (reaches), the narrowed uses merged — or none when it reaches no pair, so it is not one the
-      rename breaks. Pure.
+      method naming one; a parameter rename through every entry publishing the method or a
+      follower's verb): narrowedTo applied to each (public name, member) pair the consumer reaches
+      (reaches) — a pair also reached under a former public name (formerNames) or a former method
+      name (formerMembers) the consumer still writes, so one whose reference no longer resolves
+      since an earlier rename is kept — and each former public name among the consumer's broken
+      names kept as a use of its own; the narrowed uses merged, or none when it reaches nothing, so
+      it is not one the rename breaks. Pure.
     sourcePath: src/models/project-family.ts
     symbol: narrowedToUses
 sourcePath: src/models/project-family.ts
 createdAt: '2026-10-06T23:03:22.646Z'
-updatedAt: '2026-10-08T08:27:52.524Z'
+updatedAt: '2026-10-08T19:00:00.296Z'

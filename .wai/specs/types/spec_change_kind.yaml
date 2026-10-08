@@ -3,7 +3,8 @@ id: spec_change_kind
 name: SpecChangeKind
 description: >-
   What a write did at one path of a stored spec. A narrative is compared by step identity, which
-  adds renumbered and relocated.
+  adds renumbered and relocated; a list whose elements stayed the same but changed order adds
+  reordered.
 fields: []
 methods: []
 sourcePath: src/core/specs.ts
@@ -20,5 +21,7 @@ values:
     description: A run of unchanged steps an insert or delete shifted (before and after name the ranges)
   - name: relocated
     description: A jump field that followed its target to the target's new number
+  - name: reordered
+    description: A list holding the same elements in a new order (before and after name the orders)
 createdAt: '2026-10-04T23:33:34.350Z'
-updatedAt: '2026-10-04T23:33:34.966Z'
+updatedAt: '2026-10-08T18:50:01.318Z'

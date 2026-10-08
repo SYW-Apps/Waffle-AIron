@@ -52,7 +52,7 @@ import { registerBuiltinRules, registerPackRules, ruleSequence, knownIssueCodes 
 // component before it is written. The spec validator realizes it in
 // rules/candidate.ts; it is published here, on the validator's entry point, so
 // callers reach it through the portal.
-export { validateComponentCandidate } from './rules/candidate.js';
+export { validateComponentCandidate, introducedFindings } from './rules/candidate.js';
 import type { LoadedExtensions } from './extensions.js';
 import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelection, type ProjectIdentity } from '../models/project.js';
 // pack_impact: the pre-write pack measurement the portal forwards to.
@@ -63,6 +63,7 @@ import { analyzerDigest, computeGateIdentity, gateParts, type GateConfig } from 
 import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
+import { approvalSubject } from '../models/lock.js';
 import type { ProjectRelations } from '../models/specs.js';
 import type { CodeModel } from '../models/code-model.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
@@ -1266,7 +1267,7 @@ function directMemberSubjects(): Record<string, string> {
   for (const node of family.nodes) {
     if (node.parent !== '' || node.mountAlias === undefined) continue;
     const record = approvalRecord(node.directory);
-    subjects[node.mountAlias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
+    subjects[node.mountAlias] = record ? approvalSubject(record) : NEVER_SUBJECT;
   }
   // Stage 8: each referenced project member (a `../` or git source), at the
   // root the scan located — its sibling checkout or the fetch cache at its
@@ -1275,7 +1276,7 @@ function directMemberSubjects(): Record<string, string> {
   for (const external of family.nodes.find((n) => n.namespace === '')?.externals ?? []) {
     if (external.role !== 'member' || external.sourceKind === 'hosted') continue;
     const record = external.directory ? approvalRecord(external.directory) : null;
-    subjects[external.alias] = record ? `${record.stateId.algorithm}:${record.stateId.digest}` : NEVER_SUBJECT;
+    subjects[external.alias] = record ? approvalSubject(record) : NEVER_SUBJECT;
   }
   // A declared member with no project on disk carries no decision at all.
   for (const problem of family.problems) {

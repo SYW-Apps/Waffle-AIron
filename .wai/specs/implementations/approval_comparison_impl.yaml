@@ -130,8 +130,11 @@ methods:
           From the approvals the caller passed, when it passed any: take the root's own entry. When
           it carries a release verdict, that is the whole cause: carried — `approved under <old>,
           re-validated under <new>: still approved` (`wairon lock` refreshes the record's release
-          stamp without a review); not carried — `the new release finds N issue(s) in the approved
-          design` with the first few named, never the generic candidate list. Else note when it is
+          stamp without a review); not carried — release_verdict.staleSentence: its reason when it
+          has one (a record from before gate parts, a newer or invalid stamp, parts that do not
+          break down the identity), else `the new release finds N issue(s) in the approved design`
+          with the first few named, never the generic candidate list. When the entry carries
+          partsIgnored, one notice says the record's gate parts are ignored. Else note when it is
           upgraded — the lock was taken under an earlier gate identity. For a format-2 lock that is
           stale under its own algorithm, say that it predates code linkage leaving the approval and
           something it covered moved since — the design, or only code linkage, which can no longer
@@ -289,4 +292,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-08T08:40:54.306Z'
+updatedAt: '2026-10-08T18:57:07.652Z'

@@ -170,6 +170,143 @@ function tileStudioWithMember(bindingSource: string): FixtureTree {
 }
 
 
+// ---------------------------------------------------------------------------
+// Round 7: the shapes a binding module met in the trials that the first cut
+// never compared — a member declared under an alias other than its id, a
+// types-only library reached through the types a contract names, a verb the
+// producer removed (the pin's retired names), a CommonJS binding, a binding
+// that exports through `module.exports = require(…)`, and a type renamed
+// under the binding's declaration.
+// ---------------------------------------------------------------------------
+
+/** TileStudio with its binding at `bindingPath`, the renderer's contract and component reworked by `rework`. */
+function tileStudioAt(bindingPath: string, bindingSource: string, pin: string = GEOKIT_PIN, rework?: (tree: FixtureTree) => void): FixtureTree {
+  const tree = tileStudio(null);
+  const files = { ...tree.files!, '.wai/externals/geokit.yaml': pin, [bindingPath]: bindingSource };
+  const implementations = (tree.implementations ?? []).map((impl) => ({ ...impl, bindings: [bindingPath] }));
+  const out: FixtureTree = { ...tree, implementations, files };
+  rework?.(out);
+  return out;
+}
+
+/** GeoKit's pin after a release that removed `vincentyDistance` (an earlier pin held it) and renamed the tile key from `tile_coord`. */
+const GEOKIT_PIN_V3 = (() => {
+  const pin = yaml.load(GEOKIT_PIN) as { interfaces: Record<string, unknown>[]; types: Record<string, unknown>[] };
+  pin.interfaces[0] = { ...pin.interfaces[0], retired: ['vincentyDistance'] };
+  pin.types[0] = { ...pin.types[0], formerly: ['tile_coord'] };
+  return yaml.dump(pin, { noRefs: true, lineWidth: 200 });
+})();
+
+/** TileStudio's GeoKit member declared under the alias `geo` (its project id stays `geokit`), referenced as `geo::…`. */
+function tileStudioWithAliasedMember(bindingSource: string): FixtureTree {
+  const tree = tileStudioWithMember(bindingSource);
+  const files = { ...tree.files! };
+  files['.wai/project.yaml'] = files['.wai/project.yaml'].replace('geokit: packages/geokit', 'geo: packages/geokit');
+  return {
+    ...tree,
+    components: (tree.components ?? []).map((c) => ({ ...c, dependsOn: ['geo::tiles'] })),
+    implementations: (tree.implementations ?? []).map((impl) => ({
+      ...impl,
+      methods: (impl.methods as { narrative: Record<string, unknown>[] }[]).map((m) => ({
+        ...m,
+        narrative: m.narrative.map((s) => (s.targetComponent === 'geokit::tiles' ? { ...s, targetComponent: 'geo::tiles' } : s)),
+      })),
+    })),
+    files,
+  };
+}
+
+/** The renderer reaching GeoKit through a type alone: its contract answers a GeoKit tile key and it depends on nothing of GeoKit's. */
+function typesOnly(tree: FixtureTree): void {
+  tree.components = (tree.components ?? []).map((c) => ({ ...c, dependsOn: [] }));
+  tree.interfaces = (tree.interfaces ?? []).map((i) => ({
+    ...i,
+    methods: (i.methods as Record<string, unknown>[]).map((m) => ({ ...m, returns: 'geokit::tile_key' })),
+  }));
+  tree.implementations = (tree.implementations ?? []).map((impl) => ({
+    ...impl,
+    methods: (impl.methods as Record<string, unknown>[]).map((m) => ({
+      ...m,
+      narrative: [
+        { stepNumber: 1, type: 'local', description: 'Work out the tile under the centre of the view from the zoom and the coordinate.' },
+        { stepNumber: 2, type: 'return', description: 'Answer the tile key.', outcome: 'the centre tile' },
+      ],
+    })),
+  }));
+}
+
+export const round7 = {
+  aliasedMember: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio declares its GeoKit member under the alias `geo` (GeoKit\'s project id is `geokit`); GeoKit renamed its tile verb\'s `zoom` parameter and the tile key\'s `zoom` field to `z`, and the binding still spells `zoom`.',
+    tree: tileStudioWithAliasedMember(memberBinding('zoom')),
+  }),
+  aliasedMemberControl: defineRuleFixture({
+    code: 'BINDING_UNREAD',
+    expectFire: false,
+    reason: 'A member reached under an alias other than its project id is still a member the binding is compared with — never "pin it".',
+    scenario: 'TileStudio\'s binding into its GeoKit member, declared under the alias `geo`, follows GeoKit\'s current names.',
+    tree: tileStudioWithAliasedMember(memberBinding('z')),
+  }),
+  typesOnly: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'The renderer only answers GeoKit\'s tile key — it calls nothing of GeoKit — and its binding still declares the key\'s former `zoom` field.',
+    tree: tileStudioAt('src/editor/geokit-types.ts', 'export interface TileKey { x: number; y: number; zoom: number }\n', GEOKIT_PIN, typesOnly),
+  }),
+  typesOnlyControl: defineRuleFixture({
+    code: 'BINDING_UNREAD',
+    expectFire: false,
+    reason: 'A contract that answers `geokit::tile_key` reaches the pinned GeoKit, so its types-only binding is compared, not reported unread.',
+    scenario: 'The renderer only answers GeoKit\'s tile key, and its binding declares the key as GeoKit pins it.',
+    tree: tileStudioAt('src/editor/geokit-types.ts', 'export interface TileKey { x: number; y: number; z: number }\n', GEOKIT_PIN, typesOnly),
+  }),
+  removedVerb: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'GeoKit removed `vincentyDistance` in a release TileStudio re-pinned; the binding still exports it as a free function.',
+    tree: tileStudioAt('src/editor/geokit-binding.ts', `${binding('tileAt', 'z')}export function vincenty_distance(a: number, b: number): number;\n`, GEOKIT_PIN_V3),
+  }),
+  commonJs: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio\'s binding to GeoKit\'s addon is a CommonJS module, `exports.TileLibrary = { … }`, still naming the verb GeoKit renamed.',
+    tree: tileStudioAt('src/editor/geokit-binding.js', '\'use strict\';\n/** geokit::tiles */\nexports.TileLibrary = {\n  tileFor(lat, lon, zoom) { return addon.tileFor(lat, lon, zoom); },\n};\n'),
+  }),
+  commonJsControl: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    expectFire: false,
+    reason: 'The CommonJS binding spells GeoKit\'s pinned verb.',
+    scenario: 'TileStudio\'s CommonJS binding follows GeoKit\'s rename.',
+    tree: tileStudioAt('src/editor/geokit-binding.js', '\'use strict\';\n/** geokit::tiles */\nexports.TileLibrary = {\n  tileAt(lat, lon, zoom) { return addon.tileAt(lat, lon, zoom); },\n};\n'),
+  }),
+  requireOnly: defineRuleFixture({
+    code: 'BINDING_UNREAD',
+    severity: 'notice',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio\'s binding is the usual N-API one-liner, `module.exports = require(\'./build/Release/geokit.node\')`, so it declares nothing GeoKit\'s pin can be compared with.',
+    tree: tileStudioAt('src/editor/geokit-binding.js', 'module.exports = require(\'./build/Release/geokit.node\');\n'),
+  }),
+  renamedType: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'GeoKit renamed its tile type from `tile_coord` to `tile_key`; TileStudio\'s binding still declares `TileCoord` and types a field of its own with it.',
+    tree: tileStudioAt('src/editor/geokit-binding.ts', 'export interface TileCoord { x: number; y: number; z: number }\n/** geokit::tiles */\nexport interface TileLibrary {\n  tileAt(lat: number, lon: number, zoom: number): TileCoord;\n}\nexport interface TileSpan { corner: TileCoord }\n', GEOKIT_PIN_V3),
+  }),
+};
+
 export default [
   defineRuleFixture({
     code: 'BINDING_DRIFT',
@@ -216,4 +353,5 @@ export default [
     scenario: 'TileStudio followed its GeoKit member\'s renames in its binding module.',
     tree: tileStudioWithMember(memberBinding('z')),
   }),
+  ...Object.values(round7),
 ];

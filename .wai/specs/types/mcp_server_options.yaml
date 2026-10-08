@@ -1,0 +1,26 @@
+kind: value-object
+id: mcp_server_options
+name: McpServerOptions
+description: >-
+  How a caller asks for an MCP server: whether the hosted data-plane tools are advertised for
+  discovery, and which build the server stands for. One options value rather than a flag per choice,
+  so the stdio session and the hosted transport build their servers through the same signature.
+subsystem: sdd_mcp
+fields:
+  - name: hostedTools
+    type: bool
+    description: >-
+      Advertise the seventeen hosted data-plane tools in tools/list — discovery only, and never for
+      the stdio server, which cannot serve any of them
+    optional: true
+  - name: buildStamp
+    type: build_stamp?
+    description: >-
+      The build the server stands for, judged by the build-freshness guard on every call: omitted,
+      this process's own entry file as stamped when the module loaded; none opts out, with nothing
+      to compare against
+    optional: true
+methods: []
+sourcePath: src/mcp/server.ts
+createdAt: '2026-10-08T19:33:17.981Z'
+updatedAt: '2026-10-08T19:33:19.533Z'

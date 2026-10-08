@@ -56,6 +56,27 @@ methods:
         type: string
         description: The `alias::name` the contract would implement
     effect: read
+  - name: introducedFindings
+    description: >-
+      Forward a write's in-tree judgement to the validator portal: the doctrine edges and route
+      collisions the candidate introduces.
+    signature: >-
+      introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
+      CandidateOptions): CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: >-
+          The kind of spec written; a kind other than component or interface answers an empty
+          verdict
+      - name: candidate
+        type: ComponentSpec | InterfaceSpec
+        description: The spec about to be written, merged and carried
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:11:59.866Z'
-updatedAt: '2026-10-07T18:50:55.236Z'
+updatedAt: '2026-10-08T18:56:35.701Z'

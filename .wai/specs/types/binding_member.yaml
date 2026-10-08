@@ -16,7 +16,15 @@ fields:
       A method's parameter names in order (an empty string for one bound by a destructuring
       pattern); absent for a data field.
     optional: true
+  - name: type
+    type: string
+    description: >-
+      A data field's declared type as the binding writes it (`TileCoord[]`, `Money | null`), when it
+      declares one: the type names it references are compared with the pin, so a field still typed
+      by a type the producer renamed is told the new name. Absent for a method, and for a field
+      declared without a type (a JavaScript object literal's value).
+    optional: true
 methods: []
 sourcePath: src/core/binding-modules.ts
 createdAt: '2026-10-08T08:21:17.594Z'
-updatedAt: '2026-10-08T08:21:18.245Z'
+updatedAt: '2026-10-08T18:48:24.654Z'

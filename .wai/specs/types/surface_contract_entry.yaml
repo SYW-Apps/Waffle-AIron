@@ -112,6 +112,17 @@ fields:
       The entry's export role, call (the default) or implement: an extension point the consumer
       implements
     optional: true
+  - name: retired
+    type: list<string>
+    description: >-
+      On a PINNED snapshot only: the method names an earlier pin of this entry held that the
+      producer has since removed — gone from the entry, and named in no method's `formerly` (a
+      rename is not a removal). Written by `wairon externals pin` from the snapshot it replaces,
+      carried forward while the name stays absent, so a consumer's binding module still declaring a
+      removed verb is told it was removed instead of reading the declaration as its own plumbing.
+      Provenance: it enters no digest, no carried fact and no drift comparison; a fresh projection
+      never carries it.
+    optional: true
 methods:
   - name: sameContract
     signature: 'sameContract(other: SurfaceContractEntry): boolean'
@@ -122,4 +133,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-10-06T13:01:34.151Z'
+updatedAt: '2026-10-08T18:47:56.734Z'

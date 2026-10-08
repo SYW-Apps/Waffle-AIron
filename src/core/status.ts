@@ -86,7 +86,7 @@ function approvalTag(entry: ProjectApproval | undefined): string {
   const state = entry.release
     ? (entry.release.carried
       ? `${words}, re-validated under ${entry.release.to}`
-      : `${words}: the new release finds ${entry.release.count ?? 0} issue(s)`)
+      : entry.release.reason ? `${words}: re-lock once at its own root` : `${words}: the new release finds ${entry.release.count ?? 0} issue(s)`)
     : entry.upgraded ? `${words}, re-lock once` : words;
   return entry.pinned ? ` [${state} · ${PIN_WORDS[entry.pinned]}]` : ` [${state}]`;
 }
@@ -489,9 +489,12 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     const release = own.release
       ? (own.release.carried
         ? ` (approved under wairon ${own.release.from}, re-validated under ${own.release.to}: still approved)`
-        : ` (approved under wairon ${own.release.from}; the new release finds ${own.release.count ?? 0} issue(s) in the approved design)`)
+        : own.release.reason
+          ? ` (${own.release.reason})`
+          : ` (approved under wairon ${own.release.from}; the new release finds ${own.release.count ?? 0} issue(s) in the approved design)`)
       : '';
-    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
+    const ignored = own.partsIgnored !== undefined ? ` (notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them)` : '';
+    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}${ignored}\n`;
   }
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

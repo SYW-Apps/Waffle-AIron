@@ -22,6 +22,10 @@ import {
   type SystemSpec,
   type TypeSpec,
   specIndexRetiredBy,
+  specIndexReferencesTo,
+  specIndexSubtreeOf,
+  type SpecRef,
+  type SpecReference,
 } from '../models/specs.js';
 import {
   interfaceCanonicalTypes,
@@ -32,7 +36,7 @@ import {
 } from '../models/type-grammar.js';
 import { fitsMethodCasing, methodCasingFor, type RulesConfig } from '../models/project.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
-import type { MethodMoveReport, SpecChangeReport, SpecWriteHooks, WritableSpecKind } from './specs.js';
+import type { MethodMoveReport, SpecChangeReport, SpecIndex, SpecWriteHooks, WritableSpecKind } from './specs.js';
 import { qualifiedTypeId } from '../models/type-references.js';
 // authoring_core_adapter and authoring_validator_adapter — every hop out of the
 // seam lands on the adapter's own module, which re-exports the provider's
@@ -49,7 +53,7 @@ import {
   scanAllSpecs,
   updateSpec,
 } from './adapters/authoring-core.js';
-import { validateComponentCandidate, findTestsReferencing, implementsProblem } from './adapters/authoring-validator.js';
+import { validateComponentCandidate, introducedFindings, findTestsReferencing, implementsProblem } from './adapters/authoring-validator.js';
 import type { TestsToRevisit } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from '../models/candidate.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -141,8 +145,14 @@ export interface SpecRestatementApplication {
 export interface SpecDeletion {
   kind: WritableSpecKind;
   id: string;
-  /** False when no spec held the id: nothing was removed. */
+  /** True when the spec and its subtree were removed; false on a dry run and when no spec held the id. */
   deleted: boolean;
+  /** True when the caller asked only for the plan: nothing was removed. */
+  dryRun: boolean;
+  /** Every spec the deletion removes (or would), innermost first and the addressed spec last. */
+  removed: SpecRef[];
+  /** Every reference a spec outside the removed set holds to it: what a forced deletion leaves dangling. */
+  references: SpecReference[];
   /** The tests that encode a method this deletion removed. */
   testsToRevisit: TestsToRevisit[];
 }
@@ -227,10 +237,15 @@ export function componentCandidateGate(
       // A method, parameter or field name the delta introduced, judged as writeSpec judges one.
       const names = introducedNameProblems(kind, merged, stored ?? null);
       if (names.length) throw new Error(nameRefusal(kind, String((merged as { id?: string }).id), names));
-      if (kind !== 'component') return;
-      const verdict = validateComponentCandidate(merged as ComponentSpec, options);
-      if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
-      return noticesFrom(verdict);
+      if (kind !== 'component' && kind !== 'interface') return;
+      const notices: string[] = [];
+      if (kind === 'component') {
+        const verdict = validateComponentCandidate(merged as ComponentSpec, options);
+        if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
+        notices.push(...noticesFrom(verdict));
+      }
+      // The doctrine edges and route collisions the merged spec introduces in its tree.
+      return [...notices, ...judgeInTree(kind, merged as ComponentSpec | InterfaceSpec, options)];
     },
   };
 }
@@ -956,6 +971,8 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   if (names.length) throw new Error(nameRefusal(restatement.kind, id, names));
   // Steps 9-12: the intrinsic judgement, for the one kind judged at the boundary.
   const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
+  // Steps 16-18: the doctrine edges and route collisions it introduces in its tree.
+  gateNotices.push(...judgeInTree(restatement.kind, application.spec as ComponentSpec | InterfaceSpec, bound));
   // Steps 13-15: to disk — the legacy mount form refused before anything is written.
   const persisted = persistCandidate(restatement.kind, application.spec);
   // Steps 16-18: the tests this write invalidated, each placed in its file.
@@ -982,6 +999,26 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
 function judgeComponent(candidate: ComponentSpec, options: { rules?: RulesConfig; projectType?: string }): string[] {
   const verdict = validateComponentCandidate(candidate, options);
   if (verdict.errors.length) throw new Error(formatCandidateRefusal(verdict));
+  return noticesFrom(verdict);
+}
+
+/**
+ * The in-tree judgement of a component or contract about to be written: the
+ * doctrine edges and route collisions it would introduce. An error refuses
+ * the write — the same codes and messages validate gives, before anything
+ * reaches disk, exactly as an intrinsic error is refused — and a code the
+ * project tuned down comes back as notices. Any other kind is not judged.
+ */
+function judgeInTree(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, options: { rules?: RulesConfig; projectType?: string }): string[] {
+  const verdict = introducedFindings(kind, candidate, options);
+  if (verdict.errors.length) {
+    throw new Error(
+      `Refused: writing ${kind} "${candidate.id}" would introduce ${verdict.errors.length === 1 ? 'an error' : `${verdict.errors.length} errors`} validate reports — `
+      + 'an edge whose two blocks forbid it, or a route another method already binds:\n'
+      + `${verdict.errors.map((e) => `- ${e.code}: ${e.message}`).join('\n')}\n\n`
+      + 'Nothing was written. Route the dependency the way the message names, or bind the method to a route of its own.',
+    );
+  }
   return noticesFrom(verdict);
 }
 
@@ -1074,24 +1111,74 @@ function searchedMethods(
 }
 
 /**
- * Delete one spec of the named kind and report the tests that encode a method
- * the deletion took away (authoring_orchestrator.deleteSpec; the portal method
- * is this same function). Deleting a contract or an implementation removes
- * every method it held, which invalidates their tests exactly as removing one
- * method by delta does. The L0 cannot be deleted.
+ * Delete one spec of the named kind together with everything it contains, and
+ * report what went (authoring_orchestrator.deleteSpec; the portal method is
+ * this same function).
+ *
+ * Deleting only the addressed document left a subsystem's components, a
+ * component's contract, implementation and owned members, orphaned under a
+ * container that no longer existed, and answered "Successfully deleted". A
+ * container's content means nothing without it, so the deletion takes its
+ * subtree (spec_index.subtreeOf). A spec OUTSIDE that set still referencing
+ * it is an invalid reference the deletion itself would introduce — an error
+ * validate reports — so the deletion is refused, naming each one, exactly as
+ * the gate refuses every other write that introduces an error; `force`
+ * deletes anyway and answers the references it left, for a staged teardown.
+ * `dryRun` answers the same plan and removes nothing. The tests a removed
+ * method encodes are found first, while the implementations placing them
+ * still exist. The L0 cannot be deleted.
  */
-export function deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion {
+export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean, force?: boolean): SpecDeletion {
+  // A spec of a member project read through this tree keeps the single-document
+  // delete it always had: its subtree is that project's to plan, from its root.
+  if (kind === 'system' || (kind !== 'type' && id.includes('::'))) {
+    const deleted = dryRun ? loadSpec(kind, id) !== null : coreDeleteSpec(kind, id);
+    return { kind, id, deleted: deleted && !dryRun, dryRun: dryRun === true, removed: deleted ? [{ kind, id }] : [], references: [], testsToRevisit: [] };
+  }
   // Step 1: the test roots the report searches.
   const bound = candidateOptions();
-  // Step 2: the spec about to be removed, for the methods it takes with it.
-  const stored = loadSpec(kind, id);
-  // Step 3: the delete itself.
-  const deleted = coreDeleteSpec(kind, id);
-  // Steps 4-6: the tests the removed methods invalidated, each placed in its file.
-  const methods = deleted ? ((stored as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name) : [];
-  const testsToRevisit = testsInvalidatedBy(kind, id, methods, [stored], bound);
-  // Step 7.
-  return { kind, id, deleted, testsToRevisit };
+  // Step 2: the bound tree's own specs, and the L0 whose export table may name them.
+  const index = scanAllSpecs({ memberDepth: 0 });
+  const system = loadSpec('system', 'system') as SystemSpec | null;
+  // Steps 3-5: what the deletion takes; nothing held the id, nothing to delete.
+  const removed = specIndexSubtreeOf(index, kind, id);
+  if (removed.length === 0) return { kind, id, deleted: false, dryRun: dryRun === true, removed: [], references: [], testsToRevisit: [] };
+  // Step 6: what stays behind still naming it.
+  const references = specIndexReferencesTo(index, removed, system);
+  // Steps 7-9: the tests the removed methods encode, found while their realizations still exist.
+  const testsToRevisit = removed.flatMap((ref) => {
+    const spec = specOf(index, ref);
+    const methods = ((spec as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name);
+    return ref.kind === 'interface' || ref.kind === 'implementation' || ref.kind === 'type'
+      ? testsInvalidatedBy(ref.kind, ref.id, methods, [spec as Spec | null], bound)
+      : [];
+  });
+  // Steps 10-11: the plan alone.
+  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit };
+  // Steps 12-13: references a deletion would leave dangling refuse it, unless forced.
+  if (references.length > 0 && !force) throw new Error(referencedRefusal(kind, id, references));
+  // Steps 14-15: innermost first, so a container goes after its content.
+  for (const ref of removed) coreDeleteSpec(ref.kind as WritableSpecKind, ref.id);
+  // Step 16.
+  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit };
+}
+
+/** The stored spec a SpecRef names in the index; null when none does. */
+function specOf(index: SpecIndex, ref: SpecRef): Spec | null {
+  const pool: ReadonlyArray<{ id: string }> = ref.kind === 'subsystem' ? index.subsystems
+    : ref.kind === 'component' ? index.components
+      : ref.kind === 'interface' ? index.interfaces
+        : ref.kind === 'implementation' ? index.implementations
+          : ref.kind === 'type' ? index.types : [];
+  return (pool.find((s) => s.id === ref.id) as Spec | undefined) ?? null;
+}
+
+/** The refusal of a deletion that would leave references dangling: every one, and the two ways on. */
+function referencedRefusal(kind: WritableSpecKind, id: string, references: SpecReference[]): string {
+  return `Refusing to delete ${kind} "${id}": ${references.length === 1 ? 'a spec that stays still references' : `specs that stay still hold ${references.length} references to`} what the deletion removes — `
+    + 'the invalid references validate would report:\n'
+    + `${references.map((r) => `- ${r.kind} "${r.id}" (${r.position}) -> ${r.target.kind} "${r.target.id}"`).join('\n')}\n`
+    + 'Edit those specs first, or pass force: true to delete anyway and leave them dangling. Nothing was deleted; dryRun lists the whole plan.';
 }
 
 /**

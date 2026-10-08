@@ -265,8 +265,8 @@ export function authenticate(dataDir: string, token: string | null): Principal {
 
 /** Verify the control-plane master credential to the bootstrap admin Principal
  *  (or reject). The master holds the env-anchored instance-admin bypass. */
-export function authenticateMaster(token: string | null): Principal {
-  if (!masterMatches(token)) return UNAUTHENTICATED;
+export function authenticateMaster(credential: string | null): Principal {
+  if (!masterMatches(credential)) return UNAUTHENTICATED;
   return bootstrapAdminPrincipal();
 }
 

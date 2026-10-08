@@ -267,6 +267,14 @@ fields:
       first: the checker follows every spelling of a receiver to the declaration, where the shape
       facts follow the spellings they know
     optional: true
+  - name: crossProjectImports
+    type: list<CrossProjectImportFact>
+    description: >-
+      Each import of the file — a runtime or a type-only one — from ANOTHER project's source (a
+      folder holding its own .wai/project.yaml that is not the analyzed project's root) that the
+      type checker resolves to nothing: the module is gone, or it does not export the name imported.
+      Recorded only where a type checker read the file; absent when every such import resolves
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -385,4 +393,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-07T18:28:33.720Z'
+updatedAt: '2026-10-08T18:51:47.678Z'

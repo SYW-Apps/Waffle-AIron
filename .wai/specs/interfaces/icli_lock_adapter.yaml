@@ -31,8 +31,10 @@ methods:
       - name: options
         type: LockOptions
         description: >-
-          CLI flags: --yes (skip confirmation), --subsystem (scope narrowing of the approved
-          digests), --all (list every changed spec of the summary)
+          CLI flags: --yes (skip confirmation), --subsystem (re-approve one subsystem: refused as a
+          first approval and whenever anything outside the scope moved since the approval, so the
+          record always agrees with the whole-tree identity it certifies), --all (list every changed
+          spec of the summary)
       - name: gate
         type: ValidationResult
         description: >-
@@ -157,4 +159,4 @@ methods:
         description: The direct members' approval entries
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-08T09:02:53.611Z'
+updatedAt: '2026-10-08T18:53:39.844Z'

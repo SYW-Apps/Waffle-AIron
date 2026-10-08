@@ -195,8 +195,8 @@ describe('2c. a node:http handler\'s imposed parameters are never undeclared', (
     portal: portalFile({ signature, field: NO_FIELD, head: '', dispatch: "params.id ?? ''" }),
   });
 
-  it('`checkIn(_req, _url, params)` realizing `checkIn(id)` → no UNDECLARED_PARAM, no PARAM_NAME_MISMATCH', () => {
-    const issues = handler('_req: object, _url: URL, params: Record<string, string>');
+  it('`checkIn(_req, _url, id)` realizing `checkIn(id)`, the request and URL unused → no UNDECLARED_PARAM, no PARAM_NAME_MISMATCH', () => {
+    const issues = habits({ portal: portalFile({ signature: '_req: object, _url: URL, id: string', field: NO_FIELD, head: '' }) });
     expect(byCode(issues, 'UNDECLARED_PARAM'), said(issues)).toEqual([]);
     expect(byCode(issues, 'PARAM_NAME_MISMATCH')).toEqual([]);
   });

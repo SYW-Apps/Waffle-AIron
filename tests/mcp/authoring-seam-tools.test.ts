@@ -379,7 +379,8 @@ describe('sdd_delete_spec — the deletion as data', () => {
     const result = await call('sdd_delete_spec', { kind: 'interface', id: 'ishop_portal' });
     expect(result.isError ?? false).toBe(false);
     expect(result.structuredContent).toEqual({
-      kind: 'interface', id: 'ishop_portal', deleted: true,
+      kind: 'interface', id: 'ishop_portal', deleted: true, dryRun: false,
+      removed: [{ kind: 'interface', id: 'ishop_portal' }], references: [],
       testsToRevisit: [{ method: 'pay', symbol: 'pay', imported: ['tests/pay.test.ts'], mentioned: [], indiscriminate: false }],
     });
     expect(textOf(result)).toBe(

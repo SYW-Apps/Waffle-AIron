@@ -17,13 +17,21 @@ fields:
     description: >-
       read, missing (not on disk: planned), escaped (absolute or outside the project root),
       unreadable (binary or not readable) or unsupported (a language the reader does not read: only
-      TypeScript and JavaScript are).
+      TypeScript and JavaScript are — ES module and CommonJS exports both).
     optional: false
   - name: declarations
     type: list<BindingDeclaration>
     description: The exported declarations, in source order; empty unless the status is read.
     optional: false
+  - name: unreadForms
+    type: list<string>
+    description: >-
+      Each export form the reader met in the module but does not compare, named as written
+      (`module.exports = require(…)`, `exports.X = <identifier>`): what a module that declares
+      nothing comparable is reported unread for, so a CommonJS binding the reader cannot see into is
+      never silently passed. Absent when every export form was read.
+    optional: true
 methods: []
 sourcePath: src/core/binding-modules.ts
 createdAt: '2026-10-08T08:21:28.106Z'
-updatedAt: '2026-10-08T08:21:28.792Z'
+updatedAt: '2026-10-08T18:48:27.259Z'

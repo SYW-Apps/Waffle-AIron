@@ -285,11 +285,13 @@ methods:
         targetMethod: approvalRecord
       - stepNumber: 9
         description: >-
-          Its composition subject is that record's stateId, rendered `<algorithm>:<digest>` — the
-          member's gate identity at ITS lock time, the decision its owner made; `never` when the
-          member carries no record or has no project on disk. Recorded, not recomputed: the member's
-          live edits are the member's to re-approve, and recomputing here would load the member's
-          tree into every parent identity
+          Its composition subject is that record's approval subject (lock_record.approvalSubject),
+          rendered `<algorithm>:<digest>` — the member's gate identity at the moment its owner
+          APPROVED it, the decision its owner made: a release stamp `wairon lock` refreshed without
+          a re-approval keeps the subject the approval had, so a member's restamp never moves this
+          identity; `never` when the member carries no record or has no project on disk. Recorded,
+          not recomputed: the member's live edits are the member's to re-approve, and recomputing
+          here would load the member's tree into every parent identity
         type: local
       - stepNumber: 10
         description: Seed the built-in SDD rule set into the in-memory rule set
@@ -863,6 +865,76 @@ methods:
         description: Answer the result with its analysis
         type: return
         outcome: ValidationResult
+  - name: introducedFindings
+    sourcePath: src/core/rules/candidate.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound tree's spec index through the core adapter: the tree the candidate is
+          judged in, its stored version included
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
+        description: >-
+          Seed the built-in rules, so the doctrine and route rules are registered under the codes
+          and severities validate uses
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 3
+        description: >-
+          Gather the known issue codes of the registered rules, as validateSddTree does, so a rule
+          reading them sees the same set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 4
+        description: >-
+          Build two rule contexts over that index — the tree as stored, and the tree with the
+          candidate in place of the spec of its kind and id (added when there is none) — each with
+          the project's rules config and project type
+        type: local
+      - stepNumber: 5
+        description: >-
+          For each of the two contexts, run the dependency-edge doctrine and the Portal endpoint
+          rule over it
+        type: loop
+        loopKind: forEach
+        over: the stored context and the candidate context
+        endStep: 8
+      - stepNumber: 6
+        description: >-
+          Judge the edges at the entry points: a Portal or Observer reaching the data layer,
+          anything depending on a Portal, a View or Supervisor reaching what it may not
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: entrypointDependencies
+      - stepNumber: 7
+        description: >-
+          Judge the data layer's edges: a Store, Registry, Adapter or Query depending on what its
+          stereotype forbids
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: dataBlockDependencies
+      - stepNumber: 8
+        description: Judge the Portals' endpoints, for two bound methods sharing one HTTP route
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: portalEndpoints
+      - stepNumber: 9
+        description: >-
+          Keep the findings the candidate's context raises and the stored one did not, keyed by
+          code, spec and message, restricted to the codes no later write in the authoring order can
+          cure: an edge between two existing blocks whose stereotypes forbid it, and a route two
+          bound methods share
+        type: local
+      - stepNumber: 10
+        description: >-
+          Return the verdict split by severity: an error refuses the write, a warning or notice (a
+          code the project tuned down) rides along as one of its notices
+        type: return
+        outcome: CandidateVerdict
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -878,4 +950,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:36:42.671Z'
+updatedAt: '2026-10-08T19:14:38.278Z'

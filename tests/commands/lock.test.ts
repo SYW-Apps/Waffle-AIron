@@ -175,7 +175,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(onDisk.projectId).toBe('lockable-system');
   });
 
-  it('--subsystem approves only its own scope, never the whole tree', async () => {
+  it("--subsystem is refused as a FIRST approval: the identity is the whole design's (round 7, tinkerer N3)", async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
     buildLockableProject(rootDir);
     saveSpec('subsystem', subsystem('aux-sub'));
@@ -183,20 +183,38 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    const record = await runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeGateStateId());
-    expect(record).not.toBeNull();
+    await expect(runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeGateStateId()))
+      .rejects.toThrow(/first approval covers the whole tree/);
+    expect(readLockRecordAt(rootDir)).toBeNull();
+  });
 
-    // The approval covers core-sub's specs and nothing outside it: a scoped
-    // approval must never silently mark the rest of the tree reviewed.
+  it('--subsystem re-approves its scope only while nothing outside it moved, and records what a full lock records', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+    saveSpec('subsystem', subsystem('aux-sub'));
+    saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+
+    // A spec OUTSIDE the scope moved: the scope cannot be approved alone.
+    saveComponentSpec({ ...component('aux-orchestrator', 'aux-sub'), description: 'moved outside the scope' });
+    invalidateSpecCache();
+    await expect(runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeGateStateId()))
+      .rejects.toThrow(/outside it moved/);
+
+    // Only the scope moved: re-approved, and the record is the whole tree's — the identity agrees.
+    saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
+    saveComponentSpec({ ...loadComponentSpec('gateway-portal')!, description: 'moved inside the scope' });
+    invalidateSpecCache();
+    const captured = computeGateStateId();
+    const record = (await runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, captured))!;
+    expect(record.stateId.digest).toBe(captured.digest);
     const approved = Object.keys(readLockRecordAt(rootDir)!.specs!);
     expect(approved.some((p) => p.includes('gateway-portal'))).toBe(true);
-    expect(approved.some((p) => p.includes('aux-orchestrator'))).toBe(false);
-    expect(approved.some((p) => p.includes('aux-sub'))).toBe(false);
-
-    // And no spec file was rewritten either way.
+    expect(approved.some((p) => p.includes('aux-orchestrator'))).toBe(true);
     invalidateSpecCache();
-    expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
-    expect(loadComponentSpec('aux-orchestrator')?.status).toBe('draft');
+    expect(diffAgainstApproval()!.changed).toEqual([]);
   });
 
   it('a declined confirmation returns null and changes nothing', async () => {

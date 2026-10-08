@@ -8,12 +8,14 @@ import {
   type CallSiteFact,
   type CallTargetFact,
   type CodeModel,
+  type CrossProjectImportFact,
   type ExportAliasFact,
   type FunctionBodyFact,
   type ImplementationSpec,
   type ImportBindingFact,
   type MethodImplementation,
   type ParameterFact,
+  type ParameterKind,
   type ModuleImports,
   type ResolvedCallFact,
   type RouteFact,
@@ -392,6 +394,459 @@ export function compilerIdentity(projectRoot: string): CompilerIdentity | null {
   return shipped ? { version: String(shipped.version), source: 'wairon' } : null;
 }
 
+// ---------------------------------------------------------------------------
+// Routes — read off a router's guards, or off the route table it names.
+//
+// Shared by the syntactic walk (which settles a value through the constants
+// of the file alone) and the type checker's pass (which settles one through
+// any module's constants, and through a type the checker narrows to one
+// string literal). Both read the same two idioms, so the checker only ever
+// widens what settles — never what counts as a route.
+// ---------------------------------------------------------------------------
+
+type TsNode = import('typescript').Node;
+type TsExpression = import('typescript').Expression;
+
+/** Where a name's value is written: the initializer of the const it names, or of the property it reads. */
+type InitializerOf = (node: import('typescript').Identifier | import('typescript').PropertyAccessExpression) => TsExpression | undefined;
+/** The one string literal a checker types an expression as, where one was loaded. */
+type LiteralOf = (node: TsExpression) => string | undefined;
+
+const HTTP_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+const METHOD_KEYS = new Set(['method', 'verb', 'httpMethod']);
+const PATH_KEYS = new Set(['path', 'pattern', 'route', 'url', 'template']);
+/** How deep a constant is followed through other constants: far past any honest table, and a stop for a cycle. */
+const SETTLE_DEPTH = 8;
+/** A path segment as a route states it literally. */
+const LITERAL_SEGMENT = /^[\w.~@!$&'+,;=%-]+$/;
+
+/** An expression with the wrappers that change no value taken off. */
+function bareExpression(ts: TsModule, expression: TsExpression): TsExpression {
+  let at = expression;
+  while (ts.isParenthesizedExpression(at) || ts.isAsExpression(at) || ts.isSatisfiesExpression(at)
+    || ts.isNonNullExpression(at) || ts.isTypeAssertionExpression(at)) at = at.expression;
+  return at;
+}
+
+/**
+ * The string an expression settles on, where the code spells it out: a
+ * literal, a template literal or a concatenation of such, a const (or a
+ * const object's property) holding one — followed through `initializerOf`
+ * to a bounded depth — or, where a checker was loaded, an expression it types
+ * as ONE string literal. Anything else settles on nothing: a guess about a
+ * route would be read as a measurement.
+ */
+function settleString(
+  ts: TsModule,
+  expression: TsExpression,
+  initializerOf: InitializerOf,
+  literalOf?: LiteralOf,
+  depth = 0,
+): string | undefined {
+  if (depth > SETTLE_DEPTH) return undefined;
+  const at = bareExpression(ts, expression);
+  if (ts.isStringLiteral(at) || ts.isNoSubstitutionTemplateLiteral(at) || ts.isNumericLiteral(at)) return at.text;
+  if (ts.isTemplateExpression(at)) {
+    let text = at.head.text;
+    for (const span of at.templateSpans) {
+      const part = settleString(ts, span.expression, initializerOf, literalOf, depth + 1);
+      if (part === undefined) return undefined;
+      text += part + span.literal.text;
+    }
+    return text;
+  }
+  if (ts.isBinaryExpression(at) && at.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = settleString(ts, at.left, initializerOf, literalOf, depth + 1);
+    const right = left === undefined ? undefined : settleString(ts, at.right, initializerOf, literalOf, depth + 1);
+    return left === undefined || right === undefined ? undefined : left + right;
+  }
+  if (ts.isIdentifier(at) || ts.isPropertyAccessExpression(at)) {
+    const initializer = initializerOf(at);
+    if (initializer) {
+      const settled = settleString(ts, initializer, initializerOf, literalOf, depth + 1);
+      if (settled !== undefined) return settled;
+    }
+  }
+  return literalOf?.(at);
+}
+
+/** The const declarations at a file's top level, by name — what a syntactic reading settles a name through. */
+function topLevelConstants(ts: TsModule, sf: import('typescript').SourceFile): Map<string, TsExpression> {
+  const out = new Map<string, TsExpression>();
+  for (const statement of sf.statements) {
+    if (!ts.isVariableStatement(statement) || (statement.declarationList.flags & ts.NodeFlags.Const) === 0) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.initializer && !out.has(declaration.name.text)) {
+        out.set(declaration.name.text, declaration.initializer);
+      }
+    }
+  }
+  return out;
+}
+
+function propertyKeyText(ts: TsModule, name: import('typescript').PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name) || ts.isPrivateIdentifier(name)) return name.text;
+  if (ts.isNoSubstitutionTemplateLiteral(name)) return name.text;
+  return undefined;
+}
+
+/** The value a property of an object literal is written with, by key. */
+function propertyInitializer(ts: TsModule, literal: TsExpression, key: string): TsExpression | undefined {
+  const object = bareExpression(ts, literal);
+  if (!ts.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.properties) {
+    if (ts.isPropertyAssignment(property) && propertyKeyText(ts, property.name) === key) return property.initializer;
+  }
+  return undefined;
+}
+
+/** The initializer a name or a `Const.property` read names, through the file's own top-level consts alone. */
+function fileInitializer(ts: TsModule, constants: ReadonlyMap<string, TsExpression>): InitializerOf {
+  return (node) => {
+    if (ts.isIdentifier(node)) return constants.get(node.text);
+    const holder = bareExpression(ts, node.expression);
+    if (!ts.isIdentifier(holder)) return undefined;
+    const literal = constants.get(holder.text);
+    return literal ? propertyInitializer(ts, literal, node.name.text) : undefined;
+  };
+}
+
+/**
+ * The name under which a function-like gets its own entry: a declaration's own
+ * name, or the named slot (variable / property) a function or arrow
+ * initializer is bound to. An anonymous callback answers nothing — it belongs
+ * to the enclosing named function.
+ */
+function namedFunctionNameOf(ts: TsModule, node: TsNode): string | undefined {
+  if (ts.isFunctionDeclaration(node)) return node.name && ts.isIdentifier(node.name) ? node.name.text : undefined;
+  if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
+    return propertyKeyText(ts, node.name);
+  }
+  if (ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
+    const parent = node.parent;
+    if (parent && ts.isVariableDeclaration(parent) && parent.initializer === node && ts.isIdentifier(parent.name)) return parent.name.text;
+    if (parent && (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.initializer === node) {
+      return propertyKeyText(ts, parent.name);
+    }
+  }
+  return undefined;
+}
+
+/** How a route is keyed: one entry per verb and path, a route open at its end marked so. */
+function routeKey(route: RouteFact): string {
+  return `${route.verb} /${route.segments.join('/')}${route.exactLength ? '' : '/…'}`;
+}
+
+/** A `/a/:b`, `/a/{b}` or `/a/*` path template as segments, `*` for each parameter; undefined for any other pattern syntax. */
+function templateSegments(template: string): string[] | undefined {
+  if (!template.startsWith('/')) return undefined;
+  const segments: string[] = [];
+  for (const segment of template.split('/').filter(Boolean)) {
+    if (/^:[A-Za-z_$][\w$]*$/.test(segment) || /^\{[^{}/]+\}$/.test(segment) || segment === '*') segments.push('*');
+    else if (LITERAL_SEGMENT.test(segment)) segments.push(segment);
+    else return undefined;
+  }
+  return segments;
+}
+
+/**
+ * A regular-expression literal as a route path: anchored with `^`, each
+ * escaped-slash-separated piece a literal or one capture group (the
+ * wildcard), a `$` pinning the segment count. Any other construct —
+ * alternation, an optional piece, a dot — is a pattern this reading does not
+ * state, and answers nothing.
+ */
+function regexRoute(literal: string): { segments: string[]; exactLength: boolean } | undefined {
+  const close = literal.lastIndexOf('/');
+  if (!literal.startsWith('/') || close <= 0) return undefined;
+  let source = literal.slice(1, close);
+  if (!source.startsWith('^')) return undefined;
+  source = source.slice(1);
+  let exactLength = false;
+  if (source.endsWith('$') && !source.endsWith('\\$')) {
+    exactLength = true;
+    source = source.slice(0, -1);
+  }
+  if (source.endsWith('\\/?')) source = source.slice(0, -3);
+  const pieces: string[] = [];
+  let current = '';
+  let depth = 0;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (c === '\\' && i + 1 < source.length) {
+      if (depth === 0 && source[i + 1] === '/') { pieces.push(current); current = ''; i++; continue; }
+      current += c + source[i + 1];
+      i++;
+      continue;
+    }
+    if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    current += c;
+  }
+  pieces.push(current);
+  if (pieces[0] !== '') return undefined;
+  const segments: string[] = [];
+  for (let i = 1; i < pieces.length; i++) {
+    const piece = pieces[i];
+    if (piece === '' && i === pieces.length - 1) break;
+    if (/^\((?:\?<[A-Za-z_]\w*>)?(?:\[[^\]]*\]|\\[dw]|[^()|?])[+*]\)$/.test(piece)) segments.push('*');
+    else if (/^(?:[A-Za-z0-9_~%-]|\\[.\-_~])+$/.test(piece)) segments.push(piece.replace(/\\/g, ''));
+    else return undefined;
+  }
+  return { segments, exactLength };
+}
+
+/** The path pattern a table entry's value is: a regular-expression literal, or a string path, followed through constants. */
+function patternOf(
+  ts: TsModule,
+  value: TsExpression,
+  initializerOf: InitializerOf,
+  literalOf: LiteralOf | undefined,
+  depth = 0,
+): { segments: string[]; exactLength: boolean } | undefined {
+  if (depth > SETTLE_DEPTH) return undefined;
+  const at = bareExpression(ts, value);
+  if (ts.isRegularExpressionLiteral(at)) return regexRoute(at.text);
+  if (ts.isIdentifier(at) || ts.isPropertyAccessExpression(at)) {
+    const initializer = initializerOf(at);
+    if (initializer && ts.isRegularExpressionLiteral(bareExpression(ts, initializer))) {
+      return patternOf(ts, initializer, initializerOf, literalOf, depth + 1);
+    }
+  }
+  const text = settleString(ts, at, initializerOf, literalOf);
+  if (text === undefined) return undefined;
+  const segments = templateSegments(text);
+  return segments ? { segments, exactLength: true } : undefined;
+}
+
+/** One route-table entry: the object literal's method and path, each by its key where one names it, else the one value that reads as such. */
+function tableEntry(
+  ts: TsModule,
+  entry: import('typescript').ObjectLiteralExpression,
+  initializerOf: InitializerOf,
+  literalOf: LiteralOf | undefined,
+): RouteFact | undefined {
+  let keyedVerb: string | undefined;
+  let keyedPath: { segments: string[]; exactLength: boolean } | undefined;
+  const verbs: string[] = [];
+  const paths: Array<{ segments: string[]; exactLength: boolean }> = [];
+  for (const property of entry.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const key = propertyKeyText(ts, property.name);
+    const value = property.initializer;
+    const text = settleString(ts, value, initializerOf, literalOf);
+    const verb = text !== undefined && HTTP_VERBS.has(text.toUpperCase()) ? text.toUpperCase() : undefined;
+    if (verb) {
+      if (key && METHOD_KEYS.has(key)) keyedVerb = verb;
+      verbs.push(verb);
+      continue;
+    }
+    const pattern = patternOf(ts, value, initializerOf, literalOf);
+    if (pattern) {
+      if (key && PATH_KEYS.has(key)) keyedPath = pattern;
+      paths.push(pattern);
+    }
+  }
+  const verb = keyedVerb ?? (verbs.length === 1 ? verbs[0] : undefined);
+  const route = keyedPath ?? (paths.length === 1 ? paths[0] : undefined);
+  return verb && route ? { verb, segments: route.segments, exactLength: route.exactLength, fullPath: true } : undefined;
+}
+
+/**
+ * The routes a ROUTE TABLE states: an array of object literals each pairing a
+ * method with a path pattern, or an object keyed `VERB /path`. Every entry
+ * must settle, or the table answers nothing at all — a table read in part
+ * would accuse the endpoints of the entries it skipped.
+ */
+function tableRoutes(ts: TsModule, value: TsExpression, initializerOf: InitializerOf, literalOf: LiteralOf | undefined): RouteFact[] {
+  const at = bareExpression(ts, value);
+  const out: RouteFact[] = [];
+  if (ts.isArrayLiteralExpression(at)) {
+    for (const element of at.elements) {
+      const entry = bareExpression(ts, element);
+      if (!ts.isObjectLiteralExpression(entry)) return [];
+      const route = tableEntry(ts, entry, initializerOf, literalOf);
+      if (!route) return [];
+      out.push(route);
+    }
+    return out;
+  }
+  if (ts.isObjectLiteralExpression(at)) {
+    for (const property of at.properties) {
+      const key = property.name ? propertyKeyText(ts, property.name) : undefined;
+      const match = key ? /^([A-Za-z]+)\s+(\/\S*)$/.exec(key) : null;
+      if (!match || !HTTP_VERBS.has(match[1].toUpperCase())) return [];
+      const segments = templateSegments(match[2]);
+      if (!segments) return [];
+      out.push({ verb: match[1].toUpperCase(), segments, exactLength: true, fullPath: true });
+    }
+  }
+  return out;
+}
+
+/**
+ * The prefix a router strips off the path before splitting it into `parts`
+ * — `pathname.slice(BASE.length)`, `.substring(…)`, `.replace(BASE, '')` —
+ * as segments, where every such strip settles on one prefix. Undefined when
+ * there is none, or it does not settle: the leading segment then stays the
+ * one the mount supplies.
+ */
+function strippedPrefix(
+  ts: TsModule,
+  body: TsNode,
+  initializerOf: InitializerOf,
+  literalOf: LiteralOf | undefined,
+): string[] | undefined {
+  const sources: TsExpression[] = [];
+  const find = (node: TsNode): void => {
+    if (namedFunctionNameOf(ts, node) !== undefined) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'parts' && node.initializer) sources.push(node.initializer);
+    else if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isIdentifier(node.left) && node.left.text === 'parts') sources.push(node.right);
+    ts.forEachChild(node, find);
+  };
+  find(body);
+  const UNSETTLED = '\u0000';
+  const prefixes = new Set<string>();
+  for (const source of sources) {
+    const strip = (node: TsNode): void => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const name = node.expression.name.text;
+        const beforeSplit = !/\bsplit\s*\(/.test(node.expression.expression.getText());
+        const [first, second] = node.arguments;
+        if (beforeSplit && (name === 'slice' || name === 'substring' || name === 'substr') && node.arguments.length === 1
+          && first && ts.isPropertyAccessExpression(first) && first.name.text === 'length') {
+          prefixes.add(settleString(ts, first.expression, initializerOf, literalOf) ?? UNSETTLED);
+        } else if (beforeSplit && name === 'replace' && first && second && settleString(ts, second, initializerOf, literalOf) === '') {
+          prefixes.add(settleString(ts, first, initializerOf, literalOf) ?? UNSETTLED);
+        }
+      }
+      ts.forEachChild(node, strip);
+    };
+    strip(source);
+  }
+  if (prefixes.size !== 1) return undefined;
+  const [prefix] = [...prefixes];
+  if (!prefix.startsWith('/')) return undefined;
+  const segments = prefix.split('/').filter(Boolean);
+  return segments.every(segment => LITERAL_SEGMENT.test(segment)) ? segments : undefined;
+}
+
+/**
+ * Every route one named function-like serves, read two ways. Its GUARDS: a
+ * branch serves a route when the conjunction of its own `&&`-conjuncts and
+ * those of every enclosing `if` on the path taken includes a comparison of
+ * `<x>.method` with a string. Routers NEST — an outer guard on the first
+ * segment, inner ones on the rest — so a then-branch inherits its guard's
+ * conjuncts and an else-branch does not: the else of `a && b` is `!(a &&
+ * b)`, which fixes no segment at all. Within that conjunction `parts.length
+ * === N` pins the segment count and `parts[i] === <value>` fixes segment i,
+ * each value settled through the constants; any other conjunct is one the
+ * route model cannot state, so it neither narrows nor widens the route. A
+ * prefix the function strips before splitting is folded in front. And the
+ * ROUTE TABLES it names (tableRoutes). Nested NAMED functions are skipped
+ * (they carry their own entries); anonymous callbacks count into the
+ * enclosing one.
+ */
+function readRoutes(
+  ts: TsModule,
+  fn: TsNode & { body?: TsNode },
+  initializerOf: InitializerOf,
+  literalOf?: LiteralOf,
+): Map<string, RouteFact> {
+  const routes = new Map<string, RouteFact>();
+  if (!fn.body) return routes;
+  const settle = (expression: TsExpression): string | undefined => settleString(ts, expression, initializerOf, literalOf);
+  const conjunctsOf = (expression: TsExpression, out: TsExpression[] = []): TsExpression[] => {
+    if (ts.isParenthesizedExpression(expression)) return conjunctsOf(expression.expression, out);
+    if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      conjunctsOf(expression.left, out);
+      conjunctsOf(expression.right, out);
+      return out;
+    }
+    out.push(expression);
+    return out;
+  };
+  const isPartsRef = (expression: TsExpression): boolean =>
+    (ts.isIdentifier(expression) && expression.text === 'parts')
+    || (ts.isPropertyAccessExpression(expression) && expression.name.text === 'parts');
+  type RouteConstraint = { verb: string } | { length: number } | { index: number; literal: string };
+  const constraintOf = (conjunct: TsExpression): RouteConstraint | undefined => {
+    if (!ts.isBinaryExpression(conjunct) || conjunct.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) return undefined;
+    const sides: Array<[TsExpression, TsExpression]> = [[conjunct.left, conjunct.right], [conjunct.right, conjunct.left]];
+    for (const [left, right] of sides) {
+      if (ts.isPropertyAccessExpression(left) && left.name.text === 'method') {
+        const verb = settle(right);
+        if (verb !== undefined) return { verb };
+      }
+      if (ts.isPropertyAccessExpression(left) && left.name.text === 'length' && isPartsRef(left.expression) && ts.isNumericLiteral(right)) {
+        return { length: Number(right.text) };
+      }
+      if (ts.isElementAccessExpression(left) && isPartsRef(left.expression) && ts.isNumericLiteral(left.argumentExpression)) {
+        const literal = settle(right);
+        if (literal !== undefined) return { index: Number(left.argumentExpression.text), literal };
+      }
+    }
+    return undefined;
+  };
+  const prefix = strippedPrefix(ts, fn.body, initializerOf, literalOf);
+  const routeOf = (conjuncts: TsExpression[]): RouteFact | undefined => {
+    let verb: string | undefined;
+    let length: number | undefined;
+    const fixed = new Map<number, string>();
+    for (const conjunct of conjuncts) {
+      const constraint = constraintOf(conjunct);
+      if (!constraint) continue;
+      if ('verb' in constraint) verb = constraint.verb;
+      else if ('length' in constraint) length = constraint.length;
+      else fixed.set(constraint.index, constraint.literal);
+    }
+    if (verb === undefined) return undefined;
+    // Without a pinned count the route is as long as the furthest segment it
+    // fixes — and may continue past it, which `exactLength: false` says.
+    const count = length ?? (fixed.size > 0 ? Math.max(...fixed.keys()) + 1 : 0);
+    const segments: string[] = [];
+    for (let index = 0; index < count; index++) segments.push(fixed.get(index) ?? '*');
+    return prefix
+      ? { verb, segments: [...prefix, ...segments], exactLength: length !== undefined, fullPath: true }
+      : { verb, segments, exactLength: length !== undefined };
+  };
+  const walk = (node: TsNode, enclosing: TsExpression[]): void => {
+    if (namedFunctionNameOf(ts, node) !== undefined) return;
+    if (ts.isIfStatement(node)) {
+      const guarded = [...enclosing, ...conjunctsOf(node.expression)];
+      const route = routeOf(guarded);
+      if (route) routes.set(routeKey(route), route);
+      walk(node.thenStatement, guarded);
+      if (node.elseStatement) walk(node.elseStatement, enclosing);
+      return;
+    }
+    ts.forEachChild(node, child => walk(child, enclosing));
+  };
+  walk(fn.body, []);
+  // The route tables the body names: each constant a name in it reads, once.
+  const read = new Set<TsNode>();
+  const names = (node: TsNode): void => {
+    if (namedFunctionNameOf(ts, node) !== undefined) return;
+    if (ts.isIdentifier(node) && !(node.parent && ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) {
+      const initializer = initializerOf(node);
+      if (initializer && !read.has(initializer)) {
+        read.add(initializer);
+        for (const route of tableRoutes(ts, initializer, initializerOf, literalOf)) routes.set(routeKey(route), route);
+      }
+    }
+    ts.forEachChild(node, names);
+  };
+  names(fn.body);
+  return routes;
+}
+
+/** One parameter list as the walk read it, at the position of the function declaring it. */
+interface ParameterSite {
+  pos: number;
+  params: ParameterFact[];
+}
+
 interface ExactFacts {
   declared: Set<string>;
   anchors: Set<string>;
@@ -482,6 +937,12 @@ interface ExactFacts {
    */
   functionParams: Map<string, ParameterFact[][]>;
   /**
+   * Each parameter list read, with the position of its function in the file:
+   * what the kinds the type checker settles are joined on, since its program
+   * parses the same text into nodes at the same positions.
+   */
+  paramSites: ParameterSite[];
+  /**
    * The routes each named function-like handles, by name, deduplicated by
    * route. A name gets an entry only when at least one branch of one of its
    * bodies reads as a route — see SourceFileFacts.functionRoutes for why an
@@ -552,6 +1013,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const typeShapes = new Map<string, TypeShapeFact>();
   const functionParams = new Map<string, ParameterFact[][]>();
   const functionRoutes = new Map<string, Map<string, RouteFact>>();
+  /** The named function-likes with a body, read for routes once the walk is over. */
+  const routeBodies: { name: string; node: import('typescript').Node }[] = [];
+  const paramSites: ParameterSite[] = [];
   const asyncFunctions: string[] = [];
   const enumValues = new Map<string, string[]>();
   const aliasTypes = new Map<string, string>();
@@ -966,12 +1430,36 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // signature. Absent-able is the caller's question, so all three spellings
   // answer it — a question mark, a default value, and a rest parameter, which
   // a caller may leave out exactly as it may leave out an optional one.
-  const declaredParameters = (fn: import('typescript').Node): ParameterFact[] =>
-    ((fn as import('typescript').SignatureDeclarationBase).parameters ?? []).map((parameter) => {
+  //
+  // And whether each named one is PROVABLY unused: no identifier of its name
+  // anywhere in the body or in another parameter's default value, and no read
+  // of `arguments`. Every occurrence counts as a use but a member name read off
+  // a value, so a shadowing local keeps the parameter judged — the only safe
+  // way for this reading to be wrong.
+  const declaredParameters = (fn: import('typescript').Node): ParameterFact[] => {
+    const parameters = (fn as import('typescript').SignatureDeclarationBase).parameters ?? [];
+    const used = new Set<string>();
+    const mentions = (node: import('typescript').Node): void => {
+      if (ts.isIdentifier(node)) {
+        const parent = node.parent;
+        const memberName = !!parent && ((ts.isPropertyAccessExpression(parent) && parent.name === node)
+          || (ts.isPropertyAssignment(parent) && parent.name === node)
+          || (ts.isQualifiedName(parent) && parent.right === node));
+        if (!memberName) used.add(node.text);
+      }
+      ts.forEachChild(node, mentions);
+    };
+    const body = (fn as { body?: import('typescript').Node }).body;
+    if (body) mentions(body);
+    for (const parameter of parameters) if (parameter.initializer) mentions(parameter.initializer);
+    return parameters.map((parameter) => {
       const fact: ParameterFact = {
         optional: !!parameter.questionToken || !!parameter.initializer || !!parameter.dotDotDotToken,
       };
-      if (ts.isIdentifier(parameter.name)) fact.name = parameter.name.text;
+      if (ts.isIdentifier(parameter.name)) {
+        fact.name = parameter.name.text;
+        if (!used.has(fact.name) && !used.has('arguments')) fact.unused = true;
+      }
       // The annotation as WRITTEN, whitespace-normalized so a signature broken
       // over lines reads as the one type it is. An unannotated parameter
       // records none — what an initializer infers is not what the code
@@ -979,6 +1467,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       if (parameter.type) fact.type = parameter.type.getText(sf).replace(/\s+/g, ' ').trim();
       return fact;
     });
+  };
 
   // One pass per named function's body collecting classic cyclomatic
   // complexity (decision points + 1) AND direct callee names. Nested NAMED
@@ -1104,94 +1593,6 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     return { score, callees };
   };
 
-  // ---- routes: the ONE router idiom, read off a function's guards ----
-  //
-  // A branch serves a route when the conjunction of its own `&&`-conjuncts and
-  // those of every enclosing `if` on the path taken includes a comparison of
-  // `<x>.method` with a string literal. Routers NEST — an outer guard on the
-  // first segment, inner ones on the rest — so a then-branch inherits its
-  // guard's conjuncts and an else-branch does not: the else of `a && b` is
-  // `!(a && b)`, which fixes no segment at all. Within that conjunction
-  // `parts.length === N` pins the segment count and `parts[i] === '<lit>'`
-  // fixes segment i; any other conjunct is one the route model cannot state,
-  // so it neither narrows nor widens the route. Nested NAMED functions are
-  // skipped (they carry their own entries); anonymous callbacks count into the
-  // enclosing one, as they do for complexity and call sites.
-  const conjunctsOf = (
-    expression: import('typescript').Expression,
-    out: import('typescript').Expression[] = [],
-  ): import('typescript').Expression[] => {
-    if (ts.isParenthesizedExpression(expression)) return conjunctsOf(expression.expression, out);
-    if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-      conjunctsOf(expression.left, out);
-      conjunctsOf(expression.right, out);
-      return out;
-    }
-    out.push(expression);
-    return out;
-  };
-  /** `parts`, or `<anything>.parts` — the split path the idiom compares against. */
-  const isPartsRef = (expression: import('typescript').Expression): boolean =>
-    (ts.isIdentifier(expression) && expression.text === 'parts')
-    || (ts.isPropertyAccessExpression(expression) && expression.name.text === 'parts');
-  /** The one reading of a conjunct the route model can state, or undefined for any other. */
-  type RouteConstraint = { verb: string } | { length: number } | { index: number; literal: string };
-  const constraintOf = (conjunct: import('typescript').Expression): RouteConstraint | undefined => {
-    if (!ts.isBinaryExpression(conjunct) || conjunct.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) {
-      return undefined;
-    }
-    const { left, right } = conjunct;
-    if (ts.isPropertyAccessExpression(left) && left.name.text === 'method' && ts.isStringLiteral(right)) {
-      return { verb: right.text };
-    }
-    if (ts.isPropertyAccessExpression(left) && left.name.text === 'length' && isPartsRef(left.expression)
-      && ts.isNumericLiteral(right)) {
-      return { length: Number(right.text) };
-    }
-    if (ts.isElementAccessExpression(left) && isPartsRef(left.expression)
-      && ts.isNumericLiteral(left.argumentExpression) && ts.isStringLiteral(right)) {
-      return { index: Number(left.argumentExpression.text), literal: right.text };
-    }
-    return undefined;
-  };
-  /** The route a conjunction states, or undefined when it names no method — a guard that is not a route. */
-  const routeOf = (conjuncts: import('typescript').Expression[]): RouteFact | undefined => {
-    let verb: string | undefined;
-    let length: number | undefined;
-    const fixed = new Map<number, string>();
-    for (const conjunct of conjuncts) {
-      const constraint = constraintOf(conjunct);
-      if (!constraint) continue;
-      if ('verb' in constraint) verb = constraint.verb;
-      else if ('length' in constraint) length = constraint.length;
-      else fixed.set(constraint.index, constraint.literal);
-    }
-    if (verb === undefined) return undefined;
-    // Without a pinned count the route is as long as the furthest segment it
-    // fixes — and may continue past it, which `exactLength: false` says.
-    const count = length ?? (fixed.size > 0 ? Math.max(...fixed.keys()) + 1 : 0);
-    const segments: string[] = [];
-    for (let index = 0; index < count; index++) segments.push(fixed.get(index) ?? '*');
-    return { verb, segments, exactLength: length !== undefined };
-  };
-  const collectRoutes = (fn: import('typescript').Node & { body?: import('typescript').Node }): Map<string, RouteFact> => {
-    const routes = new Map<string, RouteFact>();
-    const walk = (node: import('typescript').Node, enclosing: import('typescript').Expression[]): void => {
-      if (namedFunctionName(node) !== undefined) return;
-      if (ts.isIfStatement(node)) {
-        const guarded = [...enclosing, ...conjunctsOf(node.expression)];
-        const route = routeOf(guarded);
-        if (route) routes.set(`${route.verb} /${route.segments.join('/')}${route.exactLength ? '' : '/…'}`, route);
-        walk(node.thenStatement, guarded);
-        if (node.elseStatement) walk(node.elseStatement, enclosing);
-        return;
-      }
-      ts.forEachChild(node, child => walk(child, enclosing));
-    };
-    if (fn.body) walk(fn.body, []);
-    return routes;
-  };
-
   // Whether a function-like completes LATER: declared `async`, or annotated
   // to return a Promise. What it returns unannotated is inferred, not
   // declared, and counts as completing now.
@@ -1267,7 +1668,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       // forwards to it are two different signatures, and which one a contract
       // means is the reader's question, not this walk's.
       const signatures = functionParams.get(fnName) ?? [];
-      signatures.push(declaredParameters(node));
+      const declaredHere = declaredParameters(node);
+      signatures.push(declaredHere);
+      paramSites.push({ pos: node.pos, params: declaredHere });
       functionParams.set(fnName, signatures);
       // Whether THIS body completes later: declared `async`, or annotated to
       // return a Promise. One entry per body, beside the one signature per
@@ -1281,12 +1684,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       // The routes the body's guards serve. Only a name with at least one
       // gets an entry: "no entry" is how a reader tells a router it could not
       // read from one it read, so an empty map is never written.
-      const routes = collectRoutes(node as { body?: import('typescript').Node } & import('typescript').Node);
-      if (routes.size > 0) {
-        const known = functionRoutes.get(fnName) ?? new Map<string, RouteFact>();
-        for (const [key, route] of routes) known.set(key, route);
-        functionRoutes.set(fnName, known);
-      }
+      // Read once the walk is over: a route table or a prefix constant is as
+      // often declared below the router as above it.
+      routeBodies.push({ name: fnName, node });
     }
     // What the code DECLARES an instance field to be: a class property's own
     // annotation, and a constructor parameter property's — the shape that
@@ -1480,6 +1880,21 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   };
   visit(sf);
 
+  // The routes each named function-like serves, read now that every
+  // top-level constant of the file has been met: a route table or the prefix
+  // a router strips is as often declared below it as above. Only a name with
+  // at least one route gets an entry: "no entry" is how a reader tells a
+  // router it could not read from one it read, so an empty map is never
+  // written.
+  const fileValues = fileInitializer(ts, topLevelConstants(ts, sf));
+  for (const { name, node } of routeBodies) {
+    const routes = readRoutes(ts, node as import('typescript').Node & { body?: import('typescript').Node }, fileValues);
+    if (routes.size === 0) continue;
+    const known = functionRoutes.get(name) ?? new Map<string, RouteFact>();
+    for (const [key, route] of routes) known.set(key, route);
+    functionRoutes.set(name, known);
+  }
+
   // The members a schema expression composes, read off this file alone: the
   // base `.object({…})` call's keys, or — when the chain is built on another
   // schema constant THIS FILE declares (`Base.extend({…})`,
@@ -1579,7 +1994,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -2122,9 +2537,9 @@ function resolveCalls(
   ts: TsModule,
   files: Map<string, string>,
   projectRoot: string,
-): { calls: Map<string, ResolvedCallFact[]>; imports: Map<string, ModuleImports> } {
+): CheckerReading {
   const out = new Map<string, ResolvedCallFact[]>();
-  if (files.size === 0) return { calls: out, imports: new Map() };
+  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), crossProjectImports: new Map() };
   const options = checkerOptions(ts, projectRoot);
   const settings = JSON.stringify(options);
   const host = ts.createCompilerHost(options, true);
@@ -2144,7 +2559,7 @@ function resolveCalls(
   try {
     program = ts.createProgram({ rootNames: [...files.keys()], options, host });
   } catch {
-    return { calls: out, imports: new Map() };
+    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), crossProjectImports: new Map() };
   }
   const checker = program.getTypeChecker();
   const assignable = (checker as unknown as {
@@ -2289,12 +2704,42 @@ function resolveCalls(
     return targets;
   };
 
+  /**
+   * The argument of `await (x)` written where `await` is no keyword — outside
+   * an async function the parser reads it as a call to a name nothing
+   * declares, spelled `await`. What the code means is x, and the receiver is
+   * read as x: a broken await must never be what hides a receiver.
+   */
+  const awaited = (expr: import('typescript').Expression): import('typescript').Expression | undefined => {
+    if (!ts.isCallExpression(expr) || expr.arguments.length !== 1) return undefined;
+    const callee = expr.expression;
+    if (!ts.isIdentifier(callee) || callee.text !== 'await' || checker.getSymbolAtLocation(callee)) return undefined;
+    return expr.arguments[0];
+  };
+
   const unwrap = (expr: import('typescript').Expression): import('typescript').Expression => {
     let at = expr;
     for (;;) {
       if (ts.isParenthesizedExpression(at) || ts.isNonNullExpression(at) || ts.isAsExpression(at)
         || ts.isSatisfiesExpression(at) || ts.isTypeAssertionExpression(at)) at = at.expression;
-      else return at;
+      else {
+        const inner = awaited(at);
+        if (!inner) return at;
+        at = inner;
+      }
+    }
+  };
+
+  /** The expression with what changes no type taken off — parentheses, `!`, `satisfies`, a broken await — and every cast kept. */
+  const seeThrough = (expr: import('typescript').Expression): import('typescript').Expression => {
+    let at = expr;
+    for (;;) {
+      if (ts.isParenthesizedExpression(at) || ts.isNonNullExpression(at) || ts.isSatisfiesExpression(at)) at = at.expression;
+      else {
+        const inner = awaited(at);
+        if (!inner) return at;
+        at = inner;
+      }
     }
   };
 
@@ -2396,18 +2841,68 @@ function resolveCalls(
     if (where.name !== undefined) fact.enclosing = where.name;
     if (where.container !== undefined) fact.enclosingContainer = where.container;
     const opaque = decls.size === 0
-      && (isOpaque(checker.getTypeAtLocation(callee)) || (receiver !== undefined && isOpaque(checker.getTypeAtLocation(receiver))));
+      && (isOpaque(checker.getTypeAtLocation(callee))
+        || (receiver !== undefined && (isOpaque(checker.getTypeAtLocation(receiver)) || rootOpaque(receiver))));
+    // A member read off a receiver TYPED by an index signature that names no
+    // property of that name lands on no declaration — the table the code
+    // built is a value this analysis cannot name, exactly as a cast to one is.
+    const indexed = receiver !== undefined && targets.length === 0 && readsIndexOnly(receiver, fact.name);
     // Where the receiver was one of this project's classes before any cast,
     // a computed key on it is unresolved whatever the checker made of the
     // call: a key that names no single member names none of its writes
     // either, so neither a landing nor its absence clears it.
-    const original = receiver !== undefined && (opaque || computedKey || indexCast) ? classesOf(unwrap(receiver), fact.name) : [];
-    if (opaque || (targets.length === 0 && (computedKey || indexCast)) || (computedKey && original.length > 0)) {
+    const original = receiver !== undefined && (opaque || computedKey || indexCast || indexed) ? receiversOf(receiver, fact.name) : [];
+    if (opaque || (targets.length === 0 && (computedKey || indexCast || indexed)) || (computedKey && original.length > 0)) {
       fact.unresolved = true;
       if (original.length > 0) fact.receivers = original;
     }
+    // Every landing a member of a shape no project class realizes: a port
+    // nothing written implements — what its landings name is the port alone.
+    if (!fact.unresolved && targets.length > 0 && targets.every(t => t.via === 'declaration')) {
+      const own = [...decls].filter(d => ownKey(d.getSourceFile()) !== undefined);
+      if (own.length > 0 && own.every(d => !!d.parent && (ts.isInterfaceDeclaration(d.parent) || ts.isTypeLiteralNode(d.parent)))) fact.port = true;
+    }
     return fact;
   };
+
+  /**
+   * Whether a receiver chain is opaque at any link, read the way the code
+   * means it: `(this as any).store` is any because `this as any` is, which
+   * the checker says itself — except where a broken await stands in the
+   * chain and the checker answers its own error type for everything past it.
+   */
+  function rootOpaque(receiver: import('typescript').Expression): boolean {
+    for (let at: import('typescript').Expression = receiver, depth = 0; depth < 16; depth++) {
+      const plain = seeThrough(at);
+      if (isOpaque(checker.getTypeAtLocation(plain))) return true;
+      if (ts.isPropertyAccessExpression(plain) || ts.isElementAccessExpression(plain)) at = plain.expression;
+      else return false;
+    }
+    return false;
+  }
+
+  /** Whether a receiver's type, nullability aside, answers a member only through an index signature: no property of that name, and an index to read it through. */
+  function readsIndexOnly(receiver: import('typescript').Expression, name: string): boolean {
+    const type = checker.getNonNullableType(checker.getTypeAtLocation(receiver));
+    if (checker.getIndexInfosOfType(type).length === 0) return false;
+    return name === '' || !checker.getPropertyOfType(type, name);
+  }
+
+  /**
+   * Where a receiver's ORIGINAL type lands (classesOf over the receiver with
+   * every cast taken off), and, when that lands nowhere and the receiver is a
+   * name bound once by a const declaration, where its initializer lands — so
+   * `const s: Record<…> = store as any; s[k]()` is read as the store it was.
+   */
+  function receiversOf(receiver: import('typescript').Expression, member: string, depth = 0): CallTargetFact[] {
+    const at = unwrap(receiver);
+    const found = classesOf(at, member);
+    if (found.length > 0 || depth >= 4 || !ts.isIdentifier(at)) return found;
+    const declaration = symbolOf(at)?.valueDeclaration;
+    if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer
+      || (ts.getCombinedNodeFlags(declaration) & ts.NodeFlags.Const) === 0) return found;
+    return receiversOf(declaration.initializer, member, depth + 1);
+  }
 
   /**
    * The one member an element-access key names: a string or number literal's
@@ -2468,8 +2963,8 @@ function resolveCalls(
     const receiver = unwrap(node.expression);
     // A receiver with no member of its own (an index-signature table, an
     // empty shape) was never a component: every class would "realize" it.
-    if (checker.getPropertiesOfType(checker.getTypeAtLocation(receiver)).length === 0) return undefined;
-    const receivers = classesOf(receiver, name ?? '');
+    if (checker.getPropertiesOfType(checker.getNonNullableType(checker.getTypeAtLocation(receiver))).length === 0) return undefined;
+    const receivers = receiversOf(receiver, name ?? '');
     if (receivers.length === 0) return undefined;
     return placed({
       name: name ?? '',
@@ -2491,7 +2986,9 @@ function resolveCalls(
       } else if (ts.isParenthesizedExpression(at) || ts.isNonNullExpression(at) || ts.isSatisfiesExpression(at)) {
         at = at.expression;
       } else {
-        return false;
+        const inner = awaited(at);
+        if (!inner) return false;
+        at = inner;
       }
     }
   }
@@ -2504,7 +3001,8 @@ function resolveCalls(
       const id = `${target.path}|${target.container ?? ''}`;
       if (!seen.has(id)) { seen.add(id); out.push(target); }
     };
-    const type = checker.getTypeAtLocation(expr);
+    // Nullability set aside: an optional field holds the class it is typed by.
+    const type = checker.getNonNullableType(checker.getTypeAtLocation(expr));
     for (const part of type.isUnionOrIntersection() ? type.types : [type]) {
       const symbol = part.getSymbol() ?? part.aliasSymbol;
       for (const decl of symbol?.declarations ?? []) {
@@ -2512,7 +3010,16 @@ function resolveCalls(
         if (!key) continue;
         if (ts.isClassLike(decl) && decl.name) add({ path: key, container: decl.name.text, member, via: 'declaration' });
         else if (ts.isInterfaceDeclaration(decl) || ts.isTypeLiteralNode(decl)) {
-          for (const c of implementorsOf(decl)) add({ path: c.path, container: c.name, member, via: 'implementor' });
+          const realizing = implementorsOf(decl);
+          for (const c of realizing) add({ path: c.path, container: c.name, member, via: 'implementor' });
+          // A shape no class realizes — the type of a component a factory
+          // builds — is the shape itself, in the file that declares it: where
+          // a call through it lands, and so where its receiver was.
+          const shapeName = ts.isInterfaceDeclaration(decl) ? decl.name.text
+            : decl.parent && ts.isTypeAliasDeclaration(decl.parent) ? decl.parent.name.text : undefined;
+          if (realizing.length === 0 && shapeName && checker.getPropertiesOfType(part).length > 0) {
+            add({ path: key, container: shapeName, member, via: 'declaration' });
+          }
         }
       }
     }
@@ -2662,7 +3169,179 @@ function resolveCalls(
     }
     imports.set(key, entry);
   }
-  return { calls: out, imports };
+
+  // ---- what the checker settles beyond the calls, for each root file ----
+  const kinds = new Map<string, Array<Array<ParameterKind | undefined>>>();
+  const routes = new Map<string, Map<string, RouteFact[]>>();
+  const crossProjectImports = new Map<string, CrossProjectImportFact[]>();
+  const literalOf: LiteralOf = (node) => {
+    const type = checker.getTypeAtLocation(node);
+    return type.isStringLiteral() ? type.value : undefined;
+  };
+  const initializerOf: InitializerOf = (node) => {
+    const declaration = symbolOf(ts.isPropertyAccessExpression(node) ? node.name : node)?.valueDeclaration;
+    if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+      && (ts.getCombinedNodeFlags(declaration) & ts.NodeFlags.Const) !== 0) return declaration.initializer;
+    if (declaration && ts.isPropertyAssignment(declaration)) return declaration.initializer;
+    return undefined;
+  };
+  const root = path.resolve(projectRoot);
+  const homes = new Map<string, string | null>();
+  /** The nearest folder at or above `dir` holding a .wai/project.yaml — the project a file belongs to. */
+  const homeOf = (dir: string): string | null => {
+    const known = homes.get(dir);
+    if (known !== undefined) return known;
+    let home: string | null;
+    if (isFile(path.join(dir, '.wai', 'project.yaml'))) home = dir;
+    else {
+      const parent = path.dirname(dir);
+      home = parent === dir ? null : homeOf(parent);
+    }
+    homes.set(dir, home);
+    return home;
+  };
+  for (const [absolute, key] of files) {
+    const sf = program.getSourceFile(absolute);
+    if (!sf) continue;
+    const fileKinds: Array<Array<ParameterKind | undefined>> = [];
+    const fileRoutes = new Map<string, Map<string, RouteFact>>();
+    const visit = (node: import('typescript').Node): void => {
+      const name = namedFunctionNameOf(ts, node);
+      const body = (node as { body?: import('typescript').Node }).body;
+      if (name !== undefined && body) {
+        fileKinds.push(((node as import('typescript').SignatureDeclarationBase).parameters ?? []).map((parameter) => {
+          try {
+            return kindOf(checker.getTypeAtLocation(parameter)) ?? platformKind(parameter.type);
+          } catch {
+            return undefined;
+          }
+        }));
+        // Both idioms compare a request's method — a guard `<request>.method`,
+        // a table entry's `method` / `verb` key matched against it — so a
+        // function that never says so is no router, and is not re-read.
+        if (/method|verb/i.test(body.getText(sf))) try {
+          const read = readRoutes(ts, node as import('typescript').Node & { body?: import('typescript').Node }, initializerOf, literalOf);
+          if (read.size > 0) {
+            const known = fileRoutes.get(name) ?? new Map<string, RouteFact>();
+            for (const [routeKeyText, route] of read) known.set(routeKeyText, route);
+            fileRoutes.set(name, known);
+          }
+        } catch {
+          // a router the checker cannot settle keeps the syntactic reading
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    kinds.set(key, fileKinds);
+    routes.set(key, new Map([...fileRoutes].map(([name, read]) => [name, [...read.values()]])));
+
+    // An import from ANOTHER project's source that resolves to nothing.
+    const broken: CrossProjectImportFact[] = [];
+    for (const statement of sf.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+      const specifier = statement.moduleSpecifier.text;
+      let resolved: string | undefined;
+      try {
+        resolved = ts.resolveModuleName(specifier, sf.fileName, options, host, cache).resolvedModule?.resolvedFileName;
+      } catch {
+        resolved = undefined;
+      }
+      const target = resolved !== undefined ? path.resolve(resolved)
+        : specifier.startsWith('.') ? path.resolve(path.dirname(sf.fileName), specifier) : undefined;
+      if (target === undefined || target.split(path.sep).includes('node_modules')) continue;
+      const home = homeOf(path.dirname(target));
+      if (home === null || home === root) continue;
+      const project = pathKey(path.relative(root, home)) || '.';
+      const line = sf.getLineAndCharacterOfPosition(statement.getStart(sf)).line + 1;
+      const clause = statement.importClause;
+      if (resolved === undefined) {
+        broken.push({ specifier, project, line, typeOnly: clause?.isTypeOnly ?? false });
+        continue;
+      }
+      const unresolvedName = (node: import('typescript').Identifier): boolean => {
+        try {
+          const symbol = checker.getSymbolAtLocation(node);
+          const aliased = symbol && (symbol.flags & ts.SymbolFlags.Alias) ? checker.getAliasedSymbol(symbol) : symbol;
+          return !aliased || !aliased.declarations || aliased.declarations.length === 0;
+        } catch {
+          return false;
+        }
+      };
+      if (clause?.name && unresolvedName(clause.name)) {
+        broken.push({ specifier, name: 'default', project, line, typeOnly: clause.isTypeOnly });
+      }
+      if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          if (!unresolvedName(element.name)) continue;
+          broken.push({ specifier, name: (element.propertyName ?? element.name).text, project, line, typeOnly: clause.isTypeOnly || element.isTypeOnly });
+        }
+      }
+    }
+    if (broken.length > 0) crossProjectImports.set(key, broken);
+  }
+  return { calls: out, imports, kinds, routes, crossProjectImports };
+
+  /**
+   * The kind of a parameter annotated with a platform class the run's fixed
+   * ES library leaves out (a URL, a fetch Request, node:http's
+   * IncomingMessage…), where the checker could not resolve it: an object,
+   * whatever environment defines it. Only an annotation naming such a class
+   * outright, and only where nothing in the program declares that name.
+   */
+  function platformKind(annotation: import('typescript').TypeNode | undefined): ParameterKind | undefined {
+    if (!annotation || !ts.isTypeReferenceNode(annotation)) return undefined;
+    const name = ts.isIdentifier(annotation.typeName) ? annotation.typeName.text : annotation.typeName.right.text;
+    if (!PLATFORM_OBJECT_TYPES.has(name)) return undefined;
+    const type = checker.getTypeAtLocation(annotation);
+    return (type as unknown as { intrinsicName?: string }).intrinsicName === 'error' ? 'object' : undefined;
+  }
+
+  /**
+   * The kind of value a type is, nullability set aside: string, number,
+   * boolean, list, object or function — undefined where no one kind settles
+   * (any, unknown, the checker's error type, a union of kinds).
+   */
+  function kindOf(type: import('typescript').Type): ParameterKind | undefined {
+    const at = checker.getNonNullableType(type);
+    if ((at.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never | ts.TypeFlags.Void)) !== 0) return undefined;
+    if ((at.flags & ts.TypeFlags.BooleanLike) !== 0) return 'boolean';
+    if (at.isUnion()) {
+      const settled = new Set(at.types.map(kindOf));
+      return settled.size === 1 ? [...settled][0] : undefined;
+    }
+    if (at.isIntersection()) {
+      const primitive = new Set(at.types.map(kindOf).filter(k => k !== undefined && k !== 'object'));
+      return primitive.size === 1 ? [...primitive][0] : primitive.size === 0 ? 'object' : undefined;
+    }
+    if ((at.flags & ts.TypeFlags.StringLike) !== 0) return 'string';
+    if ((at.flags & (ts.TypeFlags.NumberLike | ts.TypeFlags.BigIntLike)) !== 0) return 'number';
+    if ((at.flags & (ts.TypeFlags.Object | ts.TypeFlags.NonPrimitive)) !== 0) {
+      const lists = checker as unknown as { isArrayType?: (t: import('typescript').Type) => boolean; isTupleType?: (t: import('typescript').Type) => boolean };
+      if (lists.isArrayType?.(at) || lists.isTupleType?.(at)) return 'list';
+      if (at.getCallSignatures().length > 0 && at.getProperties().length === 0) return 'function';
+      return 'object';
+    }
+    return undefined;
+  }
+}
+
+/** The platform classes the run's fixed ES library leaves out, each an object wherever it is defined. */
+const PLATFORM_OBJECT_TYPES = new Set([
+  'URL', 'URLSearchParams', 'Request', 'Response', 'Headers', 'FormData', 'Blob', 'ReadableStream', 'WritableStream',
+  'AbortSignal', 'IncomingMessage', 'ServerResponse', 'Http2ServerRequest', 'Http2ServerResponse', 'Socket', 'Buffer',
+]);
+
+/** What the type checker settles over the run's files beyond their calls. */
+interface CheckerReading {
+  calls: Map<string, ResolvedCallFact[]>;
+  imports: Map<string, ModuleImports>;
+  /** Per root file, the parameter kinds of each named function-like with a body, in the order the walk meets them. */
+  kinds: Map<string, Array<Array<ParameterKind | undefined>>>;
+  /** Per root file, the routes each named function-like serves, read with the checker settling every value. */
+  routes: Map<string, Map<string, RouteFact[]>>;
+  /** Per root file, its imports from another project's source that resolve to nothing. */
+  crossProjectImports: Map<string, CrossProjectImportFact[]>;
 }
 
 /**
@@ -2690,6 +3369,8 @@ export function buildCodeModel(
   const ts = resolveTypeScript(projectRoot);
   /** The files read at exact grade, by absolute path: the type checker's roots. */
   const checkerRoots = new Map<string, string>();
+  /** Each exact-grade file's parameter lists in walk order: what the checker's kinds are joined onto. */
+  const paramSitesAt = new Map<string, ParameterSite[]>();
   const rootFiles = walkDeclaredRoots(sourceRoots, exclude, projectRoot);
   // The repository's own packages, read once: what lets a package specifier
   // naming one of them resolve like a relative import.
@@ -2794,6 +3475,7 @@ export function buildCodeModel(
             reexportOnly: facts.reexportOnly,
           };
           checkerRoots.set(absolute, sourcePath);
+          paramSitesAt.set(sourcePath, facts.paramSites);
         } catch {
           analyzed = analyzeGeneric(text);
         }
@@ -2817,8 +3499,10 @@ export function buildCodeModel(
   if (ts && checkerRoots.size > 0) {
     let resolved = new Map<string, ResolvedCallFact[]>();
     let imports = new Map<string, ModuleImports>();
+    let reading: CheckerReading | undefined;
     try {
-      ({ calls: resolved, imports } = resolveCalls(ts, checkerRoots, projectRoot));
+      reading = resolveCalls(ts, checkerRoots, projectRoot);
+      ({ calls: resolved, imports } = reading);
     } catch {
       resolved = new Map();
       imports = new Map();
@@ -2830,6 +3514,23 @@ export function buildCodeModel(
         facts.resolvedCalls = calls;
         held.add(facts.path);
       }
+      if (!reading) continue;
+      // The kinds the checker settles, joined onto the parameter lists the
+      // walk read in the same order — and only where both read the same
+      // functions, the same number of parameters each.
+      const sites = paramSitesAt.get(facts.path);
+      const settled = reading.kinds.get(facts.path);
+      if (sites && settled && sites.length === settled.length) {
+        sites.forEach((site, index) => {
+          if (settled[index].length !== site.params.length) return;
+          site.params.forEach((param, at) => { const kind = settled[index][at]; if (kind) param.kind = kind; });
+        });
+      }
+      // The routes re-read with the checker settling every compared value.
+      const read = reading.routes.get(facts.path);
+      if (read && read.size > 0) facts.functionRoutes = { ...(facts.functionRoutes ?? {}), ...Object.fromEntries(read) };
+      const broken = reading.crossProjectImports.get(facts.path);
+      if (broken) facts.crossProjectImports = broken;
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;

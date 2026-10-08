@@ -13,6 +13,7 @@
 import type { ValidationResult } from '../core/validation.js';
 import type { MemberPin } from '../core/lockfile.js';
 import type { MemberKind } from './project.js';
+import { isNewerVersion } from '../utils/version.js';
 
 /** How an approver's identity was established. */
 export type ApproverSource = 'git' | 'hosted' | 'os' | 'legacy';
@@ -163,6 +164,12 @@ export interface ProjectApproval {
   release?: ReleaseVerdict;
   /** On a drifted entry whose record carries gate parts: the inputs that moved (lock_record.movedGateParts). */
   inputsMoved?: string[];
+  /**
+   * Set when the record's gateParts do not break down its stateId
+   * (lock_record.partsProblem): why. They are ignored — they name no input
+   * and carry no approval over — and every surface says so as a notice.
+   */
+  partsIgnored?: string;
 }
 
 /**
@@ -181,6 +188,25 @@ export interface ReleaseVerdict {
   count?: number;
   /** The first few of them, `CODE [spec] message`. */
   findings?: string[];
+  /**
+   * Set on a verdict that is not carried because the change of the release
+   * cannot be judged by re-validation at all — the record cannot prove the
+   * project's own inputs unchanged — as one sentence naming why. count and
+   * findings are absent then.
+   */
+  reason?: string;
+}
+
+/**
+ * release_verdict.staleSentence — the one sentence every surface shows for a
+ * verdict that is not carried: its reason when it has one, else the findings
+ * the new release reports in the approved design. Pure.
+ */
+export function staleReleaseSentence(verdict: ReleaseVerdict): string {
+  if (verdict.reason) return verdict.reason;
+  const findings = verdict.findings ?? [];
+  const more = (verdict.count ?? 0) > findings.length ? '; …' : '';
+  return `It was approved under wairon ${verdict.from}, and the new release (${verdict.to}) finds ${verdict.count ?? 0} issue(s) in the approved design: ${findings.join('; ')}${more}.`;
 }
 
 /** lock_restamp — provenance of a release stamp refreshed by `wairon lock` without a re-approval. */
@@ -189,6 +215,84 @@ export interface LockRestamp {
   fromVersion: string;
   toVersion: string;
   by: string;
+  /**
+   * The composition subject of the human approval this restamp carried over
+   * (kept through every later restamp): what a parent pins of this project,
+   * so a restamp never reads as a re-approval one level up.
+   */
+  subject?: string;
+}
+
+/** The first wairon release that records gate parts on every lock it writes. */
+export const GATE_PARTS_SINCE = '5.1.1-dev.111';
+
+/** The gate parts every identity carries (`network` only when one is declared). */
+const CORE_GATE_PARTS = ['composition', 'contracts', 'design', 'members', 'packs', 'release', 'rules'];
+
+/**
+ * lock_record.approvalSubject — the composition subject this record's
+ * APPROVAL stands for: the subject its restamp kept, else its own stateId,
+ * `<algorithm>:<digest>`. What a parent's identity and pin read of it. Pure.
+ */
+export function approvalSubject(record: { stateId: { algorithm: string; digest: string }; restamped?: { subject?: string } }): string {
+  const kept = record.restamped?.subject;
+  return typeof kept === 'string' && kept !== '' ? kept : `${record.stateId.algorithm}:${record.stateId.digest}`;
+}
+
+/** How a record's release stamp reads against the running release. */
+export type ReleaseStampReading = 'older' | 'same' | 'newer' | 'invalid';
+
+/** A wairon version: X.Y.Z with an optional pre-release suffix. */
+const WAIRON_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+/**
+ * lock_record.releaseStampAgainst — how a record's validatorVersion compares
+ * with the running release: older, same, newer, or invalid when it is absent
+ * or no wairon version. Pure.
+ */
+export function releaseStampAgainst(record: { validatorVersion?: unknown }, running: string): ReleaseStampReading {
+  const stamp = record.validatorVersion;
+  if (typeof stamp !== 'string' || !WAIRON_VERSION_RE.test(stamp)) return 'invalid';
+  if (stamp === running) return 'same';
+  if (isNewerVersion(running, stamp)) return 'newer';
+  return isNewerVersion(stamp, running) ? 'older' : 'same';
+}
+
+/** Whether a valid stamp is at or after the first release that records gate parts. */
+export function stampRecordsGateParts(stamp: string): boolean {
+  return stamp === GATE_PARTS_SINCE || isNewerVersion(GATE_PARTS_SINCE, stamp);
+}
+
+/**
+ * lock_record.partsProblem — why a record's gateParts do not break down the
+ * stateId they sit beside, or null when they do or it carries none: a part
+ * every identity has is missing; the stateId IS the current identity while a
+ * part differs from the current one; or, under the same algorithm, the
+ * stateId differs while no part does. Pure.
+ */
+export function gatePartsProblem(
+  record: { stateId: { algorithm: string; digest: string }; gateParts?: Record<string, string> },
+  current: { algorithm: string; digest: string; parts?: Record<string, string> },
+): string | null {
+  const parts = record.gateParts;
+  if (!parts) return null;
+  const missing = CORE_GATE_PARTS.filter((k) => typeof parts[k] !== 'string');
+  if (missing.length > 0) return `they lack the part(s) every identity has: ${missing.join(', ')}`;
+  if (!current.parts) return null;
+  const differ = movedGateParts(record, current.parts) ?? [];
+  const sameAlgorithm = record.stateId.algorithm === current.algorithm;
+  const same = sameAlgorithm && record.stateId.digest === current.digest;
+  if (same && differ.length > 0) return `its stateId is the identity as it stands, yet its part(s) ${differ.join(', ')} differ from that identity's`;
+  if (!same && sameAlgorithm && differ.length === 0) return 'they say no input moved, yet its stateId is not the identity as it stands';
+  return null;
+}
+
+/** A record's gateParts when they break down its identity, else undefined (none, or ignored). */
+export function usableGateParts(
+  record: { stateId: { algorithm: string; digest: string }; gateParts?: Record<string, string> },
+  current: { algorithm: string; digest: string; parts?: Record<string, string> },
+): Record<string, string> | undefined {
+  return record.gateParts && gatePartsProblem(record, current) === null ? record.gateParts : undefined;
 }
 
 /** The words every verdict names a gate part by: what moved, said once. */

@@ -403,18 +403,24 @@ methods:
     effect: read
   - name: releaseVerdict
     description: >-
-      THE verdict on an approval whose gate identity no longer matches only because the wairon
-      release changed — one function every surface reads through the project's approval entry
-      (lock-check, status, sdd_get_status, validate, the family view). A record carrying gateParts
-      qualifies when every part but `release` equals the identity's current one; a record from
-      before gate parts qualifies when it was taken by another release (its validatorVersion), no
-      own spec file moved since (its per-spec digests) and every direct member's recorded subject is
-      the one read now. A qualifying approval is re-validated under the current rules, in the same
-      command: clean at the `--ci` standard (no error, no warning but the draft-related ones --ci
-      waives; notices never count) it CARRIES OVER — approved, nothing written; otherwise it is
-      stale for exactly the findings the new release reports. Undefined when the approval does not
-      qualify: the caller judges it as before. Writes nothing; a verdict is decided once per record
-      and identity in a process.
+      THE verdict on an approval whose gate identity no longer matches because the wairon release
+      changed — one function every surface reads through the project's approval entry (lock-check,
+      status, sdd_get_status, validate, the family view). Only a record that PROVES the project's
+      own inputs unchanged is re-validated: its gateParts break down its stateId
+      (lock_record.partsProblem is none), every part but `release` equals the identity's current
+      one, and its release stamp is older than or the same as the running release
+      (lock_record.releaseStampAgainst). Such an approval is re-validated under the current rules,
+      in the same command: clean at the `--ci` standard (no error, no warning but the draft-related
+      ones --ci waives; notices never count) it CARRIES OVER — approved, nothing written; otherwise
+      it is stale for exactly the findings the new release reports. A record that cannot prove it,
+      over a design whose own spec files and direct members' approvals did not move, is stale with
+      one sentence (ReleaseVerdict.reason) and never re-validated: taken before gate parts
+      ("approved under <old> before wairon recorded its inputs separately — re-lock once to record
+      them; later upgrades then carry over"), stamped by a release that records gate parts although
+      it carries none (its stamp was edited: an earlier wairon wrote it), carrying parts that do not
+      break down its identity, or stamped by a newer wairon or by no valid version. Undefined when
+      what moved is not the release: the caller judges it as before. Writes nothing; a verdict is
+      decided once per record and identity in a process.
     signature: 'releaseVerdict(record: LockRecord, current: StateId): ReleaseVerdict?'
     returns: ReleaseVerdict?
     params:
@@ -426,4 +432,4 @@ methods:
         description: Its gate identity as computed now, with its parts
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-08T08:37:14.576Z'
+updatedAt: '2026-10-08T18:51:39.617Z'

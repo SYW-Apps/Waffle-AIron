@@ -30,6 +30,12 @@ export interface MigrationRequest {
   /** false: plan without rehearsing (doctor's summary). Absent or true: a full plan. */
   rehearse?: boolean;
   /**
+   * true: the door (the CLI's migration commands, the MCP member tools) asks
+   * the plan to announce the findings its result will have that the projects
+   * it changes do not report now. Absent: an internal plan is not judged twice.
+   */
+  announce?: boolean;
+  /**
    * detach and adopt on a hosted instance: move the project between its
    * family's tree and an isolated root of its own in the same transaction.
    * Absent everywhere else.

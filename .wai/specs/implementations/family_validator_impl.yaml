@@ -531,7 +531,9 @@ methods:
       - stepNumber: 5
         description: >-
           Compute the project's own gate identity — its own tree, doctrine, own inputs, composition
-          and ITS direct members' recorded subjects, never an ancestor's
+          and ITS direct members' approval subjects (each member record's
+          lock_record.approvalSubject: a member whose release stamp was only refreshed reads as the
+          approval its human gave, never as a re-approval), never an ancestor's
         type: call
         targetComponent: spec_validator
         targetMethod: computeGateStateId
@@ -545,9 +547,11 @@ methods:
           Decide its state: no record is never; a record whose stateId equals the identity just
           computed is approved; otherwise drifted, marked upgraded when the record's algorithm
           differs from the current one (the lock predates the stage-5 identity, which says nothing
-          about the design), and carrying inputsMoved when the record has gate parts
-          (lock_record.movedGateParts: the inputs that moved, named by every verdict). Its subject
-          is the record's stateId rendered `<algorithm>:<digest>`, absent when never
+          about the design), and carrying inputsMoved when the record has gate parts that break down
+          its identity (lock_record.movedGateParts: the inputs that moved, named by every verdict).
+          Parts that do not break it down (lock_record.partsProblem) name nothing: the entry carries
+          `partsIgnored`, the clause every surface shows as a notice. Its subject is the record's
+          approval subject (lock_record.approvalSubject), absent when never
         type: local
       - stepNumber: 8
         description: >-
@@ -986,42 +990,80 @@ methods:
   - name: releaseVerdict
     narrative:
       - stepNumber: 1
-        label: recorded-parts
-        description: Does the record carry its gate parts (every record from this release on)?
-        type: branch
-        condition: record.gateParts is set
-        onFalseStep: 3
+        description: >-
+          Read what the record can prove: whether its gateParts break down its stateId
+          (lock_record.partsProblem against the current identity), the inputs those parts say moved
+          (lock_record.movedGateParts) when they do, and its release stamp against the running
+          release (lock_record.releaseStampAgainst: older, same, newer or invalid)
+        type: local
       - stepNumber: 2
+        description: >-
+          Does the record carry gate parts that break down its identity (every record this release
+          writes does)?
+        type: branch
+        condition: record.gateParts is set and partsProblem is none
+        onFalseStep: 6
+      - stepNumber: 3
         description: >-
           Did only the release's part move — every part but `release` (the design, rule tuning,
           packs, network, composition, consumed contracts, members' subjects) equal to the
-          identity's current one (lock_record.movedGateParts is exactly [release])?
+          identity's current one?
         type: branch
         condition: the only moved gate part is release
-        onTrueStep: 6
-        onFalseStep: 14
-      - stepNumber: 3
-        label: legacy
-        description: 'A record from before gate parts: was it taken by another wairon release than this one?'
-        type: branch
-        condition: record.validatorVersion differs from this release
-        onFalseStep: 14
+        onFalseStep: 19
       - stepNumber: 4
+        description: >-
+          Was the record stamped by an older wairon, or this one? A stamp newer than the running
+          release was written by a newer wairon, whose rules this one cannot judge an approval by; a
+          stamp that is no wairon version says nothing about which release took it
+        type: branch
+        condition: releaseStampAgainst is older or same
+        onTrueStep: 11
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Stale, never re-validated: {from, to, carried: false, reason} — `written by a newer wairon
+          (<stamp>) than this one (<running>)`, or a stamp that is no wairon version, so the change
+          cannot be told apart from an edited record; re-lock (or run the newer wairon)
+        type: return
+        outcome: stale with a reason
+      - stepNumber: 6
+        label: legacy
+        description: >-
+          A record that cannot prove its own inputs unchanged: it carries no gate parts (taken
+          before they existed, or stripped), or parts that do not break down its identity
+        type: local
+      - stepNumber: 7
         description: Compare the own spec files with the approval's per-spec digests
         type: call
         targetComponent: validator_core_adapter
         targetMethod: diffAgainstApproval
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
-          Did no own spec file move, and is every direct member's recorded subject (record.members)
-          the one the identity reads now? Those are the inputs such a record can still prove; its
-          rule tuning, packs, network and pins it records only inside the digest, so they are judged
-          by the re-validation alone until one `wairon lock` refreshes the record with its gate
-          parts
+          Did no own spec file move, and is every direct member's approval subject (record.members)
+          the one the identity reads now? Otherwise what moved is named by the caller (the specs,
+          the member), not guessed as the release
         type: branch
         condition: no own spec moved and every member pin is unchanged
-        onFalseStep: 14
-      - stepNumber: 6
+        onFalseStep: 19
+      - stepNumber: 9
+        description: >-
+          Choose the one sentence (ReleaseVerdict.reason): parts that do not break down the identity
+          are ignored, so whether only the release moved cannot be told; a stamp that is newer or no
+          version; a stamp at or after the first release that records gate parts on a record without
+          them — an earlier wairon wrote it and its stamp was edited, so the release moved and
+          whether the project's own inputs did cannot be told; else `approved under <stamp> before
+          wairon recorded its inputs separately — re-lock once to record them; later upgrades then
+          carry over`. Such a record cannot prove its rule tuning, packs, network or pins unchanged,
+          so it is never carried by re-validation
+        type: local
+      - stepNumber: 10
+        description: >-
+          Stale: {from: the stamp, to: this release, carried: false, reason}. `wairon lock` then
+          takes a real approval, which records the parts
+        type: return
+        outcome: stale with a reason
+      - stepNumber: 11
         label: cached
         description: >-
           Was this record already judged against this identity in this process? Re-validation is a
@@ -1029,18 +1071,18 @@ methods:
           more than once
         type: branch
         condition: a verdict is cached for this root, record identity and current identity
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 13
+      - stepNumber: 12
         description: Answer the cached verdict
         type: return
         outcome: ReleaseVerdict
-      - stepNumber: 8
+      - stepNumber: 13
         label: revalidate
         description: 'Read the project''s own configuration: its rules and projectType judge it'
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 9
+      - stepNumber: 14
         description: >-
           Re-validate the approved design under the current rules: the owner's gate at the project's
           own configuration, each spec at its authored status. A re-validation already running at
@@ -1048,37 +1090,35 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: validateDesign
-      - stepNumber: 10
+      - stepNumber: 15
         description: >-
           Keep the design half (validation_result.designOnly) and of it the findings that fail
           `validate --ci` (validation_result.ciBlocking)
         type: local
-      - stepNumber: 11
+      - stepNumber: 16
         description: Is the re-validation clean at the --ci standard?
         type: branch
         condition: no finding fails --ci
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 18
+      - stepNumber: 17
         description: >-
           Carried: {from: the record's validatorVersion, to: this release, carried: true} — approved
           under the old release, re-validated under this one: still approved. Nothing is written;
           cached
         type: return
         outcome: carried
-      - stepNumber: 13
+      - stepNumber: 18
         label: stale
         description: >-
           Stale for exactly those findings: {from, to, carried: false, count, findings: the first
           few as `CODE [spec] message`}; cached
         type: return
         outcome: stale by release
-      - stepNumber: 14
+      - stepNumber: 19
         label: none
-        description: >-
-          Not a change of the release alone: answer none, and the caller judges the staleness as
-          before
+        description: 'Not a change of the release: answer none, and the caller judges the staleness as before'
         type: return
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-08T08:37:15.557Z'
+updatedAt: '2026-10-08T18:56:51.382Z'

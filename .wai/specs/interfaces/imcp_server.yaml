@@ -12,14 +12,15 @@ methods:
       long-lived stdio session that emits list-changed notifications. The MCP portal mounts its own
       surface on top — the skill/agent resources, the prompts, and for a hosted caller the
       advertisement of the hosted data-plane tools.
-    signature: 'create(hostedTools?: bool): McpServerInstance'
+    signature: 'create(options?: mcp_server_options): McpServerInstance'
     returns: McpServerInstance
     params:
-      - name: hostedTools
-        type: bool
+      - name: options
+        type: mcp_server_options
         description: >-
-          Advertise the seventeen hosted data-plane tools in tools/list — discovery only, and false
-          for the stdio server, which cannot serve any of them.
+          What the caller asks for: whether the seventeen hosted data-plane tools are advertised
+          (discovery only, never for the stdio server), and the build the server stands for, which
+          the build-freshness guard judges every call against
         optional: true
   - name: schemaFingerprint
     description: >-
@@ -51,4 +52,4 @@ methods:
           which reads as fresh
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T10:27:37.996Z'
+updatedAt: '2026-10-08T19:33:43.034Z'

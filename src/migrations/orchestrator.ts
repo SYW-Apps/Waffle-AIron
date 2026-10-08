@@ -1,5 +1,8 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as core from './adapters/core.js';
+import * as validator from './adapters/validator.js';
+import type { ValidationIssue } from '../core/validation.js';
 import * as chaining from './chaining-migration.js';
 import * as membership from './membership.js';
 import * as identity from './identity.js';
@@ -195,8 +198,77 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
     transaction.discard(rehearsal);
     return { ...plan, refusals: [...plan.refusals, ...refused] };
   }
-  // Steps 19-20.
-  return { ...plan, rehearsal, changes, relock: relockOf(plan, changes, rehearsal) };
+  // Steps 19-20: what the result will report that the family does not now.
+  const announced = plan.request.announce === true ? newFindings(plan, rehearsal, scopeOf(plan, projects), changes) : [];
+  // Steps 21-23.
+  return { ...plan, notes: [...plan.notes, ...announced], rehearsal, changes, relock: relockOf(plan, changes, rehearsal) };
+}
+
+/** How many new findings of one severity a note names before it counts the rest. */
+const NOTE_HEAD = 5;
+
+/**
+ * Steps 19-20 of rehearse: each project the plan changes, judged by its own
+ * gate twice — on an unwritten copy of the family (as it stands) and on the
+ * rehearsal copy (as the plan leaves it) — each run's design half at error
+ * and warning severity, and every finding the result has that the project
+ * does not report now, counted by project, code and spec (a path that differs
+ * between two copies never reads as new), as one note per severity:
+ * `after <verb>: N new error(s) …`. Both sides are copies of the .wai trees,
+ * so neither reads code, and the live sources are never analysed for it. A
+ * run that throws names nothing.
+ */
+function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: TransactionScope, changes: FileChange[]): string[] {
+  const owners = [...new Set(changes.map((c) => path.resolve(c.project)))];
+  if (owners.length === 0) return [];
+  type Found = { owner: string; issue: ValidationIssue };
+  const run = (copy: Rehearsal): Found[] | null => {
+    try {
+      return owners.flatMap((owner) => runWithProjectRoot(rehearsalRoot(copy, owner), () => {
+        // The design half: a copy holds .wai trees only, so a code finding is no evidence there.
+        const codeCodes = new Set(validator.listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+        return validator.validateFamily({ memberDepth: 0 }).issues
+          .filter((i) => (i.severity === 'error' || i.severity === 'warning') && !codeCodes.has(i.code))
+          .map((issue) => ({ owner, issue }));
+      }));
+    } catch {
+      return null;
+    }
+  };
+  // The result first: a result that reports no error or warning announces
+  // nothing, and the projects as they stand need no judging at all.
+  const after = onCopy(rehearsal, () => run(rehearsal));
+  if (after === null || after.length === 0) return [];
+  let before: Found[] | null = null;
+  let pristine: Rehearsal | null = null;
+  try {
+    pristine = transaction.rehearse(scope);
+    const copy = pristine;
+    before = onCopy(copy, () => run(copy));
+  } catch {
+    before = null;
+  } finally {
+    if (pristine) transaction.discard(pristine);
+  }
+  if (before === null || after === null) return [];
+  const key = (f: Found): string => `${f.owner}|${f.issue.severity}|${f.issue.code}|${f.issue.specId ?? ''}`;
+  const seen = new Map<string, number>();
+  for (const f of before) seen.set(key(f), (seen.get(key(f)) ?? 0) + 1);
+  const added: ValidationIssue[] = [];
+  for (const f of after) {
+    const left = seen.get(key(f)) ?? 0;
+    if (left > 0) seen.set(key(f), left - 1);
+    else added.push(f.issue);
+  }
+  const notes: string[] = [];
+  for (const severity of ['error', 'warning'] as const) {
+    const these = added.filter((i) => i.severity === severity);
+    if (these.length === 0) continue;
+    const named = these.slice(0, NOTE_HEAD).map((i) => `${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.replace(/\.\s*$/, '')}`);
+    const rest = these.length - named.length;
+    notes.push(`after ${plan.request.verb}: ${these.length} new ${severity}(s) the projects it changes do not report now: ${named.join('; ')}${rest > 0 ? `; … and ${rest} more` : ''}.`);
+  }
+  return notes;
 }
 
 /** The relocated project's directory and where it goes, when the plan moves one (a hosted detach or adopt). */
@@ -305,7 +377,16 @@ function partDirectories(plan: MigrationPlan, family: ProjectFamily): string[] {
 /** Step 4: the roots a verb writes that the family graph does not hold yet — a project attached or adopted. */
 function broughtIn(plan: MigrationPlan, family: ProjectFamily): string[] {
   const known = new Set(family.nodes.map((n) => path.resolve(n.directory)));
-  return [...new Set(plan.edits.flatMap((e) => (e.write ? [path.resolve(e.write.root)] : [])))].filter((r) => !known.has(r));
+  // A member a write declares is read by the result even when nothing writes
+  // into it: the copy must hold it, or the family run on the copy would miss it.
+  const declared = plan.edits.flatMap((e) => {
+    if (e.write?.call !== 'declareMember') return [];
+    const at = (e.write.args[1] as { path?: unknown } | undefined)?.path;
+    if (typeof at !== 'string') return [];
+    const dir = path.resolve(e.write.root, at);
+    return fs.existsSync(path.join(dir, '.wai')) ? [dir] : [];
+  });
+  return [...new Set([...plan.edits.flatMap((e) => (e.write ? [path.resolve(e.write.root)] : [])), ...declared])].filter((r) => !known.has(r));
 }
 
 /** Steps 6-14: which writer. */

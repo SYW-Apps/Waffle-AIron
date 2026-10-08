@@ -117,12 +117,12 @@ describe('1 — a wairon upgrade never stales an unchanged approval by itself (r
     expect(after.all).not.toContain('re-validated under');
   });
 
-  it('a record from before gate parts, taken by an older release over the same design, is carried too', async () => {
+  it('a record from before gate parts is never carried (round 7): it cannot prove its own inputs unchanged', async () => {
     const dir = await lockedHabitly('carry-legacy');
     takenByOlderRelease(dir, true);
     const check = await sb.run(['lock-check'], dir);
-    expect(check.code, transcript(check)).toBe(0);
-    expect(check.all).toContain('re-validated under');
+    expect(check.code, transcript(check)).toBe(1);
+    expect(check.all).toContain('before wairon recorded its inputs separately');
   });
 
   it('when the new rules find an issue in the approved design, the approval is stale for exactly that issue', async () => {

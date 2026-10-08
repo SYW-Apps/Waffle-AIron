@@ -125,8 +125,15 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
         status('warn', `${projected} — it publishes nothing at that audience: no entry of the L0 export table resolves to a component or a type (\`wairon validate\` names an entry that publishes nothing as EXPORT_INVALID). Publish a Portal or a type in a subsystem's publicInterfaces and export it at L0, or widen --audience.`);
       } else if (gateErrors.length > 0) {
         status('warn', `${projected} — from a design the gate refuses.`);
+      } else if ((result.unresolvedTypes ?? []).length > 0) {
+        status('warn', `${projected} — with types the document cannot describe.`);
       } else {
         status('ok', `${projected}.`);
+      }
+      // A schema the document could not resolve is named, gate errors or not: a client generator gets nothing for it.
+      const unresolved = result.unresolvedTypes ?? [];
+      if (unresolved.length > 0) {
+        status('warn', `The document has no schema for ${unresolved.length} type(s) it names: ${unresolved.join(', ')}. Each reads "Unresolved type" where a client generator expects a schema: pin the external it comes from (\`wairon externals pin\`), or export the type from the member's or external's L0.`);
       }
       if (gateErrors.length > 0) {
         const codes = [...new Set(gateErrors)].map((c) => `${c}${gateErrors.filter((x) => x === c).length > 1 ? ` ×${gateErrors.filter((x) => x === c).length}` : ''}`).join(', ');

@@ -99,6 +99,26 @@ describe('stage 6 — the membership verbs', () => {
     expect([again.refusals, again.changes]).toEqual([[], []]);
   });
 
+  it('a plan announces the findings its result will have that the projects it changes do not report now (round 7, R7-10)', () => {
+    const f = family();
+    const tools = path.join(f.top, 'tools');
+    standalone(tools, 'Tools');
+    // The top already holds a local subsystem "front"; attaching a member under
+    // that alias makes the two read alike — rehearsed on the copy, the plan says so before apply.
+    const planned = plan(f.top, { verb: 'attach', alias: 'front', path: 'tools', announce: true });
+    expect(planned.refusals).toEqual([]);
+    const note = planned.notes.find((n) => n.startsWith('after attach: '));
+    expect(note, planned.notes.join('\n')).toBeDefined();
+    expect(note).toMatch(/1 new warning\(s\) the projects it changes do not report now: LOCAL_ID_SHADOWS_PROJECT/);
+    // Nothing the family already reports is announced as new.
+    expect(planned.notes.join('\n')).not.toMatch(/new error\(s\)/);
+    migrations.discard(planned);
+    // A plan whose result adds nothing announces nothing.
+    const clean = plan(f.top, { verb: 'attach', alias: 'tools', path: 'tools', announce: true });
+    expect(clean.notes.filter((n) => n.startsWith('after attach: '))).toEqual([]);
+    migrations.discard(clean);
+  });
+
   it('attach keeps the id a lock approved over the effective one, and lists the attached project to re-lock', () => {
     const f = family();
     const tools = path.join(f.top, 'tools');
@@ -118,7 +138,11 @@ describe('stage 6 — the membership verbs', () => {
     standalone(path.join(f.top, 'fresh'), 'Fresh', 'fresh');
     projectConfigRepositoryAt(f.top).declareExternal('crm', { source: { path: 'crm' } });
     const cases: [Record<string, string>, string][] = [
-      [{ alias: 'x', path: path.relative(f.top, outside) }, 'not-contained'],
+      // A sibling written with a leading ../ is a location, as `member add` reads it (r7): judged, then refused for what is there.
+      [{ alias: 'x', path: path.relative(f.top, outside) }, 'not-a-project'],
+      // Any other way out is not: an inner .., an absolute path.
+      [{ alias: 'x', path: `fresh/../../${path.basename(outside)}` }, 'not-contained'],
+      [{ alias: 'x', path: outside }, 'not-contained'],
       [{ alias: 'billing', path: 'fresh' }, 'alias-taken'],
       // A malformed alias is alias-invalid, as rename-alias names it — never alias-taken.
       [{ alias: 'Bad Alias', path: 'fresh' }, 'alias-invalid'],

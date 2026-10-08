@@ -293,11 +293,12 @@ methods:
         optional: true
   - name: deleteSpec
     description: >-
-      The sdd_delete_spec workflow: choose the delete for the named kind and answer whether a
-      document was actually removed. A spec that was not there answers false rather than throwing,
-      so a repeated delete is not an error — but the caller is told which of the two happened,
-      because "deleted" and "was never there" are different answers to the same request.
-    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
+      The sdd_delete_spec workflow: hand the delete, with the caller's dry-run and force requests,
+      to the authoring seam and answer what went — every spec removed, every reference left, the
+      tests to revisit — or that nothing was there. A spec that was not there answers false rather
+      than throwing, so a repeated delete is not an error, but the caller is told which of the two
+      happened.
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
@@ -306,6 +307,16 @@ methods:
       - name: id
         type: string
         description: The spec's id (namespaced if needed)
+      - name: dryRun
+        type: bool
+        description: Answer with the plan — what would be removed, what references it — and remove nothing
+        optional: true
+      - name: force
+        type: bool
+        description: >-
+          Delete even though other specs still reference what goes, leaving those references for
+          validate to report
+        optional: true
   - name: getProjectConfig
     description: >-
       The getProjectConfig workflow: answer with the bound project's resolved configuration, or null
@@ -446,4 +457,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-08T08:25:46.495Z'
+updatedAt: '2026-10-08T18:55:05.376Z'

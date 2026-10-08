@@ -18,14 +18,14 @@ methods:
       hosting request orchestrator before any call reaches this server. The caller connects the
       transport: stdio for `wairon mcp serve`, the hosted request's HTTP transport for the data
       plane.
-    signature: 'createMcpServer(hostedTools?: bool): McpServerInstance'
+    signature: 'createMcpServer(options?: mcp_server_options): McpServerInstance'
     returns: McpServerInstance
     params:
-      - name: hostedTools
-        type: bool
+      - name: options
+        type: mcp_server_options
         description: >-
-          Advertise the hosted data-plane tools for discovery; false for the stdio server, which
-          cannot serve them.
+          What the caller asks for: the hosted data-plane tools advertised for discovery (never for
+          the stdio server, which cannot serve them), and the build the server stands for
         optional: true
     endpoint:
       transport: Custom
@@ -58,4 +58,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-10-06T19:01:08.252Z'
-updatedAt: '2026-10-06T19:01:42.517Z'
+updatedAt: '2026-10-08T19:33:38.188Z'

@@ -22,13 +22,43 @@ methods:
         targetMethod: diffAgainstApproval
       - stepNumber: 2
         description: >-
+          A scoped lock (--subsystem): read the spec paths in that scope through the core portal, to
+          tell a spec inside the scope from one outside it
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: specPathsInScope
+      - stepNumber: 3
+        label: scope-check
+        description: >-
+          A --subsystem lock narrows a RE-approval and never a first one: the gate identity a record
+          certifies is the whole design's, so a record listing one subsystem while its identity
+          covers the whole tree would pass lock-check over specs nobody reviewed. Is it a scoped
+          lock that cannot be approved alone — no approval on record with per-spec digests (a first
+          approval covers the whole tree), a record without gate parts that break down its identity
+          (it cannot show the rest unmoved), a spec OUTSIDE the scope that changed, was added or was
+          removed since the approval, or an input the identity covers besides the design (rule
+          tuning, packs, network, composition, a pin, a member's approval, the release) that moved?
+        type: branch
+        condition: '--subsystem was given and the scope cannot be approved alone'
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse, writing nothing, saying why in one sentence: a first approval covers the whole
+          tree (`wairon lock` without --subsystem), or what moved outside the scope is named and the
+          whole project must be re-approved together. A scoped lock that passes re-approves its
+          scope and carries the rest forward exactly as previously approved — nothing outside it
+          moved — so the record, its identity, status and lock-check agree
+        type: throw
+        error: a --subsystem lock that cannot be approved alone
+      - stepNumber: 5
+        description: >-
           Read each DIRECT member's approval state, subject and pin, each project member computed at
           its own root (depth 1) — and each part, answered as a part with its content digest and the
           commit it was read at (stage 8)
         type: call
         targetComponent: validator_portal
         targetMethod: familyApprovals
-      - stepNumber: 3
+      - stepNumber: 6
         label: release-carry
         description: >-
           Refresh the record's release stamp when the own approval carried a change of the release
@@ -36,18 +66,18 @@ methods:
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: restampRelease
-      - stepNumber: 4
+      - stepNumber: 7
         description: Was the release stamp refreshed?
         type: branch
         condition: restampRelease answered a record
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           Return the refreshed record (the generated outputs are refreshed by the caller as after
           any lock)
         type: return
         outcome: restamped
-      - stepNumber: 6
+      - stepNumber: 9
         description: >-
           Read the approval on record: when no own spec moved, the summary must still say what did —
           the captured gate identity differing from the recorded one is an input the identity covers
@@ -57,7 +87,7 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: readLockRecord
-      - stepNumber: 7
+      - stepNumber: 10
         description: >-
           Read the specs of every kind — this component read and its siblings for subsystems,
           contracts, implementations and types — to say plainly how many of each are still draft or
@@ -66,25 +96,28 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
-      - stepNumber: 8
+      - stepNumber: 11
         description: >-
           Print the summary: the own specs changed, added and removed — a part's specs among them,
           under `members/<alias>/…`, since a part is this project's own content; a spec whose
           storage moved with its content unchanged is a move (ApprovalDiff.moved), counted apart and
           never as a change; past a dozen paths per kind the list is summarized (the first few, then
           a count of the rest and `--all`, which lists every one); when no own spec moved, either
-          "nothing has changed" or — when the identity or the project id moved — "no spec changed,
-          but what the design is approved under did", naming it; when any spec of any kind is still
-          draft or design, how many of how many, counted per kind (subsystems, components,
-          contracts, implementations, types), and that the approval covers them as they stand; the
-          code results of the gate on a line of their own ("code: N errors, M warnings recorded
-          beside the claim — CI enforces them, not the lock"); then each direct project member with
-          its state (approved | drifted | never) and, where its pin moved, the subject this approval
-          recorded and the one it carries now — a project member's own edits never appear in this
-          project's spec diff; what the parent reviews is the member's approval moving; then each
-          part stored outside the project with the commit being approved
+          "nothing has changed" — the approval on record stays as it is, its lockedAt and
+          .wai/lock.json untouched, unless another approver is locking (then their approval is
+          recorded anew, said so) — or, when the identity or the project id moved, "no spec changed,
+          but what the design is approved under did", naming it (a record without gate parts says it
+          cannot tell which input moved and that this re-approval records them); when any spec of
+          any kind is still draft or design, how many of how many, counted per kind (subsystems,
+          components, contracts, implementations, types), and that the approval covers them as they
+          stand; the code results of the gate on a line of their own ("code: N errors, M warnings
+          recorded beside the claim — CI enforces them, not the lock"); then each direct project
+          member with its state (approved | drifted | never) and, where its pin moved, the subject
+          this approval recorded and the one it carries now — a project member's own edits never
+          appear in this project's spec diff; what the parent reviews is the member's approval
+          moving; then each part stored outside the project with the commit being approved
         type: local
-      - stepNumber: 9
+      - stepNumber: 12
         description: >-
           Refuse, writing nothing, what no lock may approve (cli_lock_adapter.assertApprovable): a
           project that requires approved members with a member project not approved, an external
@@ -92,61 +125,60 @@ methods:
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: assertApprovable
-      - stepNumber: 10
+      - stepNumber: 13
         description: >-
           Confirm with the human (skipped under --yes; a non-interactive shell without --yes
           refuses)
         type: branch
         condition: the human declined the confirmation
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
         description: 'Declined: nothing was written'
         type: return
         outcome: null (declined)
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Capture the approval: one digest per OWN spec file — the project's own and its parts'
           (stage 8), a part's keyed `members/<alias>/<path inside the part>` so moving its storage
-          changes no key; a --subsystem scope re-captures only what it covers and carries the rest
-          of the previous approval forward
+          changes no key. A scoped lock that passed the scope check captures the same: nothing
+          outside its scope moved, so the rest is carried forward as previously approved and the
+          record agrees with the whole-tree identity it certifies
         type: call
         targetComponent: approval_portal
         targetMethod: captureApprovedSpecs
-      - stepNumber: 13
+      - stepNumber: 16
         description: 'Resolve who is approving: the git author identity, else user@hostname'
         type: call
         targetComponent: approval_portal
         targetMethod: localApprover
-      - stepNumber: 14
+      - stepNumber: 17
         label: confirm
         description: Recompute the gate identity immediately before writing
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
           Did any input move while the lock ran — between the capture before validation and now, the
           confirmation prompt included?
         type: branch
         condition: the recomputed identity differs from the captured one
-        onTrueStep: 16
-        onFalseStep: 17
-      - stepNumber: 16
+        onTrueStep: 19
+        onFalseStep: 20
+      - stepNumber: 19
         description: >-
           Refuse, writing nothing: a spec, the doctrine, an input, the composition block or a
           member's approval changed while the lock ran, so the validation the human saw does not
           describe what would be recorded. Run the lock again
         type: throw
         error: the lock's inputs changed while it ran
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
-          A scoped lock (--subsystem) covers only its subsystem: read the spec paths in that scope
-          through the core portal, so every spec outside it keeps the approval it already had
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: specPathsInScope
-      - stepNumber: 18
+          Nothing below is scoped: a scoped lock that passed the scope check records the whole
+          tree's digests and identity, exactly what an unscoped lock of the same tree records
+        type: local
+      - stepNumber: 21
         description: >-
           Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
           gateParts = the captured identity's parts (each input digested on its own, so a later
@@ -159,27 +191,30 @@ methods:
           gate.analysis without its codes list. No `children`, no `reexpressed`, no `restamped` (a
           human approved this one)
         type: local
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
-          Is the assembled record the record already on file in every field but lockedAt — the same
-          identity, specs, members, project id, approver, counts and code? Then nothing was approved
-          anew, and rewriting the timestamp would only leave .wai/lock.json modified with no change
-          in it
+          Is the assembled record the same APPROVAL as the record on file — the same identity, specs
+          and reading, format, members, project id and approver? The evidence recorded beside it
+          (lockedAt, validatorVersion, gateParts, validationResult, code, a `restamped` trace) is
+          not the approval: when the approval is the same, nothing was approved anew
         type: branch
-        condition: a record is on file and equals the assembled one but for lockedAt
-        onFalseStep: 21
-      - stepNumber: 20
+        condition: a record is on file and is the same approval as the assembled one
+        onFalseStep: 24
+      - stepNumber: 23
         description: >-
-          Keep the record on file — its lockedAt included — write nothing, and return it, so the
-          generated outputs are still refreshed
+          Keep the record on file — its lockedAt, release stamp and `restamped` trace included — and
+          write nothing, and return it, so the generated outputs are still refreshed and
+          `.wai/lock.json` is left untouched as the summary said. Only when its gateParts are
+          missing or do not break down the identity it still matches are they rewritten from the
+          identity, every other field kept, and said so
         type: return
         outcome: LockRecord
-      - stepNumber: 21
+      - stepNumber: 24
         description: Persist the commit-scoped lock record — the only file this lock writes
         type: call
         targetComponent: approval_portal
         targetMethod: writeLockRecord
-      - stepNumber: 22
+      - stepNumber: 25
         description: Return the written lock record
         type: return
         outcome: LockRecord
@@ -323,6 +358,9 @@ methods:
           stamp without a re-approval); and how many member projects are approved at their own
           roots. A member that was never approved is named as NOT gated (only --strict fails it), so
           the verdict never calls the family approved while one of its projects was never approved.
+          When the record's gateParts do not break down its identity (the own entry's partsIgnored),
+          one notice says they are ignored and that `wairon lock` rewrites them — the identity alone
+          decided the pass.
         type: return
         outcome: locked
       - stepNumber: 17
@@ -579,16 +617,21 @@ methods:
         description: >-
           Does the root's own entry carry a release verdict that did NOT carry the approval over
           (family_validator.releaseVerdict: the approved design re-validated under this release
-          finds issues)?
+          finds issues, or the record cannot prove its own inputs unchanged — no gate parts, parts
+          that do not break down its identity, a newer or invalid stamp)?
         type: branch
         condition: the own entry's release verdict is not carried
         onFalseStep: 9
       - stepNumber: 8
         description: >-
-          Refuse at every strictness, naming the cause exactly: approved under <old release>, and
-          the new release finds N issue(s) in the approved design — the first few named, `CODE
-          [spec] message` — with the remedy: resolve them, `wairon lock`, commit. Never the generic
-          list of candidate inputs: what moved is known
+          Refuse at every strictness, naming the cause exactly (release_verdict.staleSentence): its
+          reason when it has one — `approved under <old> before wairon recorded its inputs
+          separately — re-lock once to record them; later upgrades then carry over`, `written by a
+          newer wairon`, a stamp that is no version — else approved under <old release>, and the new
+          release finds N issue(s) in the approved design, the first few named `CODE [spec]
+          message`, with the remedy: resolve them, `wairon lock`, commit. Never the generic list of
+          candidate inputs, and never the claim that every input the project decides is as approved
+          unless its parts prove it
         type: return
         outcome: stale (release findings)
       - stepNumber: 9
@@ -614,8 +657,10 @@ methods:
         description: >-
           Refresh its release stamp WITHOUT a re-approval: stateId = the captured identity,
           gateParts = its parts, validatorVersion = this release and `restamped: {at, fromVersion,
-          toVersion, by: wairon lock}`; lockedAt, lockedBy, specs, members and results kept — the
-          approval stays the approver's
+          toVersion, by: wairon lock, subject}`, where subject is the approval subject the record
+          had (lock_record.approvalSubject: an earlier restamp's subject, else its stateId) — what a
+          parent keeps pinning, so the restamp never reads as a re-approval one level up; lockedAt,
+          lockedBy, specs, members and results kept — the approval stays the approver's
         type: local
       - stepNumber: 4
         description: Persist the refreshed record — the only file this writes — and say so in one line
@@ -680,4 +725,4 @@ methods:
         outcome: ok
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-08T09:02:55.800Z'
+updatedAt: '2026-10-08T18:54:41.873Z'

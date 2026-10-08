@@ -96,6 +96,30 @@ methods:
           re-exported, which is what makes it a pure re-export barrel
         type: local
       - stepNumber: 7
+        label: readSignaturesAndRoutes
+        description: >-
+          Beside those facts, read at exact grade the parameters each named function-like with a
+          body DECLARES — its name unless destructured, its annotation as written, whether a caller
+          may leave it out, and whether it is PROVABLY unused: named, with no identifier of that
+          name in the body or in another parameter's default value and no read of `arguments` (a
+          shadowing local counts as a use, which can only keep a parameter judged) — and the routes
+          it serves, read two ways. The guard idiom: an `if` whose conditions, together with every
+          enclosing `if`'s, compare `<request>.method` with a string and `parts[i]` / `parts.length`
+          with literals, every compared value a string literal or one this file's constants,
+          concatenations and template literals settle; where the function strips a prefix before
+          splitting the path (`.slice(BASE.length)`, `.slice('/v1'.length)`,
+          `.substring(BASE.length)`, `.replace(BASE, '')`) and that prefix settles, its segments are
+          folded in front of each route, marked fullPath. The table idiom: every entry of a route
+          table the function names — a top-level constant array of object literals each pairing a
+          method (a `method` or `verb` property, else any property whose value is an HTTP verb) with
+          a path (a `path`, `pattern`, `route` or `url` property, else any property whose value is a
+          path or a regular-expression literal: a `/a/:b` or `/a/{b}` template, or an expression
+          anchored with ^ whose segments are literals or capture groups, the groups being the
+          wildcards), or a top-level constant object keyed `VERB /path` — each marked fullPath. A
+          table any of whose entries cannot be settled is read as no table at all, never as part of
+          one: a route is never invented
+        type: local
+      - stepNumber: 8
         label: chaseReexports
         description: >-
           Chase the re-export barrels through their relative specifiers, and their package
@@ -112,7 +136,7 @@ methods:
           than guessed. A carried site keeps the file it was READ in, so its bare names and
           receivers resolve in the real module's scope and never in the barrel's
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         label: resolveCalls
         description: >-
           Resolve every call with the type checker: build one program over every exact-grade ts/js
@@ -161,12 +185,44 @@ methods:
           canonical key, and a bare one that does not (never a relative path or a node: builtin) as
           a package
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
+        label: checkerReadings
+        description: >-
+          With the same program, three readings more. The RECEIVER is read the way the code means
+          it: a call to a name nothing declares, spelled `await` with one argument — the parser's
+          reading of `await (x)` outside an async function — is that argument, see-through like
+          parentheses, and a receiver chain is opaque wherever one of its links is; the original
+          type has its nullability set aside, so an optional field reads as the class it holds; a
+          name bound once by a const declaration is read through its initializer when its own type
+          lands on no class; and an interface or type shape no class realizes lands, as a receiver,
+          on the shape in the file declaring it — what a component realized by a factory is typed
+          by. A call on a receiver typed by an index signature that has no property of the call's
+          name lands on no declaration and is unresolved, exactly as a cast to one is; and a call
+          whose every landing is a member of an interface or type shape no project class realizes is
+          marked port. The SIGNATURES: each parameter of each named function-like with a body gets
+          the kind of value the checker says it takes (string, number, boolean, list, object or
+          function, nullability set aside; none where no one kind settles; a platform class the
+          fixed ES library leaves out — URL, Request, Response, Headers, IncomingMessage,
+          ServerResponse, Buffer and their kin — an object where the checker cannot resolve it),
+          joined onto the parameter facts in the order the walk met the functions, wherever both
+          read the same functions with the same number of parameters. The ROUTES of every such
+          function whose body speaks of a method or a verb — both idioms compare one — are re-read
+          with the checker settling each compared value — a constant another module exports, and any
+          expression the checker types as one string literal — and replace the syntactic reading of
+          that function. And the CROSS-PROJECT IMPORTS: each import declaration of a root file,
+          type-only or not, whose module lies in ANOTHER project — the nearest folder above the file
+          the specifier resolves to (or would, for a relative specifier resolving to nothing) that
+          holds a .wai/project.yaml is not the analyzed project's root, nothing under node_modules —
+          and resolves to nothing: the module missing, or a name imported from it whose alias the
+          checker resolves to no declaration; each recorded as a CrossProjectImportFact (the
+          specifier, the name, the other project's root, the line, whether it is type-only)
+        type: local
+      - stepNumber: 11
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
           root-file list the unclaimed-source rule judges, the local-package map every import
@@ -246,4 +302,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-08T08:30:17.363Z'
+updatedAt: '2026-10-08T19:51:20.546Z'

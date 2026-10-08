@@ -9,10 +9,11 @@ description: >-
   so a project's verdict is the same from every root. It also gathers the inputs of the gate
   identity a lock records (the content identity, the governing extensions and gate config, the
   consumed contract inputs and the built-in rules) and has the gate identity computed from them. Its
-  write-gate half runs only the spec-scoped rules against a component candidate before the component
-  is saved. It holds no state of its own: the rule set belongs to the rule Repository, and each
-  rule's verdict to its rule family. The family run that composes projects is family_validator's,
-  which calls this gate once per project.
+  write-gate half runs the spec-scoped rules against a component candidate before the component is
+  saved, and the doctrine edge and route rules over the tree with a component or contract candidate
+  in place, keeping only what the candidate introduces. It holds no state of its own: the rule set
+  belongs to the rule Repository, and each rule's verdict to its rule family. The family run that
+  composes projects is family_validator's, which calls this gate once per project.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -24,6 +25,7 @@ dependsOn:
   - rule_repository
   - gate_identity
   - reach_model_projector
+  - doctrine_rules
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-08T08:22:25.025Z'
+updatedAt: '2026-10-08T19:14:48.774Z'

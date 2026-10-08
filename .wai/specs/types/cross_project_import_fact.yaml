@@ -1,0 +1,40 @@
+kind: value-object
+id: cross_project_import_fact
+name: CrossProjectImportFact
+description: >-
+  One import a file makes from ANOTHER project's source that resolves to nothing — the module the
+  specifier names is gone, or it does not export the name imported from it. Another project is a
+  folder holding its own `.wai/project.yaml` that is not the analyzed project's root (a member
+  project inside it, or a sibling outside it): its code moves on its own release, and a type-only
+  import of it is erased at run time, so nothing but a compiler would notice — and the gate reads
+  the file with one.
+subsystem: sdd_validator
+fields:
+  - name: specifier
+    type: string
+    description: The module specifier as the import writes it
+    optional: false
+  - name: name
+    type: string
+    description: >-
+      The name imported from it that the module does not export; absent when the module itself does
+      not resolve
+    optional: true
+  - name: project
+    type: string
+    description: The other project's root the import reaches into, relative to the analyzed project's root
+    optional: false
+  - name: line
+    type: int
+    description: The 1-based line of the import
+    optional: false
+  - name: typeOnly
+    type: bool
+    description: >-
+      Whether the import binds the name as a type only — erased at run time, so no test run notices
+      it either
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-08T18:51:43.992Z'
+updatedAt: '2026-10-08T18:51:44.762Z'

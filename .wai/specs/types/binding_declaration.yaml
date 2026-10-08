@@ -14,8 +14,10 @@ fields:
   - name: kind
     type: string
     description: >-
-      function, interface, class, type (an object type alias, whose members are its fields), alias
-      (any other type alias — a union, a primitive, a reference — compared by name only) or enum.
+      function, interface, class, object (a CommonJS `exports.X = { … }` or a property of
+      `module.exports = { … }` holding an object literal, whose members are its methods and fields),
+      type (an object type alias, whose members are its fields), alias (any other type alias — a
+      union, a primitive, a reference — compared by name only) or enum.
     optional: false
   - name: params
     type: list<string>
@@ -28,9 +30,11 @@ fields:
   - name: tag
     type: string
     description: >-
-      The `alias::name` its leading doc comment names (`/** geo::tiles */`), when it names one: the
+      The `alias::name` its leading doc comment names (`/** geo::tiles */`, or `/**
+      geo::tiles.tile_at */` naming the one method a free function mirrors), when it names one: the
       producer interface or type the author says it mirrors, which the comparison then takes instead
-      of matching by name.
+      of matching by name — and against which a free function the interface no longer holds is
+      reported as removed.
     optional: true
   - name: line
     type: int
@@ -39,4 +43,4 @@ fields:
 methods: []
 sourcePath: src/core/binding-modules.ts
 createdAt: '2026-10-08T08:21:24.570Z'
-updatedAt: '2026-10-08T08:24:05.143Z'
+updatedAt: '2026-10-08T18:48:25.943Z'

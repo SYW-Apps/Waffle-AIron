@@ -77,9 +77,11 @@ methods:
         description: The spec as stated, with the fields its caller's input can express
   - name: deleteSpec
     description: >-
-      Delete one spec of the named kind, answering with whether anything was removed and the tests
-      that encode a method the deletion took away. Routed to the gated workflow.
-    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
+      Delete one spec of the named kind with its subtree, answering with what was removed, the
+      references other specs still hold to it, and the tests that encode a method the deletion took
+      away; refused while a reference remains unless forced, and a dry run removes nothing. Routed
+      to the gated workflow.
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
@@ -88,6 +90,14 @@ methods:
       - name: id
         type: string
         description: The spec id
+      - name: dryRun
+        type: bool
+        description: Answer with the plan and remove nothing
+        optional: true
+      - name: force
+        type: bool
+        description: Delete even though other specs still reference what goes
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-10-04T23:37:32.091Z'
+updatedAt: '2026-10-08T18:52:15.835Z'

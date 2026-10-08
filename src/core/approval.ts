@@ -554,7 +554,9 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
         ? (own.owed !== undefined
           ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock-check\` fails until it is cleared${/never pinned|beyond its pin/.test(own.owed) ? ' — pin first (`wairon externals pin`), then `wairon lock`' : ' — `wairon lock` re-approves the unchanged design'}.`
           : own.release && !own.release.carried
-            ? ` But it was approved under wairon ${own.release.from}, and the new release (${own.release.to}) finds ${own.release.count ?? 0} issue(s) in the approved design: ${(own.release.findings ?? []).join('; ')}. Resolve them, then \`wairon lock\`.`
+            ? (own.release.reason
+              ? ` But ${own.release.reason}`
+              : ` But it was approved under wairon ${own.release.from}, and the new release (${own.release.to}) finds ${own.release.count ?? 0} issue(s) in the approved design: ${(own.release.findings ?? []).join('; ')}. Resolve them, then \`wairon lock\`.`)
             : pinDrift
               ? ''
               : own.inputsMoved && own.inputsMoved.length > 0
@@ -565,8 +567,9 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       const released = own?.release?.carried
         ? ` Approved under wairon ${own.release.from}, re-validated under ${own.release.to}: still approved (\`wairon lock\` refreshes the record's release stamp without a re-approval).`
         : '';
+      const ignored = own?.partsIgnored !== undefined ? ` Notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them.` : '';
       return {
-        text: `\nApproved: ${stamp} — no spec has changed since.${released}${owes}${childNote}${carry}\n`,
+        text: `\nApproved: ${stamp} — no spec has changed since.${released}${owes}${ignored}${childNote}${carry}\n`,
         drifted: pinDrift || own?.state === 'drifted',
       };
     }
