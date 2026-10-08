@@ -168,8 +168,9 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       dependsOn: ['local-helper', 'super::crates-portal'],
     });
     invalidateSpecCache();
-    expect(loadComponentSpec('transpiler::transpiler-orch')!.dependsOn)
-      .toEqual(['transpiler::local-helper', 'crates-portal']);
+    // A plain list merges (round 6): the held dependency stays, the new one joins, each qualified.
+    expect([...loadComponentSpec('transpiler::transpiler-orch')!.dependsOn].sort())
+      .toEqual(['crates-portal', 'transpiler::local-helper']);
   });
 
   it('cross-tree dependsOn survives component re-save', () => {

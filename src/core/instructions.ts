@@ -152,7 +152,8 @@ ${skillPointers(skills)}
 Delegate component work from a LIVE agent brief, never a generated file: discover
 agents via \`listAgents\` (or the \`wairon-agent://\` resources), fetch the target's
 brief with \`sdd_get_agent_brief\`, and spawn a scoped subagent from it — its
-\`instructions\` as prompt, its \`ownedPaths\` as write fence. Briefs are composed
+\`instructions\` as prompt, its \`codeFence\` (exact files) as the code it owns and
+its \`sharedPaths\` as the files it may touch only for its own needs. Briefs are composed
 from the current spec tree on every call, so a re-lock never requires a session
 restart — fetch fresh per delegation. \`wairon-skill://sdd-delegate\` carries the
 full flow.`;

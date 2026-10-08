@@ -1,0 +1,29 @@
+kind: value-object
+id: binding_module
+name: BindingModule
+description: >-
+  A binding module an implementation names (implementation_spec.bindings) as the binding module
+  adapter read it: where it is, whether it could be read, and the exported declarations it holds.
+  The pure input binding conformance judges against the pinned snapshots.
+subsystem: sdd_validator
+fields:
+  - name: path
+    type: string
+    description: The project-relative path as the implementation names it.
+    optional: false
+    key: primary
+  - name: status
+    type: string
+    description: >-
+      read, missing (not on disk: planned), escaped (absolute or outside the project root),
+      unreadable (binary or not readable) or unsupported (a language the reader does not read: only
+      TypeScript and JavaScript are).
+    optional: false
+  - name: declarations
+    type: list<BindingDeclaration>
+    description: The exported declarations, in source order; empty unless the status is read.
+    optional: false
+methods: []
+sourcePath: src/core/binding-modules.ts
+createdAt: '2026-10-08T08:21:28.106Z'
+updatedAt: '2026-10-08T08:21:28.792Z'

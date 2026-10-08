@@ -256,6 +256,15 @@ methods:
         type: string
         description: The project whose .mcp.json to write
     effect: io
+  - name: staleDerivedDocs
+    description: >-
+      Published read: the derived context documents whose content a regenerate would change.
+      Forwarded to the context composer.
+    signature: 'staleDerivedDocs(): list<string>'
+    returns: list<string>
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:13.399Z'
-updatedAt: '2026-10-07T06:21:33.824Z'
+updatedAt: '2026-10-08T08:41:03.404Z'

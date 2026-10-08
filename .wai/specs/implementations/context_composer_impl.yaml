@@ -132,6 +132,23 @@ methods:
         targetComponent: context_store
         targetMethod: derivedPaths
     symbol: derivedDocPaths
+  - name: staleDocs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Render each derived document as a regenerate would write it now: the wairon guide and the
+          domain map
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read each one on disk; a file that is missing is not stale here (the caller reports it
+          missing)
+        type: local
+      - stepNumber: 3
+        description: Answer the paths whose content differs from the rendering, line endings aside
+        type: return
+        outcome: list<string>
+    symbol: staleDerivedDocs
 status: complete
 createdAt: '2026-09-23T11:11:29.644Z'
-updatedAt: '2026-10-03T17:59:24.256Z'
+updatedAt: '2026-10-08T08:41:01.398Z'

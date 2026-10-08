@@ -20,9 +20,10 @@ dependsOn:
   - validator_core_adapter
   - validator_surfaces_adapter
   - source_analysis_adapter
+  - binding_module_adapter
   - rule_repository
   - gate_identity
   - reach_model_projector
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-06T13:00:09.087Z'
+updatedAt: '2026-10-08T08:22:25.025Z'

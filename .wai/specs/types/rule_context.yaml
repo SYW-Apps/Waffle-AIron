@@ -225,6 +225,13 @@ fields:
       facts are the only place the stored form is still visible. entry-declarations reports
       INVOKED_BY_RETIRED_KIND from them. Absent on a candidate run.
     optional: true
+  - name: bindingModules
+    type: list<BindingModule>
+    description: >-
+      Every binding module the bound project's implementations name (implementation_spec.bindings),
+      read once by the validator through the binding module adapter: what binding conformance
+      compares with ctx.pinnedExternals. Absent on a candidate run and a reach-only run.
+    optional: true
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -452,4 +459,4 @@ methods:
       prefixing it). Pure over the scan.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-06T18:01:41.918Z'
+updatedAt: '2026-10-08T08:21:32.463Z'

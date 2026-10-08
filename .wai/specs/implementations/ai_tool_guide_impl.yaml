@@ -90,12 +90,65 @@ methods:
   - name: writeDelegator
     narrative:
       - stepNumber: 1
+        label: block
         description: >-
-          Write the repository-root file as a pointer at the real guide inside the project, rather
-          than a second copy of it — one file to keep current instead of two that can disagree —
-          keeping the file's line endings as every wairon writer does
+          Pick the target's root file and compose wairon's block for it, wrapped in the root-pointer
+          markers (`<!-- wairon-root-start -->` … `<!-- wairon-root-end -->`): for claude CLAUDE.md,
+          the `@.claude/CLAUDE.md` import and the short pointer text; for gemini and agy GEMINI.md,
+          the stamped guide inlined (those tools do not expand imports); .cursorrules,
+          .github/copilot-instructions.md and .codexrules a pointer at the target's own folder. A
+          target that has no root file writes nothing
         type: local
       - stepNumber: 2
+        description: Read the root file as it stands, an absent file read as empty
+        type: local
+      - stepNumber: 3
+        label: marked
+        description: Does the file already hold wairon's marked block?
+        type: branch
+        condition: both root-pointer markers are present
+        onFalseStep: 6
+      - stepNumber: 4
+        description: >-
+          Replace exactly the marked block, markers included, with the new one; every byte before
+          and after it is kept as it is
+        type: local
+      - stepNumber: 5
+        description: Write it
+        type: jump
+        toStep: 10
+      - stepNumber: 6
+        label: legacy
+        description: >-
+          Does the file open with the unmarked pointer an earlier release wrote — recognised by its
+          exact text, line endings and trailing blank lines aside (for GEMINI.md: the `# Wairon SDD
+          Project` heading over a guide section)?
+        type: branch
+        condition: the file starts with an earlier release's unmarked pointer
+        onFalseStep: 9
+      - stepNumber: 7
+        description: >-
+          Migrate it: replace that legacy text with the marked block and keep whatever the user
+          wrote after it byte for byte
+        type: local
+      - stepNumber: 8
+        description: Write it
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        label: append
+        description: >-
+          The user's own file (or none): keep its content exactly and add the marked block after it,
+          separated by a blank line. For claude the block leaves the import line out when the user's
+          own text already imports @.claude/CLAUDE.md, so the guide is never loaded twice
+        type: local
+      - stepNumber: 10
+        label: write
+        description: >-
+          Write the file only when its content changed, keeping its line endings as every wairon
+          writer does (CRLF stays CRLF)
+        type: local
+      - stepNumber: 11
         description: Done
         type: return
         outcome: written
@@ -169,4 +222,4 @@ methods:
     symbol: registerProjectServer
 status: complete
 createdAt: '2026-09-23T00:11:34.495Z'
-updatedAt: '2026-10-07T06:31:06.069Z'
+updatedAt: '2026-10-08T08:26:17.093Z'

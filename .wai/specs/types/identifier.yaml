@@ -55,7 +55,10 @@ methods:
       applied only where the language forbids the word: TypeScript and JavaScript allow a keyword as
       a method or a field (obj.delete()), never as a parameter, and never constructor as a method;
       Ruby likewise refuses keywords as parameters only; Rust, Python, Go, Java, C#, C and Kotlin
-      refuse their keywords as every kind. A language without a table reserves nothing. Pure
+      refuse their keywords as every kind. A language without a table reserves nothing. A tree that
+      declares NO targetLanguage is judged by the TypeScript table — the convention whose camelCase
+      it is already judged by (naming_rule_config.methodCasingFor), so casing and reserved words
+      never disagree — and the answer says it judged it so. Pure
     symbol: reservedWordProblem
   - name: entryIn
     signature: 'entryIn(record: map<string, any>): any'
@@ -82,4 +85,4 @@ methods:
 sourcePath: src/models/identifiers.ts
 holds: string
 createdAt: '2026-10-07T21:43:22.463Z'
-updatedAt: '2026-10-07T22:27:52.297Z'
+updatedAt: '2026-10-08T08:58:22.146Z'

@@ -203,6 +203,22 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: typePath
+    description: >-
+      The path the workspace records for a type's spec, or where one not stored yet is placed under
+      its subsystem and group.
+    signature: 'typePath(id: string, subsystemId?: string, group?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: subsystemId
+        type: string
+        optional: true
+      - name: group
+        type: string
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-06T13:06:52.830Z'
+updatedAt: '2026-10-08T08:43:48.711Z'

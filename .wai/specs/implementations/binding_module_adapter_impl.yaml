@@ -1,0 +1,59 @@
+id: binding_module_adapter_impl
+name: Binding Module Adapter Implementation
+description: >-
+  A syntax-level declaration reader for TypeScript and JavaScript binding modules: comments blanked
+  (doc comments kept for their alias::name tag), string and template literals skipped, braces and
+  parentheses balanced, so the exported functions, interfaces, classes, object type aliases and
+  enums and their members are read without a compiler.
+contract: ibinding_module_adapter
+sourcePath: src/core/binding-modules.ts
+methods:
+  - name: readBindingModules
+    narrative:
+      - stepNumber: 1
+        label: each
+        description: For each distinct path named
+        type: loop
+        over: the distinct paths, in the order named
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Containment: an absolute path, or one whose resolution leaves the project root, is
+          answered escaped and never touched
+        type: branch
+        condition: the path stays within the project root
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Read the file: not a file on disk is missing (planned), a binary or unreadable one is
+          unreadable
+        type: local
+      - stepNumber: 4
+        description: Is it TypeScript or JavaScript by its extension?
+        type: branch
+        condition: the file was read and its language is TypeScript or JavaScript
+        onFalseStep: 1
+      - stepNumber: 5
+        description: >-
+          Blank the comments (keeping each doc comment's `alias::name` for the declaration it
+          precedes), skip string and template literals, and find each `export` of a function,
+          interface, class, type alias or enum (an `export declare` too), recording its name and
+          starting line
+        type: local
+      - stepNumber: 6
+        description: >-
+          For a function: its parameter names, split on the commas at depth zero of its parameter
+          list (a destructured parameter recorded as an empty name). For an interface, a class body
+          or an object type literal: each member at depth zero — a call signature or method with its
+          parameter names, a function-typed field as a method, any other as a data field, a
+          constructor and index signatures skipped; for an enum, its member names as fields
+        type: local
+      - stepNumber: 7
+        description: >-
+          Answer one BindingModule per path: its status and, when read, its declarations in source
+          order
+        type: return
+        outcome: read
+status: complete
+createdAt: '2026-10-08T08:21:54.979Z'
+updatedAt: '2026-10-08T08:21:55.819Z'

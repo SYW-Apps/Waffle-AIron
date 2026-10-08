@@ -1084,6 +1084,37 @@ methods:
           unknown one, the parameters the method has: a wire request could never bind it, and the
           OpenAPI document would describe a parameter nobody sends
         type: local
+      - stepNumber: 13
+        label: routes
+        description: >-
+          Collect every HTTP route of the tree: for each Portal whose transport is HTTP, each
+          interface method bound to an HTTP endpoint, keyed by its verb (upper case) and its full
+          path — the Portal's basePath joined to the endpoint path, slashes collapsed, a trailing
+          slash dropped, and every placeholder (`{name}` or a `:name` segment) reduced to one
+          positional marker, so `/a/{id}` and `/a/:code` are one route; the scope of a route is its
+          Portal, or, when the Portal declares a basePath other than `/`, that normalized basePath,
+          which Portals sharing it share
+        type: local
+      - stepNumber: 14
+        label: routeGroup
+        description: For each group of routes sharing scope, verb and normalized path
+        type: loop
+        loopKind: forEach
+        over: the route groups
+        endStep: 16
+      - stepNumber: 15
+        description: Do two or more methods bind it?
+        type: branch
+        condition: the group holds more than one route
+        onFalseStep: 14
+      - stepNumber: 16
+        label: routeReport
+        description: >-
+          Report ENDPOINT_ROUTE_DUPLICATE (error, never in draft context: two verbs on one route is
+          a contradiction, not unfinished work) once per interface in the group, naming every method
+          that binds the route with its interface and Portal, the verb and the full path: no router
+          can dispatch both, and an OpenAPI document holds one operation per path and verb
+        type: local
     symbol: check
     exportedVia: portalsRule
   - name: nonPortalEndpoints
@@ -1580,4 +1611,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-07T22:57:05.863Z'
+updatedAt: '2026-10-08T08:28:42.050Z'

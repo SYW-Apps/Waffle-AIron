@@ -78,6 +78,42 @@ methods:
         description: The project's configuration half; only rules.conformance is read
     guarantees:
       - idempotent
+  - name: parts
+    description: >-
+      The gate identity's inputs digested ONE BY ONE, in exactly the projection compute takes them
+      in: `design` the own content identity, `release` the built-in design rules (the wairon
+      release's own doctrine), `rules` the project type with the design rule tuning, `packs` the
+      governing extensions' doctrine (packs, profiles, languages, patterns, guarantees, assertions,
+      pack rules), `network` the declaration (left out when none is declared), `composition`,
+      `contracts` the consumed contract inputs and `members` the members' subjects. Never part of
+      the identity's digest: a lock records them beside it (gateParts), so a later check can name
+      the input that moved and tell a change of the wairon release alone — judged by re-validation —
+      from a change the project made. Pure.
+    signature: >-
+      parts(content: StateId, doctrine: LoadedExtensions, builtinRules: list<SddRule>, inputs:
+      list<string>, gate: GateConfig, members: map<string, string>): map<string, string>
+    returns: map<string, string>
+    params:
+      - name: content
+        type: StateId
+        description: The project's own design identity
+      - name: doctrine
+        type: LoadedExtensions
+        description: The governing extensions
+      - name: builtinRules
+        type: list<SddRule>
+        description: The built-in rule sequence; the rules that judge code are filtered out
+      - name: inputs
+        type: list<string>
+        description: The own consumed contract inputs
+      - name: gate
+        type: GateConfig
+        description: The project's type, rule tuning, composition and network
+      - name: members
+        type: map<string, string>
+        description: Each direct member's alias → its composition subject
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-10-06T23:05:38.681Z'
+updatedAt: '2026-10-08T08:36:37.923Z'

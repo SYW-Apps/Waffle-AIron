@@ -5,7 +5,7 @@ import type { StateId } from './statehash.js';
 import { LockRecordUnreadableError } from '../utils/errors.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
-import type { ApproverIdentity, CodeAnalysis, LockReexpression, ProjectApprovalState, SpecDigestReading } from '../models/lock.js';
+import type { ApproverIdentity, CodeAnalysis, LockReexpression, LockRestamp, ProjectApprovalState, SpecDigestReading } from '../models/lock.js';
 import type { MemberKind } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -101,6 +101,18 @@ export interface LockRecord {
    * human re-approving it.
    */
   reexpressed?: LockReexpression;
+  /**
+   * The digest of each input of the certified gate identity (StateId.parts):
+   * what lets a later check name the input that moved, and judge a change of
+   * the wairon release alone by re-validation instead of by digest. Absent on
+   * a record written before this release.
+   */
+  gateParts?: Record<string, string>;
+  /**
+   * Present when `wairon lock` refreshed the record's release stamp after the
+   * approved, unchanged design re-validated clean under a newer release.
+   */
+  restamped?: LockRestamp;
   /**
    * Each DIRECT member, keyed by alias → its composition subject and approval
    * state as they stood when this project locked. Present (possibly empty) on
@@ -223,7 +235,10 @@ function displayPath(file: string): string {
 
 function normalizeRecord(raw: unknown): LockRecord {
   const record = raw as LockRecord;
-  return { ...record, lockedBy: normalizeApprover((record as { lockedBy?: unknown }).lockedBy) };
+  // A lockedAt that is no timestamp text is no timestamp: read as absent, so
+  // no verdict prints `approved undefined` or a number as a date.
+  const lockedAt = typeof (record as { lockedAt?: unknown }).lockedAt === 'string' ? record.lockedAt : '';
+  return { ...record, lockedAt, lockedBy: normalizeApprover((record as { lockedBy?: unknown }).lockedBy) };
 }
 
 /**

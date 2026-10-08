@@ -81,9 +81,13 @@ describe('findOrphanedSpecFiles — spec files under a specs folder that lost it
   it('is empty while the L0 is there, and for a folder with nothing in it', () => {
     fs.mkdirSync(specs(), { recursive: true });
     expect(runWithProjectRoot(root, () => findOrphanedSpecFiles())).toEqual([]);
-    fs.writeFileSync(path.join(specs(), '.index.yaml'), 'name: X\n');
+    // A READABLE L0 (round 6: one that does not read leaves the tree as unjudged as a deleted one).
+    fs.writeFileSync(path.join(specs(), '.index.yaml'), 'schemaVersion: "1.0.0"\nname: X\nvision: a readable L0\nboundaries: []\nglobalRequirements: []\ncreatedAt: "2026-01-01T00:00:00.000Z"\nupdatedAt: "2026-01-01T00:00:00.000Z"\n');
     fs.mkdirSync(path.join(specs(), 'habits'), { recursive: true });
     fs.writeFileSync(path.join(specs(), 'habits', '.index.yaml'), 'id: habits\n');
     expect(runWithProjectRoot(root, () => findOrphanedSpecFiles())).toEqual([]);
+    // The same tree under an L0 that cannot be read is a tree whose root is broken.
+    fs.writeFileSync(path.join(specs(), '.index.yaml'), 'name: X\n');
+    expect(runWithProjectRoot(root, () => findOrphanedSpecFiles())).toEqual(['.wai/specs/habits/.index.yaml']);
   });
 });

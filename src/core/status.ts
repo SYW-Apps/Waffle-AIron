@@ -27,6 +27,7 @@ import {
   loadTypeSpecs,
   getLoaderIssues,
   scanAllSpecs,
+  findOrphanedSpecFiles,
 } from './specs.js';
 import { implementationSourceFiles, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
@@ -82,7 +83,11 @@ export interface StatusOptions {
 function approvalTag(entry: ProjectApproval | undefined): string {
   if (!entry) return '';
   const words = APPROVAL_WORDS[entry.state];
-  const state = entry.upgraded ? `${words}, re-lock once` : words;
+  const state = entry.release
+    ? (entry.release.carried
+      ? `${words}, re-validated under ${entry.release.to}`
+      : `${words}: the new release finds ${entry.release.count ?? 0} issue(s)`)
+    : entry.upgraded ? `${words}, re-lock once` : words;
   return entry.pinned ? ` [${state} · ${PIN_WORDS[entry.pinned]}]` : ` [${state}]`;
 }
 
@@ -201,9 +206,14 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // a script came to read a tree that would not parse as a healthy one.
   if (loaderErrors.length > 0) {
     let errText = 'Failed to parse specification files:\n';
+    // Each failure said once: a file read twice reports the same issue twice.
+    const said = new Set<string>();
     for (const issue of loaderErrors) {
       const prefix = issue.specId ? mark.structure(`[${issue.specId}] `) : '';
-      errText += `${prefix}[${issue.code}] ${issue.message}\n`;
+      const line = `${prefix}[${issue.code}] ${issue.message}`;
+      if (said.has(line)) continue;
+      said.add(line);
+      errText += `${line}\n`;
     }
     return { text: errText, failed: true };
   }
@@ -224,6 +234,18 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     // for a system.yaml that never exists.
     if (!pathExists(fromProjectRoot('.wai/project.yaml'))) {
       return { text: `No wairon project binds this folder (no .wai/project.yaml at ${fromProjectRoot('.')}): there is no design to report.`, failed: true };
+    }
+    // Spec files left below a missing L0: a tree whose root is gone, said as
+    // `validate` and `lock-check` say it — never "not started".
+    const orphaned = findOrphanedSpecFiles();
+    if (orphaned.length > 0) {
+      const shown = orphaned.slice(0, 3).join(', ') + (orphaned.length > 3 ? `, … and ${orphaned.length - 3} more` : '');
+      return {
+        text: `The L0 System spec (.wai/specs/.index.yaml) is missing, but ${orphaned.length} spec file(s) remain below it (${shown}): `
+          + 'the tree is not empty, its root is gone, so nothing below it can be judged. Restore it from version control '
+          + '(`git checkout -- .wai/specs/.index.yaml`).',
+        failed: true,
+      };
     }
     return { text: 'This project has no L0 System spec yet (.wai/specs/.index.yaml): its design has not been started.', failed: true };
   }
@@ -464,7 +486,12 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   if (own && nothingDesigned) {
     output += `${mark.layer('system', 'Approval:')} nothing to approve yet — the tree holds the L0 and nothing below it (add a subsystem, then \`wairon lock\`)\n`;
   } else if (own) {
-    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
+    const release = own.release
+      ? (own.release.carried
+        ? ` (approved under wairon ${own.release.from}, re-validated under ${own.release.to}: still approved)`
+        : ` (approved under wairon ${own.release.from}; the new release finds ${own.release.count ?? 0} issue(s) in the approved design)`)
+      : '';
+    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}\n`;
   }
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

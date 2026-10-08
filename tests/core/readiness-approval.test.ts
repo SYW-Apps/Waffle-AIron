@@ -193,12 +193,15 @@ describe('an older lock over an untouched tree whose gate moved', () => {
     return record;
   }
 
-  it('lock-check names the moved gate as the cause, never the design or code linkage', () => {
+  it('lock-check judges a release change by re-validation and names its findings, never the design or code linkage (round 6)', () => {
     root = project();
     writeFormat2UnderOtherGate();
     const check = checkApproval(false);
     expect(check.approved).toBe(false);
-    expect(check.message).toContain('what moved is the gate it was judged under');
+    // Only the release moved: the approved design is re-validated under it, and
+    // this fixture's unreached worker is what the new release reports.
+    expect(check.message).toContain('was taken under wairon 5.1.1-dev.102, and the new release');
+    expect(check.message).toContain('UNUSED_COMPONENT');
     expect(check.message).not.toContain('the design, or only code linkage');
   });
 
@@ -213,7 +216,7 @@ describe('an older lock over an untouched tree whose gate moved', () => {
     expect(readLockRecord()!.format).toBe(3);
     // Still stale — for the gate — and one lock clears it.
     expect(readLockState(computeGateStateId()).state).toBe('stale');
-    expect(checkApproval(false).message).toContain('what moved is the gate');
+    expect(checkApproval(false).message).toContain('finds 1 issue(s) in the approved design');
     // Idempotent.
     expect(reexpressLock()).toBeNull();
   });

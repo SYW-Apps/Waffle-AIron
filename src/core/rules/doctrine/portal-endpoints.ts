@@ -65,11 +65,12 @@ export const portalsRule: SddRule = {
   name: 'portal-endpoints',
   judges: 'design',
   description:
-    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's parameters, so each must be closed, appear once and name a parameter of the method or a field of a parameter's type (a method that states no structured params is not judged on names).",
+    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's parameters, so each must be closed, appear once and name a parameter of the method or a field of a parameter's type (a method that states no structured params is not judged on names). One HTTP route binds one verb: two methods bound to the same HTTP method and path — the Portal's basePath joined in, placeholders compared by position whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI document holds one operation per path and verb.",
   codes: [
     { code: 'MISSING_ENDPOINT', defaultSeverity: 'error', summary: 'Portal method without a wire endpoint binding, on a transport that requires one' },
     { code: 'ENDPOINT_TRANSPORT_MISMATCH', defaultSeverity: 'error', summary: "Endpoint transport does not match the Portal's transport" },
     { code: 'ENDPOINT_PATH_PLACEHOLDER', defaultSeverity: 'error', summary: 'An HTTP endpoint path holds an unclosed placeholder, one placeholder twice, or a placeholder that names no parameter of its method' },
+    { code: 'ENDPOINT_ROUTE_DUPLICATE', defaultSeverity: 'error', summary: 'Two methods bound to the same HTTP method and path (placeholders compared by position) within one Portal, or across Portals declaring the same basePath' },
   ],
   check(ctx) {
     for (const comp of ctx.components) {
@@ -127,5 +128,69 @@ export const portalsRule: SddRule = {
         }
       }
     }
+    // Steps 13-16: one HTTP route binds one verb.
+    duplicateRoutes(ctx);
   },
 };
+
+/**
+ * An HTTP route as a router matches it: the basePath joined in, slashes
+ * collapsed, a trailing slash dropped, and every placeholder — `{name}` or a
+ * `:name` segment — reduced to one positional marker, since a router (and an
+ * OpenAPI document) binds a placeholder by its position, never by its name.
+ */
+function routeKey(basePath: string | undefined, path: string): string {
+  const base = (basePath ?? '').trim();
+  const joined = `/${base}/${path.trim()}`.replace(/\/+/g, '/');
+  const trimmed = joined.length > 1 ? joined.replace(/\/+$/, '') : joined;
+  return trimmed
+    .split('/')
+    .map((segment) => (segment.startsWith(':') ? '{}' : segment.replace(/\{[^}]*\}/g, '{}')))
+    .join('/') || '/';
+}
+
+/** A Portal's basePath as a scope two Portals can share: normalized, or none for `/` and an empty one. */
+function sharedBase(basePath: string | undefined): string | undefined {
+  const base = (basePath ?? '').trim().replace(/\/+/g, '/').replace(/\/+$/, '');
+  if (base === '' || base === '/') return undefined;
+  return base.startsWith('/') ? base : `/${base}`;
+}
+
+/**
+ * Steps 13-16 of portal-endpoints: every HTTP route of the tree, grouped by
+ * scope (its Portal, or the basePath Portals declaring one share), verb and
+ * normalized path; a group two or more methods bind is ENDPOINT_ROUTE_DUPLICATE
+ * on each interface in it — a contradiction, never downgraded on a draft.
+ */
+function duplicateRoutes(ctx: RuleContext): void {
+  interface Route { portal: string; intf: string; method: string; verb: string; shown: string }
+  const groups = new Map<string, Route[]>();
+  for (const comp of ctx.components) {
+    if (comp.componentType !== 'Portal' || comp.transport !== 'HTTP') continue;
+    const scope = sharedBase(comp.basePath) !== undefined ? `base ${sharedBase(comp.basePath)}` : `portal ${comp.id}`;
+    for (const intf of ctx.interfaces.filter((i) => i.component === comp.id)) {
+      for (const m of intf.methods) {
+        const endpoint = m.endpoint as { transport?: string; method?: string; path?: string } | undefined;
+        if (!endpoint || endpoint.transport !== 'HTTP' || typeof endpoint.path !== 'string') continue;
+        const verb = String(endpoint.method ?? '').toUpperCase();
+        const key = `${scope} ${verb} ${routeKey(comp.basePath, endpoint.path)}`;
+        const shown = `/${(comp.basePath ?? '').trim()}/${endpoint.path.trim()}`.replace(/\/+/g, '/').replace(/(.)\/$/, '$1');
+        groups.set(key, [...(groups.get(key) ?? []), { portal: comp.id, intf: intf.id, method: m.name, verb, shown }]);
+      }
+    }
+  }
+  for (const routes of groups.values()) {
+    if (routes.length < 2) continue;
+    const named = routes.map((r) => `"${r.method}" (${r.verb} ${r.shown}, interface "${r.intf}" of Portal "${r.portal}")`).join(' and ');
+    for (const intf of [...new Set(routes.map((r) => r.intf))]) {
+      ctx.addIssue(
+        'error',
+        'ENDPOINT_ROUTE_DUPLICATE',
+        `Methods ${named} bind the same HTTP route (placeholders compared by position, whatever their name): no router can dispatch both, so one of them is never reached on the wire, and an OpenAPI document holds one operation per path and verb. Bind each to its own route with sdd_set_endpoints.`,
+        intf,
+        // A contradiction, not unfinished work: never downgraded on a draft.
+        false,
+      );
+    }
+  }
+}

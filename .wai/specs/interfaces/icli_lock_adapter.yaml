@@ -111,6 +111,50 @@ methods:
       - name: strict
         type: bool
         description: Whether --strict asks for an approved design
+  - name: coverageVerdict
+    description: >-
+      What the approval on record owes beside its gate identity, as a merge-gate refusal: the
+      project id moved since it, an external never pinned or used beyond its pin (the own entry's
+      owed), or a change of the release whose re-validation found issues in the approved design (its
+      release verdict, not carried) — none when nothing is owed.
+    signature: 'coverageVerdict(record: LockRecord, own: ProjectApproval?): ApprovalCheck?'
+    returns: ApprovalCheck?
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval on record
+      - name: own
+        type: ProjectApproval?
+        description: The root's own approval entry
+  - name: restampRelease
+    description: >-
+      Refresh the record's release stamp when the own approval carried a change of the release over
+      — the approved design unchanged and re-validated clean under this release — without a review:
+      new stateId, gateParts and validatorVersion, `restamped` provenance, lockedAt and lockedBy
+      kept. None when there is nothing to refresh. Writes this project's .wai/lock.json only.
+    signature: 'restampRelease(own: ProjectApproval?, captured: StateId, options: LockOptions): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: own
+        type: ProjectApproval?
+        description: The root's own approval entry
+      - name: captured
+        type: StateId
+        description: The gate identity captured before validating
+      - name: options
+        type: LockOptions
+        description: The lock's flags (a scoped lock never restamps)
+    effect: write
+  - name: assertApprovable
+    description: >-
+      Refuse, writing nothing, what no lock may approve: a project requiring approved members with a
+      member project not approved, an external never pinned, or a use its pin does not record.
+    signature: 'assertApprovable(members: list<ProjectApproval>): void'
+    returns: void
+    params:
+      - name: members
+        type: list<ProjectApproval>
+        description: The direct members' approval entries
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-07T22:15:33.277Z'
+updatedAt: '2026-10-08T09:02:53.611Z'

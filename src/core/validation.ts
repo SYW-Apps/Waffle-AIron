@@ -40,6 +40,7 @@ import {
 import type { SignatureFacts } from './signature-sources.js';
 import type { TypeSpellingFacts } from '../models/type-grammar.js';
 import { listSnapshots, listPinnedExternals, pinnedParent } from './adapters/validator-surfaces.js';
+import { readBindingModules } from './binding-modules.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
@@ -58,7 +59,7 @@ import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelec
 import * as packImpact from './pack-impact.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ExtensionPack } from './extensions.js';
-import { analyzerDigest, computeGateIdentity, type GateConfig } from './rules/gate-identity.js';
+import { analyzerDigest, computeGateIdentity, gateParts, type GateConfig } from './rules/gate-identity.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
@@ -119,7 +120,8 @@ import {
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { aiPathsAt } from '../config/paths.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
   ComponentSpecSchema,
@@ -559,6 +561,13 @@ function runOwnersGate(
   // specs are this project's own, so it has no pin to be judged against.
   const parts = new Set(projectFamily().nodes.find((n) => n.namespace === '')?.parts.map((p) => p.alias) ?? []);
   const pinnedExternals = listPinnedExternals().filter((p) => !parts.has(p.alias));
+  // The binding modules the implementations name, read once through the
+  // binding module adapter: what binding conformance compares with the pins —
+  // the bound project's own (a contained member's are its own gate's). A
+  // reach-only run judges no code and reads none.
+  const bindingModules = reachOnly
+    ? []
+    : readBindingModules(implementations.filter((impl) => !impl.id.includes('::')).flatMap((impl) => impl.bindings ?? []), getProjectRoot());
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
   // — what structural conformance checks realization against. The declared
   // source roots widen the walked set with the files no spec names yet, which
@@ -619,7 +628,12 @@ function runOwnersGate(
       const pending = (extensions.errors.length > 0 || extensions.selectionFailures.length > 0)
         ? ' Extension packs were not checked yet either, and at least one problem is already known there — re-run once the L0 exists.'
         : ' Extension-pack configuration is not checked until the L0 exists.';
-      issues.push(issue('error', 'MISSING_SYSTEM_SPEC', `L0 System specification (.system.yaml) is missing.${pending}`));
+      // The file named as it is stored; one that is there but does not read is
+      // not missing, and the loader's finding above says why.
+      const present = pathExists(aiPathsAt(getProjectRoot()).specsSystem());
+      issues.push(issue('error', 'MISSING_SYSTEM_SPEC', present
+        ? `The L0 System spec (.wai/specs/.index.yaml) cannot be read, so the tree below it cannot be judged — restore it from version control (\`git checkout -- .wai/specs/.index.yaml\`).${pending}`
+        : `The L0 System spec (.wai/specs/.index.yaml) is missing.${pending}`));
       return { result: { valid: false, issues }, codeModel };
     }
 
@@ -727,6 +741,7 @@ function runOwnersGate(
       signatureFacts: signatures,
       typeSpellingFacts: typeSpellings,
       pinnedExternals,
+      bindingModules,
       // By-name selections only: a legacy path ref pins nothing to check. A dry
       // run supplies its candidate's; otherwise the stored ones.
       packSelections: packSelections ?? projectPackSelections(),
@@ -1053,6 +1068,23 @@ function settledStatusBearing(loaded: {
  * would discard any objects mutated out here before the rules ever saw them —
  * exactly the silent degradation this wrapper previously suffered from.
  */
+/**
+ * ispec_validator.validateDesign — the owner's gate at each spec's AUTHORED
+ * status (never as-complete), its result carrying `analysis` — the code half
+ * summarised with the analyzer that took it, as validateAsComplete's does — so
+ * validation_result.designOnly keeps the design half. What a change of the
+ * wairon release is judged by (family_validator.releaseVerdict).
+ */
+export function validateDesign(options?: ValidationOptions): ValidationResult {
+  // Step 1: the owner's gate, each spec at its authored status.
+  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: false });
+  // Step 2: the code half summarised with the analyzer that took it.
+  const sequence = ruleSequence();
+  const doctrineDigest = analyzerDigest(sequence, { rules: options?.rules ?? projectRules() });
+  // Step 3.
+  return { ...result, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
+}
+
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
   const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true });
   // Steps 15-16: the code half summarized apart, with the analyzer that took
@@ -1193,7 +1225,11 @@ export function computeGateStateId(): StateId {
   // The built-in rules only: pack rules enter the identity through the extensions.
   registerBuiltinRules();
   const builtin = ruleSequence();
-  const current = computeGateIdentity(content, extensions, builtin, inputs, gate, members);
+  const current: StateId = {
+    ...computeGateIdentity(content, extensions, builtin, inputs, gate, members),
+    // Step 13: each input on its own, which the lock records as gateParts.
+    parts: gateParts(content, extensions, builtin, inputs, gate, members),
+  };
   // Steps 13-16: a lock taken under the previous, full-content gate algorithm
   // (format 2) is judged as it was taken — the same inputs, its own content
   // reading — so an upgrade never forces a re-lock of an unchanged design.

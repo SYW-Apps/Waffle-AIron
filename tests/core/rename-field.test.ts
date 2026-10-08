@@ -53,7 +53,7 @@ describe('renameField', () => {
   it('moves the field, keeps its trace and respells every foreign key naming it', () => {
     root = project();
     const result = renameField('invoice', 'id', 'number');
-    expect(result).toEqual({ type: 'billing::invoice', from: 'id', to: 'number', rewritten: ['line'] });
+    expect(result).toEqual({ type: 'billing::invoice', from: 'id', to: 'number', rewritten: ['line'], publishedIn: [] });
     const invoice = loadTypeSpec('invoice')!;
     expect(invoice.fields.map((f) => f.name)).toEqual(['number', 'total']);
     expect(invoice.fields[0]).toMatchObject({ type: 'string', key: 'primary', previousNames: ['id'] });

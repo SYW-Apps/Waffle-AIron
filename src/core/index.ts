@@ -593,7 +593,7 @@ export { readStampVersion } from './stamp.js';
 // overwrite what somebody wrote about their own system, and the two functions
 // that could (`writeProjectContext`, `writeArchitectureContext`) are gone
 // rather than merely unpublished.
-export { syncContextFiles, hasContext, derivedDocPaths } from './context.js';
+export { syncContextFiles, hasContext, derivedDocPaths, staleDerivedDocs } from './context.js';
 export type { SyncResult } from './context.js';
 
 // The completeness report (spec_tree_portal getStatusReport) — a 1:1 forward to the

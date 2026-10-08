@@ -434,7 +434,7 @@ methods:
       judged against the request's write reach before the first write: a rename that would change a
       spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming every
       such subsystem and the rung that decided each, and nothing is written.
-    signature: 'renameComponent(componentId: string, newId: string): ComponentRename'
+    signature: 'renameComponent(componentId: string, newId: string, dryRun?: bool): ComponentRename'
     returns: ComponentRename
     params:
       - name: componentId
@@ -443,6 +443,12 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer what the rename would move, rewrite, keep and rekey — refusing exactly as the real
+          rename would — and write nothing
+        optional: true
   - name: retireSpecialists
     description: >-
       Plan, and with apply write, the migration off the retired Specialist stereotype. Every
@@ -1220,7 +1226,7 @@ methods:
       change, and a lock goes stale as with any edit. Inside a hosted request every spec it would
       write is judged against the request's write reach before the first write
       (SubsystemWriteDenied), and nothing is written on a refusal.
-    signature: 'renameType(typeId: string, newId: string): TypeRename'
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: typeId
@@ -1229,6 +1235,12 @@ methods:
       - name: newId
         type: string
         description: Its new id, under the same owner
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer what the rename would rewrite, keep and rekey — refusing exactly as the real rename
+          would — and write nothing
+        optional: true
   - name: setNetwork
     description: >-
       Declare (or, with null, remove) the bound project's network, through the project config
@@ -1249,13 +1261,17 @@ methods:
       design export shows it as `formerly`, so a consumer holding the old name can follow the move);
       every reference to it in the bound tree is respelled: a foreign key `references:
       <type>.<field>` naming it from any type. Rename traces are never rewritten, and prose is never
-      rewritten. Refuses, writing nothing: a type that does not exist (type-missing), one in another
-      project (chained-type), a field the type does not declare (field-missing), a new name that is
-      not an identifier (invalid-name), and a name another field of the type holds or retired in its
-      trace (name-taken, name-retired). A lock goes stale as with any edit. Inside a hosted request
-      every spec it would write is judged against the request's write reach before the first write
-      (SubsystemWriteDenied).
-    signature: 'renameField(typeId: string, field: string, newName: string): FieldRename'
+      rewritten. The report names every public name a consumer reaches the field through
+      (publishedIn): an exported type that is, or embeds transitively, the renamed type, and an
+      exported contract whose methods name such a type. Refuses, writing nothing: a type that does
+      not exist (type-missing), one in another project (chained-type), a field the type does not
+      declare (field-missing), a new name that is not an identifier (invalid-name), and a name
+      another field of the type holds or retired in its trace (name-taken, name-retired). With
+      dryRun it answers what it would respell and where the field is published, refusing exactly as
+      the real rename would, and writes nothing. A lock goes stale as with any edit. Inside a hosted
+      request every spec it would write is judged against the request's write reach before the first
+      write (SubsystemWriteDenied).
+    signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
     returns: FieldRename
     params:
       - name: typeId
@@ -1269,6 +1285,10 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would respell and where the field is published, and write nothing
+        optional: true
   - name: renameParam
     description: >-
       Rename a parameter of a contract method and every reference to it. The parameter moves on
@@ -1276,20 +1296,25 @@ methods:
       description and optionality under the new name, its old name appended to its rename trace
       (previousNames, shown as `formerly` in the design export) — and each such method is re-saved
       with the signature text its params derive. A method whose signatureFrom names this one reads
-      the new name through the loader; an HTTP endpoint path placeholder `{old}` on the method's own
-      binding is respelled `{new}` (the URL a caller sends is unchanged — only the name binding the
-      segment to the parameter moves). Prose is never rewritten. Refuses, writing nothing: a
-      component that does not exist (component-missing), one inside a chained subproject
-      (chained-component), a method no contract of the component declares (method-missing), a
-      parameter the method does not declare (param-missing), a new name that is not an identifier —
-      or, when rules.naming.variables is set and no contract of the component implements another
-      project's extension point, not in that casing (invalid-name) — and a name another parameter of
-      the method holds or retired in its trace (name-taken, name-retired). A lock goes stale as with
-      any edit. Inside a hosted request every spec it would write is judged against the request's
-      write reach before the first write (SubsystemWriteDenied).
+      the new name through the loader, and its HTTP endpoint path placeholder follows too: `{old}`
+      (or `/:old`) on the method's own binding AND on every follower method's binding — any contract
+      method in the bound tree whose signatureFrom takes this method's signature — is respelled in
+      the form it was written (the URL a caller sends is unchanged — only the name binding the
+      segment to the parameter moves). The report names the export entries publishing the method
+      (publishedIn). Prose is never rewritten. Refuses, writing nothing: a component that does not
+      exist (component-missing), one inside a chained subproject (chained-component), a method no
+      contract of the component declares (method-missing), a parameter the method does not declare
+      (param-missing), a new name that is not an identifier — or, when rules.naming.variables is set
+      and no contract of the component implements another project's extension point, not in that
+      casing (invalid-name) — and a name another parameter of the method holds or retired in its
+      trace (name-taken, name-retired). With dryRun it answers what it would move and respell,
+      refusing exactly as the real rename would, and writes nothing. A lock goes stale as with any
+      edit. Inside a hosted request every spec it would write — the moving contracts and every
+      follower's — is judged against the request's write reach before the first write
+      (SubsystemWriteDenied).
     signature: >-
-      renameParam(componentId: string, methodName: string, param: string, newName: string):
-      ParamRename
+      renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
+      bool): ParamRename
     returns: ParamRename
     params:
       - name: componentId
@@ -1304,15 +1329,21 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move and respell, and write nothing
+        optional: true
   - name: findOrphanedSpecFiles
     description: >-
-      The bound tree's spec files left standing while its specs folder holds no L0 (no .index.yaml
-      at its root, nor a legacy system.yaml), as paths from the project root, sorted; empty when the
-      L0 is there or nothing is. A tree whose root was deleted is not an empty tree. Pure read.
+      The bound tree's spec files left standing while its specs folder holds no READABLE L0 — none
+      at all (no .index.yaml at its root, nor a legacy system.yaml), or one that cannot be read as
+      an L0 (empty, null, not YAML, failing its schema) — as paths from the project root, sorted,
+      the L0 file itself left out; empty when a readable L0 is there or nothing else is. A tree
+      whose root was deleted or broken is not an empty tree. Pure read.
     signature: 'findOrphanedSpecFiles(): list<string>'
     returns: list<string>
     params: []
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T21:48:21.566Z'
+updatedAt: '2026-10-08T08:40:47.787Z'

@@ -101,6 +101,33 @@ export function derivedDocPaths(): string[] {
   return [CONTEXT_PATHS.waironGuideMd(), CONTEXT_PATHS.domainsMd()];
 }
 
+/**
+ * context_composer.staleDocs — the derived documents whose content differs
+ * from what a regenerate would write now (line endings aside): a file stamped
+ * by this very release can still be stale in content — the project context it
+ * embeds, the domain map. A missing file is not stale here (the caller reports
+ * it missing). Read-only.
+ */
+export function staleDerivedDocs(): string[] {
+  // Step 1: each derived document as a regenerate would write it now.
+  const rendered: Array<[string, () => string]> = [
+    [CONTEXT_PATHS.waironGuideMd(), renderWaironGuide],
+    [CONTEXT_PATHS.domainsMd(), renderDomainsDoc],
+  ];
+  const out: string[] = [];
+  for (const [file, render] of rendered) {
+    // Step 2: the file on disk.
+    const onDisk = readFileOrNull(file);
+    if (onDisk === null) continue;
+    let now: string;
+    try { now = render(); } catch { continue; }
+    // Step 3: stale when the content differs, line endings aside.
+    const lf = (text: string): string => text.replace(/\r\n/g, '\n');
+    if (lf(onDisk) !== lf(now)) out.push(file);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Renderers for auto-generated files
 // ---------------------------------------------------------------------------

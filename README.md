@@ -132,8 +132,12 @@ registry:
 
 Each agent is served as a **live brief** (`sdd_get_agent_brief`, or
 `wairon agent brief <id>`), composed from the current tree whenever it is
-asked for, so it is never stale. Writing them to disk as agent files is opt-in
-(`rules.materializeAgentFiles: true`).
+asked for, so it is never stale. A brief fences exact files — the code its
+specs alone name, planned files and the agent's own types included — and lists
+the shared files (module setup, files other components also name, unnamed
+helpers) it may touch only for its own needs, so parallel implementers never
+overlap and a first implementation is never blocked. Writing them to disk as
+agent files is opt-in (`rules.materializeAgentFiles: true`).
 
 A **domain** is a unit of ownership. Subsystems yield spec-backed domains
 automatically; you can also declare **free-standing domains** (docs, infra,

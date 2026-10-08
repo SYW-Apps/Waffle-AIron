@@ -154,6 +154,81 @@ export interface ProjectApproval {
   contentDigest?: string;
   /** The commit a part or a referenced project member was read at, when known — provenance the lock records. */
   commit?: string;
+  /**
+   * Set when the identity no longer matches ONLY because the wairon release
+   * changed (family_validator.releaseVerdict): carried — approved, re-validated
+   * under this release — or not, drifted for exactly its findings. Never set
+   * together with upgraded.
+   */
+  release?: ReleaseVerdict;
+  /** On a drifted entry whose record carries gate parts: the inputs that moved (lock_record.movedGateParts). */
+  inputsMoved?: string[];
+}
+
+/**
+ * release_verdict — an approval whose gate identity moved only because the
+ * wairon release's built-in design doctrine did, judged by re-validating the
+ * approved design under the current rules instead of by digest.
+ */
+export interface ReleaseVerdict {
+  /** The release the approval was taken under (the record's validatorVersion). */
+  from: string;
+  /** The release that re-validated it. */
+  to: string;
+  /** True when the re-validation is clean at the --ci standard: the approval carries over. */
+  carried: boolean;
+  /** How many findings fail the --ci standard; 0 when carried. */
+  count?: number;
+  /** The first few of them, `CODE [spec] message`. */
+  findings?: string[];
+}
+
+/** lock_restamp — provenance of a release stamp refreshed by `wairon lock` without a re-approval. */
+export interface LockRestamp {
+  at: string;
+  fromVersion: string;
+  toVersion: string;
+  by: string;
+}
+
+/** The words every verdict names a gate part by: what moved, said once. */
+export const GATE_PART_WORDS: Record<string, string> = {
+  design: 'the design itself (its own specs)',
+  release: "this wairon release's built-in design rules",
+  rules: "the project's rule tuning or projectType",
+  packs: 'its extension packs (packs, profiles, languages, patterns)',
+  network: 'the network declaration',
+  composition: '`composition`',
+  contracts: "a consumed contract's pin",
+  members: "a member's approval",
+};
+
+/** The moved gate parts in words, joined: "the network declaration and `composition`". */
+export function describeGateParts(parts: readonly string[]): string {
+  const words = parts.map((p) => GATE_PART_WORDS[p] ?? p);
+  return words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+/**
+ * lock_record.movedGateParts — the gate parts that differ between a record's
+ * gateParts and `current` (an input present on one side only counts as
+ * moved), sorted; null when the record carries no gate parts. Pure.
+ */
+export function movedGateParts(record: { gateParts?: Record<string, string> }, current: Record<string, string> | undefined): string[] | null {
+  if (!record.gateParts || !current) return null;
+  const keys = new Set([...Object.keys(record.gateParts), ...Object.keys(current)]);
+  return [...keys].filter((k) => record.gateParts![k] !== current[k]).sort();
+}
+
+/**
+ * lock_record.approvalStamp — `<lockedAt> by <approver>` as every verdict
+ * names an approval; a record that carries no lockedAt or no usable lockedBy
+ * says so instead of `undefined by unknown`. Pure.
+ */
+export function approvalStamp(record: { lockedAt?: unknown; lockedBy?: ApproverIdentity }): string {
+  const at = typeof record.lockedAt === 'string' && record.lockedAt.trim() !== '' ? record.lockedAt : 'at an unrecorded time';
+  const who = record.lockedBy && record.lockedBy.id && record.lockedBy.id !== 'unknown' ? describeApprover(record.lockedBy) : 'an unrecorded approver';
+  return `${at} by ${who}`;
 }
 
 /**
@@ -187,6 +262,28 @@ export function memberPinOf(member: ProjectApproval): MemberPin {
  * certifies. Pure; a result with no analysis answers itself unchanged. It
  * lives beside CodeAnalysis because the partition is that value's to draw.
  */
+/**
+ * Whether a warning is waived from the --ci failure decision because it only
+ * reflects a draft: the DRAFT_*_WARNING family always, UNUSED_COMPONENT in
+ * draft context. Pure.
+ */
+export function isCiDraftWaivable(issue: { severity: string; code: string; draftContext?: boolean }): boolean {
+  if (issue.severity !== 'warning') return false;
+  if (issue.code === 'DRAFT_SUBSYSTEM_WARNING') return true;
+  if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
+  if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
+  return false;
+}
+
+/**
+ * validation_result.ciBlocking — the findings that fail `wairon validate
+ * --ci`: every error, and every warning but the draft-related ones --ci
+ * waives; notices never count. Pure.
+ */
+export function ciBlockingIssues(result: ValidationResult): ValidationResult['issues'] {
+  return result.issues.filter((i) => i.severity === 'error' || (i.severity === 'warning' && !isCiDraftWaivable(i)));
+}
+
 export function designOnly(result: ValidationResult): ValidationResult {
   if (!result.analysis) return result;
   const codeCodes = new Set(result.analysis.codes ?? []);

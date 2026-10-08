@@ -160,6 +160,13 @@ methods:
         type: call
         targetComponent: ai_tool_guide
         targetMethod: registerServer
+  - name: staleDerivedDocs
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the context composer
+        type: call
+        targetComponent: context_composer
+        targetMethod: staleDocs
 status: complete
 createdAt: '2026-09-25T17:33:15.144Z'
-updatedAt: '2026-10-07T06:21:36.043Z'
+updatedAt: '2026-10-08T08:41:04.855Z'

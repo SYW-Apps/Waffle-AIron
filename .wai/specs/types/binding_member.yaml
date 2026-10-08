@@ -1,0 +1,22 @@
+kind: value-object
+id: binding_member
+name: BindingMember
+description: >-
+  One member a binding module declares inside a declaration: a method (a call signature, a class
+  method, a function-typed field) with its parameter names, or a data field.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: The member's name as the binding spells it.
+    optional: false
+  - name: params
+    type: list<string>
+    description: >-
+      A method's parameter names in order (an empty string for one bound by a destructuring
+      pattern); absent for a data field.
+    optional: true
+methods: []
+sourcePath: src/core/binding-modules.ts
+createdAt: '2026-10-08T08:21:17.594Z'
+updatedAt: '2026-10-08T08:21:18.245Z'

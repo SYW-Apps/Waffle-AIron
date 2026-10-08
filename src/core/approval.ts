@@ -3,7 +3,7 @@ import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, graph, scanAllSpecs } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
-import { describeApprover, type ProjectApproval, type SpecDigestReading } from '../models/lock.js';
+import { approvalStamp, describeGateParts, type ProjectApproval, type SpecDigestReading } from '../models/lock.js';
 import { parseYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
@@ -519,7 +519,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
   try {
     const approval = approvalRecord();
     if (!approval) return quiet;
-    const by = describeApprover(approval.lockedBy);
+    const stamp = approvalStamp(approval);
 
     // What the pin tree says, when the caller passed one: an upgrade-only
     // staleness of this project's own lock, direct members whose pin MOVED
@@ -536,7 +536,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       // proves the tree validated, not which specs still match it. Say exactly
       // that rather than implying either answer.
       return {
-        text: `\nApproved: ${approval.lockedAt} by ${by} — this lock predates per-spec approval, so `
+        text: `\nApproved: ${stamp} — this lock predates per-spec approval, so `
           + `drift is only visible at whole-tree level. Re-lock to record it.${childNote}\n`,
         drifted: pinDrift,
       };
@@ -553,12 +553,20 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       const owes = own?.state === 'drifted' && !own.upgraded
         ? (own.owed !== undefined
           ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock-check\` fails until it is cleared${/never pinned|beyond its pin/.test(own.owed) ? ' — pin first (`wairon externals pin`), then `wairon lock`' : ' — `wairon lock` re-approves the unchanged design'}.`
-          : pinDrift
-            ? ''
-            : ' But what it was approved under did change: an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval. `wairon lock` re-approves the unchanged design.')
+          : own.release && !own.release.carried
+            ? ` But it was approved under wairon ${own.release.from}, and the new release (${own.release.to}) finds ${own.release.count ?? 0} issue(s) in the approved design: ${(own.release.findings ?? []).join('; ')}. Resolve them, then \`wairon lock\`.`
+            : pinDrift
+              ? ''
+              : own.inputsMoved && own.inputsMoved.length > 0
+                ? ` But what it was approved under did change: ${describeGateParts(own.inputsMoved)}. \`wairon lock\` re-approves the unchanged design under it.`
+                : ' But what it was approved under did change: an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval. `wairon lock` re-approves the unchanged design.')
+        : '';
+      // An approval a change of the release carried over says so, once.
+      const released = own?.release?.carried
+        ? ` Approved under wairon ${own.release.from}, re-validated under ${own.release.to}: still approved (\`wairon lock\` refreshes the record's release stamp without a re-approval).`
         : '';
       return {
-        text: `\nApproved: ${approval.lockedAt} by ${by} — no spec has changed since.${owes}${childNote}${carry}\n`,
+        text: `\nApproved: ${stamp} — no spec has changed since.${released}${owes}${childNote}${carry}\n`,
         drifted: pinDrift || own?.state === 'drifted',
       };
     }
@@ -583,7 +591,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       : `${noun} changed since approval (${parts.join(', ')})`;
 
     return {
-      text: `\n${headline} — approved ${approval.lockedAt} by ${by}:\n`
+      text: `\n${headline} — approved ${stamp}:\n`
         + named.map((p) => `  ${p}`).join('\n')
         + (rest > 0 ? `\n  … and ${rest} more` : '')
         + (own?.owed !== undefined ? `\nThe approval also owes: ${own.owed}.` : '')

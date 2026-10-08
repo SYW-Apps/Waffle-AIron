@@ -2,9 +2,10 @@ kind: value-object
 id: field_rename
 name: FieldRename
 description: >-
-  What renaming a field of a type changed: the field moved to its new name (its old name appended to
-  the field's rename trace, previousNames, which the design export shows as `formerly`), and the
-  specs whose references to it were respelled.
+  What renaming a field of a type changed (or, in a dry run, would change): the field moved to its
+  new name (its old name appended to the field's rename trace, previousNames, which the design
+  export shows as `formerly`), the specs whose references to it were respelled, and the export
+  entries a consumer reaches the field through.
 subsystem: sdd_core
 fields:
   - name: type
@@ -25,7 +26,26 @@ fields:
       Ids of the other specs whose references to the field (a foreign key's `references:
       <type>.<field>`) were respelled
     optional: false
+  - name: publishedIn
+    type: list<ExportUse>
+    description: >-
+      Every public name a consumer reaches the field through, with the members that carry it: an
+      exported type that is, or embeds (transitively), the renamed type (member `type`), and an
+      exported contract whose methods name such a type in a param or returns (those methods). Empty
+      when nothing exported carries it.
+    optional: false
+  - name: dryRun
+    type: bool
+    description: 'True when this report is a dry run: nothing was written.'
+    optional: true
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers — family members and pinned externals in reach, and checkouts in the searched
+      folders — whose specs reach one of publishedIn's members, each narrowed to what carries the
+      field: the ones whose code reading the old name breaks. Filled by the caller that read them.
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-06T23:07:04.066Z'
-updatedAt: '2026-10-06T23:07:04.951Z'
+updatedAt: '2026-10-08T08:24:00.577Z'

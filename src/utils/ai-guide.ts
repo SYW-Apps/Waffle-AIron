@@ -140,12 +140,27 @@ export function stripGuideSection(content: string): string {
   return content.slice(0, start) + content.slice(end + GUIDE_MARKER_END.length);
 }
 
-export function writeRootGuideDelegator(projectRoot: string, targetType: string): void {
-  if (targetType === 'claude') {
-    const filePath = path.join(projectRoot, 'CLAUDE.md');
-    const content = `@.claude/CLAUDE.md
+// ---------------------------------------------------------------------------
+// Root pointers
+//
+// The repository-root file a tool loads first (CLAUDE.md, GEMINI.md,
+// .cursorrules, …) is usually the USER's own file: a repository that adopts
+// wairon has one already, and a team keeps adding to it. wairon therefore owns
+// only its block between the root markers, exactly as it owns only its guide
+// section in .claude/CLAUDE.md: every byte outside the markers is kept, and no
+// command ever deletes text a person wrote there. A root file that holds the
+// unmarked pointer an earlier release wrote is recognised and migrated into
+// the marked block, keeping whatever followed it.
+// ---------------------------------------------------------------------------
 
-# Wairon SDD Project
+export const ROOT_MARKER_START = '<!-- wairon-root-start -->';
+export const ROOT_MARKER_END = '<!-- wairon-root-end -->';
+
+/** The import line that loads the in-project guide into Claude's context. */
+const CLAUDE_IMPORT = '@.claude/CLAUDE.md';
+
+/** What the claude root pointer says below its import line. */
+const CLAUDE_POINTER_TEXT = `# Wairon SDD Project
 
 This project uses the Wairon Spec-Driven Development (SDD) framework. The imported
 \`.claude/CLAUDE.md\` above is your complete operating guide — you already have the
@@ -155,46 +170,164 @@ To design or modify the system, invoke the **\`sdd-architect\`** skill
 (in \`.claude/skills/\`). Author and validate specs with the \`sdd_*\` MCP tools;
 the \`wairon\` CLI is the human developer's tool, not yours.
 `;
-    writeFile(filePath, content);
-  } else if (targetType === 'gemini' || targetType === 'agy') {
-    const filePath = path.join(projectRoot, 'GEMINI.md');
-    // Gemini CLI / Antigravity auto-load the ROOT GEMINI.md but NOT .gemini/GEMINI.md,
-    // and @-import expansion is not guaranteed — so inline the full guide here so the
-    // agent actually has it (otherwise it's told "the guide is above" when it isn't).
-    const content = `# Wairon SDD Project
-${GUIDE_MARKER_START}
-${versionStamp()}
-${LOCAL_GUIDE_BODY}
-${GUIDE_MARKER_END}
-`;
-    writeFile(filePath, content);
-  } else if (targetType === 'cursor') {
-    const filePath = path.join(projectRoot, '.cursorrules');
-    const content = `# Wairon SDD Project
 
-This project uses the Wairon Spec-Driven Development (SDD) framework.
+/** The unmarked root pointers earlier releases wrote, by file: recognised at the start of a file and migrated. */
+const LEGACY_POINTERS: Record<string, string[]> = {
+  'CLAUDE.md': [
+    `${CLAUDE_IMPORT}\n\n${CLAUDE_POINTER_TEXT}`,
+    `${CLAUDE_IMPORT}\n@.claude/skills/sdd-architect.md\n@.claude/skills/sdd-narrative.md\n@.claude/skills/sdd-auditor.md\n@.claude/skills/sdd-implement.md\n\n# Wairon SDD Project\n\nThis project uses the Wairon Spec-Driven Development (SDD) framework.\nTo start designing or modifying the system, you must invoke the **\`/sdd-architect\`** sub-agent.\n\nRefer to [.claude/CLAUDE.md](.claude/CLAUDE.md) for full instructions and CLI references.\n`,
+    `${CLAUDE_IMPORT}\n@.claude/sdd-architect.md\n@.claude/sdd-narrative.md\n@.claude/sdd-auditor.md\n@.claude/sdd-implement.md\n\n# Wairon SDD Project\n\nThis project uses the Wairon Spec-Driven Development (SDD) framework.\nTo start designing or modifying the system, you must invoke the **\`/sdd-architect\`** sub-agent.\n\nRefer to [.claude/CLAUDE.md](.claude/CLAUDE.md) for full instructions and CLI references.\n`,
+  ],
+  '.cursorrules': ['# Wairon SDD Project\n\nThis project uses the Wairon Spec-Driven Development (SDD) framework.\n\nRefer to the rules in [.cursor/rules/](.cursor/rules/) for full instructions.\n'],
+  'copilot-instructions.md': ['# Wairon SDD Project\n\nThis project uses the Wairon Spec-Driven Development (SDD) framework.\n\nRefer to the prompts in [.github/prompts/](.github/prompts/) for instructions.\n'],
+  '.codexrules': ['# Wairon SDD Project\n\nRefer to [.codex/agents/](.codex/agents/) for full instructions.\n'],
+};
 
-Refer to the rules in [.cursor/rules/](.cursor/rules/) for full instructions.
-`;
-    writeFile(filePath, content);
-  } else if (targetType === 'copilot') {
-    const filePath = path.join(projectRoot, '.github', 'copilot-instructions.md');
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const content = `# Wairon SDD Project
-
-This project uses the Wairon Spec-Driven Development (SDD) framework.
-
-Refer to the prompts in [.github/prompts/](.github/prompts/) for instructions.
-`;
-    writeFile(filePath, content);
-  } else if (targetType === 'codex') {
-    const filePath = path.join(projectRoot, '.codexrules');
-    const content = `# Wairon SDD Project
-
-Refer to [.codex/agents/](.codex/agents/) for full instructions.
-`;
-    writeFile(filePath, content);
+/** A target's root file and the body of wairon's block in it (the text between the markers), given the user's own text. */
+function rootPointerOf(projectRoot: string, targetType: string): { file: string; body: (userText: string) => string } | null {
+  switch (targetType) {
+    case 'claude':
+      return {
+        file: path.join(projectRoot, 'CLAUDE.md'),
+        // The user's own text may import the guide already: never load it twice.
+        body: (userText) => (importsLine(userText, CLAUDE_IMPORT) ? CLAUDE_POINTER_TEXT : `${CLAUDE_IMPORT}\n\n${CLAUDE_POINTER_TEXT}`),
+      };
+    case 'gemini':
+    case 'agy':
+      // Gemini CLI / Antigravity auto-load the ROOT GEMINI.md but NOT .gemini/GEMINI.md,
+      // and @-import expansion is not guaranteed — so the full guide is inlined here so the
+      // agent actually has it (otherwise it's told "the guide is above" when it isn't).
+      return {
+        file: path.join(projectRoot, 'GEMINI.md'),
+        body: () => `# Wairon SDD Project\n${GUIDE_MARKER_START}\n${versionStamp()}\n${LOCAL_GUIDE_BODY}\n${GUIDE_MARKER_END}\n`,
+      };
+    case 'cursor':
+      return { file: path.join(projectRoot, '.cursorrules'), body: () => LEGACY_POINTERS['.cursorrules'][0] };
+    case 'copilot':
+      return { file: path.join(projectRoot, '.github', 'copilot-instructions.md'), body: () => LEGACY_POINTERS['copilot-instructions.md'][0] };
+    case 'codex':
+      return { file: path.join(projectRoot, '.codexrules'), body: () => LEGACY_POINTERS['.codexrules'][0] };
+    default:
+      return null;
   }
+}
+
+/** Whether a text holds `line` as one of its own lines (surrounding space aside). */
+function importsLine(text: string, line: string): boolean {
+  return text.split(/\r?\n/).some((l) => l.trim() === line);
+}
+
+/** The line ending a file's existing text uses: CRLF when it holds one, else LF. */
+function eolOf(text: string): '\r\n' | '\n' {
+  return text.includes('\r\n') ? '\r\n' : '\n';
+}
+
+/** The text's lines, each with its own line ending kept. */
+function linesOf(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
+/**
+ * How many characters at the start of `text` an earlier release's unmarked
+ * pointer occupies — compared line by line with line endings and trailing
+ * space aside, and taking the blank lines after it — or -1 when the text does
+ * not open with one. A GEMINI.md opened by the `# Wairon SDD Project` heading
+ * over a guide section is one too, whatever release wrote its guide.
+ */
+function legacyPointerLength(fileName: string, text: string): number {
+  const lines = linesOf(text);
+  const bare = (l: string): string => l.replace(/\r?\n$/, '').trimEnd();
+  const withBlanks = (count: number): number => {
+    let n = count;
+    while (n < lines.length && bare(lines[n]) === '') n++;
+    return lines.slice(0, n).join('').length;
+  };
+  if (fileName === 'GEMINI.md') {
+    if (lines.length < 2 || bare(lines[0]) !== '# Wairon SDD Project' || bare(lines[1]) !== GUIDE_MARKER_START) return -1;
+    const end = lines.findIndex((l, i) => i > 1 && bare(l) === GUIDE_MARKER_END);
+    return end < 0 ? -1 : withBlanks(end + 1);
+  }
+  for (const legacy of LEGACY_POINTERS[fileName] ?? []) {
+    const want = legacy.replace(/\n$/, '').split('\n').map((l) => l.trimEnd());
+    if (lines.length < want.length) continue;
+    if (want.every((l, i) => bare(lines[i]) === l)) return withBlanks(want.length);
+  }
+  return -1;
+}
+
+/**
+ * The root file's new content with wairon's block written into `existing`:
+ * the marked block replaced in place; an earlier release's unmarked pointer at
+ * the start migrated into the block, the user's text after it kept; else the
+ * block appended after the user's own text, separated by a blank line. Every
+ * byte outside wairon's block is kept as it was — only the block takes the
+ * file's line endings. Pure.
+ */
+export function withRootPointer(fileName: string, existing: string, body: (userText: string) => string): string {
+  const eol = eolOf(existing);
+  const block = (userText: string): string =>
+    `${ROOT_MARKER_START}\n${body(userText)}${ROOT_MARKER_END}\n`.replace(/\n/g, eol);
+  const start = existing.indexOf(ROOT_MARKER_START);
+  const end = existing.indexOf(ROOT_MARKER_END, start);
+  if (start >= 0 && end > start) {
+    // The marked block, replaced in place: the text after its end marker keeps its own line ending.
+    let after = end + ROOT_MARKER_END.length;
+    if (existing.startsWith('\r\n', after)) after += 2;
+    else if (existing.startsWith('\n', after)) after += 1;
+    const userText = existing.slice(0, start) + existing.slice(after);
+    return existing.slice(0, start) + block(userText) + existing.slice(after);
+  }
+  const legacy = legacyPointerLength(fileName, existing);
+  if (legacy >= 0) {
+    const rest = existing.slice(legacy);
+    return block(rest) + (rest.length > 0 ? eol : '') + rest;
+  }
+  if (existing.length === 0) return block('');
+  const separator = existing.endsWith('\n') ? eol : `${eol}${eol}`;
+  return existing + separator + block(existing);
+}
+
+/**
+ * The text of a root file with wairon's block (marked, or an earlier
+ * release's unmarked pointer at its start) taken out — the user's own text,
+ * byte for byte. What a demote leaves behind when it removes a session
+ * scaffold. Pure.
+ */
+export function withoutRootPointer(fileName: string, text: string): string {
+  const start = text.indexOf(ROOT_MARKER_START);
+  const end = text.indexOf(ROOT_MARKER_END, start);
+  if (start >= 0 && end > start) {
+    let after = end + ROOT_MARKER_END.length;
+    if (text.startsWith('\r\n', after)) after += 2;
+    else if (text.startsWith('\n', after)) after += 1;
+    return text.slice(0, start) + text.slice(after);
+  }
+  const legacy = legacyPointerLength(fileName, text);
+  return legacy >= 0 ? text.slice(legacy) : text;
+}
+
+/**
+ * ai_tool_guide.writeDelegator — write wairon's block of a target's
+ * repository-root pointer file between the root markers, keeping every byte
+ * of the user's own text, migrating an earlier release's unmarked pointer.
+ * Written only when the content changed.
+ */
+export function writeRootGuideDelegator(projectRoot: string, targetType: string): void {
+  // Step 1: the target's root file and its block; a target with none writes nothing.
+  const pointer = rootPointerOf(projectRoot, targetType);
+  if (!pointer) return;
+  // Step 2: the file as it stands.
+  const existing = fs.existsSync(pointer.file) ? fs.readFileSync(pointer.file, 'utf-8') : null;
+  // Steps 3-9: the block written into it.
+  const fileName = path.basename(pointer.file);
+  if (existing === null) {
+    // A new file takes the convention around it (writeFile's line endings).
+    writeFile(pointer.file, withRootPointer(fileName, '', pointer.body));
+    return;
+  }
+  const next = withRootPointer(fileName, existing, pointer.body);
+  // Step 10: only when it changed, every byte outside the block as it was.
+  if (next !== existing) fs.writeFileSync(pointer.file, next, 'utf-8');
 }
 
 // Target types that carry a guide-bearing root delegator file.

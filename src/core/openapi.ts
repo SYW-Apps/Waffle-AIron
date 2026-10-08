@@ -9,6 +9,7 @@ import {
   SurfaceSnapshotSchema,
   SurfaceTypeDef,
   TypeExpression,
+  canonicalTypeText,
   parseTypeExpression,
 } from '../models/index.js';
 
@@ -152,6 +153,39 @@ function returnsNothing(returns: string): boolean {
   return inner?.form === 'primitive' && inner.name === 'void';
 }
 
+/** The error type of a returns that is a `result<T, E>` (awaited or not): E's expression, else null. */
+function failureOf(returns: string): TypeExpression | null {
+  const expr = expressionOf(returns);
+  const awaited = expr?.form === 'async' ? expr.args[0] : expr;
+  return awaited?.form === 'result' ? awaited.args[1] ?? null : null;
+}
+
+/**
+ * An operation's responses: its success under the verb's conventional code —
+ * 204 with no content for a method returning nothing, else 201 for POST and
+ * 200 otherwise — and, for a `result<T, E>`, a `default` response carrying
+ * E's schema: the failure the design declares, never left out.
+ */
+function responsesFor(method: MethodSignature, httpVerb: string, scope: SchemaScope): Record<string, unknown> {
+  const returns = method.returns ?? '';
+  const nothing = !returns || returnsNothing(returns);
+  const code = nothing ? '204' : httpVerb === 'post' ? '201' : '200';
+  const responses: Record<string, unknown> = {
+    [code]: {
+      description: nothing ? 'Success, with no content' : `Success: ${returns}`,
+      ...(nothing ? {} : { content: { 'application/json': { schema: schemaFor(returns, scope) } } }),
+    },
+  };
+  const failure = failureOf(returns);
+  if (failure) {
+    responses.default = {
+      description: `The method fails with ${canonicalTypeText(failure)}`,
+      content: { 'application/json': { schema: schemaOfExpression(failure, scope) } },
+    };
+  }
+  return responses;
+}
+
 /** The description an enum component carries: one line per value, its description beside it. */
 function enumDescription(values: EnumValue[]): string {
   return ['Values:', ...values.map(v => `- \`${v.name}\`${v.description ? `: ${v.description}` : ''}`)].join('\n');
@@ -245,14 +279,7 @@ function operationFor(method: MethodSignature, scope: SchemaScope, entry?: Surfa
   const op: Record<string, unknown> = {
     operationId: method.name,
     summary: method.description,
-    responses: {
-      '200': {
-        description: method.returns || 'Success',
-        ...(method.returns && !returnsNothing(method.returns)
-          ? { content: { 'application/json': { schema: schemaFor(method.returns, scope) } } }
-          : {}),
-      },
-    },
+    responses: responsesFor(method, httpVerb, scope),
   };
   if (method.guarantees?.length) op['x-wairon-guarantees'] = method.guarantees;
   if (method.effect) op['x-wairon-effect'] = method.effect;
@@ -394,8 +421,14 @@ function securitySchemeObject(auth: PortalAuth): Record<string, unknown> | null 
     }
     case 'openIdConnect':
       return { type: 'openIdConnect', openIdConnectUrl: auth.openIdConnectUrl ?? '', ...desc };
-    case 'custom':
-      return { type: 'apiKey', in: auth.in ?? 'header', name: auth.name ?? 'Authorization', description: auth.description ?? auth.example ?? 'Custom authentication scheme.' };
+    case 'custom': {
+      const description = auth.description ?? auth.example ?? 'Custom authentication scheme.';
+      // Only where the design names the header (or query/cookie parameter)
+      // the credential travels in is it an apiKey scheme: a guessed
+      // `Authorization` would describe a header nobody sends.
+      if (auth.name) return { type: 'apiKey', in: auth.in ?? 'header', name: auth.name, description };
+      return { type: 'http', scheme: 'custom', description };
+    }
     default:
       return null;
   }
@@ -445,6 +478,20 @@ export interface OpenApiRenderContext {
   version?: string;
 }
 
+/**
+ * Two operations of one document on the same verb and path: an OpenAPI
+ * document holds one operation per path and verb, so rendering would drop one
+ * of them from what reads as the whole surface. Refused, naming both.
+ */
+class OpenApiRouteCollisionError extends Error {
+  constructor(portal: string, first: string, second: string, route: string) {
+    super(`Cannot render the OpenAPI document of "${portal}": "${first}" and "${second}" both bind ${route} (placeholders compared by position) — `
+      + 'an OpenAPI document holds one operation per path and verb, so one of them would be dropped from the document. '
+      + 'Bind each to its own route (sdd_set_endpoints; `wairon validate` reports it as ENDPOINT_ROUTE_DUPLICATE). Nothing was written.');
+    this.name = 'OpenApiRouteCollisionError';
+  }
+}
+
 /** Render ONE OpenAPI document from a chosen subset of entries: one portal's, for toOpenApiSet. */
 function renderDoc(
   snapshot: SurfaceSnapshot,
@@ -457,6 +504,9 @@ function renderDoc(
   const scope = schemaScope(new Set(snapshot.types.map(t => t.id)), context.externals ?? new Map(), reached);
 
   const paths: Record<string, Record<string, unknown>> = {};
+  // Every operation by verb and path, placeholders compared by position: OpenAPI
+  // reads `/a/{id}` and `/a/{code}` as one templated path.
+  const taken = new Map<string, string>();
   for (const entry of entries) {
     const security = securityByEntry.get(entry.id);
     for (const method of entry.methods) {
@@ -464,6 +514,10 @@ function renderDoc(
       if (!endpoint || endpoint.transport !== 'HTTP') continue;
       // The Portal's basePath is part of every path, and `:name` reads as `{name}`.
       const p = openApiPath(entry.basePath, endpoint.path);
+      const route = `${endpoint.method.toUpperCase()} ${p.replace(/\{[^}]*\}/g, '{}').replace(/(.)\/$/, '$1')}`;
+      const holder = taken.get(route);
+      if (holder !== undefined) throw new OpenApiRouteCollisionError(opts.title ?? snapshot.projectName, holder, method.name, `${endpoint.method.toUpperCase()} ${p}`);
+      taken.set(route, method.name);
       paths[p] = paths[p] ?? {};
       paths[p][endpoint.method.toLowerCase()] = {
         tags: [entry.id],
@@ -650,6 +704,7 @@ function authFromSecurityScheme(scheme: Record<string, unknown>): PortalAuth | u
   if (scheme.type === 'http') {
     if (scheme.scheme === 'bearer') return { scheme: 'bearer', ...(typeof scheme.bearerFormat === 'string' ? { bearerFormat: scheme.bearerFormat } : {}), ...desc };
     if (scheme.scheme === 'basic') return { scheme: 'basic', ...desc };
+    if (scheme.scheme === 'custom') return { scheme: 'custom', ...desc };
   }
   if (scheme.type === 'oauth2') {
     const flows = (scheme.flows ?? {}) as Record<string, Record<string, unknown>>;
@@ -729,10 +784,17 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         }
       }
 
-      const okResponse = ((op.responses as Record<string, Record<string, unknown>>)?.['200']
-        ?? (op.responses as Record<string, Record<string, unknown>>)?.['201']) as Record<string, unknown> | undefined;
-      const responseSchema = ((okResponse?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema) as Record<string, unknown> | undefined;
-      const returns = responseSchema ? typeRefFromSchema(responseSchema) : 'void';
+      // The success: the first 2xx in code order (no JSON body — a 204 — reads
+      // void); a `default`, 4XX or 5XX response with a JSON body is the failure
+      // a `result<T, E>` declares.
+      const responses = (op.responses ?? {}) as Record<string, Record<string, unknown>>;
+      const jsonSchema = (r: Record<string, unknown> | undefined): Record<string, unknown> | undefined =>
+        ((r?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema) as Record<string, unknown> | undefined;
+      const successCode = Object.keys(responses).filter((c) => /^2\d\d$/.test(c)).sort()[0];
+      const responseSchema = successCode !== undefined ? jsonSchema(responses[successCode]) : undefined;
+      const failureCode = ['default', ...Object.keys(responses).filter((c) => /^[45](\d\d|XX)$/i.test(c)).sort()].find((c) => jsonSchema(responses[c]) !== undefined);
+      const success = responseSchema ? typeRefFromSchema(responseSchema) : 'void';
+      const returns = failureCode !== undefined ? `result<${success}, ${typeRefFromSchema(jsonSchema(responses[failureCode]))}>` : success;
 
       // Read back the x-wairon-* keys toOpenApiSet emits, so an OpenAPI-format
       // exchange preserves the same contract the native YAML snapshot does.

@@ -79,6 +79,16 @@ methods:
       unchanged. The lock refuses only on the errors this answers, and records its counts as the
       lock's validationResult.
     sourcePath: src/models/lock.ts
+  - name: ciBlocking
+    signature: 'ciBlocking(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    description: >-
+      The findings that fail `wairon validate --ci`: every error, and every warning but the
+      draft-related ones --ci waives (the DRAFT_*_WARNING family, and UNUSED_COMPONENT in draft
+      context); notices never count. Pure; the one reading `validate --ci` and the release
+      re-validation share.
+    sourcePath: src/models/lock.ts
+    symbol: ciBlockingIssues
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-07T21:50:25.334Z'
+updatedAt: '2026-10-08T08:36:00.725Z'

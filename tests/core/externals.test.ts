@@ -380,7 +380,7 @@ describe('stage 2b — the project graph and declared externals', () => {
       expect(exportUsage('dispatch', 'billing')).toEqual({
         consumer: 'dispatch',
         producer: 'billing',
-        used: [{ publicName: 'invoicing', kind: 'component', members: ['issueInvoice'], specs: ['dispatch::route-planner', 'dispatch::route-planner-impl'] }],
+        used: [{ publicName: 'invoicing', kind: 'component', members: ['issueInvoice'], specs: ['dispatch::route-planner', 'dispatch::route-planner-impl'], memberSpecs: { issueInvoice: ['dispatch::route-planner-impl'] } }],
         unexported: [],
       });
       expect(exportUsage('billing', 'dispatch')).toEqual({ consumer: 'billing', producer: 'dispatch', used: [], unexported: [] });

@@ -110,6 +110,11 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
       stdout.push(String(chunk));
       return true;
     }) as typeof process.stdout.write);
+    // Round 6: every status line of an export is on stderr, so stdout is the document alone.
+    vi.spyOn(process.stderr, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      logged.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
   });
 
   afterEach(() => {
@@ -131,6 +136,13 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
     expect(doc['x-wairon-base-path']).toBe('/admin');
     // The OTHER portal's API is absent — a selection is a selection.
     expect(stdout[0]).not.toContain('/records/{id}');
+  });
+
+  it('round 6: stdout is the JSON document alone — the projection line is on stderr', async () => {
+    await runSurface('export', { format: 'openapi', portal: 'admin-portal' });
+    expect(() => JSON.parse(stdout.join(''))).not.toThrow();
+    expect(stdout.join('')).not.toContain('Projected surface');
+    expect(logged.join(' ')).toContain('Projected surface');
   });
 
   it('--portal with --out writes exactly one file at the given path', async () => {

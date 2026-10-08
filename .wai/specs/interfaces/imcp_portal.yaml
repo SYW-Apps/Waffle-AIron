@@ -244,8 +244,9 @@ methods:
   - name: renameComponent
     description: >-
       Tool: rename a component and rewrite every reference to it; the interfaces and implementations
-      named after it move too. Reports the specs moved and the specs rewritten.
-    signature: 'renameComponent(id: string, newId: string): ComponentRename'
+      named after it move too. Reports the specs moved and the specs rewritten. With dryRun it
+      answers what the rename would do and writes nothing.
+    signature: 'renameComponent(id: string, newId: string, dryRun?: bool): ComponentRename'
     returns: ComponentRename
     params:
       - name: id
@@ -254,6 +255,10 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, rewrite, keep and rekey, and write nothing
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_rename_component
@@ -874,8 +879,8 @@ methods:
       the old id joins the type's rename trace (previousIds), and an export entry that derived its
       public name from the old id keeps it through `as`. Refuses an id another type of the same
       owner holds or retired. Reports the specs rewritten, the public names kept and the
-      debt-register edits.
-    signature: 'renameType(id: string, newId: string): TypeRename'
+      debt-register edits. With dryRun it answers what the rename would do and writes nothing.
+    signature: 'renameType(id: string, newId: string, dryRun?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: id
@@ -884,6 +889,10 @@ methods:
       - name: newId
         type: string
         description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_rename_type
@@ -1063,8 +1072,12 @@ methods:
       Tool: rename a field of a type and respell every reference to it (a foreign key's `references:
       <type>.<field>`); the old name joins the field's rename trace (previousNames), which the
       design export shows as `formerly`. Refuses a name another field of the type holds or retired.
-      Reports the specs rewritten.
-    signature: 'renameField(id: string, field: string, newName: string): FieldRename'
+      Reports the specs rewritten, the public names carrying the field (publishedIn) and, as
+      `breaks`, the consumers — family members included, plus checkouts in the searched folders —
+      whose specs reach one. With dryRun it answers all of that and writes nothing.
+    signature: >-
+      renameField(id: string, field: string, newName: string, dryRun?: bool, search?: list<string>):
+      FieldRename
     returns: FieldRename
     params:
       - name: id
@@ -1076,6 +1089,16 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would respell and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_rename_field
@@ -1083,10 +1106,15 @@ methods:
     description: >-
       Tool: rename a parameter of a contract method; the old name joins the parameter's rename trace
       (previousNames), which the design export shows as `formerly`, each signature is re-derived and
-      an HTTP path placeholder that bound the parameter is respelled. Refuses a name another
-      parameter of the method holds or retired. Reports the interfaces it moved in and the
-      placeholders respelled.
-    signature: 'renameParam(id: string, method: string, param: string, newName: string): ParamRename'
+      an HTTP path placeholder that bound the parameter is respelled — on the method's own binding
+      and on every method whose signatureFrom takes its signature. Refuses a name another parameter
+      of the method holds or retired. Reports the interfaces it moved in, the placeholders
+      respelled, the public names publishing the method and, as `breaks`, the consumers — family
+      members included, plus checkouts in the searched folders — that call it. With dryRun it
+      answers all of that and writes nothing.
+    signature: >-
+      renameParam(id: string, method: string, param: string, newName: string, dryRun?: bool,
+      search?: list<string>): ParamRename
     returns: ParamRename
     params:
       - name: id
@@ -1101,6 +1129,16 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, respell and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_rename_param
@@ -1139,4 +1177,4 @@ methods:
       method: tools/call sdd_surface_diff
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T18:41:18.226Z'
+updatedAt: '2026-10-08T08:26:11.655Z'

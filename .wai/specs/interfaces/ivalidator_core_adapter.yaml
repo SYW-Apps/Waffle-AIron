@@ -289,6 +289,19 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: diffAgainstApproval
+    description: >-
+      Forward to approval_portal.diffAgainstApproval: which own spec files moved since the approval
+      on record, or null when there is none (or it predates per-spec digests).
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T06:20:34.614Z'
+updatedAt: '2026-10-08T08:36:45.169Z'

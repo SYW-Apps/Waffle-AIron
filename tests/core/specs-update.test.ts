@@ -614,7 +614,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     })).toThrow(/nothing with that identity exists/);
   });
 
-  it('string arrays have no per-element identity, so they replace wholesale', () => {
+  it('string arrays merge value by value; only a removal marker takes one away (round 6)', () => {
     project();
     saveSpec('subsystem', { schemaVersion: '1.0.0', id: 'billing', name: 'B', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
     saveComponentSpec({
@@ -623,10 +623,13 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     } as never);
     invalidateSpecCache();
 
-    updateSpec('component', 'repo', { owns: ['a'] });
+    updateSpec('component', 'repo', { owns: ['a', 'd'] });
     invalidateSpecCache();
-    // Deliberate: there is no way to address one string, so the list IS the delta.
-    expect(loadComponentSpec('repo')!.owns).toEqual(['a']);
+    // Restating a value never loses the others: the delta adds what is missing.
+    expect(loadComponentSpec('repo')!.owns).toEqual(['a', 'b', 'c', 'd']);
+    updateSpec('component', 'repo', { owns: [{ value: 'b', action: 'delete' }] });
+    invalidateSpecCache();
+    expect(loadComponentSpec('repo')!.owns).toEqual(['a', 'c', 'd']);
   });
 
   it('an empty array clears a keyed list outright', () => {

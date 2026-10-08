@@ -105,6 +105,7 @@ import { typeShapeRule } from './conformance/type-shape.js';
 import { enumValuesRule } from './conformance/enum-values.js';
 import { paramConformanceRule } from './conformance/param-conformance.js';
 import { asyncConformanceRule } from './conformance/async-conformance.js';
+import { bindingModulesRule } from './conformance/binding-modules.js';
 import { routeCoverageRule } from './conformance/route-coverage.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
 import { exportConformanceRule } from './conformance/export-conformance.js';
@@ -345,6 +346,8 @@ export const SDD_RULES: SddRule[] = [
   routeCoverageRule,
   unclaimedSourceRule,
   exportConformanceRule,
+  // A consumer's hand-written binding module against the pins it binds.
+  bindingModulesRule,
   couplingRule,
   // Target-language fit: what a NARRATIVE may describe. What a contract may
   // name is the neutral type grammar's (type-expressions), not a language's.

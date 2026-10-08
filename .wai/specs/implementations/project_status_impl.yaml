@@ -23,9 +23,11 @@ methods:
         onFalseStep: 4
       - stepNumber: 3
         description: >-
-          Answer with each failure named — the file, the code and the message — and say plainly that
-          the report failed. Refusing to answer would withhold the one thing the asker needs;
-          answering without marking it failed would let a script read a broken tree as a healthy one
+          Answer with each failure named — the file, the code and the message, each said once and in
+          one line (an unreadable L0 is `The L0 System spec (.wai/specs/.index.yaml) cannot be read:
+          <why>`, never a raw schema dump) — and say plainly that the report failed. Refusing to
+          answer would withhold the one thing the asker needs; answering without marking it failed
+          would let a script read a broken tree as a healthy one
         type: return
         outcome: parse failures
       - stepNumber: 4
@@ -37,7 +39,11 @@ methods:
       - stepNumber: 5
         description: >-
           Say the system specification is missing, and mark the report failed. A different state
-          from a tree that would not parse, and it reads differently to whoever is looking
+          from a tree that would not parse, and it reads differently to whoever is looking: when
+          spec files remain below the missing L0 (core_orchestrator.findOrphanedSpecFiles), say what
+          `validate` and `lock-check` say of it — its root is gone, N spec file(s) remain and cannot
+          be judged, restore it from version control — never that the design has not been started;
+          only a specs folder with nothing in it has not been started
         type: return
         outcome: no system
       - stepNumber: 6
@@ -74,14 +80,16 @@ methods:
           When the options carry the pin tree (options.approvals, computed by the validator at each
           project's own root and handed in — this component cannot compute a gate identity), mark
           each `[Project]` line with that member's approval state in words (approved | drifted |
-          never approved, `re-lock once` for an upgrade-only drift) and how its parent's lock pinned
-          it (pinned | pin moved | not pinned), and close the report with the root's own state as a
-          sentence (`Approval: this project is approved | drifted since its approval | never
-          approved`) — a lone project never approved says so too, so the report never leaves the
-          question open. A never-approved tree holding the L0 and nothing below it (no subsystem, no
-          member project) says instead that there is nothing to approve yet — add a subsystem, then
-          `wairon lock` — as `wairon lock` and `lock-check` say of it. States are read, never
-          recomputed here, so the report from a parent and from the member agree by construction
+          never approved, `re-lock once` for an upgrade-only drift, `re-validated under <release>`
+          for an approval a release change carried, `the new release finds N issue(s)` for one it
+          did not) and how its parent's lock pinned it (pinned | pin moved | not pinned), and close
+          the report with the root's own state as a sentence (`Approval: this project is approved |
+          drifted since its approval | never approved`, with the release line when its entry carries
+          one) — a lone project never approved says so too, so the report never leaves the question
+          open. A never-approved tree holding the L0 and nothing below it (no subsystem, no member
+          project) says instead that there is nothing to approve yet — add a subsystem, then `wairon
+          lock` — as `wairon lock` and `lock-check` say of it. States are read, never recomputed
+          here, so the report from a parent and from the member agree by construction
           (status-agrees). Without approvals the report shows no states
         type: local
       - stepNumber: 10
@@ -94,4 +102,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-07T22:24:33.723Z'
+updatedAt: '2026-10-08T08:40:57.211Z'

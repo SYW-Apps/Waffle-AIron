@@ -872,11 +872,17 @@ methods:
         type: NetworkCommandOptions
   - name: runTypeRenameField
     description: >-
-      `wairon type rename-field <type> <field> <new-name>`: rename a field of a type and respell
-      every reference to it, the old name kept in the field's rename trace (previousNames,
-      `formerly` in the design export). Prints the specs rewritten and that a lock goes stale as
-      with any edit; a refusal prints its reason and exits non-zero.
-    signature: 'runTypeRenameField(typeId: string, field: string, newName: string): async void'
+      `wairon type rename-field <type> <field> <new-name> [--dry-run] [--search <dir...>]`: rename a
+      field of a type and respell every reference to it, the old name kept in the field's rename
+      trace (previousNames, `formerly` in the design export). Prints the specs rewritten (or, with
+      --dry-run, that it would rewrite), the public names carrying the field, and every consumer
+      whose specs reach one — the family in reach, members included, and the consumer checkouts in
+      the searched folders — as the projects whose code reading the old name breaks; a dry run ends
+      with "Nothing was written", a real one with the re-lock it owes; a refusal prints its reason
+      and exits non-zero.
+    signature: >-
+      runTypeRenameField(typeId: string, field: string, newName: string, options:
+      RenamePreviewOptions): async void
     returns: async void
     params:
       - name: typeId
@@ -888,16 +894,24 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: options
+        type: RenamePreviewOptions
+        description: '--dry-run and --search <dir...>'
   - name: runMethodRenameParam
     description: >-
-      `wairon method rename-param <component> <method> <param> <new-name>`: rename a parameter of a
-      contract method, the old name kept in the parameter's rename trace (previousNames, `formerly`
-      in the design export), each signature re-derived and an HTTP path placeholder that bound it
-      respelled. Prints the move, the interfaces it moved in and the placeholders respelled, and
-      that a lock goes stale as with any edit; a refusal prints its reason and exits non-zero.
+      `wairon method rename-param <component> <method> <param> <new-name> [--dry-run] [--search
+      <dir...>]`: rename a parameter of a contract method, the old name kept in the parameter's
+      rename trace (previousNames, `formerly` in the design export), each signature re-derived and
+      an HTTP path placeholder that bound it respelled — its own binding's and every follower's
+      through signatureFrom. Prints the move (or, with --dry-run, what would move), the interfaces
+      it moved in, the placeholders respelled, the export entries publishing the method and every
+      consumer whose specs call it — the family in reach, members included, and the consumer
+      checkouts in the searched folders — as the projects that must follow; a dry run ends with
+      "Nothing was written", a real one with the re-lock it owes; a refusal prints its reason and
+      exits non-zero.
     signature: >-
-      runMethodRenameParam(componentId: string, methodName: string, param: string, newName: string):
-      async void
+      runMethodRenameParam(componentId: string, methodName: string, param: string, newName: string,
+      options: RenamePreviewOptions): async void
     returns: async void
     params:
       - name: componentId
@@ -912,6 +926,9 @@ methods:
       - name: newName
         type: string
         description: Its new name
+      - name: options
+        type: RenamePreviewOptions
+        description: '--dry-run and --search <dir...>'
   - name: runMethodRename
     description: >-
       `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dir...>]
@@ -940,4 +957,4 @@ methods:
         description: '--dry-run, --search <dir...> and --no-pin-symbol'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T18:41:21.338Z'
+updatedAt: '2026-10-08T08:26:37.487Z'

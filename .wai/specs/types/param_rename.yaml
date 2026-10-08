@@ -2,11 +2,12 @@ kind: value-object
 id: param_rename
 name: ParamRename
 description: >-
-  What renaming a parameter of a contract method changed: the parameter moved to its new name on
-  every contract of the component that declares the method (its old name appended to the parameter's
-  rename trace, previousNames, which the design export shows as `formerly`), each signature
-  re-derived under the new name, and the HTTP endpoint path placeholders that bound it by name
-  respelled.
+  What renaming a parameter of a contract method changed (or, in a dry run, would change): the
+  parameter moved to its new name on every contract of the component that declares the method (its
+  old name appended to the parameter's rename trace, previousNames, which the design export shows as
+  `formerly`), each signature re-derived under the new name, and the HTTP endpoint path placeholders
+  that bound it by name respelled — on the method's own binding and on every follower method whose
+  signatureFrom takes this method's signature.
 subsystem: sdd_core
 fields:
   - name: component
@@ -32,10 +33,30 @@ fields:
   - name: rewritten
     type: list<string>
     description: >-
-      The endpoint path placeholders respelled, each `<interface>.<method>: {old} -> {new}` — the
-      URL a caller sends is unchanged, only the name binding the segment to the parameter
+      The endpoint path placeholders respelled, each `<interface>.<method>: {old} -> {new}` (or
+      `:old -> :new`) — the method's own binding and every follower's that takes its signature
+      through signatureFrom. The URL a caller sends is unchanged, only the name binding the segment
+      to the parameter
     optional: false
+  - name: publishedIn
+    type: list<string>
+    description: >-
+      The public names of the export entries (L0 and L1) whose contract carries the method:
+      consumers calling it on one of them see a parameter renamed. Empty when the contract is not
+      exported.
+    optional: false
+  - name: dryRun
+    type: bool
+    description: 'True when this report is a dry run: nothing was written.'
+    optional: true
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers — family members and pinned externals in reach, and checkouts in the searched
+      folders — whose specs call the method on a public name that publishes it, each narrowed to
+      that method: the ones that must follow the rename. Filled by the caller that read them.
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-07T06:24:46.657Z'
-updatedAt: '2026-10-07T06:24:47.236Z'
+updatedAt: '2026-10-08T08:23:55.249Z'

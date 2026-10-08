@@ -673,6 +673,11 @@ function bindOwnType(world: ExportWorld, owner: string, e: SystemPublicInterface
   return { publicName: name, kind: 'type', source: owner, typeDef: type.id, via: [] };
 }
 
+/** What an L0 wildcard re-export of a source that exports nothing is told: it publishes nothing. */
+function emptySourceDetail(source: string, why: string): string {
+  return `re-exports everything ${source} exports, but ${why}: the entry publishes nothing while it reads as a published API — publish something there first, or drop the entry`;
+}
+
 /**
  * Bind one L0 entry against another project's table: only its public names can
  * be bound, and an entry declaring a wider audience than the export it
@@ -699,6 +704,10 @@ function bindFromProject(
       detail: `re-exports "${requested}" from ${source.label}, whose export table has no such public name — another project is reached only through its L0 exports`,
       ...(from !== undefined ? { source: from } : {}),
     });
+    return [];
+  }
+  if (!named && table.entries.length === 0) {
+    problems.push({ kind: 'invalid', owner, ...((e.from ?? e.subsystem) !== undefined ? { source: (e.from ?? e.subsystem)! } : {}), detail: emptySourceDetail(source.label, 'its L0 export table exports nothing') });
     return [];
   }
   const declared = e.audience ?? 'instance';
@@ -745,6 +754,12 @@ function bindFromSubsystem(
     const entry = withEntryMetadata(bound, e);
     checkConsumable(entry, owner, problems);
     return [{ entry, explicit: true, from: index }];
+  }
+  // A wildcard over a subsystem that exports nothing publishes nothing, while
+  // the entry reads as a published API: an invalid entry, never a silent no-op.
+  if (sourceTable.entries.length === 0) {
+    problems.push({ kind: 'invalid', owner, source: subsystem.id, detail: emptySourceDetail(`subsystem "${subsystem.id}"`, 'its L1 publicInterfaces publish no component and no type') });
+    return [];
   }
   return sourceTable.entries.map((found) => {
     const entry = withEntryMetadata({ ...found, via: [subsystem.id, ...found.via] }, e);
@@ -849,7 +864,7 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
   // Steps 3-4: none, an empty usage.
   if (references.length === 0) return { consumer, producer, used: [], unexported: [] };
   const table = resolveProjectExportTable(producer || undefined);
-  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string> }>();
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string>; memberSpecs: Map<string, Set<string>> }>();
   const unexported: CrossProjectReference[] = [];
   // Step 5: each reference counted under the name it bound to.
   for (const ref of references) {
@@ -858,10 +873,13 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
       unexported.push(ref);
       continue;
     }
-    const slot = used.get(entry.publicName) ?? { kind: entry.kind, members: new Set<string>(), specs: new Set<string>() };
+    const slot = used.get(entry.publicName) ?? { kind: entry.kind, members: new Set<string>(), specs: new Set<string>(), memberSpecs: new Map<string, Set<string>>() };
     slot.specs.add(ref.specId);
-    if (entry.kind === 'type') slot.members.add('type');
-    else if (ref.member !== undefined) slot.members.add(ref.member);
+    const member = entry.kind === 'type' ? 'type' : ref.member;
+    if (member !== undefined) {
+      slot.members.add(member);
+      slot.memberSpecs.set(member, (slot.memberSpecs.get(member) ?? new Set<string>()).add(ref.specId));
+    }
     used.set(entry.publicName, slot);
   }
   // Step 6: names sorted, each name's members sorted.
@@ -870,9 +888,17 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
     producer,
     used: [...used.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort() })),
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort(), ...memberSpecsOf(u.memberSpecs) })),
     unexported,
   };
+}
+
+/** Each member's referring specs, sorted, as an ExportUse records them; nothing when no member was reached. */
+function memberSpecsOf(perMember: Map<string, Set<string>>): { memberSpecs?: Record<string, string[]> } {
+  if (perMember.size === 0) return {};
+  const out: Record<string, string[]> = {};
+  for (const member of [...perMember.keys()].sort()) out[member] = [...perMember.get(member)!].sort();
+  return { memberSpecs: out };
 }
 
 /** The public name a bare import spells, as the consumer's `use` on the alias writes it. */
@@ -934,12 +960,15 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     && ((r.form === 'alias' && r.authored.split('::').length === 2 && r.authored.startsWith(`${alias}::`))
       || (r.form === 'import' && (r.importedVia ?? '').split(', ').includes(alias))));
   // Step 3: each counted under the public name it spells, with the members its position reaches.
-  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string> }>();
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string>; memberSpecs: Map<string, Set<string>> }>();
   for (const ref of through) {
     const publicName = ref.form === 'import' ? importedName(ref.authored, use) : ref.authored.slice(alias.length + 2);
-    const slot = used.get(publicName) ?? { kind: ref.position === 'type' ? 'type' as const : 'component' as const, members: new Set<string>(), specs: new Set<string>() };
+    const slot = used.get(publicName) ?? { kind: ref.position === 'type' ? 'type' as const : 'component' as const, members: new Set<string>(), specs: new Set<string>(), memberSpecs: new Map<string, Set<string>>() };
     slot.specs.add(ref.specId);
-    for (const member of membersAt(ref)) slot.members.add(member);
+    for (const member of membersAt(ref)) {
+      slot.members.add(member);
+      slot.memberSpecs.set(member, (slot.memberSpecs.get(member) ?? new Set<string>()).add(ref.specId));
+    }
     used.set(publicName, slot);
   }
   // Step 4: no unexported references; names sorted, each name's members sorted.
@@ -948,7 +977,7 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     producer: alias,
     used: [...used.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort() })),
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort(), ...memberSpecsOf(u.memberSpecs) })),
     unexported: [],
   };
 }

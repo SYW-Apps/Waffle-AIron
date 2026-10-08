@@ -36,6 +36,17 @@ fields:
       judged exactly as it was taken — never a forced re-lock of an unchanged design. Never
       recorded: a lock writes algorithm and digest alone.
     optional: true
+  - name: parts
+    type: map<string, string>?
+    description: >-
+      On a gate identity only: the digest of each input the identity covers, taken on its own
+      (gate_identity.parts) — `design` (the own design), `release` (this wairon release's built-in
+      design rules), `rules` (projectType and the design rule tuning), `packs` (the governing
+      extensions' doctrine), `network` (absent when none is declared), `composition`, `contracts`
+      (the consumed contract inputs) and `members` (the direct members' subjects). Never part of the
+      digest; a lock records them as gateParts, so a later check can say WHICH input moved, and tell
+      a release change (only `release` moved) from a change the project made.
+    optional: true
 methods:
   - name: equals
     signature: 'equals(other: StateId | null | undefined): boolean'
@@ -46,4 +57,4 @@ methods:
     symbol: stateIdEquals
 sourcePath: src/core/statehash.ts
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-10-06T10:07:03.203Z'
+updatedAt: '2026-10-08T08:35:39.792Z'

@@ -14,6 +14,7 @@ import {
   type ImportBindingFact,
   type MethodImplementation,
   type ParameterFact,
+  type ModuleImports,
   type ResolvedCallFact,
   type RouteFact,
   type ShapeMemberFact,
@@ -2117,9 +2118,13 @@ interface ProjectClass {
  * its canonical key; the answer is keyed the same way. A program the compiler
  * cannot build answers nothing, and the rules fall back to the shape facts.
  */
-function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: string): Map<string, ResolvedCallFact[]> {
+function resolveCalls(
+  ts: TsModule,
+  files: Map<string, string>,
+  projectRoot: string,
+): { calls: Map<string, ResolvedCallFact[]>; imports: Map<string, ModuleImports> } {
   const out = new Map<string, ResolvedCallFact[]>();
-  if (files.size === 0) return out;
+  if (files.size === 0) return { calls: out, imports: new Map() };
   const options = checkerOptions(ts, projectRoot);
   const settings = JSON.stringify(options);
   const host = ts.createCompilerHost(options, true);
@@ -2139,7 +2144,7 @@ function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: str
   try {
     program = ts.createProgram({ rootNames: [...files.keys()], options, host });
   } catch {
-    return out;
+    return { calls: out, imports: new Map() };
   }
   const checker = program.getTypeChecker();
   const assignable = (checker as unknown as {
@@ -2373,13 +2378,17 @@ function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: str
 
     const targets = targetsOf(decls);
     // A computed key that names no single member — a template, a
-    // concatenation, a string-typed variable — and a member read off a type
-    // the code CAST to an index signature both leave the call landing on no
-    // declaration of this project, and the cast or the key is what made it so.
-    const computedKey = ts.isElementAccessExpression(callee) && !literalKey(callee.argumentExpression);
+    // concatenation, a string-typed variable, a `keyof T` union — and a member
+    // read off a type the code CAST to an index signature both leave the call
+    // landing on no single declaration of this project, and the cast or the
+    // key is what made it so. A key the checker types as ONE literal names
+    // its member by that literal's value, never by the variable's own name.
+    const elementKey = ts.isElementAccessExpression(callee) ? keyName(callee.argumentExpression) : undefined;
+    const computedKey = ts.isElementAccessExpression(callee) && elementKey === undefined && !symbolKey(callee.argumentExpression);
     const indexCast = receiver !== undefined && castToIndex(receiver);
     const fact: ResolvedCallFact = {
-      name: targets.find(t => t.via === 'declaration')?.member ?? (computedKey ? '' : nameText(nameNode)) ?? '',
+      name: targets.find(t => t.via === 'declaration')?.member
+        ?? (ts.isElementAccessExpression(callee) ? (elementKey ?? '') : nameText(nameNode)) ?? '',
       written: callee.getText().replace(/\s+/g, ' ').slice(0, 80),
       targets,
     };
@@ -2388,22 +2397,89 @@ function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: str
     if (where.container !== undefined) fact.enclosingContainer = where.container;
     const opaque = decls.size === 0
       && (isOpaque(checker.getTypeAtLocation(callee)) || (receiver !== undefined && isOpaque(checker.getTypeAtLocation(receiver))));
-    if (opaque || (targets.length === 0 && (computedKey || indexCast))) {
+    // Where the receiver was one of this project's classes before any cast,
+    // a computed key on it is unresolved whatever the checker made of the
+    // call: a key that names no single member names none of its writes
+    // either, so neither a landing nor its absence clears it.
+    const original = receiver !== undefined && (opaque || computedKey || indexCast) ? classesOf(unwrap(receiver), fact.name) : [];
+    if (opaque || (targets.length === 0 && (computedKey || indexCast)) || (computedKey && original.length > 0)) {
       fact.unresolved = true;
-      if (receiver !== undefined) {
-        const receivers = classesOf(unwrap(receiver), fact.name);
-        if (receivers.length > 0) fact.receivers = receivers;
-      }
+      if (original.length > 0) fact.receivers = original;
     }
     return fact;
   };
 
-  /** Whether an element-access key names one member: a string or number literal, or an expression the checker types as one literal. */
-  function literalKey(key: import('typescript').Expression): boolean {
-    if (ts.isStringLiteralLike(key) || ts.isNumericLiteral(key)) return true;
+  /**
+   * The one member an element-access key names: a string or number literal's
+   * text, or the value of the ONE literal the checker types the key
+   * expression as (`const name = 'record'; o[name]`). Undefined for a key
+   * that names no single member — a template, a concatenation, a
+   * string-typed variable, a union of keys.
+   */
+  function keyName(key: import('typescript').Expression): string | undefined {
+    if (ts.isStringLiteralLike(key) || ts.isNumericLiteral(key)) return key.text;
     const type = checker.getTypeAtLocation(key);
-    return (type.flags & (ts.TypeFlags.StringLiteral | ts.TypeFlags.NumberLiteral | ts.TypeFlags.UniqueESSymbol)) !== 0;
+    if (type.isStringLiteral() || type.isNumberLiteral()) return String(type.value);
+    return undefined;
   }
+
+  /** Whether an element-access key is one unique symbol (`o[Symbol.iterator]`): one member, though it has no name to give. */
+  function symbolKey(key: import('typescript').Expression): boolean {
+    return (checker.getTypeAtLocation(key).flags & ts.TypeFlags.UniqueESSymbol) !== 0;
+  }
+
+  /**
+   * A member read by element access in a VALUE position — taken, not
+   * invoked on the spot (the callee of a call is resolveOne's) — on a
+   * receiver whose ORIGINAL type, every cast taken off, is one of this
+   * project's classes or a shape they realize, when what the access reads is
+   * no declaration the checker can name: its key names no single member
+   * (`this.store[k]` with k a `keyof` union, a template, a concatenation),
+   * or a literal key is read off a receiver cast to any, unknown or an index
+   * signature. Recorded unresolved, under the literal's name or none, with
+   * the classes the receiver was — so a rule fails it closed against that
+   * class's writes however the value is invoked later (`f.call(store, …)`).
+   */
+  const computedAccessOf = (node: import('typescript').ElementAccessExpression): ResolvedCallFact | undefined => {
+    let at: import('typescript').Node = node;
+    while (at.parent && (ts.isParenthesizedExpression(at.parent) || ts.isAsExpression(at.parent) || ts.isNonNullExpression(at.parent)
+      || ts.isSatisfiesExpression(at.parent) || ts.isTypeAssertionExpression(at.parent))) at = at.parent;
+    if (at.parent && ts.isCallExpression(at.parent) && at.parent.expression === at) return undefined;
+    if (symbolKey(node.argumentExpression)) return undefined;
+    const name = keyName(node.argumentExpression);
+    const where = enclosingOf(node);
+    const placed = (fact: ResolvedCallFact): ResolvedCallFact => {
+      if (where.name !== undefined) fact.enclosing = where.name;
+      if (where.container !== undefined) fact.enclosingContainer = where.container;
+      return fact;
+    };
+    if (name !== undefined) {
+      // A literal key names its member on the receiver as written: a method
+      // taken that way is a plain reference (a `const` key variable is no
+      // member of its own, so referenceOf could not name it), and a data
+      // field is no use of a function at all.
+      const member = checker.getPropertyOfType(checker.getTypeAtLocation(node.expression), name);
+      if (member) {
+        const targets = targetsOf((member.declarations ?? []).filter(d => FUNCTION_DECLS.has(d.kind) && !ts.isVariableDeclaration(d)));
+        if (targets.length === 0 || !isValuePosition(node)) return undefined;
+        return placed({ name: targets.find(t => t.via === 'declaration')?.member ?? name, written: node.getText().replace(/\s+/g, ' ').slice(0, 80), targets, reference: true });
+      }
+    }
+    const receiver = unwrap(node.expression);
+    // A receiver with no member of its own (an index-signature table, an
+    // empty shape) was never a component: every class would "realize" it.
+    if (checker.getPropertiesOfType(checker.getTypeAtLocation(receiver)).length === 0) return undefined;
+    const receivers = classesOf(receiver, name ?? '');
+    if (receivers.length === 0) return undefined;
+    return placed({
+      name: name ?? '',
+      written: node.getText().replace(/\s+/g, ' ').slice(0, 80),
+      targets: [],
+      reference: true,
+      unresolved: true,
+      receivers,
+    });
+  };
 
   /** Whether an expression, as written, is cast (as, an assertion) to a type with an index signature, any or unknown. */
   function castToIndex(expr: import('typescript').Expression): boolean {
@@ -2508,7 +2584,7 @@ function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: str
           const fact = resolveOne(node);
           if (fact) calls.push(fact);
         } else if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isIdentifier(node)) {
-          const fact = referenceOf(node);
+          const fact = referenceOf(node) ?? (ts.isElementAccessExpression(node) ? computedAccessOf(node) : undefined);
           if (fact) calls.push(fact);
         }
       } catch {
@@ -2542,7 +2618,51 @@ function resolveCalls(ts: TsModule, files: Map<string, string>, projectRoot: str
       }
     }
   }
-  return out;
+
+  // What every own file of the program imports — the roots and every project
+  // file they pull in, a helper module no spec names included: the project
+  // files each import resolves to, and the bare package specifiers it names.
+  // What lets a rule read an unowned module's imports as its importer's.
+  const imports = new Map<string, ModuleImports>();
+  const cache = ts.createModuleResolutionCache(projectRoot, f => (ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase()), options);
+  for (const sf of program.getSourceFiles()) {
+    const key = ownKey(sf);
+    if (!key || sf.isDeclarationFile) continue;
+    const specifiers: string[] = [];
+    const visit = (node: import('typescript').Node): void => {
+      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) {
+        specifiers.push(node.moduleSpecifier.text);
+      } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)
+        && ts.isStringLiteralLike(node.moduleReference.expression)) {
+        specifiers.push(node.moduleReference.expression.text);
+      } else if (ts.isCallExpression(node) && node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])
+        && ((ts.isIdentifier(node.expression) && node.expression.text === 'require') || node.expression.kind === ts.SyntaxKind.ImportKeyword)) {
+        specifiers.push(node.arguments[0].text);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    const entry: ModuleImports = { packages: [], files: [] };
+    for (const specifier of new Set(specifiers)) {
+      let resolved: string | undefined;
+      try {
+        const answer = ts.resolveModuleName(specifier, sf.fileName, options, host, cache).resolvedModule;
+        if (answer && !answer.isExternalLibraryImport && !/\.d\.[cm]?ts$/.test(answer.resolvedFileName)) {
+          const absolute = path.resolve(answer.resolvedFileName);
+          if (isOwnFile(projectRoot, absolute)) resolved = pathKey(path.relative(projectRoot, absolute));
+        }
+      } catch {
+        // an unresolvable specifier is simply not a project file
+      }
+      if (resolved !== undefined) {
+        if (!entry.files.includes(resolved)) entry.files.push(resolved);
+      } else if (!specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('node:')) {
+        entry.packages.push(specifier);
+      }
+    }
+    imports.set(key, entry);
+  }
+  return { calls: out, imports };
 }
 
 /**
@@ -2696,10 +2816,12 @@ export function buildCodeModel(
   // the rules read the shape facts as they always have.
   if (ts && checkerRoots.size > 0) {
     let resolved = new Map<string, ResolvedCallFact[]>();
+    let imports = new Map<string, ModuleImports>();
     try {
-      resolved = resolveCalls(ts, checkerRoots, projectRoot);
+      ({ calls: resolved, imports } = resolveCalls(ts, checkerRoots, projectRoot));
     } catch {
       resolved = new Map();
+      imports = new Map();
     }
     const held = new Set<string>();
     for (const facts of files) {
@@ -2711,7 +2833,10 @@ export function buildCodeModel(
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
-    if (Object.keys(reached).length > 0) return { files, projectRoot, rootFiles, packages, reachedCalls: reached };
+    const model: CodeModel = { files, projectRoot, rootFiles, packages };
+    if (Object.keys(reached).length > 0) model.reachedCalls = reached;
+    if (imports.size > 0) model.reachedImports = Object.fromEntries(imports);
+    return model;
   }
 
   return { files, projectRoot, rootFiles, packages };

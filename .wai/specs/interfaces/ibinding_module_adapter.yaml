@@ -1,0 +1,31 @@
+id: ibinding_module_adapter
+name: Binding Module Adapter Interface
+description: >-
+  Reads binding modules into the declarations binding conformance compares with the pinned
+  snapshots.
+component: binding_module_adapter
+methods:
+  - name: readBindingModules
+    description: >-
+      Read each named binding module once (a path named twice is read once): resolve it within the
+      project root (absolute or escaping paths are answered escaped, never read), answer missing for
+      a file not on disk, unreadable for a binary or unreadable one, unsupported for a language
+      other than TypeScript or JavaScript, and otherwise the exported declarations it holds in
+      source order — exported functions (and `declare function`s) with their parameter names;
+      exported interfaces, classes, object type aliases and enums with their members (methods with
+      their parameter names, data fields by name; a function-typed field counts as a method), each
+      with the line it starts on and the `alias::name` its leading doc comment names. Never throws
+      for a file: a file it cannot read is answered with its status.
+    signature: 'readBindingModules(paths: list<string>, projectRoot: string): list<BindingModule>'
+    returns: list<BindingModule>
+    params:
+      - name: paths
+        type: list<string>
+        description: The binding modules, project-relative, as implementations name them
+      - name: projectRoot
+        type: string
+        description: The bound project's root, every path is resolved and contained within
+    effect: io
+status: complete
+createdAt: '2026-10-08T08:21:44.643Z'
+updatedAt: '2026-10-08T08:21:45.409Z'

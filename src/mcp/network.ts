@@ -13,21 +13,29 @@ import { flows as matrix, why } from './adapters/network.js';
 import { isNamed } from '../network/types.js';
 import { effectiveProjectId } from '../models/index.js';
 import { WaironError } from '../utils/errors.js';
-import { loadProjectConfig, setNetwork } from './adapters/core.js';
+import { loadProjectConfig, resolveChainingParent, setNetwork } from './adapters/core.js';
 import type { FlowExplanation, NetworkFlow } from './adapters/network.js';
 
 /**
- * A party as written, read as the network commands read one: the bound
- * project's own id (or a former one) written as a prefix — `<project>::<portal>`
- * or `<project>::<portal>.<verb>` — names its own party, which the matrix keys
- * bare (the bound root's project key is empty).
+ * A party as written, read as the network commands read one (flow-matrix
+ * partyName): every spelling it may denote. The name as written; the bound
+ * project's own id (or a former one) written as a prefix names its own
+ * party, which the matrix keys bare at a family's root — and, at a member's
+ * own root, under the member's alias (`<alias>::<name>`), where a bare name of
+ * the member's own reads the same way.
  */
-function ownParty(to: string): string {
+function partySpellings(to: string, memberAlias: string | undefined): string[] {
   let config: ReturnType<typeof loadProjectConfig> = null;
   try { config = loadProjectConfig(); } catch { /* an unreadable configuration: read the name as written */ }
   const own = config ? [effectiveProjectId(config), ...(config.previousIds ?? [])].filter((id): id is string => !!id) : [];
-  for (const id of own) if (to.startsWith(`${id}::`)) return to.slice(id.length + 2);
-  return to;
+  const spellings = new Set<string>([to]);
+  let bare: string | undefined = to.includes('::') ? undefined : to;
+  for (const id of own) if (to.startsWith(`${id}::`)) bare = to.slice(id.length + 2);
+  if (bare !== undefined) {
+    spellings.add(bare);
+    if (memberAlias !== undefined && bare !== 'outside' && !bare.startsWith('network')) spellings.add(`${memberAlias}::${bare}`);
+  }
+  return [...spellings];
 }
 
 /** imcp_network_orchestrator.flows — the sdd_get_network_flows workflow. Read-only. */
@@ -36,11 +44,15 @@ export function flows(to: string | null): NetworkFlow[] {
   const doc = matrix({}, 'json');
   const all = JSON.parse(doc.content) as NetworkFlow[];
   if (!to) return all;
-  // Step 2: only the flows whose called end the name denotes.
-  const party = ownParty(to);
-  const landing = all.filter((f) => isNamed(f.to, party));
-  // Steps 3-6: an empty answer must never stand for a name that resolved to nothing.
+  // Step 2: at a member's own root, the member's parties are keyed under its alias.
+  let memberAlias: string | undefined;
+  try { memberAlias = resolveChainingParent()?.alias; } catch { memberAlias = undefined; }
+  // Step 3: only the flows whose called end one of the name's spellings denotes.
+  const spellings = partySpellings(to, memberAlias);
+  const landing = all.filter((f) => spellings.some((name) => isNamed(f.to, name)));
+  // Steps 4-7: an empty answer must never stand for a name that resolved to nothing.
   if (landing.length === 0) {
+    const party = spellings[spellings.length - 1];
     const explanation = why({}, 'outside', party);
     if (explanation.unknown?.includes(party)) {
       throw new WaironError(

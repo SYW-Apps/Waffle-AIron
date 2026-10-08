@@ -5,6 +5,7 @@ import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectB
 // identity a member's lock is compared with.
 import {
   validateProject,
+  validateDesign,
   ownReachModel,
   computeGateStateId,
   type ProjectVerdict,
@@ -19,6 +20,7 @@ import {
   loadProjectConfig,
   readLockRecord,
   approvalRecord,
+  diffAgainstApproval,
   loadProjectExtensions,
   packManifest,
   loadSubsystemSpecs,
@@ -36,7 +38,8 @@ import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
-import type { PinState, ProjectApproval } from '../models/lock.js';
+import { ciBlockingIssues, describeGateParts, designOnly, movedGateParts, type PinState, type ProjectApproval, type ReleaseVerdict } from '../models/lock.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 import type { NetworkDeclaration } from '../models/project.js';
 import type { ReachFinding, ReachModel } from '../models/reach.js';
 // reach_model_projector and network_arbiter: the family's reach model and its
@@ -743,6 +746,16 @@ function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): 
       `The member ${named(entry.key)} has never been locked: nobody has approved its design. Lock it at its own root (\`wairon lock\`).`,
       entry.key);
   }
+  if (entry.state === 'drifted' && entry.release && !entry.release.carried) {
+    return finding(config, 'MEMBER_DRIFTED',
+      `The member ${named(entry.key)} was approved under wairon ${entry.release.from}, and this release (${entry.release.to}) finds ${entry.release.count ?? 0} issue(s) in its approved design: ${(entry.release.findings ?? []).join('; ')}. Fix them at its own root, then \`wairon lock\` there.`,
+      entry.key);
+  }
+  if (entry.state === 'drifted' && entry.inputsMoved && entry.inputsMoved.length > 0 && entry.owed === undefined) {
+    return finding(config, 'MEMBER_DRIFTED',
+      `The member ${named(entry.key)} changed since it was approved: ${describeGateParts(entry.inputsMoved)} moved. Re-lock it at its own root (\`wairon lock\`).`,
+      entry.key);
+  }
   if (entry.state === 'drifted' && entry.upgraded) {
     return finding(config, 'MEMBER_DRIFTED',
       `The member ${named(entry.key)} was approved under an earlier gate identity — the gate identity gained inputs in this release (members' composition subjects, \`composition\`; code conformance moved beside the claim), which says nothing about its design. Re-lock it once at its own root (\`wairon lock\`).`,
@@ -883,17 +896,98 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
     if (!record) return base;
     const same = (id: StateId | undefined): boolean => !!id && record.stateId.algorithm === id.algorithm && record.stateId.digest === id.digest;
     const matches = same(current) || same(current.asRecorded);
-    // Steps 8-11: what the approval still owes although its identity may
+    // Step 7: the inputs that moved, named, when the record carries gate parts.
+    const moved = matches ? null : movedGateParts(record, current.parts);
+    // Step 8: a change of the release alone is judged by re-validation.
+    const release = matches ? undefined : releaseVerdict(record, current);
+    // Steps 9-12: what the approval still owes although its identity may
     // match — a moved id, an external never pinned or used beyond its pin.
     const owed = owedBy(record);
+    const covered = (matches || release?.carried === true) && owed === undefined;
     return {
       ...base,
-      state: matches && owed === undefined ? 'approved' : 'drifted',
+      state: covered ? 'approved' : 'drifted',
       subject: subjectOf(record),
-      ...(!matches && record.stateId.algorithm !== current.algorithm ? { upgraded: true } : {}),
+      ...(!matches && !release && record.stateId.algorithm !== current.algorithm ? { upgraded: true } : {}),
+      ...(release ? { release } : {}),
+      ...(moved && moved.length > 0 && !release ? { inputsMoved: moved } : {}),
       ...(owed !== undefined ? { owed } : {}),
     };
   });
+}
+
+/** Release verdicts already decided in this process, by root, record identity and current identity. */
+const releaseVerdicts = new Map<string, ReleaseVerdict | null>();
+
+/** Roots whose re-validation is running: a rule asking for the entry again never starts another. */
+const revalidating = new Set<string>();
+
+/**
+ * ifamily_validator.releaseVerdict — THE verdict on an approval whose gate
+ * identity no longer matches only because the wairon release changed: its
+ * approved design re-validated under the current rules, in the same command.
+ * Clean at the --ci standard it carries over (approved, nothing written);
+ * otherwise it is stale for exactly the findings the new release reports.
+ * Undefined when what moved is not the release alone. Bound to the project's
+ * own root by the caller.
+ */
+export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVerdict | undefined {
+  const root = path.resolve(getProjectRoot());
+  const moved = movedGateParts(record, current.parts);
+  if (moved !== null) {
+    // Steps 1-2: a record with gate parts — only the release's part moved.
+    if (moved.length !== 1 || moved[0] !== 'release') return undefined;
+  } else {
+    // Steps 3-5: a record from before gate parts — another release took it,
+    // no own spec file moved, and every direct member's pin is unchanged.
+    if (!record.validatorVersion || record.validatorVersion === WAIRON_VERSION) return undefined;
+    const diff = diffAgainstApproval();
+    if (!diff || diff.added.length + diff.changed.length + diff.removed.length > 0) return undefined;
+    if (!membersAsPinned(record)) return undefined;
+  }
+  // Steps 6-7: decided once per record and identity in a process.
+  const key = `${root}|${record.stateId.digest}|${current.digest}`;
+  if (releaseVerdicts.has(key)) return releaseVerdicts.get(key) ?? undefined;
+  if (revalidating.has(root)) return undefined;
+  revalidating.add(root);
+  try {
+    // Steps 8-9: the approved design re-validated under the current rules.
+    const config = configOrNull();
+    const result = designOnly(validateDesign({ rules: config?.rules, projectType: config?.projectType, memberDepth: 0 }));
+    // Step 10: what would fail `validate --ci`.
+    const blocking = ciBlockingIssues(result);
+    const from = record.validatorVersion || 'an earlier release';
+    // Steps 11-13.
+    const verdict: ReleaseVerdict = blocking.length === 0
+      ? { from, to: WAIRON_VERSION, carried: true }
+      : {
+        from, to: WAIRON_VERSION, carried: false, count: blocking.length,
+        findings: blocking.slice(0, 5).map((i) => `${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.replace(/\.\s*$/, '')}`),
+      };
+    releaseVerdicts.set(key, verdict);
+    return verdict;
+  } finally {
+    revalidating.delete(root);
+  }
+}
+
+/** Whether every direct member's recorded subject is the one the identity reads now (a record from before gate parts). */
+function membersAsPinned(record: LockRecord): boolean {
+  const family = projectFamily();
+  const now = new Map<string, string>();
+  for (const node of family.nodes) {
+    if (node.parent !== '' || node.mountAlias === undefined) continue;
+    const r = approvalRecord(node.directory);
+    now.set(node.mountAlias, r ? subjectOf(r) : 'never');
+  }
+  const recorded = record.members ?? {};
+  const aliases = new Set([...now.keys(), ...Object.keys(recorded)]);
+  for (const alias of aliases) {
+    const pin = ownGet(recorded, alias);
+    if (pin?.as === 'part') continue;
+    if ((pin?.subject ?? 'never') !== (now.get(alias) ?? 'never')) return false;
+  }
+  return true;
 }
 
 /**

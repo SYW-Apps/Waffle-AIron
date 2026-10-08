@@ -82,6 +82,9 @@ import {
   deriveMethodSignature,
   qualifiedTypeId,
   typeMatchesRef,
+  extractTypeIdentifiers,
+  methodTypeRefs,
+  type ExportUse,
   parseDeclaredCall,
   transportKind,
   type Transport,
@@ -1277,6 +1280,10 @@ function rebaseEscapingPaths(memberDir: string, familyRoot: string, result: Prom
       result.pathsRebased.push(`${raw.id} ${where}: ${p} → ${next} (the code is not moved: it is planned there until ${next} of the parent moves into ${shownMember})`);
     };
     for (const key of isImplementation ? ['sourcePath', 'simPath'] : ['sourcePath']) rebase(raw, key, key);
+    // Binding-module paths are code linkage too, re-based the same way.
+    if (isImplementation && Array.isArray(raw.bindings)) {
+      raw.bindings.forEach((_b: unknown, i: number) => rebase(raw.bindings, String(i), `bindings[${i}]`));
+    }
     if (Array.isArray(raw.methods)) {
       for (const method of raw.methods) {
         if (method && typeof method === 'object') rebase(method, 'sourcePath', `${method.name} sourcePath`);
@@ -2904,6 +2911,10 @@ function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: s
       }
     };
     for (const key of isImplementation ? ['sourcePath', 'simPath'] : ['sourcePath']) rebase(raw, key);
+    // Binding-module paths are code linkage too: read against the new root the same way.
+    if (isImplementation && Array.isArray(raw.bindings)) {
+      raw.bindings.forEach((_b: unknown, i: number) => rebase(raw.bindings, String(i)));
+    }
     if (Array.isArray(raw.methods)) {
       for (const method of raw.methods) {
         if (method && typeof method === 'object') rebase(method, 'sourcePath');
@@ -2963,6 +2974,8 @@ export interface ComponentRename {
    * and every consumer's pin stay as they were. Empty when none derived it.
    */
   keptPublicNames: string[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
 }
 
 /**
@@ -2976,7 +2989,7 @@ export interface ComponentRename {
  * id — or the interface or implementation id it implies — already in use
  * (id-taken).
  */
-export function renameComponent(componentId: string, newId: string): ComponentRename {
+export function renameComponent(componentId: string, newId: string, dryRun?: boolean): ComponentRename {
   // Steps 1–3: the component must exist…
   const component = loadComponentSpec(componentId);
   if (!component) {
@@ -3059,11 +3072,19 @@ export function renameComponent(componentId: string, newId: string): ComponentRe
     ? movingInterface !== undefined && entry.interface === movingInterface.id
     : entry.typeDef === undefined && entry.component === componentId);
   const keptDry = keepPublicNames(specsDir, derivesName, true);
+  const wouldRewrite = [...keptDry.specs, ...rewriteRefFields(specsDir, remap, undefined, true), ...rekeyLintAllows(specsDir, rename, true)];
   assertSpecsInReach(
-    [...renamed.map(({ kind, from }) => ({ kind, id: from })), ...keptDry.specs, ...rewriteRefFields(specsDir, remap, undefined, true), ...rekeyLintAllows(specsDir, rename, true)],
+    [...renamed.map(({ kind, from }) => ({ kind, id: from })), ...wouldRewrite],
     `renaming component "${componentId}"`,
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
+  // A dry run stops here, refused exactly as the real rename above.
+  if (dryRun) {
+    const rewritten = [...new Set(wouldRewrite
+      .filter((spec) => !renamed.some((moved) => moved.kind === spec.kind && moved.from === spec.id))
+      .map((spec) => spec.id))];
+    return { renamed, rewritten, carried: Array.isArray(registerEdits) ? registerEdits : [], keptPublicNames: keptDry.names, dryRun: true };
+  }
   // Still step 16: the published names first — an entry that states no `as`
   // gets the name it published, before its component or interface is respelled.
   const kept = keepPublicNames(specsDir, derivesName);
@@ -3658,6 +3679,8 @@ export interface TypeRename {
   keptPublicNames: string[];
   /** Every edit the rename made to the debt register: an entry anchored on the type. */
   carried: CarriedRekey[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
 }
 
 /** An id respelled in the style a written reference spelled the old one: snake id, PascalCase, camelCase or kebab-case. */
@@ -3700,7 +3723,7 @@ function memberRootWay(qualifiedId: string, call: string): string {
   return `It belongs to ${where}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
 }
 
-export function renameType(typeId: string, newId: string): TypeRename {
+export function renameType(typeId: string, newId: string, dryRun?: boolean): TypeRename {
   // Steps 1–3: the type must exist. A subsystem-qualified id names the type within its owner.
   const all = loadTypeSpecs();
   const cut = typeId.lastIndexOf('::');
@@ -3819,11 +3842,24 @@ export function renameType(typeId: string, newId: string): TypeRename {
   };
   // Inside a hosted request, every spec the rename would write is judged
   // against the request's write reach before the first write.
+  const keptDry = keepPublicNames(specsDir, derivesName, true);
+  const wouldRewrite = [...keptDry.specs, ...respellAll(true), ...rekeyLintAllows(specsDir, rename, true)];
   assertSpecsInReach(
-    [{ kind: 'type', id: oldId }, ...keepPublicNames(specsDir, derivesName, true).specs, ...respellAll(true), ...rekeyLintAllows(specsDir, rename, true)],
+    [{ kind: 'type', id: oldId }, ...wouldRewrite],
     `renaming type "${typeId}"`,
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
+  // A dry run stops here, refused exactly as the real rename above.
+  if (dryRun) {
+    return {
+      from: qualifiedTypeId(type),
+      to: qualifiedTypeId({ id: newId, subsystem: type.subsystem }),
+      rewritten: [...new Set(wouldRewrite.filter((spec) => !(spec.kind === 'type' && spec.id === oldId)).map((spec) => spec.id))],
+      keptPublicNames: keptDry.names,
+      carried: Array.isArray(registerEdits) ? registerEdits : [],
+      dryRun: true,
+    };
+  }
   // The published names first, then the positions; traces are never touched.
   const kept = keepPublicNames(specsDir, derivesName);
   const respelled = respellAll(false);
@@ -3864,6 +3900,16 @@ export interface FieldRename {
   to: string;
   /** Ids of the other specs whose references to the field were respelled. */
   rewritten: string[];
+  /**
+   * Every public name a consumer reaches the field through, with the members
+   * carrying it: an exported type that is, or embeds, the renamed type (member
+   * `type`), and an exported contract whose methods name such a type.
+   */
+  publishedIn: ExportUse[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
+  /** The consumers whose specs reach a member of publishedIn: the ones whose code reading the old name breaks. Filled by the caller that read them. */
+  breaks?: ExternalConsumer[];
 }
 
 /**
@@ -3878,7 +3924,7 @@ export interface FieldRename {
  * (invalid-name), and a name another field holds or retired (name-taken,
  * name-retired).
  */
-export function renameField(typeId: string, field: string, newName: string): FieldRename {
+export function renameField(typeId: string, field: string, newName: string, dryRun?: boolean): FieldRename {
   // Steps 1-2: the type, resolved as renameType resolves it.
   const all = loadTypeSpecs();
   const cut = typeId.lastIndexOf('::');
@@ -3911,7 +3957,7 @@ export function renameField(typeId: string, field: string, newName: string): Fie
   if (retired) {
     throw new WaironError(`name-retired: field "${retired.name}" of type "${type.id}" lists "${newName}" in its previousNames — the name is retired on this type. Unsetting that previousNames releases it.`);
   }
-  if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [] };
+  if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
 
   // Step 4: every foreign key naming the field, collected without writing.
   const others = all.filter((t) => t !== type);
@@ -3951,7 +3997,14 @@ export function renameField(typeId: string, field: string, newName: string): Fie
     }
     return out;
   };
-  assertSpecsInReach([{ kind: 'type', id: type.id }, ...respell(true)], `renaming field "${field}" of type "${typeId}"`, false);
+  const wouldRespell = respell(true);
+  assertSpecsInReach([{ kind: 'type', id: type.id }, ...wouldRespell], `renaming field "${field}" of type "${typeId}"`, false);
+  // Where a consumer reaches the field: every export carrying the type.
+  const publishedIn = publishedCarriers(type);
+  // A dry run stops here, refused exactly as the real rename above.
+  if (dryRun) {
+    return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: wouldRespell.map((spec) => spec.id), publishedIn, dryRun: true };
+  }
   // Step 5: the references.
   const rewritten = respell(false).map((spec) => spec.id);
   invalidateSpecCache();
@@ -3968,7 +4021,57 @@ export function renameField(typeId: string, field: string, newName: string): Fie
   saveSpec('type', { ...stored, fields: renamed } as TypeSpec);
   invalidateSpecCache();
   // Step 7.
-  return { type: qualifiedTypeId(type), from: field, to: newName, rewritten };
+  return { type: qualifiedTypeId(type), from: field, to: newName, rewritten, publishedIn };
+}
+
+/**
+ * Every public name of the bound project's L1 and L0 export tables a consumer
+ * reaches a type through, with the members carrying it: the type and every type
+ * embedding it (a field, param or returns naming a carrying type, transitively)
+ * exported as a type (member `type`), and every exported contract whose
+ * methods name a carrying type in a param or returns (those methods).
+ */
+function publishedCarriers(type: TypeSpec): ExportUse[] {
+  const all = loadTypeSpecs();
+  const carrying: TypeSpec[] = [type];
+  const names = (exprs: string[]): boolean => exprs.some((expr) => extractTypeIdentifiers(expr).some((token) => carrying.some((t) => typeMatchesRef(t, token))));
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const t of all) {
+      if (carrying.includes(t)) continue;
+      const exprs = [...(t.fields ?? []).map((x) => x.type), ...(t.params ?? []).map((p) => p.type), ...(t.returns ? [t.returns] : [])];
+      if (!names(exprs)) continue;
+      carrying.push(t);
+      grew = true;
+    }
+  }
+  const carries = (typeDef: string): boolean => carrying.some((t) => t.id === typeDef || qualifiedTypeId(t) === typeDef || typeMatchesRef(t, typeDef));
+  const contracts = loadInterfaceSpecs();
+  const out = new Map<string, ExportUse>();
+  const add = (publicName: string, kind: ExportUse['kind'], members: string[]): void => {
+    const held = out.get(publicName);
+    out.set(publicName, { publicName, kind, members: [...new Set([...(held?.members ?? []), ...members])].sort() });
+  };
+  const tables = [
+    ...loadSubsystemSpecs().filter((sub) => !sub.id.includes('::')).map((sub) => resolveSubsystemExports(sub.id)),
+    resolveProjectExports(),
+  ];
+  for (const table of tables) {
+    for (const entry of table.entries) {
+      if (entry.kind === 'type') {
+        if (entry.typeDef !== undefined && carries(entry.typeDef)) add(entry.publicName, 'type', ['type']);
+        continue;
+      }
+      if (entry.kind !== 'component' || entry.component === undefined) continue;
+      const methods = contracts
+        .filter((i) => i.component === entry.component && (entry.interface === undefined || i.id === entry.interface))
+        .flatMap((i) => i.methods)
+        .filter((m) => names(methodTypeRefs(m)))
+        .map((m) => m.name);
+      if (methods.length > 0) add(entry.publicName, entry.kind, methods);
+    }
+  }
+  return [...out.values()].sort((a, b) => (a.publicName < b.publicName ? -1 : a.publicName > b.publicName ? 1 : 0));
 }
 
 /** What renaming a parameter of a contract method changed (param_rename). */
@@ -3983,8 +4086,14 @@ export interface ParamRename {
   to: string;
   /** Ids of the interfaces the parameter was renamed in. */
   movedIn: string[];
-  /** The endpoint path placeholders respelled, `<interface>.<method>: {old} -> {new}`. */
+  /** The endpoint path placeholders respelled, `<interface>.<method>: {old} -> {new}` — the method's own bindings and every follower's that takes its signature through signatureFrom. */
   rewritten: string[];
+  /** The public names of the export entries (L0 and L1) whose contract carries the method. */
+  publishedIn: string[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
+  /** The consumers whose specs call the method on one of publishedIn: the ones that must follow. Filled by the caller that read them. */
+  breaks?: ExternalConsumer[];
 }
 
 /**
@@ -3998,7 +4107,7 @@ export interface ParamRename {
  * chained-component, method-missing, param-missing, invalid-name, name-taken
  * and name-retired.
  */
-export function renameParam(componentId: string, methodName: string, param: string, newName: string): ParamRename {
+export function renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?: boolean): ParamRename {
   // Steps 1-2: the component, in this project.
   const component = loadComponentSpec(componentId);
   if (!component) throw new WaironError(`component-missing: no component has the id "${componentId}".`);
@@ -4040,39 +4149,76 @@ export function renameParam(componentId: string, methodName: string, param: stri
   if (variables && !dictated && !methodNameFits(newName, variables)) {
     throw new WaironError(`invalid-name: "${newName}" does not match this tree's parameter naming (rules.naming.variables: ${variables}).`);
   }
-  if (newName === param) return { component: componentId, method: methodName, from: param, to: newName, movedIn: [], rewritten: [] };
-  // Step 5: the hosted request's write reach, before the first write.
-  assertSpecsInReach(moving.map((i) => ({ kind: 'interface', id: i.id })), `renaming parameter "${param}" of "${componentId}.${methodName}"`, false);
-  // Steps 6-8: the parameter moves on each contract; the writer derives the signature.
-  const rewritten: string[] = [];
-  const placeholder = `{${param}}`;
-  for (const contract of moving) {
-    saveInterfaceSpec({
-      ...contract,
-      methods: contract.methods.map((m) => {
-        if (m.name !== methodName) return m;
-        const params = (m.params ?? []).map((p) => (p.name === param
-          ? { ...p, name: newName, previousNames: [...(p.previousNames ?? []), param] }
-          : p));
-        let endpoint = m.endpoint;
-        if (endpoint && endpoint.transport === 'HTTP' && endpoint.path.includes(placeholder)) {
-          endpoint = { ...endpoint, path: endpoint.path.split(placeholder).join(`{${newName}}`) };
-          rewritten.push(`${contract.id}.${methodName}: {${param}} -> {${newName}}`);
-        }
-        // The Express idiom `/:name` is the same placeholder, respelled in its own form.
-        const colon = new RegExp(`/:${param}(?![A-Za-z0-9_])`, 'g');
-        if (endpoint && endpoint.transport === 'HTTP' && colon.test(endpoint.path)) {
-          endpoint = { ...endpoint, path: endpoint.path.replace(colon, `/:${newName}`) };
-          rewritten.push(`${contract.id}.${methodName}: :${param} -> :${newName}`);
-        }
-        return { ...m, params, ...(endpoint ? { endpoint } : {}) };
-      }),
+  if (newName === param) return { component: componentId, method: methodName, from: param, to: newName, movedIn: [], rewritten: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
+  // Step 5: the followers — every contract method of the bound tree whose
+  // signatureFrom takes this method's signature, so it reads the renamed
+  // parameter through the loader — and the export entries publishing it.
+  const source = `${componentId}.${methodName}`;
+  const followers = loadInterfaceSpecs().filter((i) => !moving.includes(i) && i.methods.some((m) => followsSource(m.signatureFrom, source, i.component)));
+  const publishedIn = exportsPublishing(componentId, new Set(moving.map((i) => i.id)));
+  // Step 6: the hosted request's write reach, before the first write — the
+  // moving contracts, and each follower whose binding names the placeholder.
+  const respelled = (contract: InterfaceSpec, isFollower: boolean): { methods: InterfaceSpec['methods']; rewritten: string[] } => {
+    const rewritten: string[] = [];
+    const methods = contract.methods.map((m) => {
+      const own = !isFollower && m.name === methodName;
+      if (!own && !(isFollower && followsSource(m.signatureFrom, source, contract.component))) return m;
+      const params = own
+        ? (m.params ?? []).map((p) => (p.name === param ? { ...p, name: newName, previousNames: [...(p.previousNames ?? []), param] } : p))
+        : m.params;
+      const endpoint = respellPlaceholder(m.endpoint, param, newName, `${contract.id}.${m.name}`, rewritten);
+      return { ...m, ...(params !== undefined ? { params } : {}), ...(endpoint ? { endpoint } : {}) };
     });
+    return { methods, rewritten };
+  };
+  const followerEdits = followers.map((i) => ({ contract: i, ...respelled(i, true) })).filter((e) => e.rewritten.length > 0);
+  assertSpecsInReach(
+    [...moving, ...followerEdits.map((e) => e.contract)].map((i) => ({ kind: 'interface', id: i.id })),
+    `renaming parameter "${param}" of "${componentId}.${methodName}"`,
+    false,
+  );
+  const ownEdits = moving.map((i) => ({ contract: i, ...respelled(i, false) }));
+  const rewritten = [...ownEdits, ...followerEdits].flatMap((e) => e.rewritten);
+  // Steps 7-8: a dry run stops here, refused exactly as the real rename above.
+  if (dryRun) {
+    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn, dryRun: true };
   }
-  // Step 9.
+  // Steps 9-11: the parameter moves on each contract; the writer derives the signature.
+  for (const edit of ownEdits) saveInterfaceSpec({ ...edit.contract, methods: edit.methods });
+  // Steps 12-14: each follower's placeholder follows.
+  for (const edit of followerEdits) saveInterfaceSpec({ ...edit.contract, methods: edit.methods });
+  // Step 15.
   invalidateSpecCache();
-  // Step 10.
-  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten };
+  // Step 16.
+  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn };
+}
+
+/** Whether a signatureFrom names `source` (`component.method`): written qualified, or bare beside a component of the same owner namespace. */
+function followsSource(signatureFrom: string | undefined, source: string, follower: string): boolean {
+  if (signatureFrom === undefined) return false;
+  if (signatureFrom === source) return true;
+  const ns = follower.includes('::') ? follower.slice(0, follower.lastIndexOf('::') + 2) : '';
+  return `${ns}${signatureFrom}` === source || signatureFrom === `${ns}${source}`;
+}
+
+/**
+ * An HTTP endpoint with the placeholder that bound `from` respelled `to` in
+ * the form it was written — `{from}`, or the Express idiom `/:from` — each
+ * respelling recorded under `label`; any other endpoint as it is.
+ */
+function respellPlaceholder<E extends { transport: string; path?: string } | undefined>(endpoint: E, from: string, to: string, label: string, rewritten: string[]): E {
+  if (!endpoint || endpoint.transport !== 'HTTP' || typeof endpoint.path !== 'string') return endpoint;
+  let path = endpoint.path;
+  if (path.includes(`{${from}}`)) {
+    path = path.split(`{${from}}`).join(`{${to}}`);
+    rewritten.push(`${label}: {${from}} -> {${to}}`);
+  }
+  const colon = new RegExp(`/:${from}(?![A-Za-z0-9_])`, 'g');
+  if (colon.test(path)) {
+    path = path.replace(colon, `/:${to}`);
+    rewritten.push(`${label}: :${from} -> :${to}`);
+  }
+  return path === endpoint.path ? endpoint : { ...endpoint, path };
 }
 
 /** The file the loader keeps a type in, by its id, owner and group. */

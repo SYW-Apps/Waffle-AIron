@@ -228,6 +228,49 @@ export function computeGateIdentity(
   return { algorithm, digest };
 }
 
+/** sha256 over a value's canonical form, in hex. */
+function digestOf(value: unknown): string {
+  return crypto.createHash('sha256').update(canonicalize(value)).digest('hex');
+}
+
+/**
+ * gate_identity.parts — the gate identity's inputs digested ONE BY ONE, in
+ * exactly the projection compute takes them in: `design` (the own content
+ * identity), `release` (the built-in design rules — this wairon release's own
+ * doctrine), `rules` (projectType and the design rule tuning), `packs` (the
+ * extensions' doctrine), `network` (only when declared), `composition`,
+ * `contracts` (the consumed contract inputs) and `members` (the members'
+ * subjects). Never part of the identity's digest: a lock records them beside
+ * it, so a later check can name the input that moved and tell a change of
+ * the release alone — judged by re-validation — from one the project made.
+ * Pure.
+ */
+export function gateParts(
+  content: StateId,
+  doctrine: LoadedExtensions,
+  builtinRules: SddRule[],
+  inputs: string[],
+  gate: GateConfig,
+  members: Record<string, string>,
+): Record<string, string> {
+  // Step 1: the payload compute digests, split into its inputs.
+  const d = doctrineIdentity(doctrine, builtinRules, gate);
+  // Steps 2-3: each input digested on its own.
+  return {
+    design: content.digest,
+    release: digestOf(d.builtinRules),
+    rules: digestOf({ projectType: d.projectType, rulesConfig: d.rulesConfig }),
+    packs: digestOf({
+      packs: d.packs, profiles: d.profiles, languages: d.languages, patterns: d.patterns,
+      guarantees: d.guarantees, assertions: d.assertions, rules: d.rules,
+    }),
+    ...(d.network !== undefined ? { network: digestOf(d.network) } : {}),
+    composition: digestOf(d.composition),
+    contracts: digestOf([...inputs].sort(compareOrdinal)),
+    members: digestOf(byKey(Object.entries(members), ([alias]) => alias).map(([alias, subject]) => ({ alias, subject }))),
+  };
+}
+
 /**
  * gate_identity.analyzer — the digest of the code analyzer's doctrine: the
  * built-in rules that judge code (name, codes, default severities) with the

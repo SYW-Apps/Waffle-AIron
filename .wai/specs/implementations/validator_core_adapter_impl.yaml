@@ -239,6 +239,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: resolveChainingParent
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's comparison
+        type: call
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T06:20:38.335Z'
+updatedAt: '2026-10-08T08:36:46.488Z'

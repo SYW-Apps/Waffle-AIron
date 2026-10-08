@@ -18,7 +18,12 @@ methods:
         targetComponent: spec_file_store
         targetMethod: read
       - stepNumber: 3
-        description: Parse against SystemSpecSchema; an absent document yields null
+        description: >-
+          Parse against SystemSpecSchema; an absent document yields null. A document that is there
+          but cannot be read as an L0 — empty, `null`, not YAML (`x: [`), or failing the schema
+          (`name: 5`) — also yields null, with ONE loader finding that says so in one line: `The L0
+          System spec (.wai/specs/.index.yaml) cannot be read: <why>`, the schema's complaints as
+          `path: message` joined, never a raw issue array
         type: local
   - name: loadSubsystemSpecs
     narrative:
@@ -587,6 +592,14 @@ methods:
           compatibly
         type: return
         outcome: list<RetiredReachFact>
+  - name: typePath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the path the index records for the type's spec, or its placement under its
+          subsystem and group when it is not stored yet
+        type: local
+    symbol: getTypePath
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-07T18:37:10.247Z'
+updatedAt: '2026-10-08T08:43:49.971Z'

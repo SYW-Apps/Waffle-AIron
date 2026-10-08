@@ -544,11 +544,14 @@ methods:
         targetMethod: defaultPackSelections
       - stepNumber: 19
         description: >-
-          Compose the new project's configuration — its id (the project name slugified; none when
-          the name yields no slug), the chosen targets (with --yes: claude only — a tool nobody
-          chose gets no files) and projectType, execution budgets off, component-implementer and
-          agent-file generation off, the store packs declaring applyByDefault seeded as selections,
-          and machine-wide packs recorded as off — and create it through the core adapter.
+          Compose the new project's configuration — its id (the project name slugified; when the
+          slug is one the id grammar refuses — a device name such as con, the reserved `super`, or
+          nothing at all — the slug with `-project` appended, `project` for an empty one, and a line
+          saying why the folder name was not usable as it is, so a new project never starts without
+          an id), the chosen targets (with --yes: claude only — a tool nobody chose gets no files)
+          and projectType, execution budgets off, component-implementer and agent-file generation
+          off, the store packs declaring applyByDefault seeded as selections, and machine-wide packs
+          recorded as off — and create it through the core adapter.
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
@@ -597,9 +600,12 @@ methods:
         targetMethod: injectGuide
       - stepNumber: 26
         description: >-
-          Write the repository-root pointer for every target that got a local guide, and for the
-          targets that want only a root file. A pointer rather than a copy, so there is one document
-          to keep current instead of two that can disagree
+          Write wairon's block of the repository-root pointer for every target that got a local
+          guide, and for the targets that want only a root file. A pointer rather than a copy, so
+          there is one document to keep current instead of two that can disagree; and a block
+          between markers, because the root file is usually the user's own: every byte of it outside
+          the markers is kept, and the report says the block was written into an existing file
+          rather than that a file was created
         type: call
         targetComponent: cli_core_adapter
         targetMethod: writeRootGuideDelegator
@@ -693,12 +699,12 @@ methods:
           - value: export
             step: 2
           - value: import
-            step: 4
+            step: 5
           - value: list
-            step: 6
+            step: 7
           - value: diff
-            step: 8
-        defaultStep: 10
+            step: 9
+        defaultStep: 11
       - stepNumber: 2
         description: >-
           Export the own surface (format/out/portal from options; the audience from --audience, else
@@ -709,33 +715,45 @@ methods:
         targetMethod: exportSurface
       - stepNumber: 3
         description: >-
-          Report the export result: every written path — with several portals and no --portal, one
-          file per portal is written and each path is listed. Without an out path, print the single
-          document when one portal remains, else list the available portals (portalId + name) so the
-          caller can pick with --portal, rather than printing nothing. An OpenAPI export with no
-          HTTP Portal (an in-process library) is refused naming why, never answered with the native
-          entries.
+          Judge the bound project with the owner's gate, so an export of a design the gate refuses
+          never reads as a success
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 4
+        description: >-
+          Report the export result. The status line (what was projected) goes to stderr, so a
+          document printed to stdout is the document and nothing else; it is a warning, never a
+          success mark, when the projection holds no interface and no type (naming that the export
+          table publishes nothing at that audience) or when the gate found errors (their count and
+          codes, and `wairon validate` to see them). Every written path is listed — with several
+          portals and no --portal, one file per portal is written and each path is listed. Without
+          an out path, print the single document when one portal remains, else list the available
+          portals (portalId + name) so the caller can pick with --portal, rather than printing
+          nothing. An OpenAPI export with no HTTP Portal (an in-process library) is refused naming
+          why, never answered with the native entries, and one whose operations collide on a path
+          and verb is refused naming both (nothing written).
         type: return
         outcome: exported
-      - stepNumber: 4
+      - stepNumber: 5
         description: Import the foreign surface (source/origin from options)
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: importSurface
-      - stepNumber: 5
+      - stepNumber: 6
         description: Print the imported snapshot summary
         type: return
         outcome: imported
-      - stepNumber: 6
+      - stepNumber: 7
         description: List the stored snapshots
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: listSnapshots
-      - stepNumber: 7
+      - stepNumber: 8
         description: Print the snapshot table
         type: return
         outcome: listed
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Compare the public surface with the last committed approval, or with --against (a git
           revision or a saved native snapshot). A comparison that cannot be made — the project is in
@@ -745,14 +763,14 @@ methods:
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: diffSurface
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Print what it was compared with, then one line per change grouped removed, renamed,
           changed, added, and how many a consumer may have to follow; or the JSON answer under
           --json
         type: return
         outcome: changelog printed
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Unknown surface action — for `externals` and `pin`, which stage 3 removed, the error names
           `wairon externals list|status|pin` instead
@@ -2073,35 +2091,45 @@ methods:
         targetMethod: readStampVersion
       - stepNumber: 68
         description: >-
+          Ask which derived context documents a regenerate would change in CONTENT (the project
+          context they embed, the domain map): each is reported `stale — its content differs from
+          what wairon generate writes now`, never current, so a file stamped by this release is
+          never called current while `doctor --fix` would rewrite it
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: staleDerivedDocs
+      - stepNumber: 69
+        description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
           write now, reporting the missing and stale ones
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
-      - stepNumber: 69
+      - stepNumber: 70
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 70
+      - stepNumber: 71
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
-          approved, warning when it predates per-spec approval; a stale one warns that the approval
-          no longer covers the design and to re-lock; a project never locked reports nothing; a lock
-          record that cannot be read as an approval (corrupt JSON, no gate identity) is reported as
-          an error naming the file and why, never read as "never locked". Any other failure here
-          never breaks the report
+          approved (lock_record.approvalStamp), warning when it predates per-spec approval; a stale
+          one reports lock-check's own verdict — an approval a release change carried reads
+          approved, `re-validated under <release>`, and one the new release finds issues in names
+          them; a project never locked reports nothing; a lock record that cannot be read as an
+          approval (corrupt JSON, no gate identity) is reported as an error naming the file and why,
+          never read as "never locked". Any other failure here never breaks the report
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 71
+      - stepNumber: 72
         description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 72
+      - stepNumber: 73
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed on this machine but not applied (only
@@ -2109,12 +2137,12 @@ methods:
           developer's home store is never doctrine, so --fix never selects it into a project), and
           those applied from the machine-wide store
         type: local
-      - stepNumber: 73
+      - stepNumber: 74
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 74
+      - stepNumber: 75
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -3922,15 +3950,32 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: Rename the field through the core adapter
+        description: >-
+          Read the projects that consume this project — the family in reach, members included, and
+          the consumer checkouts in the --search folders — before anything moves, each with the
+          names and members its specs use
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the field through the core adapter — or, with --dry-run, ask what the rename would
+          do, refused exactly as the real rename would be and writing nothing
         type: call
         targetComponent: cli_core_adapter
         targetMethod: renameField
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
-          Print the move, the specs rewritten, and that the approval reads the renamed type as
-          changed until the next `wairon lock`
+          Keep the consumers whose specs reach a member of a public name the report says carries the
+          field (external_consumer.reaches): the projects whose code reading the old name breaks
         type: local
+      - stepNumber: 5
+        description: >-
+          Print the move (or what would move), the specs rewritten, the public names carrying the
+          field and each consumer it breaks with its section and alias — or that none in reach uses
+          it, naming --search; a dry run ends with "Nothing was written", a real one with the
+          re-lock the rename owes
+        type: return
   - name: runMethodRenameParam
     sourcePath: src/commands/method.ts
     narrative:
@@ -3942,15 +3987,32 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
       - stepNumber: 2
-        description: Rename the parameter through the core adapter
+        description: >-
+          Read the projects that consume this project — the family in reach, members included, and
+          the consumer checkouts in the --search folders — before anything moves, each with the
+          names and methods its specs use
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the parameter through the core adapter — or, with --dry-run, ask what the rename
+          would do, refused exactly as the real rename would be and writing nothing
         type: call
         targetComponent: cli_core_adapter
         targetMethod: renameParam
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
-          Print the move, the interfaces it moved in, the placeholders respelled, and that the
-          approval reads the contract as changed until the next `wairon lock`
+          Keep the consumers whose specs call the method on a public name the report says publishes
+          it (external_consumer.reaches): the projects that must follow the rename
         type: local
+      - stepNumber: 5
+        description: >-
+          Print the move (or what would move), the interfaces it moved in, the placeholders
+          respelled (followers' included), the export entries publishing the method and each
+          consumer that calls it — or that none in reach calls it, naming --search; a dry run ends
+          with "Nothing was written", a real one with the re-lock the rename owes
+        type: return
   - name: runMethodRename
     sourcePath: src/commands/method.ts
     narrative:
@@ -4004,4 +4066,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-07T22:57:06.960Z'
+updatedAt: '2026-10-08T08:41:10.437Z'

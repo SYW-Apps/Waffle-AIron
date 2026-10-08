@@ -177,7 +177,8 @@ describe('property: pin-chain (restated)', () => {
     expect(entry(tree, 'mid')).toMatchObject({ state: 'drifted', pinned: 'matches' });
     expect(entry(tree, '')!.state).toBe('approved');
     bind(fam.top);
-    expect(computeGateStateId()).toEqual(topLock.stateId);
+    const { algorithm, digest } = computeGateStateId();
+    expect({ algorithm, digest }).toEqual(topLock.stateId);
 
     // The middle re-locks: now the top's identity moves and the top is stale.
     await lockAt(fam.mid);

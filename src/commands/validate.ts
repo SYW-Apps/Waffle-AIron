@@ -9,6 +9,7 @@ import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecF
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
+import { isCiDraftWaivable as waivable } from '../models/lock.js';
 import {
   validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
   adviseExternals as adviseLive,
@@ -175,12 +176,9 @@ export function carriedDebtSummary(
   };
 }
 
+/** The --ci draft waiver, the one reading validate and the release re-validation share (models/lock.ts). */
 export function isCiDraftWaivable(issue: ValidationIssue): boolean {
-  if (issue.severity !== 'warning') return false;
-  if (issue.code === 'DRAFT_SUBSYSTEM_WARNING') return true;
-  if (issue.code === 'DRAFT_COMPONENT_WARNING') return true;
-  if (issue.code === 'UNUSED_COMPONENT') return issue.draftContext === true;
-  return false;
+  return waivable(issue);
 }
 
 /** How a family run labels a project: its key, or the bound root's id. */
@@ -387,6 +385,10 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     // at the root, so a green member run is never read as a proven one.
     const parent = resolveChainingParent();
     if (parent) logger.info(chalk.gray(memberNetworkLine(parent.alias, parent.parentRoot)));
+    // Step 12: the approval line, when the approval was taken under another
+    // release — the verdict lock-check exits on, never part of this decision.
+    const releaseLine = approvalReleaseLine();
+    if (releaseLine) logger.info(releaseLine);
   }
 
   else {
@@ -451,6 +453,26 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       logger.success('All checks passed.');
     }
   }
+}
+
+/**
+ * The approval line `validate` prints when the bound project's approval was
+ * taken under another wairon release: carried (re-validated clean: still
+ * approved) or not (the new release's findings). Null otherwise, and when the
+ * approval cannot be read — `lock-check` and `status` own that refusal.
+ */
+function approvalReleaseLine(): string | null {
+  let own;
+  try {
+    own = familyApprovals(0).find((a) => a.key === '');
+  } catch {
+    return null;
+  }
+  const release = own?.release;
+  if (!release) return null;
+  return release.carried
+    ? chalk.green(`Approval: approved under wairon ${release.from}, re-validated under ${release.to}: still approved. (\`wairon lock\` refreshes the record's release stamp without a re-approval.)`)
+    : chalk.yellow(`Approval: approved under wairon ${release.from}, and the new release (${release.to}) finds ${release.count ?? 0} issue(s) in the approved design — \`wairon lock-check\` fails until they are resolved and the design re-locked.`);
 }
 
 /**

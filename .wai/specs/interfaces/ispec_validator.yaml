@@ -182,6 +182,20 @@ methods:
         description: The run's scope, exactly as validateProject takes it
         optional: true
     effect: read
+  - name: validateDesign
+    description: >-
+      The owner's gate at each spec's AUTHORED status (never as-complete), its result carrying
+      `analysis` — the code half summarised with the analyzer that took it, as validateAsComplete's
+      does — so validation_result.designOnly keeps the design half. What a change of the wairon
+      release is judged by: the approved design re-validated under the current rules at the `--ci`
+      standard (family_validator.releaseVerdict).
+    signature: 'validateDesign(options?: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: The project's own rules and projectType
+        optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-06T13:00:07.880Z'
+updatedAt: '2026-10-08T08:36:41.267Z'

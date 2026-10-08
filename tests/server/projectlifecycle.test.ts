@@ -504,7 +504,8 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     // The record carries the validator's gate identity, the one every staleness
     // check later compares against.
     expect(lock!.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
-    expect(lock!.stateId).toEqual(runWithProjectRoot(root, () => computeGateStateId()));
+    const { algorithm, digest } = runWithProjectRoot(root, () => computeGateStateId());
+    expect(lock!.stateId).toEqual({ algorithm, digest });
     // Hosted creation declared the hosted project id as the project's id, and
     // the lock records the id it approved.
     expect(projectConfigRepositoryAt(root).load()?.id).toBe('hosted-baseline');

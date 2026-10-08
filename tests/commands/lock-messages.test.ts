@@ -98,7 +98,9 @@ describe('lock says what changed when no spec did', () => {
     await lock();
     const text = out.lines.join('\n');
     expect(text).not.toMatch(/Nothing has changed/);
-    expect(text).toMatch(/an input the gate identity covers/);
+    // Round 6: the record names each input, so the one that moved is named.
+    expect(text).toMatch(/the network declaration/);
+    expect(text).not.toMatch(/an input the gate identity covers/);
   });
 
   it('a true no-op still says nothing has changed', async () => {

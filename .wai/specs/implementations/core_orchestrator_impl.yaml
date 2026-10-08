@@ -408,9 +408,10 @@ methods:
           subsystems/ file, each component naming it, their contracts and those contracts'
           implementations; a destination already taken refuses before anything moves, and a folder
           the move empties goes. Each moved implementation's file paths — sourcePath, each method's
-          sourcePath, simPath — and each moved type's — sourcePath and each method's sourcePath —
-          are re-expressed relative to the part's root, the same files. Keys and references are
-          untouched: the moved specs are still the bound project's own, so nothing is respelled
+          sourcePath, simPath, each binding-module path — and each moved type's — sourcePath and
+          each method's sourcePath — are re-expressed relative to the part's root, the same files.
+          Keys and references are untouched: the moved specs are still the bound project's own, so
+          nothing is respelled
         type: local
       - stepNumber: 6
         description: >-
@@ -516,10 +517,10 @@ methods:
         description: >-
           Move every subsystem subtree of the member and its project-level types under the bound
           project's specs, their keys becoming local, and re-express each moved implementation's
-          file paths (sourcePath, each method's sourcePath, simPath) and each moved type's
-          (sourcePath, each method's sourcePath) relative to the bound root. Each reference that
-          crossed the old boundary is re-expressed with the target the scan bound it to before the
-          move, so the re-save below keeps every target
+          file paths (sourcePath, each method's sourcePath, simPath, each binding-module path) and
+          each moved type's (sourcePath, each method's sourcePath) relative to the bound root. Each
+          reference that crossed the old boundary is re-expressed with the target the scan bound it
+          to before the move, so the re-save below keeps every target
         type: local
       - stepNumber: 13
         description: Is there a project boundary to dissolve, or only storage to move?
@@ -1124,6 +1125,22 @@ methods:
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
       - stepNumber: 16
+        label: componentDryRun
+        description: >-
+          A dry run stops here, refused exactly as the real rename above: collect without writing
+          every spec the rewrite and the lint-allow rekey WOULD change and every export entry that
+          would get an `as`
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Return what the rename would do, marked dryRun: renamed, the ids it would rewrite (the
+          moved specs left out), the public names it would keep and the register edits the dry rekey
+          planned; nothing was written
+        type: return
+        outcome: ComponentRename (dry run)
+      - stepNumber: 18
         description: >-
           Rewrite every reference to a renamed id across the bound tree with the provisioning
           rewriter, the moved specs' own files included: a component's dependsOn, owns and dispatch
@@ -1135,19 +1152,19 @@ methods:
           public name was derived from the old id) gets `as: <that public name>` written, so the
           published name and every consumer's pin stay
         type: local
-      - stepNumber: 17
+      - stepNumber: 19
         description: >-
           Rekey every lint allow in the bound tree by the same move (identity_rename.rekeyAnchor): a
           site on an edge naming the component and every covered unit naming it follow, and each
           spec whose allows changed joins the rewritten specs — a spec the rename moves carries its
           allows with it
         type: local
-      - stepNumber: 18
+      - stepNumber: 20
         description: Drop the cached spec index, so the saves below place specs by the rewritten owns
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 19
+      - stepNumber: 21
         description: >-
           Move each renamed spec to its new id: reload it as the rewrite left it, write it under the
           new id where the loader places it, remove the file it left behind and drop the cached
@@ -1155,7 +1172,7 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveRenamedSpecs
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           Rekey the debt register for real: every carried entry anchored on a renamed spec or naming
           the component in its site or units, rewritten in place with every comment and all other
@@ -1163,7 +1180,7 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 21
+      - stepNumber: 23
         description: >-
           Return renamed (each moved spec's kind with its old and new id), rewritten (the ids of the
           other specs whose references or lint allows changed), keptPublicNames (each export entry
@@ -1512,24 +1529,33 @@ methods:
       - stepNumber: 10
         description: >-
           Merge the delta onto the stored spec: references qualify against the spec's namespace
-          first, identity-keyed arrays upsert element by element and honour their delete markers at
-          every depth, narrative steps insert and delete in ascending order, and `unset` removes the
-          fields it names at the level it sits in while `[]` clears the list it names. An existing
-          element merges field by field: a field the delta leaves out, or passes as null, leaves the
-          stored value untouched at every depth — a method named without its narrative keeps its
-          narrative, a step named without its catches keeps them — so only `[]` or an `unset` ever
-          clears one. Every STORED jump field relocates around each insert and delete; a jump the
-          delta itself writes — on an inserted, appended or edited step — names its target in the
-          numbering the whole delta leaves behind, after all of its inserts and deletes, so no later
-          step of the same delta moves it. A step whose type changes is rebuilt for its new type
-          keeping its description and label. A new element takes the shape every stored one has: an
-          implementation method the delta adds without a narrative is an intent-level method with
-          none ([]), one whose narrative is not a list is refused naming the field, and a defaulted
-          list an `unset` removed is back at its default — the write path reads those lists before
-          the schema does, and must never die on one with a raw TypeError. A step delete is refused
-          outright when it addresses no step, when a stored jump still targets it, when a restated
-          label or description does not match it, or when it is a region header whose body would be
-          left standing
+          first (a removal marker's value included), identity-keyed arrays upsert element by element
+          and honour their delete markers at every depth, narrative steps insert and delete in
+          ascending order, and `unset` removes the fields it names at the level it sits in while
+          `[]` clears the list it names. A list of plain values (strings, numbers, booleans — owns,
+          dependsOn, guarantees, previousNames, a matches list, the L0's globalRequirements written
+          as text) merges too, at every depth: each value the delta names that the list does not
+          hold is appended, every value it holds is kept, and a value is removed only by naming it
+          in a removal marker `{ value, action: 'delete' }` (or `remove: true`) — a requirement also
+          by `{ description, action: 'delete' }`, a requirement written as text and as `{
+          description }` being the same requirement; a marker naming a value the list does not hold
+          is refused, naming the values it does. So restating a list never loses a value, and only
+          an explicit marker, `[]` or an `unset` takes one away. An existing element merges field by
+          field: a field the delta leaves out, or passes as null, leaves the stored value untouched
+          at every depth — a method named without its narrative keeps its narrative, a step named
+          without its catches keeps them — so only `[]` or an `unset` ever clears one. Every STORED
+          jump field relocates around each insert and delete; a jump the delta itself writes — on an
+          inserted, appended or edited step — names its target in the numbering the whole delta
+          leaves behind, after all of its inserts and deletes, so no later step of the same delta
+          moves it. A step whose type changes is rebuilt for its new type keeping its description
+          and label. A new element takes the shape every stored one has: an implementation method
+          the delta adds without a narrative is an intent-level method with none ([]), one whose
+          narrative is not a list is refused naming the field, and a defaulted list an `unset`
+          removed is back at its default — the write path reads those lists before the schema does,
+          and must never die on one with a raw TypeError. A step delete is refused outright when it
+          addresses no step, when a stored jump still targets it, when a restated label or
+          description does not match it, or when it is a region header whose body would be left
+          standing
         type: local
       - stepNumber: 11
         description: >-
@@ -2233,10 +2259,11 @@ methods:
       - stepNumber: 17
         description: >-
           Re-express, under the new project's scope, every file path its implementations and types
-          name (sourcePath, each method's sourcePath, simPath) that escapes its root: the path the
-          file has relative to the family root, read under the member's root — the layout the code
-          takes once it is moved in (the source is not moved: until then it is planned code there).
-          A path inside the root is left alone. Record each, naming where the file still lies
+          name (sourcePath, each method's sourcePath, simPath, each binding-module path) that
+          escapes its root: the path the file has relative to the family root, read under the
+          member's root — the layout the code takes once it is moved in (the source is not moved:
+          until then it is planned code there). A path inside the root is left alone. Record each,
+          naming where the file still lies
         type: local
       - stepNumber: 18
         description: >-
@@ -2650,6 +2677,21 @@ methods:
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
       - stepNumber: 12
+        label: typeDryRun
+        description: >-
+          A dry run stops here, refused exactly as the real rename above: walk every spec without
+          writing to collect the specs whose type positions, typeDef or lint allows it WOULD respell
+          and the export entries that would get an `as`
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Return from and to, the ids it would rewrite, the public names it would keep and the
+          register edits the dry rekey planned, marked dryRun; nothing was written
+        type: return
+        outcome: TypeRename (dry run)
+      - stepNumber: 14
         description: >-
           Rewrite every reference to the type across the bound tree with a type-expression walk over
           the raw spec files (the shared reference-field table reads a position whole and never
@@ -2664,31 +2706,31 @@ methods:
           recorded as kept. Rename traces are never rewritten. Then rekey every lint allow naming
           the type (identity_rename.rekeyAnchor). Record the specs either changed
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: Drop the cached spec index, so the save below reads the rewritten tree
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
           Write the type, reloaded as the rewrite left it, under newId with the same owner and its
           old id appended to its rename trace (previousIds)
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 15
+      - stepNumber: 17
         description: Remove the file it left behind under its old id
         type: call
         targetComponent: spec_loader
         targetMethod: deleteSpec
-      - stepNumber: 16
+      - stepNumber: 18
         description: >-
           Rekey the debt register for real: every carried entry anchored on the type, rewritten in
           place with every comment and all other formatting kept
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 17
+      - stepNumber: 19
         description: >-
           Return from and to, rewritten (the other specs whose references or lint allows changed),
           keptPublicNames and carried
@@ -2726,7 +2768,7 @@ methods:
         condition: >-
           the field exists, the new name is an identifier the target language allows, and it is
           neither taken nor retired on the type
-        onFalseStep: 8
+        onFalseStep: 11
       - stepNumber: 4
         description: >-
           Collect, without writing, every other type whose foreign key `references: <type>.<field>`
@@ -2734,20 +2776,39 @@ methods:
           type's file and each of those against the hosted request's write reach
         type: local
       - stepNumber: 5
-        description: Respell each such reference in place to `<type>.<newName>`
+        description: >-
+          Collect where a consumer reaches the field (publishedIn): the types that carry it — the
+          renamed type, and every type whose field types name a carrying type, transitively — then
+          each L1 and L0 export entry publishing a carrying type (member `type`) or a contract whose
+          methods name one in a param or returns (those methods)
         type: local
       - stepNumber: 6
+        label: fieldDryRun
+        description: A dry run stops here, refused exactly as the real rename above
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Answer the FieldRename the rename would produce: the type, from, to, the ids it would
+          respell and publishedIn, marked dryRun; nothing was written
+        type: return
+        outcome: FieldRename (dry run)
+      - stepNumber: 8
+        description: Respell each such reference in place to `<type>.<newName>`
+        type: local
+      - stepNumber: 9
         description: >-
           Save the type with the field renamed and its old name appended to the field's
           previousNames
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 7
-        description: 'Answer the FieldRename: the type, from, to, and the ids of the specs respelled'
+      - stepNumber: 10
+        description: 'Answer the FieldRename: the type, from, to, the ids of the specs respelled and publishedIn'
         type: return
         outcome: FieldRename
-      - stepNumber: 8
+      - stepNumber: 11
         label: refuse
         description: >-
           Refuse with the reason that applies, naming what holds or retired the name; nothing was
@@ -2768,7 +2829,7 @@ methods:
           anything is read further
         type: branch
         condition: the component exists and is not inside a chained subproject
-        onFalseStep: 11
+        onFalseStep: 17
       - stepNumber: 3
         description: >-
           Load every interface spec, and collect the contracts of the component that declare the
@@ -2789,40 +2850,78 @@ methods:
         condition: >-
           the method and parameter are declared, the new name is acceptable, and it is neither taken
           nor retired on the method
-        onFalseStep: 11
+        onFalseStep: 17
       - stepNumber: 5
-        description: Judge every interface file the rename would write against the hosted request's write reach
+        description: >-
+          Collect the followers — every contract method in the bound tree whose signatureFrom takes
+          `<component>.<method>`'s signature, so it reads the renamed parameter through the loader —
+          and the export entries (L1 and L0) publishing a moving contract (publishedIn)
         type: local
       - stepNumber: 6
+        description: >-
+          Judge every interface file the rename would write — the moving contracts and each follower
+          whose HTTP binding spells the old placeholder — against the hosted request's write reach
+        type: local
+      - stepNumber: 7
+        label: paramDryRun
+        description: A dry run stops here, refused exactly as the real rename above
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Answer the ParamRename the rename would produce — the interfaces it would move in, every
+          placeholder it would respell (the own bindings' and the followers') and publishedIn —
+          marked dryRun; nothing was written
+        type: return
+        outcome: ParamRename (dry run)
+      - stepNumber: 9
         label: contractLoop
         description: Rename the parameter on each moving contract
         type: loop
         over: the moving contracts
-        endStep: 8
-      - stepNumber: 7
+        endStep: 11
+      - stepNumber: 10
         description: >-
           Rename the parameter in place, appending its old name to the parameter's previousNames,
           re-derive the method's signature text from its params, and respell an HTTP endpoint path
           placeholder on the method's own binding in the form it was written — `{old}` to `{new}`,
           the Express idiom `/:old` to `/:new` — recording each
         type: local
-      - stepNumber: 8
+      - stepNumber: 11
         description: Save the interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 9
+      - stepNumber: 12
+        label: followerLoop
+        description: Respell the placeholder on each follower
+        type: loop
+        over: the followers whose HTTP binding names the old placeholder
+        endStep: 14
+      - stepNumber: 13
+        description: >-
+          Respell the follower's HTTP endpoint path placeholder in the form it was written — `{old}`
+          to `{new}`, `/:old` to `/:new` — recording each; its params are the source's, which the
+          loader resolves
+        type: local
+      - stepNumber: 14
+        description: Save the follower's interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 15
         description: Drop the loader cache so the next read sees the renamed parameter
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 10
+      - stepNumber: 16
         description: >-
-          Answer the ParamRename: component, method, from, to, the interfaces it moved in and the
-          placeholders respelled
+          Answer the ParamRename: component, method, from, to, the interfaces it moved in, the
+          placeholders respelled (own and followers') and publishedIn
         type: return
         outcome: ParamRename
-      - stepNumber: 11
+      - stepNumber: 17
         label: refuse
         description: >-
           Refuse with the reason that applies (component-missing, chained-component, method-missing,
@@ -2834,8 +2933,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Answer nothing when the specs folder is absent, or when it holds its L0 (.index.yaml at
-          its root, or a legacy system.yaml) — then the tree is read the ordinary way
+          Answer nothing when the specs folder is absent, or when it holds an L0 that reads
+          (.index.yaml at its root, or a legacy system.yaml) — then the tree is read the ordinary
+          way. An L0 file that is there but does not read as an L0 (empty, null, not YAML, failing
+          its schema) leaves the tree as unjudged as a deleted one
         type: local
       - stepNumber: 2
         description: >-
@@ -2843,9 +2944,9 @@ methods:
           POSIX separators, sorted
         type: local
       - stepNumber: 3
-        description: Return the files a deleted L0 left standing
+        description: Return the files a deleted or unreadable L0 left standing, the L0 file itself left out
         type: return
         outcome: success
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T22:12:38.899Z'
+updatedAt: '2026-10-08T09:00:07.486Z'
