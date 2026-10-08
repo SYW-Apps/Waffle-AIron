@@ -17,6 +17,12 @@ function draftContext(ctx: RuleContext, interfaceId: string, component: string):
   return ctx.isComponentDraft(component) || intf?.status === 'draft' || intf?.status === 'design';
 }
 
+/** The project namespace a component key lives in: '' for the bound project's own. */
+function projectOf(componentKey: string): string {
+  const at = componentKey.lastIndexOf('::');
+  return at < 0 ? '' : componentKey.slice(0, at);
+}
+
 /** The component key of a method source's target (`<component key>.<method>`). */
 function targetComponent(target: string): string {
   return target.slice(0, target.lastIndexOf('.'));
@@ -26,7 +32,7 @@ export const signatureSourcesRule: SddRule = {
   name: 'signature-sources',
   judges: 'design',
   description:
-    'Judges every signatureFrom the loader met, from ctx.signatureFacts (the loaded specs are already resolved). The value is read both ways, as a contract method and as a signature type: neither resolving — or only a type that is an entity or value-object — is unresolved; both resolving is ambiguous, and the finding names both candidates and asks the author to qualify the reference; a source that itself names a signatureFrom is a chain, which is never followed (when that source\'s own source is a signature type, the finding names it as the one to take directly); a method source whose component the method\'s component does not name in dependsOn or owns is off the design\'s edges; a stored method that names a source and also states params or returns that differ from the source\'s restates it, and the source\'s are in force. Every finding sits at the method.',
+    'Judges every signatureFrom the loader met, from ctx.signatureFacts (the loaded specs are already resolved). The value is read both ways, as a contract method and as a signature type: neither resolving — or only a type that is an entity or value-object — is unresolved; both resolving is ambiguous, and the finding names both candidates and asks the author to qualify the reference; a source that itself names a signatureFrom is a chain, which is never followed (when that source\'s own source is a signature type, the finding names it as the one to take directly); a method source in the method\'s own project whose component the method\'s component does not name in dependsOn or owns is off the design\'s edges — another project\'s export (`alias::name.method`) is licensed by the declared relation to that project, an external or a member alike; a stored method that names a source and also states params or returns that differ from the source\'s restates it, and the source\'s are in force. Every finding sits at the method.',
   codes: [
     { code: 'SIGNATURE_SOURCE_UNRESOLVED', defaultSeverity: 'error', summary: 'A method\'s signatureFrom names no contract method and no signature type' },
     { code: 'SIGNATURE_SOURCE_AMBIGUOUS', defaultSeverity: 'error', summary: 'A method\'s signatureFrom resolves both as a contract method and as a signature type; qualify it' },
@@ -98,6 +104,12 @@ export const signatureSourcesRule: SddRule = {
       // Step 12: a method source off the design's edges.
       if (fact.form !== 'method' || !fact.target) continue;
       const source = targetComponent(fact.target);
+      // Another project's export (`alias::name.method`) is licensed by the
+      // declared relation to that project — an external's or a member's alike,
+      // one reference, one verdict — never by a dependsOn edge. (An extension
+      // point a consumer implements is the clearest case: the producer calls
+      // the implementer, so an edge to its component would point the wrong way.)
+      if (fact.source.includes('::') && projectOf(source) !== projectOf(fact.component)) continue;
       const owner = ctx.componentMap.get(fact.component);
       const reached = new Set([...(owner?.dependsOn ?? []), ...(owner?.owns ?? [])]);
       if (reached.has(source)) continue;

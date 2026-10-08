@@ -19,7 +19,7 @@ import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
-import { pathExists, writeFile, getProjectRoot, getProjectRootOverride, resolveProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { pathExists, readFileOrNull, writeFile, getProjectRoot, getProjectRootOverride, resolveProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import { effectiveProjectId } from '../models/project.js';
 import { runMcpInstall } from '../commands/mcp.js';
 import { runStatus } from '../commands/status.js';
@@ -137,6 +137,8 @@ async function runLock(options: LockOptions): Promise<void> {
   logger.header('Lock SDD specs');
   // A refusal (requireApprovedMembers, inputs that moved while it ran) is a
   // WaironError: printed and exited on by the CLI's own handler, nothing written.
+  const lockPath = path.join(getProjectRoot(), '.wai', 'lock.json');
+  const before = readFileOrNull(lockPath);
   const record = await lockTree(options, dry, captured);
   if (!record) {
     logger.info('Cancelled. Nothing was changed.');
@@ -150,7 +152,10 @@ async function runLock(options: LockOptions): Promise<void> {
 
   logger.blank();
   logger.success('Specs locked and generated outputs reconciled.');
-  logger.info(`Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
+  // Truthful about the file: the same approval re-recorded nothing.
+  logger.info(before !== null && readFileOrNull(lockPath) === before
+    ? `Lock record unchanged (.wai/lock.json left untouched): stateId ${record.stateId.algorithm}:${record.stateId.digest} — approved ${record.lockedAt}.`
+    : `Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
   for (const [alias, pin] of Object.entries(record.members ?? {})) {
     logger.info(`  member ${alias}: ${pin.state}${pin.subject ? ` (${pin.subject.slice(0, 26)}…)` : ''}`);
   }

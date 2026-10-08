@@ -9,16 +9,20 @@ methods:
   - name: planAttach
     description: >-
       Plan making the existing project at request.path a member of the bound project under
-      request.alias. Refusals: the path is not strictly within the bound project (not-contained);
-      the alias is declared under members or externals (alias-taken); an external of the bound
-      project already names that directory (already-member, pointing at `member adopt`); the
-      directory holds no project — no .wai/project.yaml and no L0 (not-a-project); a family node is
-      already there (already-member); its id equals a family project's id (id-collision,
-      PROJECT_ID_COLLISION named). Edits: the member declared (path, description); in the attached
-      project, its id declared when it only defaults one — the id its lock approved, else its
-      effective id, never the alias, so its approval keeps its identity. Its L0, subsystems, packs,
-      externals and lock are untouched; the bound project's composition.requirePolicies it does not
-      meet are notes (the family run reports them), never scaffolded into it.
+      request.alias. The path reads as a member location does (`member add`): a path inside the
+      bound project is resolved under the containment guard, and a leading `../` is the explicit way
+      out to a sibling, so attach and add accept the same locations. Refusals: a path that escapes
+      any other way — an absolute path, an inner `..`, an ancestor of the bound project, a link out
+      of it (not-contained); the alias is declared under members or externals (alias-taken); an
+      external of the bound project already names that directory (already-member, pointing at
+      `member adopt`); the directory holds no project — no .wai/project.yaml and no L0
+      (not-a-project); a family node is already there (already-member); its id equals a family
+      project's id (id-collision, PROJECT_ID_COLLISION named). Edits: the member declared (path,
+      description); in the attached project, its id declared when it only defaults one — the id its
+      lock approved, else its effective id, never the alias, so its approval keeps its identity. Its
+      L0, subsystems, packs, externals and lock are untouched; the bound project's
+      composition.requirePolicies it does not meet are notes (the family run reports them), never
+      scaffolded into it.
     signature: 'planAttach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -136,4 +140,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:33:39.248Z'
-updatedAt: '2026-10-01T19:52:06.842Z'
+updatedAt: '2026-10-08T18:55:01.950Z'

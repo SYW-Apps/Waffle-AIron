@@ -35,25 +35,30 @@ methods:
         onFalseStep: 1
       - stepNumber: 5
         description: >-
-          Blank the comments (keeping each doc comment's `alias::name` for the declaration it
-          precedes), skip string and template literals, and find each `export` of a function,
-          interface, class, type alias or enum (an `export declare` too), recording its name and
-          starting line
+          Blank the comments (keeping each doc comment's `alias::name` or `alias::name.method` for
+          the declaration it precedes), skip string and template literals, and find each ES module
+          `export` of a function, interface, class, type alias or enum (an `export declare` too),
+          and each CommonJS export — `exports.X =` / `module.exports.X =` and the properties of
+          `module.exports = { … }` — recording its name and starting line; an export form whose
+          value cannot be seen into (`module.exports = require(…)`, a bare identifier) is recorded
+          as an unread form
         type: local
       - stepNumber: 6
         description: >-
-          For a function: its parameter names, split on the commas at depth zero of its parameter
-          list (a destructured parameter recorded as an empty name). For an interface, a class body
-          or an object type literal: each member at depth zero — a call signature or method with its
-          parameter names, a function-typed field as a method, any other as a data field, a
-          constructor and index signatures skipped; for an enum, its member names as fields
+          For a function (or a CommonJS function or arrow-function value): its parameter names,
+          split on the commas at depth zero of its parameter list (a destructured parameter recorded
+          as an empty name). For an interface, a class body, an object type literal or a CommonJS
+          object literal: each member at depth zero — a call signature or method (a `name: function
+          (…)` or arrow value too) with its parameter names, a function-typed field as a method, any
+          other as a data field with the type text it is declared with, a constructor and index
+          signatures skipped; for an enum, its member names as fields
         type: local
       - stepNumber: 7
         description: >-
           Answer one BindingModule per path: its status and, when read, its declarations in source
-          order
+          order and the unread export forms it met
         type: return
         outcome: read
 status: complete
 createdAt: '2026-10-08T08:21:54.979Z'
-updatedAt: '2026-10-08T08:21:55.819Z'
+updatedAt: '2026-10-08T18:48:49.915Z'

@@ -320,15 +320,27 @@ export function narrowedToMember(consumer: ExternalConsumer, publicNames: readon
  */
 export function narrowedToUses(consumer: ExternalConsumer, published: readonly ExportUse[]): ExternalConsumer | null {
   const merged = new Map<string, ExportUse>();
+  const add = (u: ExportUse): void => {
+    const held = merged.get(u.publicName);
+    merged.set(u.publicName, held
+      ? { ...held, members: [...new Set([...held.members, ...u.members])].sort(), specs: [...new Set([...(held.specs ?? []), ...(u.specs ?? [])])].sort() }
+      : u);
+  };
   for (const use of published) {
+    // The entry under its public name now and every former one a consumer may still write.
+    const names = [use.publicName, ...(use.formerNames ?? [])];
     for (const member of use.members) {
-      if (!consumerReaches(consumer, [use.publicName], member)) continue;
-      for (const u of narrowedToMember(consumer, [use.publicName], member).uses ?? []) {
-        const held = merged.get(u.publicName);
-        merged.set(u.publicName, held
-          ? { ...held, members: [...new Set([...held.members, ...u.members])].sort(), specs: [...new Set([...(held.specs ?? []), ...(u.specs ?? [])])].sort() }
-          : u);
+      // The member under its name now and every former one: a call an earlier rename left unresolved still breaks.
+      for (const spelled of [member, ...(use.formerMembers?.[member] ?? [])]) {
+        for (const name of names) {
+          if (!consumerReaches(consumer, [name], spelled)) continue;
+          for (const u of narrowedToMember(consumer, [name], spelled).uses ?? []) add(u);
+        }
       }
+    }
+    // A former public name the consumer still writes, bound to nothing now (broken): kept as a use of its own.
+    for (const former of use.formerNames ?? []) {
+      if ((consumer.broken ?? []).includes(former) && !merged.has(former)) add({ publicName: former, kind: use.kind, members: use.kind === 'type' ? ['type'] : [] });
     }
   }
   if (merged.size === 0) return null;

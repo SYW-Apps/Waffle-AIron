@@ -2193,7 +2193,7 @@ export type WritableSpecKind =
 type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec;
 
 /** What a write did at one path of a stored spec. */
-export type SpecChangeKind = 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated';
+export type SpecChangeKind = 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated' | 'reordered';
 
 /**
  * ONE change a write made to a stored spec, addressed by a dotted path with
@@ -2697,13 +2697,33 @@ export function specChanges(before: unknown, after: unknown, prefix = ''): SpecC
       && [...before, ...after].every(i => i !== null && typeof i === 'object' && !Array.isArray(i))) {
       return narrativeChanges(before as Rec[], after as Rec[], prefix);
     }
-    const identified = [...before, ...after].every(i => reportIdentityOf(prefix.split('.').pop() ?? prefix, i) !== null);
+    const field = prefix.split('.').pop() ?? prefix;
+    // A list of plain values (a requirement written as text or as its
+    // description alike) is compared value by value: a mixed edit reads as the
+    // values it added and removed, never as the whole list "set" and truncated.
+    const plainKeys = (list: unknown[]): (string | null)[] => list.map((v) => plainReportKey(field, v));
+    const beforePlain = plainKeys(before);
+    const afterPlain = plainKeys(after);
+    if ([...beforePlain, ...afterPlain].every((k) => k !== null) && (before.length > 0 || after.length > 0)) {
+      if (JSON.stringify(before) === JSON.stringify(after)) return [];
+      const changes: SpecChange[] = [];
+      before.forEach((item, i) => {
+        if (!afterPlain.includes(beforePlain[i])) changes.push({ path: prefix, change: 'removed', before: summarizeValue(item) });
+      });
+      after.forEach((item, i) => {
+        if (!beforePlain.includes(afterPlain[i])) changes.push({ path: prefix, change: 'added', after: summarizeValue(item) });
+      });
+      changes.push(...reorderOf(prefix, beforePlain as string[], afterPlain as string[]));
+      // The same values in the same order, written in another form (text and { description }).
+      if (changes.length === 0) changes.push({ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) });
+      return changes;
+    }
+    const identified = [...before, ...after].every(i => reportIdentityOf(field, i) !== null);
     if (!identified) {
       return JSON.stringify(before) === JSON.stringify(after)
         ? []
         : [{ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) }];
     }
-    const field = prefix.split('.').pop() ?? prefix;
     const keyOf = (i: unknown): string => String(reportIdentityOf(field, i));
     const changes: SpecChange[] = [];
     for (const item of before) {
@@ -2716,6 +2736,9 @@ export function specChanges(before: unknown, after: unknown, prefix = ''): SpecC
         changes.push({ path: at(keyOf(item)), change: 'added', after: summarizeValue(item) });
       }
     }
+    // Matched by identity, a moved element is not a rewrite — but the move
+    // itself is an edit, and is said once for the list.
+    if (field !== 'narrative') changes.push(...reorderOf(prefix, before.map(keyOf), after.map(keyOf)));
     return changes;
   }
 
@@ -2732,7 +2755,41 @@ export function specChanges(before: unknown, after: unknown, prefix = ''): SpecC
   }
 
   if (JSON.stringify(before) === JSON.stringify(after)) return [];
+  // Two long texts are shown from just before where they differ: cut at the
+  // same 120 characters from the start, an edit late in a description read as
+  // two identical summaries.
+  if (typeof before === 'string' && typeof after === 'string') {
+    const [b, a] = differingWindow(before, after);
+    return [{ path: prefix, change: 'set', before: summarizeValue(b), after: summarizeValue(a) }];
+  }
   return [{ path: prefix, change: 'set', before: summarizeValue(before), after: summarizeValue(after) }];
+}
+
+/** The identity a change report compares a plain-value list by: the value as text, a requirement object by its description. */
+function plainReportKey(field: string, value: unknown): string | null {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (field === 'globalRequirements' && value !== null && typeof value === 'object' && !Array.isArray(value)
+    && typeof (value as Record<string, unknown>).description === 'string') {
+    return (value as Record<string, unknown>).description as string;
+  }
+  return null;
+}
+
+/** A `reordered` change when the elements both lists hold appear in another order; none otherwise. */
+function reorderOf(path: string, before: string[], after: string[]): SpecChange[] {
+  const kept = before.filter((k) => after.includes(k));
+  const keptAfter = after.filter((k) => before.includes(k));
+  if (kept.length < 2 || kept.every((k, i) => k === keptAfter[i])) return [];
+  return [{ path, change: 'reordered', before: summarizeValue(kept), after: summarizeValue(keptAfter) }];
+}
+
+/** Two texts from shortly before their first difference, each marked as cut when it is. */
+function differingWindow(before: string, after: string): [string, string] {
+  if (before.length <= 120 && after.length <= 120) return [before, after];
+  let at = 0;
+  while (at < before.length && at < after.length && before[at] === after[at]) at++;
+  const start = Math.max(0, at - 40);
+  return start === 0 ? [before, after] : [`...${before.slice(start)}`, `...${after.slice(start)}`];
 }
 
 // ---------------------------------------------------------------------------
@@ -3083,8 +3140,11 @@ export function ineffectiveDeltaPaths(
       if (key === 'unset') {
         for (const name of Array.isArray(value) ? value : []) {
           if (typeof name !== 'string') continue;
-          const had = isPlain(s) && s[name] !== undefined;
-          const still = isPlain(m) && m[name] !== undefined;
+          // A list the schema defaults comes back as [] once unset: that is the
+          // removal, not a failure of it (and an empty list held nothing to remove).
+          const present = (v: unknown): boolean => v !== undefined && !(Array.isArray(v) && v.length === 0);
+          const had = isPlain(s) && present(s[name]);
+          const still = isPlain(m) && present(m[name]);
           if (!had) say(at(path, name), 'unset named a field the stored spec did not have');
           else if (still) say(at(path, name), 'unset did not remove it');
         }
@@ -5667,6 +5727,75 @@ export class SpecWorkspace {
    * the inserted step; the fields a retype dropped) — empty when the merge had
    * nothing to say.
    */
+  /**
+   * core_orchestrator.updateSpec's stage step: the merged spec prepared for its
+   * level's writer and parsed through the writer schema, and its home checked
+   * as the save checks it (a git part's file is read-only; a hosted request's
+   * write reach). Throws the save's own refusal; writes nothing.
+   */
+  private stageWrite(kind: WritableSpecKind, spec: Record<string, any>, id: string): void {
+    const schema = {
+      system: SystemSpecSchema,
+      subsystem: SubsystemSpecSchema,
+      component: ComponentSpecSchema,
+      interface: InterfaceSpecSchema,
+      implementation: ImplementationSpecSchema,
+      type: TypeSpecSchema,
+    }[kind];
+    const document = parseOrThrow(schema, this.prepareForKind(kind, spec as StoredSpec), kind, id);
+    const home = kind === 'system' ? this.paths.specsSystem()
+      : kind === 'subsystem' ? this.getSubsystemPath(spec.id)
+        : kind === 'component' ? this.getComponentPath(spec.id, spec.subsystem)
+          : kind === 'interface' ? this.getInterfacePath(spec.id, spec.component)
+            : kind === 'implementation' ? this.getImplementationPath(spec.id, spec.contract)
+              : this.getTypePath(spec.id, spec.subsystem, spec.group);
+    this.assertHomeWritable(home);
+    this.assertHomeInReach(home, kind, document);
+  }
+
+  /**
+   * Why a delta may not be applied because it changes WHICH spec this is or
+   * WHERE it lives — its id, its createdAt, a component's or a type's
+   * subsystem, a contract's component, an implementation's contract — by
+   * value or by `unset`; undefined when it changes none of them. A value equal
+   * to the stored one is a restatement, not a change. Setting a subsystem is
+   * still the repair of a spec whose stored owner the tree does not have (or a
+   * system-level type adopting one): there is nothing to move it from.
+   */
+  private identityEditRefusal(kind: WritableSpecKind, stored: Record<string, unknown>, delta: Record<string, unknown>): string | undefined {
+    const unset = new Set(Array.isArray(delta.unset) ? (delta.unset as unknown[]).filter((f): f is string => typeof f === 'string') : []);
+    const local = (value: unknown): string | undefined => (typeof value === 'string' ? splitNamespace(value).localId : undefined);
+    const changes = (field: string): boolean => unset.has(field)
+      || (delta[field] !== undefined && delta[field] !== null && local(delta[field]) !== local(stored[field]));
+    const renamedBy: Partial<Record<WritableSpecKind, string>> = {
+      component: 'rename it with sdd_rename_component, which moves its contract and implementation with it and rewrites every reference',
+      type: 'rename it with sdd_rename_type, which rewrites every reference',
+      interface: 'a contract\'s id follows its component\'s: sdd_rename_component renames both; no tool renames a contract alone yet',
+      implementation: 'an implementation\'s id follows its component\'s: sdd_rename_component renames both; no tool renames an implementation alone yet',
+      subsystem: 'no tool renames a subsystem yet',
+    };
+    if (kind !== 'system' && changes('id')) {
+      return `"id" is the spec's identity, not a field a delta edits — a delta would write a second ${kind} beside this one and leave every reference on the old id; ${renamedBy[kind]}.`;
+    }
+    if (changes('createdAt')) {
+      return '"createdAt" records when the spec was first written, and the store keeps it; a delta does not edit it.';
+    }
+    if ((kind === 'component' || kind === 'type') && changes('subsystem')) {
+      const owner = typeof stored.subsystem === 'string' ? stored.subsystem : undefined;
+      // A stray (an owner the tree does not have) or a system-level type is repaired, not moved.
+      if (owner !== undefined && this.loadSubsystemSpec(owner) !== null) {
+        return `"subsystem" is where the ${kind} lives, not a field a delta edits — no tool moves a ${kind} to another subsystem with its references and published entries yet (owed), and a delta would move the file and leave them behind.`;
+      }
+    }
+    if (kind === 'interface' && changes('component')) {
+      return '"component" is the component this contract belongs to, not a field a delta edits — move its methods to another component with sdd_move_methods, which carries their implementations and re-points every caller.';
+    }
+    if (kind === 'implementation' && changes('contract')) {
+      return '"contract" is the contract this implementation realizes, not a field a delta edits — move methods between components with sdd_move_methods, which carries their implementation entries with them.';
+    }
+    return undefined;
+  }
+
   updateSpec(
     kind: WritableSpecKind,
     id: string,
@@ -5742,6 +5871,14 @@ export class SpecWorkspace {
         + `Known fields: ${[...knownKeys].sort().join(', ')}.`,
       );
     }
+
+    // A delta edits what a spec SAYS, never which spec it is or where it
+    // lives. Merged and saved, a new `id` wrote a second spec beside the first
+    // and a new `subsystem` moved the folder, each leaving every reference
+    // behind and reporting "1 change" — so identity and placement are refused
+    // here, naming the tool that owns the change.
+    const identityRefusal = this.identityEditRefusal(kind, result as Record<string, unknown>, delta ?? {});
+    if (identityRefusal) throw new Error(`Refusing to update ${kind} "${id}": ${identityRefusal} Nothing was written.`);
 
     // Flow-step jump fields relocate with renumbering, exactly like an
     // assembler relocating addresses: inserts/deletes shift every jump field
@@ -5991,6 +6128,28 @@ export class SpecWorkspace {
       return out;
     };
 
+    /**
+     * A list the delta restates with EXACTLY its stored elements — the same
+     * identities, none added, none removed, no marker — in another order takes
+     * the delta's order. Under upsert a restated element merges in place, so a
+     * reorder used to be a silent no-op answered "the delta matches what is
+     * stored"; the order of requirements, boundaries or technologies is design
+     * (priority, reading order), and a delta that states one is an edit. An
+     * element the delta adds still appends: the order follows the delta only
+     * when the delta names the whole list.
+     */
+    const inDeltaOrder = (field: string, stored: unknown[], delta: unknown[], merged: unknown[]): unknown[] => {
+      if (delta.length < 2 || delta.length !== stored.length || merged.length !== stored.length) return merged;
+      if (delta.some(carriesEditMarker)) return merged;
+      const plain = [...stored, ...delta].every((v) => isPlainValue(v) || isRequirementObject(field, v));
+      const keyOf = (v: unknown): string | null => (plain ? plainKeyOf(field, v) : identityKeyOf(field, v));
+      const order = delta.map(keyOf);
+      if (order.some((k) => k === null) || new Set(order).size !== order.length) return merged;
+      const byKey = new Map(merged.map((m) => [keyOf(m), m] as const));
+      if (byKey.size !== merged.length || !order.every((k) => byKey.has(k))) return merged;
+      return order.map((k) => byKey.get(k));
+    };
+
     /** Keys whose merge the enclosing level performs itself, so the generic one must not. */
     const NO_NESTED_MERGE: ReadonlySet<string> = new Set(['ext', 'narrative', 'unset']);
 
@@ -6018,11 +6177,11 @@ export class SpecWorkspace {
         // a marker the writer strips while reporting success.
         const stored = Array.isArray(before) ? before : [];
         if (isPlainValueList(key, stored, value)) {
-          out[key] = mergePlainValues(key, stored, value);
+          out[key] = inDeltaOrder(key, stored, value, mergePlainValues(key, stored, value));
           continue;
         }
         if (!isIdentifiedArray(key, stored, value)) continue;
-        out[key] = mergeIdentifiedArray(key, stored, value);
+        out[key] = inDeltaOrder(key, stored, value, mergeIdentifiedArray(key, stored, value));
       }
       return out;
     };
@@ -6479,28 +6638,28 @@ export class SpecWorkspace {
         }
         if (key === 'methods' && Array.isArray(value) && Array.isArray(existing.methods)) {
           if (kind === 'implementation') {
-            res.methods = mergeMethods(existing.methods, value);
+            res.methods = inDeltaOrder(key, existing.methods, value, mergeMethods(existing.methods, value));
           } else {
-            res.methods = mergeNamedArray(existing.methods, value);
+            res.methods = inDeltaOrder(key, existing.methods, value, mergeNamedArray(existing.methods, value));
           }
         } else if (key === 'fields' && Array.isArray(value) && Array.isArray(existing.fields)) {
-          res.fields = mergeNamedArray(existing.fields, value);
+          res.fields = inDeltaOrder(key, existing.fields, value, mergeNamedArray(existing.fields, value));
         } else if (key === 'publicInterfaces' && Array.isArray(value) && Array.isArray(existing.publicInterfaces)) {
-          res.publicInterfaces = mergePublicInterfaces(existing.publicInterfaces, value);
+          res.publicInterfaces = inDeltaOrder(key, existing.publicInterfaces, value, mergePublicInterfaces(existing.publicInterfaces, value));
         } else if (key === 'dispatch' && Array.isArray(value) && Array.isArray(existing.dispatch)) {
-          res.dispatch = mergeKeyedArray(existing.dispatch, value, b => String(b?.capability));
+          res.dispatch = inDeltaOrder(key, existing.dispatch, value, mergeKeyedArray(existing.dispatch, value, b => String(b?.capability)));
         } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
-          res.lifecycle = mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`);
+          res.lifecycle = inDeltaOrder(key, existing.lifecycle, value, mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`));
         } else if (Array.isArray(value) && isPlainValueList(key, existing[key], value)) {
           // A list of plain values merges: values appended when absent, a marked
           // value removed, nothing the delta did not name lost.
-          res[key] = mergePlainValues(key, existing[key] ?? [], value);
+          res[key] = inDeltaOrder(key, existing[key] ?? [], value, mergePlainValues(key, existing[key] ?? [], value));
         } else if (Array.isArray(value) && value.length > 0 && Array.isArray(existing[key])
                    && isIdentifiedArray(key, existing[key], value)) {
           // Every other array whose elements carry an identity: upsert by it and
           // honour delete markers, instead of replacing the list wholesale and
           // silently dropping whatever the delta did not mention.
-          res[key] = mergeIdentifiedArray(key, existing[key], value);
+          res[key] = inDeltaOrder(key, existing[key], value, mergeIdentifiedArray(key, existing[key], value));
         } else if (Array.isArray(value)) {
           // No per-element identity (a list of plain strings), or an explicitly
           // EMPTY array. Empty stays a wholesale clear on purpose: under upsert
@@ -6712,6 +6871,12 @@ export class SpecWorkspace {
     // write that the write itself would be refused is not an account worth
     // having.
     const gateNotices = hooks?.gate?.(kind, mergedResult);
+    // Staged exactly as the save will make it — the writer's parse and its
+    // home's write checks — for a dry run too. The dry run used to answer
+    // before the save ever parsed, so `technologies: [{name: …}]` and an unset
+    // required field read "would be made" and were refused on the write: the
+    // disk is now the only thing a dry run skips.
+    this.stageWrite(kind, mergedResult, id);
     // The keys the stored FILE carries that the schema does not know: the
     // parse above already dropped them, and the save below re-serializes
     // through the schema, so without this they would vanish unannounced.

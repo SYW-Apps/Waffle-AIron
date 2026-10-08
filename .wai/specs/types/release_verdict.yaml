@@ -2,14 +2,19 @@ kind: value-object
 id: release_verdict
 name: ReleaseVerdict
 description: >-
-  The verdict on an approval whose gate identity no longer matches ONLY because the wairon release
+  The verdict on an approval whose gate identity no longer matches because the wairon release
   changed — the built-in design doctrine moved while the approved design and every input the project
   itself decides (its own specs, rule tuning, packs, network, composition, consumed contract pins,
   members' approvals) are as approved. Such an approval is judged by re-validating the approved
   design under the current rules, never by digest: clean at the `--ci` standard it carries over
   (approved, nothing written), else it is stale for exactly the findings the new release reports.
-  One verdict, decided in family_validator.releaseVerdict, read by lock-check, status,
-  sdd_get_status, validate and the family view alike.
+  Only a record that PROVES the project's own inputs unchanged can be carried: one whose gate parts
+  (consistent with the identity they break down) say only the release moved, stamped by an older,
+  valid wairon release. A record that cannot prove it — taken before gate parts existed, carrying
+  parts that do not break down its identity, or stamped by a newer wairon or by no valid version at
+  all — is stale with `reason` instead, one sentence naming why, and is never re-validated. One
+  verdict, decided in family_validator.releaseVerdict, read by lock-check, status, sdd_get_status,
+  validate and the family view alike.
 fields:
   - name: from
     type: string
@@ -33,7 +38,28 @@ fields:
     type: list<string>
     description: The first few of those findings, each `CODE [spec] message`; empty when carried
     optional: true
-methods: []
+  - name: reason
+    type: string
+    description: >-
+      Set on a verdict that is not carried because the change of the release cannot be judged by
+      re-validation at all: one sentence naming why — the record predates gate parts ("approved
+      under <old> before wairon recorded its inputs separately — re-lock once to record them; later
+      upgrades then carry over"), its stamp claims a release that records gate parts while it
+      carries none, its gate parts do not break down its identity, or its stamp is newer than this
+      wairon ("written by a newer wairon") or no wairon version at all. count and findings are
+      absent then.
+    optional: true
+methods:
+  - name: staleSentence
+    signature: 'staleSentence(): string'
+    params: []
+    returns: string
+    description: >-
+      The one sentence every surface shows for a verdict that is not carried: its reason when it has
+      one, else that the approval was taken under `from` and the new release (`to`) finds `count`
+      issue(s) in the approved design, naming the first few. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: staleReleaseSentence
 sourcePath: src/models/lock.ts
 createdAt: '2026-10-08T08:35:35.516Z'
-updatedAt: '2026-10-08T08:35:37.629Z'
+updatedAt: '2026-10-08T18:51:08.978Z'

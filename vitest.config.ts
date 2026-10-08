@@ -12,9 +12,11 @@ export default defineConfig({
     // Several integration-ish files (git subprocesses, MCP skill servers,
     // producers) sit just under the 5s default per-test timeout and flake
     // under full parallel load — and the rule-matrix tier grew the suite
-    // enough to tip them regularly. 15s is margin, not license: a test that
-    // NEEDS it should still be investigated.
-    testTimeout: 15_000,
+    // enough to tip them regularly. 30s is margin, not license: a test that
+    // NEEDS it should still be investigated. (15s still timed out a different
+    // git/server-spawning test per loaded full run in round 7; each passes
+    // alone in 5–10s.)
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

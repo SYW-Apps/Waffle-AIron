@@ -260,13 +260,15 @@ methods:
           one, carry it as the brief's typeMapping and as a '## Types in <language>' section of the
           instructions — so an implementer maps `list<T>`, `T?`, `async T` and an enum by rule
           rather than by guess. The externals: for a component the record implements that reaches
-          another project — a dependsOn, a narrative or declared call, or an `implements` naming
-          `alias::name` — a '## Externals used' section names each alias, the names it uses, the
-          transport and abi of the producer Portal where the pin records them, the pinned snapshot
-          `.wai/externals/<alias>.yaml`, which also joins readPaths (the pin is the contract the
-          consumer codes against), and the binding modules its implementations name, which spell the
-          producer's names exactly as the pin does. An agent that implements nothing gets none of
-          these
+          another project — a dependsOn, a narrative or declared call, an `implements`, or a type
+          its contracts' params and returns write, naming `alias::name` — a '## Externals used'
+          section names each alias, the names it uses, the transport and abi of the producer Portal
+          where the pin records them, the pinned snapshot `.wai/externals/<alias>.yaml`, which also
+          joins readPaths (the pin is the contract the consumer codes against) — or, for a contained
+          member project (named by its alias or its project id), that member's L0 export table read
+          live, its root named and never a pin to take — and the binding modules its implementations
+          name, which spell the producer's names exactly as the pin does. An agent that implements
+          nothing gets none of these
         type: local
       - stepNumber: 14
         description: >-
@@ -291,4 +293,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:43:55.426Z'
+updatedAt: '2026-10-08T18:58:42.180Z'

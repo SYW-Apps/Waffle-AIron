@@ -58,10 +58,12 @@ fields:
     type: list<CallTargetFact>
     description: >-
       For an unresolved call, where its receiver's ORIGINAL type lands — the expression with every
-      cast, assertion, non-null mark and parenthesis taken off: each project class that type is, or
-      that realizes the interface or shape it is, as a target whose member is the call's name (empty
-      when a computed key names none). What tells a cast that hid a data component from a receiver
-      that never was one
+      cast, assertion, non-null mark, parenthesis and `await` taken off (and, for a name bound once
+      by a const declaration, what its initializer was), its nullability set aside: each project
+      class that type is, or that realizes the interface or shape it is — and, for an interface or
+      shape no class realizes, the shape itself in the file that declares it — as a target whose
+      member is the call's name (empty when a computed key names none). What tells a cast that hid a
+      data component from a receiver that never was one
     optional: true
   - name: reference
     type: bool
@@ -73,7 +75,15 @@ fields:
       off a receiver that was a project class before any cast is one too when it names no single
       member, recorded unresolved
     optional: true
+  - name: port
+    type: bool
+    description: >-
+      True when every place the call lands is a member declared in an interface or type shape that
+      no class of the project realizes — a port nothing written implements yet, or one implemented
+      by a value the checker cannot name. Its landings name the port alone, never what will answer
+      it
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-07T18:28:29.773Z'
-updatedAt: '2026-10-08T08:30:21.720Z'
+updatedAt: '2026-10-08T18:51:33.811Z'

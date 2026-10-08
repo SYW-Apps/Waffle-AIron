@@ -58,6 +58,8 @@ function idHit(name: string, ids: Iterable<string>): string | undefined {
 interface SchemaScope {
   /** The component name a reference resolves to, or undefined. */
   componentOf(name: string): string | undefined;
+  /** Whether a type position names one data type with fields (an object a JSON body can be): not a scalar, collection, enum, named scalar or signature. */
+  isObject(typeRef: string): boolean;
   /** The scope inside one external's closure. */
   within(alias: string): SchemaScope;
 }
@@ -69,10 +71,16 @@ interface ReachedExternal {
 }
 
 /** The scope of a document over its own closure and the pinned externals; `reached` collects the external types it names. */
-function schemaScope(ownIds: Set<string>, externals: ReadonlyMap<string, SurfaceSnapshot>, reached: Map<string, ReachedExternal>, alias?: string): SchemaScope {
+function schemaScope(ownDefs: readonly SurfaceTypeDef[], externals: ReadonlyMap<string, SurfaceSnapshot>, reached: Map<string, ReachedExternal>, alias?: string): SchemaScope {
+  const ownIds = ownDefs.map(t => t.id);
+  // An external's type by its public name first (an export may rename it), else by its closure id.
+  const externalId = (pinned: SurfaceSnapshot, name: string): string | undefined => {
+    const exported = (pinned.exportedTypes ?? []).find(t => t.id === name || t.id.toLowerCase() === name.toLowerCase());
+    return exported && pinned.types.some(t => t.id === exported.type) ? exported.type : idHit(name, pinned.types.map(t => t.id));
+  };
   const external = (from: string, name: string): string | undefined => {
     const pinned = externals.get(from);
-    const id = pinned ? idHit(name, pinned.types.map(t => t.id)) : undefined;
+    const id = pinned ? externalId(pinned, name) : undefined;
     if (!pinned || id === undefined) return undefined;
     const key = `${from}.${id}`;
     if (!reached.has(key)) reached.set(key, { alias: from, def: pinned.types.find(t => t.id === id)! });
@@ -86,8 +94,21 @@ function schemaScope(ownIds: Set<string>, externals: ReadonlyMap<string, Surface
       if (alias !== undefined) return external(alias, name);
       return idHit(name, ownIds);
     },
+    isObject(typeRef: string): boolean {
+      const expr = expressionOf(typeRef);
+      if (!expr || (expr.form !== 'named' && expr.form !== 'applied')) return false;
+      const name = expr.name ?? '';
+      const sep = name.indexOf('::');
+      const from = sep > 0 && externals.has(name.slice(0, sep)) ? name.slice(0, sep) : alias;
+      const pinned = from !== undefined ? externals.get(from) : undefined;
+      const local = sep > 0 ? name.slice(sep + 2) : name;
+      const def = pinned
+        ? pinned.types.find(t => t.id === externalId(pinned, local))
+        : ownDefs.find(t => t.id === idHit(name, ownIds));
+      return !!def && def.kind !== 'enum' && def.kind !== 'signature' && def.holds === undefined;
+    },
     within(next: string): SchemaScope {
-      return schemaScope(ownIds, externals, reached, next);
+      return schemaScope(ownDefs, externals, reached, next);
     },
   };
 }
@@ -160,6 +181,23 @@ function failureOf(returns: string): TypeExpression | null {
   return awaited?.form === 'result' ? awaited.args[1] ?? null : null;
 }
 
+/** A method name that says it brings something into existence: its leading word (camelCase or snake_case). */
+const CREATING_NAME = /^(?:create|add|new|register|sign_?[uU]p|place|open|insert|submit|upload|start|issue|book)(?:$|[A-Z_0-9])/;
+
+/**
+ * Whether a POST creates — and so answers 201 Created rather than 200: a
+ * method whose effect is `lifecycle` (it brings an entity into existence), or
+ * one whose effect is undeclared, `write` or `io` and whose name says it
+ * creates (createOrder, placeOrder, signUp). Never one whose effect is `none`
+ * or `read`. A POST acting on an existing resource (cancel, archive, log in)
+ * answers 200: 201 promises a new resource, which a client may follow.
+ */
+function creates(method: MethodSignature): boolean {
+  if (method.effect === 'lifecycle') return true;
+  if (method.effect === 'none' || method.effect === 'read') return false;
+  return CREATING_NAME.test(method.name);
+}
+
 /**
  * An operation's responses: its success under the verb's conventional code —
  * 204 with no content for a method returning nothing, else 201 for POST and
@@ -169,7 +207,7 @@ function failureOf(returns: string): TypeExpression | null {
 function responsesFor(method: MethodSignature, httpVerb: string, scope: SchemaScope): Record<string, unknown> {
   const returns = method.returns ?? '';
   const nothing = !returns || returnsNothing(returns);
-  const code = nothing ? '204' : httpVerb === 'post' ? '201' : '200';
+  const code = nothing ? '204' : httpVerb === 'post' && creates(method) ? '201' : '200';
   const responses: Record<string, unknown> = {
     [code]: {
       description: nothing ? 'Success, with no content' : `Success: ${returns}`,
@@ -304,7 +342,17 @@ function operationFor(method: MethodSignature, scope: SchemaScope, entry?: Surfa
   });
   const parameters = inPath.map(p => parameter(p, 'path'));
   if (rest.length) {
-    if (bodyVerbs.has(httpVerb)) {
+    const bodyParam = rest.length === 1 ? rest[0] : undefined;
+    if (bodyVerbs.has(httpVerb) && bodyParam && scope.isObject(bodyParam.type)) {
+      // One object-typed param IS the body, as a client sends it — never
+      // wrapped under its name; the name rides along for a reader.
+      op.requestBody = {
+        required: !bodyParam.optional,
+        ...(bodyParam.description ? { description: bodyParam.description } : {}),
+        content: { 'application/json': { schema: schemaFor(bodyParam.type, scope) } },
+      };
+      op['x-wairon-body-param'] = bodyParam.name;
+    } else if (bodyVerbs.has(httpVerb)) {
       op.requestBody = {
         required: true,
         content: {
@@ -501,7 +549,7 @@ function renderDoc(
 ): Record<string, unknown> {
   const { schemes, securityByEntry } = buildSecurity(entries);
   const reached = new Map<string, ReachedExternal>();
-  const scope = schemaScope(new Set(snapshot.types.map(t => t.id)), context.externals ?? new Map(), reached);
+  const scope = schemaScope(snapshot.types, context.externals ?? new Map(), reached);
 
   const paths: Record<string, Record<string, unknown>> = {};
   // Every operation by verb and path, placeholders compared by position: OpenAPI
@@ -767,7 +815,17 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         });
       }
       const bodySchema = ((op.requestBody as Record<string, unknown>)?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema as Record<string, unknown> | undefined;
-      if (bodySchema) {
+      const bodyParam = typeof op['x-wairon-body-param'] === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(op['x-wairon-body-param']) ? op['x-wairon-body-param'] : undefined;
+      if (bodySchema && bodyParam !== undefined) {
+        // The one object param that IS the body, under the name the extension carries.
+        const requestBody = op.requestBody as Record<string, unknown>;
+        params.push({
+          name: bodyParam,
+          type: typeRefFromSchema(bodySchema),
+          ...(requestBody.required === false ? { optional: true } : {}),
+          ...(typeof requestBody.description === 'string' ? { description: requestBody.description } : {}),
+        });
+      } else if (bodySchema) {
         const props = (bodySchema.properties ?? {}) as Record<string, Record<string, unknown>>;
         const required = new Set((bodySchema.required as string[] | undefined) ?? []);
         if (Object.keys(props).length) {

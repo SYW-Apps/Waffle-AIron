@@ -1256,10 +1256,14 @@ methods:
         description: Is a method source off the design's edges?
         type: branch
         condition: >-
-          the fact's form is method (a source in this project; an `export` source — another
-          project's export entry, `alias::name.method` — is reached through the declared dependency,
-          never a dependsOn edge) and the target's component is in neither the owning component's
-          dependsOn nor its owns (ctx.componentMap)
+          the fact's form is method and the source lives in the owning component's own project, and
+          the target's component is in neither the owning component's dependsOn nor its owns
+          (ctx.componentMap). Another project's export — `alias::name.method`, whether the alias is
+          a declared external (an `export` source) or a member whose export resolves to its
+          component — is reached through the declared relation to that project, never a dependsOn
+          edge: one reference, one verdict, whichever relation names it. (An extension point a
+          consumer implements is the clearest case: the producer calls the implementer, so a
+          dependsOn on the producer's component would claim a call in the wrong direction.)
         onFalseStep: 14
       - stepNumber: 13
         description: >-
@@ -1500,4 +1504,4 @@ methods:
     exportedVia: memberNamesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-07T21:44:28.802Z'
+updatedAt: '2026-10-08T18:55:06.742Z'

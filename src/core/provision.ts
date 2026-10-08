@@ -510,6 +510,14 @@ function createGitMember(alias: string, source: ExternalSource, description: str
   if (as !== undefined && as !== kind) {
     throw new WaironError(`Refusing to add the git member "${alias}" as a ${as}: its content at ${commit} makes it a ${kind} — a git member is never scaffolded, so what it is follows from what the repository holds.`);
   }
+  // A git project is read from outside its family, at `instance`: one that
+  // exports names, none of them that widely, would be declared only for every
+  // later check to call its names gone. Refused with the audience it is
+  // exported at, as `wairon externals add` refuses such a producer.
+  if (kind === 'project') {
+    const refusal = audienceRefusal(dir, 'instance');
+    if (refusal) throw new WaironError(`Refusing to add the git member "${alias}": ${refusal}. Nothing was written.`);
+  }
   // Step 23: declared at the commit.
   projectConfigRepository.declareMember(alias, {
     source: `${url}#${commit}`,
@@ -1646,6 +1654,26 @@ function dropCrossingConsumers(inside: RawSpec[], outside: RawSpec[], result: Pr
       });
     }
   }
+}
+
+/**
+ * Why a producer at `dir` exports nothing to a project reading it at
+ * `readAt`, when it exports names only to a narrower audience — the audience
+ * each is exported at, the one it is read at and the ranking, as `wairon
+ * externals add` says it; null when it exports something at `readAt` or
+ * nothing at all.
+ */
+function audienceRefusal(dir: string, readAt: string): string | null {
+  let entries: { publicName: string; audience?: string }[] = [];
+  try {
+    entries = runWithProjectRoot(dir, () => resolveProjectExports().entries);
+  } catch {
+    return null;
+  }
+  if (entries.length === 0 || entries.some((e) => audienceRank(e.audience) >= audienceRank(readAt))) return null;
+  const widest = [...new Set(entries.map((e) => e.audience ?? 'instance'))].sort((a, b) => audienceRank(b) - audienceRank(a));
+  const names = [...new Set(entries.map((e) => e.publicName))];
+  return `the producer exports its ${names.length} name(s) (${names.slice(0, 5).map((n) => `"${n}"`).join(', ')}${names.length > 5 ? ', …' : ''}) to \`${widest.join('`, `')}\` only, and a git member is read from outside its family, at \`${readAt}\`; audiences, narrowest first: ${(SURFACE_AUDIENCES as readonly string[]).join(' < ')} — widen the export's audience in the producer's L0 (to \`${readAt}\` or wider), or consume it from inside its family (a path member)`;
 }
 
 /** Ascending reach rank of an audience; an absent one reads as instance, the default an L0 entry declares. */
@@ -3953,9 +3981,11 @@ export function renameField(typeId: string, field: string, newName: string, dryR
   if (fieldRefusal !== null) throw new WaironError(`invalid-name: ${fieldRefusal}.`);
   const taken = fields.find((f) => f !== moving && f.name === newName);
   if (taken) throw new WaironError(`name-taken: type "${type.id}" already has a field "${newName}".`);
-  const retired = fields.find((f) => f !== moving && (f.previousNames ?? []).includes(newName));
+  // Its own trace included, as for a parameter and a method.
+  const retired = fields.find((f) => (f.previousNames ?? []).includes(newName));
   if (retired) {
-    throw new WaironError(`name-retired: field "${retired.name}" of type "${type.id}" lists "${newName}" in its previousNames — the name is retired on this type. Unsetting that previousNames releases it.`);
+    const own = retired === moving ? '; a field renamed back to a name it had would list its own name in its trace' : '';
+    throw new WaironError(`name-retired: field "${retired.name}" of type "${type.id}" lists "${newName}" in its previousNames — the name is retired on this type${own}. Unsetting that previousNames releases it.`);
   }
   if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
 
@@ -4048,9 +4078,12 @@ function publishedCarriers(type: TypeSpec): ExportUse[] {
   const carries = (typeDef: string): boolean => carrying.some((t) => t.id === typeDef || qualifiedTypeId(t) === typeDef || typeMatchesRef(t, typeDef));
   const contracts = loadInterfaceSpecs();
   const out = new Map<string, ExportUse>();
-  const add = (publicName: string, kind: ExportUse['kind'], members: string[]): void => {
+  const add = (publicName: string, kind: ExportUse['kind'], members: string[], formerNames: string[] = [], formerMembers: Record<string, string[]> = {}): void => {
     const held = out.get(publicName);
-    out.set(publicName, { publicName, kind, members: [...new Set([...(held?.members ?? []), ...members])].sort() });
+    out.set(publicName, mergeUses([...(held ? [held] : []), {
+      publicName, kind, members: [...new Set(members)].sort(),
+      ...(formerNames.length ? { formerNames } : {}), ...(Object.keys(formerMembers).length ? { formerMembers } : {}),
+    }])[0]);
   };
   const tables = [
     ...loadSubsystemSpecs().filter((sub) => !sub.id.includes('::')).map((sub) => resolveSubsystemExports(sub.id)),
@@ -4059,19 +4092,21 @@ function publishedCarriers(type: TypeSpec): ExportUse[] {
   for (const table of tables) {
     for (const entry of table.entries) {
       if (entry.kind === 'type') {
-        if (entry.typeDef !== undefined && carries(entry.typeDef)) add(entry.publicName, 'type', ['type']);
+        if (entry.typeDef === undefined || !carries(entry.typeDef)) continue;
+        // A type exported under the name its id gives carries its rename trace: a consumer still writing a former id breaks too.
+        const def = carrying.find((t) => t.id === entry.typeDef || qualifiedTypeId(t) === entry.typeDef || typeMatchesRef(t, entry.typeDef!));
+        const formerNames = def && entry.publicName === def.id.split('::').pop() ? formerOf(def.previousIds) : [];
+        add(entry.publicName, 'type', ['type'], formerNames);
         continue;
       }
       if (entry.kind !== 'component' || entry.component === undefined) continue;
-      const methods = contracts
-        .filter((i) => i.component === entry.component && (entry.interface === undefined || i.id === entry.interface))
-        .flatMap((i) => i.methods)
-        .filter((m) => names(methodTypeRefs(m)))
-        .map((m) => m.name);
-      if (methods.length > 0) add(entry.publicName, entry.kind, methods);
+      const declaring = contracts.filter((i) => i.component === entry.component && (entry.interface === undefined || i.id === entry.interface));
+      for (const use of publishingUses(entry.component, declaring, (m) => names(methodTypeRefs(m)))) {
+        if (use.publicName === entry.publicName) add(entry.publicName, entry.kind, use.members, use.formerNames, use.formerMembers);
+      }
     }
   }
-  return [...out.values()].sort((a, b) => (a.publicName < b.publicName ? -1 : a.publicName > b.publicName ? 1 : 0));
+  return mergeUses([...out.values()]);
 }
 
 /** What renaming a parameter of a contract method changed (param_rename). */
@@ -4088,8 +4123,12 @@ export interface ParamRename {
   movedIn: string[];
   /** The endpoint path placeholders respelled, `<interface>.<method>: {old} -> {new}` — the method's own bindings and every follower's that takes its signature through signatureFrom. */
   rewritten: string[];
-  /** The public names of the export entries (L0 and L1) whose contract carries the method. */
+  /** The public names of the export entries (L0 and L1) carrying the method — its own contract's, and every follower's that takes its signature. */
   publishedIn: string[];
+  /** publishedIn method-granular: each public name with the verbs a consumer calls the method by there, their former names carried. */
+  published?: ExportUse[];
+  /** The method asked for, `<component>.<method>`, when it forwards its signature and the rename was made on its source. */
+  routedFrom?: string;
   /** True when this report is a dry run: nothing was written. */
   dryRun?: boolean;
   /** The consumers whose specs call the method on one of publishedIn: the ones that must follow. Filled by the caller that read them. */
@@ -4121,11 +4160,20 @@ export function renameParam(componentId: string, methodName: string, param: stri
   const moving = contracts.filter((i) => i.methods.some((m) => m.name === methodName));
   // Step 4: every guard, before any write.
   if (moving.length === 0) throw new WaironError(`method-missing: no contract of "${componentId}" declares the method "${methodName}".`);
+  // Steps 4-6: a method forwarding its signature from one of this project's
+  // own contract methods (a Portal verb) is renamed at that source, and the
+  // rename reaches it through its signatureFrom.
+  const forwarded = forwardedSource(moving, methodName, param);
+  if (forwarded !== null) {
+    return { ...renameParam(forwarded.component, forwarded.method, param, newName, dryRun), routedFrom: `${componentId}.${methodName}` };
+  }
   for (const contract of moving) {
     const method = contract.methods.find((m) => m.name === methodName)!;
     const params = method.params ?? [];
     if (method.signatureFrom !== undefined) {
-      throw new WaironError(`param-missing: "${contract.id}.${methodName}" takes its parameters from ${method.signatureFrom}; rename the parameter there.`);
+      const from = method.signatureFrom;
+      const what = from.includes('.') ? (from.slice(0, from.lastIndexOf('.')).includes('::') && !loadComponentSpec(from.slice(0, from.lastIndexOf('.'))) ? 'another project\'s method' : 'that method') : 'a signature type';
+      throw new WaironError(`param-missing: "${contract.id}.${methodName}" takes its parameters from ${from} (${what}); rename the parameter there — a rename made on ${from} reaches "${contract.id}.${methodName}" through its signatureFrom${what === 'another project\'s method' ? ' once this project re-pins it' : ''}.`);
     }
     if (!params.some((p) => p.name === param)) {
       throw new WaironError(`param-missing: "${contract.id}.${methodName}" declares no parameter "${param}"${params.length ? ` (it declares ${params.map((p) => p.name).join(', ')})` : ''}.`);
@@ -4133,9 +4181,12 @@ export function renameParam(componentId: string, methodName: string, param: stri
     if (params.some((p) => p.name === newName && p.name !== param)) {
       throw new WaironError(`name-taken: "${contract.id}.${methodName}" already has a parameter "${newName}".`);
     }
-    const retired = params.find((p) => p.name !== param && (p.previousNames ?? []).includes(newName));
+    // Its own trace included: renaming back to a former name would leave the
+    // parameter listing its own name (RENAME_TRACE_CONFLICT), as a method rename refuses.
+    const retired = params.find((p) => (p.previousNames ?? []).includes(newName));
     if (retired) {
-      throw new WaironError(`name-retired: parameter "${retired.name}" of "${contract.id}.${methodName}" lists "${newName}" in its previousNames — the name is retired on this method. Unsetting that previousNames releases it.`);
+      const own = retired.name === param ? '; a parameter renamed back to a name it had would list its own name in its trace, and a consumer holding the old name could not tell the two apart' : '';
+      throw new WaironError(`name-retired: parameter "${retired.name}" of "${contract.id}.${methodName}" lists "${newName}" in its previousNames — the name is retired on this method${own}. Unsetting that previousNames releases it.`);
     }
   }
   if (!IDENTIFIER.test(newName)) {
@@ -4155,7 +4206,13 @@ export function renameParam(componentId: string, methodName: string, param: stri
   // parameter through the loader — and the export entries publishing it.
   const source = `${componentId}.${methodName}`;
   const followers = loadInterfaceSpecs().filter((i) => !moving.includes(i) && i.methods.some((m) => followsSource(m.signatureFrom, source, i.component)));
-  const publishedIn = exportsPublishing(componentId, new Set(moving.map((i) => i.id)));
+  // What publishes the method: its own contract's entries, and every
+  // follower's (a published Portal verb forwarding it) under the follower's verb.
+  const published = mergeUses([
+    ...publishingUses(componentId, moving, (m) => m.name === methodName),
+    ...followers.flatMap((i) => publishingUses(i.component, [i], (m) => followsSource(m.signatureFrom, source, i.component))),
+  ]);
+  const publishedIn = published.map((u) => u.publicName);
   // Step 6: the hosted request's write reach, before the first write — the
   // moving contracts, and each follower whose binding names the placeholder.
   const respelled = (contract: InterfaceSpec, isFollower: boolean): { methods: InterfaceSpec['methods']; rewritten: string[] } => {
@@ -4181,7 +4238,7 @@ export function renameParam(componentId: string, methodName: string, param: stri
   const rewritten = [...ownEdits, ...followerEdits].flatMap((e) => e.rewritten);
   // Steps 7-8: a dry run stops here, refused exactly as the real rename above.
   if (dryRun) {
-    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn, dryRun: true };
+    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), dryRun: true };
   }
   // Steps 9-11: the parameter moves on each contract; the writer derives the signature.
   for (const edit of ownEdits) saveInterfaceSpec({ ...edit.contract, methods: edit.methods });
@@ -4190,7 +4247,86 @@ export function renameParam(componentId: string, methodName: string, param: stri
   // Step 15.
   invalidateSpecCache();
   // Step 16.
-  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn };
+  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}) };
+}
+
+/**
+ * The one source method of this project every moving contract's method takes
+ * its signature from, when it declares the parameter — where a rename asked
+ * of a forwarding method (a Portal verb with signatureFrom) is made; null when
+ * the method states its own parameters, forwards from another project or a
+ * signature type, or the contracts disagree.
+ */
+function forwardedSource(moving: InterfaceSpec[], methodName: string, param: string): { component: string; method: string } | null {
+  const sources = new Set(moving.map((i) => i.methods.find((m) => m.name === methodName)?.signatureFrom));
+  if (sources.size !== 1) return null;
+  const from = [...sources][0];
+  if (from === undefined || !from.includes('.')) return null;
+  const component = from.slice(0, from.lastIndexOf('.'));
+  const method = from.slice(from.lastIndexOf('.') + 1);
+  if (!loadComponentSpec(component)) return null;
+  const declares = loadInterfaceSpecs().some((i) => i.component === component && i.methods.some((m) => m.name === method && (m.signatureFrom !== undefined || (m.params ?? []).some((p) => p.name === param))));
+  return declares ? { component, method } : null;
+}
+
+/** A rename trace's names by their last segment (`sub::name` and `iface.method` traces both read as the name). */
+function formerOf(previous: string[] | undefined): string[] {
+  return (previous ?? []).map((p) => p.split(/::|\./).pop() ?? p);
+}
+
+/**
+ * Each L1 and L0 export entry publishing one of `contracts` of `componentId`,
+ * with the methods `carries` picks as its members — each member's former
+ * names (previousNames) and the entry's former public names (the narrowed
+ * interface's or the component's previousIds, where the public name is the
+ * one that id gives) carried for the consumer search.
+ */
+function publishingUses(componentId: string, contracts: InterfaceSpec[], carries: (m: InterfaceSpec['methods'][number]) => boolean): ExportUse[] {
+  const ids = new Set(contracts.map((i) => i.id));
+  const component = loadComponentSpec(componentId);
+  const tables = [
+    ...loadSubsystemSpecs().filter((s) => !s.id.includes('::')).map((s) => resolveSubsystemExports(s.id)),
+    resolveProjectExports(),
+  ];
+  const out: ExportUse[] = [];
+  for (const table of tables) {
+    for (const entry of table.entries) {
+      if (entry.kind !== 'component' || entry.component !== componentId) continue;
+      if (entry.interface !== undefined && !ids.has(entry.interface)) continue;
+      const methods = contracts.filter((i) => entry.interface === undefined || i.id === entry.interface).flatMap((i) => i.methods).filter(carries);
+      if (methods.length === 0) continue;
+      const formerMembers: Record<string, string[]> = {};
+      for (const m of methods) if (m.previousNames?.length) formerMembers[m.name] = formerOf(m.previousNames);
+      const narrowed = entry.interface !== undefined ? contracts.find((i) => i.id === entry.interface) : undefined;
+      const traced = narrowed && entry.publicName === narrowed.id.split('::').pop() ? narrowed.previousIds : entry.publicName === componentId.split('::').pop() ? component?.previousIds : undefined;
+      const formerNames = formerOf(traced);
+      out.push({
+        publicName: entry.publicName, kind: entry.kind, members: [...new Set(methods.map((m) => m.name))].sort(),
+        ...(formerNames.length ? { formerNames } : {}),
+        ...(Object.keys(formerMembers).length ? { formerMembers } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+/** Uses under one public name merged — members, former names and former members together — sorted by public name. */
+function mergeUses(uses: ExportUse[]): ExportUse[] {
+  const merged = new Map<string, ExportUse>();
+  for (const u of uses) {
+    const held = merged.get(u.publicName);
+    if (!held) {
+      merged.set(u.publicName, u);
+      continue;
+    }
+    const formerNames = [...new Set([...(held.formerNames ?? []), ...(u.formerNames ?? [])])];
+    const formerMembers = { ...(held.formerMembers ?? {}), ...(u.formerMembers ?? {}) };
+    merged.set(u.publicName, {
+      ...held, members: [...new Set([...held.members, ...u.members])].sort(),
+      ...(formerNames.length ? { formerNames } : {}), ...(Object.keys(formerMembers).length ? { formerMembers } : {}),
+    });
+  }
+  return [...merged.values()].sort((a, b) => (a.publicName < b.publicName ? -1 : a.publicName > b.publicName ? 1 : 0));
 }
 
 /** Whether a signatureFrom names `source` (`component.method`): written qualified, or bare beside a component of the same owner namespace. */

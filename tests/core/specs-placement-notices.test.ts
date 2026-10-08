@@ -112,11 +112,12 @@ describe('type placement notices', () => {
     expect(saveTypeSpec(typeSpec())).toEqual([]);
   });
 
-  it('sdd_update_spec bubbles the save notices', () => {
+  it('sdd_update_spec bubbles the save notices (a system-level type adopting an owner — a move between subsystems is refused, r7)', () => {
     flatProject(['billing', 'ops']);
-    saveTypeSpec(typeSpec());
+    saveTypeSpec(typeSpec({ subsystem: undefined }));
     const { notices } = updateSpec('type', 'invoice', { subsystem: 'ops' });
     expect(notices.some(n => n.includes('never relocates'))).toBe(true);
+    expect(() => updateSpec('type', 'invoice', { subsystem: 'billing' })).toThrow(/no tool moves a type to another subsystem/);
   });
 });
 

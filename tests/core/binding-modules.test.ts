@@ -146,14 +146,14 @@ describe('binding conformance', () => {
     ].join('\n');
     const text = runRuleFixture({ ...fire, tree }).matching.map((i) => i.message).join('\n');
     expect(text).toContain('parameter "zoom" of "tileAt" was renamed to "level" — follow the rename');
-    expect(text).toContain('"vincentyDistance" is not exported by geokit::tiles any more');
+    expect(text).toContain('"vincentyDistance" is not exported by geokit::tiles (it holds "tileAt")');
     expect(text).toContain('"tile_at" takes 1 parameter(s) (lat), the pin\'s "tileAt" takes 3');
   });
 });
 
 describe('binding conformance against a member project (round 6)', () => {
   it('names a member\'s parameter and field renames at validate time, read live — no pin involved', () => {
-    const [memberFire, memberControl] = fixtures.slice(-2);
+    const [memberFire, memberControl] = fixtures.slice(4, 6);
     const drift = runRuleFixture(memberFire).matching;
     const text = drift.map((i) => i.message).join('\n');
     expect(text).toContain('parameter "zoom" of "tileAt" was renamed to "z" — follow the rename');
@@ -164,5 +164,65 @@ describe('binding conformance against a member project (round 6)', () => {
     expect(runRuleFixture(memberControl).matching).toEqual([]);
     // Compared, so never reported unread for want of a pin.
     expect(runRuleFixture({ ...memberControl, code: 'BINDING_UNREAD' }).matching).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Round 7: what the trials met that the first cut never compared.
+// ---------------------------------------------------------------------------
+
+import { round7 } from '../rules-matrix/families/conformance-binding.fixtures.js';
+import { readUnreadForms } from '../../src/core/binding-modules.js';
+
+const messages = (fixture: Parameters<typeof runRuleFixture>[0], code?: string): string =>
+  runRuleFixture(code ? { ...fixture, code } : fixture).matching.map((i) => i.message).join('\n');
+
+describe('binding conformance, round 7', () => {
+  it('compares a binding into a member declared under an alias other than its project id, never telling it to pin', () => {
+    const text = messages(round7.aliasedMember);
+    expect(text).toContain('parameter "zoom" of "tileAt" was renamed to "z" — follow the rename');
+    expect(text).toContain('field "zoom" was renamed to "z" — follow the rename');
+    expect(text).toContain('geo::tiles as its member project exports it now');
+    expect(messages(round7.aliasedMember, 'BINDING_UNREAD')).toBe('');
+  });
+
+  it('reaches a types-only library through the types a contract names', () => {
+    const text = messages(round7.typesOnly);
+    expect(text).toContain('"TileKey" no longer matches geokit::tile_key as pinned — field "zoom" was renamed to "z"');
+    expect(messages(round7.typesOnlyControl, 'BINDING_UNREAD')).toBe('');
+  });
+
+  it('names a removed verb a free function still declares, from the pin\'s retired names', () => {
+    expect(messages(round7.removedVerb)).toContain('"vincenty_distance" was removed from geokit::tiles (an earlier pin held it)');
+  });
+
+  it('reads a CommonJS object-literal binding, and reports one it cannot see into', () => {
+    expect(messages(round7.commonJs)).toContain('"tileFor" was renamed to "tileAt" in geokit::tiles — follow the rename');
+    expect(messages(round7.commonJsControl)).toBe('');
+    const unread = messages(round7.requireOnly);
+    expect(unread).toContain('it declares no exported function, interface, class, type, enum or CommonJS export the reader compares');
+    expect(unread).toContain('`module.exports = require(…)`');
+  });
+
+  it('names a type the producer renamed: the declaration still named by it, and a field typed by it', () => {
+    const text = messages(round7.renamedType);
+    expect(text).toContain('the type "TileCoord" was renamed to "TileKey" (geokit::tile_key) — follow the rename');
+    expect(text).toContain('field "corner" is typed "TileCoord", which geokit::tile_key was renamed from ("TileKey" now)');
+  });
+
+  it('reads CommonJS exports and field types, and lists the export forms it cannot see into', () => {
+    const decls = readDeclarations([
+      '/** geo::tiles.tile_at */',
+      'exports.tileAt = function (coordinate, zoom) {};',
+      'module.exports.Tiles = { tile_url: (template, tile) => template, label: "x" };',
+      'module.exports = { haversine(a, b) { return 0; } };',
+      'export interface Money { amountMinor: number; currency?: Currency | null }',
+    ].join('\n'));
+    const byName = new Map(decls.map((d) => [d.name, d]));
+    expect(byName.get('tileAt')).toMatchObject({ kind: 'function', params: ['coordinate', 'zoom'], tag: 'geo::tiles.tile_at', line: 2 });
+    expect(byName.get('Tiles')).toMatchObject({ kind: 'object', members: [{ name: 'tile_url', params: ['template', 'tile'] }, { name: 'label' }] });
+    expect(byName.get('haversine')).toMatchObject({ kind: 'function', params: ['a', 'b'] });
+    expect(byName.get('Money')?.members).toEqual([{ name: 'amountMinor', type: 'number' }, { name: 'currency', type: 'Currency | null' }]);
+    expect(readUnreadForms("module.exports = require('./build/Release/geo.node');\nexports.raw = addon;\n")).toEqual(['module.exports = require(…)', 'exports.raw = addon']);
   });
 });

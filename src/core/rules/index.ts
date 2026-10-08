@@ -97,6 +97,7 @@ const DEPTH_GATED_CODES: Record<string, DesignDepth> = {
   MISSING_SOURCE_PATH: 'implementations',
   MISSING_TYPE_SOURCE_PATH: 'implementations',
   PORTAL_CALL_UNRESOLVED: 'implementations',
+  CROSS_PROJECT_IMPORT_UNRESOLVED: 'implementations',
   METHOD_SOURCE_PATH_MISSING: 'implementations',
   SOURCE_FILE_PLANNED: 'implementations',
   PORTAL_AUTH_UNMET: 'implementations',

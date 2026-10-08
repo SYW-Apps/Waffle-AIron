@@ -42,16 +42,18 @@ methods:
       portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess,
       and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its
       scope. The tool never defaults an entry: a blanket entry the author did not decide would hide
-      unreached verbs. An Adapter may state the transport it calls its target Portal over; when it
-      states none and the Portals its dependsOn names share one transport, the tool fills it in from
-      them and says so (a stated transport that disagrees with the target's is
-      ADAPTER_TRANSPORT_MISMATCH). The input may state the spec's lifecycle status, so a component
-      can be authored straight at design or complete instead of being born draft and needing a
-      follow-up edit nobody remembers. An unstated status means draft for a new spec and the stored
-      status for a re-authoring, and a stated status that would lower the stored one is refused by
-      name: reopening a frozen spec is an update, not a restatement. The answer carries the write
-      receipt as structured content beside the sentence, so a caller learns the status written and
-      whether a spec already held that id without parsing English; the sentence itself is unchanged.
+      unreached verbs. A component may state its variant (a gateway is a Portal with the gateway
+      variant), so it is authored in one call. An Adapter may state the transport it calls its
+      target Portal over; when it states none and the Portals its dependsOn names share one
+      transport, the tool fills it in from them and says so (a stated transport that disagrees with
+      the target's is ADAPTER_TRANSPORT_MISMATCH). The input may state the spec's lifecycle status,
+      so a component can be authored straight at design or complete instead of being born draft and
+      needing a follow-up edit nobody remembers. An unstated status means draft for a new spec and
+      the stored status for a re-authoring, and a stated status that would lower the stored one is
+      refused by name: reopening a frozen spec is an update, not a restatement. The answer carries
+      the write receipt as structured content beside the sentence, so a caller learns the status
+      written and whether a spec already held that id without parsing English; the sentence itself
+      is unchanged.
     signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -499,12 +501,14 @@ methods:
       - imcp_portal.sdd_move_methods
   - name: deleteSpec
     description: >-
-      Tool: delete a specification document from the spec tree and prune the parent directories the
-      deletion left empty. Answers whether a document was actually removed — a spec that was not
-      there is reported as such rather than as a failure. Deleting a spec other specs still
-      reference leaves the tree invalid by design: the validator is what says so, and this tool does
-      not refuse on its behalf.
-    signature: 'deleteSpec(kind: WritableSpecKind, id: string): SpecDeletion'
+      Tool: delete a spec and everything it contains — a contract with its implementations, a
+      component with its contracts and owned members, a subsystem with its components and types —
+      pruning the folders the deletion leaves empty. Refused, naming every reference, while a spec
+      outside that set still references what would go: those are the invalid references the deletion
+      itself would introduce, and `force` deletes anyway, leaving them for validate to report.
+      `dryRun` answers the same plan and removes nothing. A spec that was not there is reported as
+      such rather than as a failure.
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
     returns: SpecDeletion
     params:
       - name: kind
@@ -513,6 +517,16 @@ methods:
       - name: id
         type: string
         description: The id of the spec to delete (namespaced if needed)
+      - name: dryRun
+        type: bool
+        description: Answer with the plan — what would be removed, what references it — and remove nothing
+        optional: true
+      - name: force
+        type: bool
+        description: >-
+          Delete even though other specs still reference what goes, leaving those references for
+          validate to report
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_delete_spec
@@ -1177,4 +1191,4 @@ methods:
       method: tools/call sdd_surface_diff
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T08:26:11.655Z'
+updatedAt: '2026-10-08T18:55:18.215Z'

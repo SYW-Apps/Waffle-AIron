@@ -472,7 +472,9 @@ function approvalReleaseLine(): string | null {
   if (!release) return null;
   return release.carried
     ? chalk.green(`Approval: approved under wairon ${release.from}, re-validated under ${release.to}: still approved. (\`wairon lock\` refreshes the record's release stamp without a re-approval.)`)
-    : chalk.yellow(`Approval: approved under wairon ${release.from}, and the new release (${release.to}) finds ${release.count ?? 0} issue(s) in the approved design — \`wairon lock-check\` fails until they are resolved and the design re-locked.`);
+    : release.reason
+      ? chalk.yellow(`Approval: ${release.reason} \`wairon lock-check\` fails until it is re-locked.`)
+      : chalk.yellow(`Approval: approved under wairon ${release.from}, and the new release (${release.to}) finds ${release.count ?? 0} issue(s) in the approved design — \`wairon lock-check\` fails until they are resolved and the design re-locked.`);
 }
 
 /**

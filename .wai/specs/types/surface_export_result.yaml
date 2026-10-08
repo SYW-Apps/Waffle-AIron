@@ -27,7 +27,14 @@ fields:
     type: list<string>
     description: Every written path; a multi-portal export writes one file per portal.
     optional: true
+  - name: unresolvedTypes
+    type: list<string>
+    description: >-
+      The type names a rendered OpenAPI document still reads as `Unresolved type` (no pin, no member
+      export and no type of the project's own resolves them), sorted: what the CLI names in a
+      warning instead of a ✔. Absent when every type resolved or nothing was rendered.
+    optional: true
 methods: []
 sourcePath: src/core/surfaces.ts
 createdAt: '2026-07-11T09:48:49.299Z'
-updatedAt: '2026-10-04T10:21:14.354Z'
+updatedAt: '2026-10-08T19:39:36.845Z'

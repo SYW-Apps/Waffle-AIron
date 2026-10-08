@@ -7,7 +7,10 @@ methods:
   - name: run
     narrative:
       - stepNumber: 1
-        description: Plan the request from the bound project
+        description: >-
+          Plan the request from the bound project, asking it to announce the findings its result
+          will have (announce: true): the answer's notes name them, the dry run's and the applied
+          one's alike
         type: call
         targetComponent: mcp_migration_adapter
         targetMethod: plan
@@ -90,4 +93,4 @@ methods:
         outcome: notice lines
 status: complete
 createdAt: '2026-09-30T20:39:33.686Z'
-updatedAt: '2026-10-07T06:22:13.232Z'
+updatedAt: '2026-10-08T20:19:44.112Z'

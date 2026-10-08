@@ -497,11 +497,11 @@ describe('deleteSpec — the delete names the tests of the methods it took away'
 
   it('answers deleted false, with nothing to revisit, when no spec held the id', () => {
     project({ testRoots: ['tests'] });
-    expect(deleteSpec('interface', 'inowhere')).toEqual({ kind: 'interface', id: 'inowhere', deleted: false, testsToRevisit: [] });
+    expect(deleteSpec('interface', 'inowhere')).toEqual({ kind: 'interface', id: 'inowhere', deleted: false, dryRun: false, removed: [], references: [], testsToRevisit: [] });
   });
 
   it('reports nothing for a spec without methods', () => {
     project({ testRoots: ['tests'] });
-    expect(deleteSpec('component', 'checkout')).toEqual({ kind: 'component', id: 'checkout', deleted: true, testsToRevisit: [] });
+    expect(deleteSpec('component', 'checkout')).toEqual({ kind: 'component', id: 'checkout', deleted: true, dryRun: false, removed: [{ kind: 'component', id: 'checkout' }], references: [], testsToRevisit: [] });
   });
 });

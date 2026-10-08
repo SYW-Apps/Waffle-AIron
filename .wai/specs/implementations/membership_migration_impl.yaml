@@ -12,7 +12,10 @@ methods:
         description: >-
           Resolve the path from the bound project's directory under the containment guard, lexically
           and through links, through the family file adapter (a planner touches no file itself); a
-          null answer — not strictly within it — is a not-contained refusal
+          null answer — not strictly within it — is a not-contained refusal. A location with a
+          leading `../` (member_source.parse: storage path) names a sibling, as `member add` reads
+          it, and is resolved lexically against the bound directory instead; an inner `..`, an
+          absolute path or a directory holding the bound project is still not-contained
         type: call
         targetComponent: family_file_adapter
         targetMethod: resolve
@@ -296,4 +299,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-07T21:46:57.951Z'
+updatedAt: '2026-10-08T18:55:03.079Z'

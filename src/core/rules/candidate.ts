@@ -1,9 +1,13 @@
-import type { ComponentSpec, SystemSpec } from '../../models/index.js';
+import type { ComponentSpec, InterfaceSpec, SystemSpec } from '../../models/index.js';
 import type { RulesConfig } from '../../models/project.js';
 import type { ValidationIssue } from '../validation.js';
 import type { LoadedExtensions } from '../extensions.js';
 import { buildRuleContext } from './index.js';
 import { registerBuiltinRules, registerPackRules, knownIssueCodes, specScopedRules } from './repository.js';
+import { entrypointDepsRule } from './doctrine/entrypoint-dependencies.js';
+import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
+import { portalsRule } from './doctrine/portal-endpoints.js';
+import { scanAllSpecs } from '../adapters/validator-core.js';
 
 // ---------------------------------------------------------------------------
 // Candidate validation — the write-boundary half of the rule set.
@@ -121,5 +125,94 @@ export function validateComponentCandidate(
     errors: own.filter(i => i.severity === 'error'),
     warnings: own.filter(i => i.severity === 'warning'),
     notices: own.filter(i => i.severity === 'notice'),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// The in-tree half: what a write INTRODUCES.
+//
+// A spec-scoped rule needs no tree; a doctrine edge and a route collision do
+// — a Portal depending on a Store is legal or not by the Store's stereotype,
+// two methods collide only beside each other. Those used to wait for the next
+// validate while the write tool answered "1 change" (a Portal -> Store
+// dependsOn, a duplicate route bound by sdd_set_endpoints). They run here over
+// the bound tree twice — as stored, and with the candidate in place — and
+// only what the candidate adds is kept, restricted to the findings no later
+// write in the sanctioned authoring order can cure without undoing this one:
+// an edge between two existing blocks whose stereotypes forbid it, and a route
+// two bound methods share. Completeness findings never run here, so a
+// component authored before its collaborators is never refused for it.
+// ---------------------------------------------------------------------------
+
+/** The codes a write is judged on in its tree: each fixed by the two ends of an edge, or by two bound routes. */
+const INTRODUCED_CODES: ReadonlySet<string> = new Set([
+  'ARCHITECTURE_VIOLATION_PORTAL_DEP',
+  'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
+  'ARCHITECTURE_VIOLATION_VIEW_DEP',
+  'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP',
+  'ARCHITECTURE_VIOLATION_STORE_DEP',
+  'ARCHITECTURE_VIOLATION_REGISTRY_DEP',
+  'ARCHITECTURE_VIOLATION_ADAPTER_DEP',
+  'ARCHITECTURE_VIOLATION_QUERY_DEP',
+  'ENDPOINT_ROUTE_DUPLICATE',
+]);
+
+/**
+ * spec_validator.introducedFindings — the doctrine edges and route
+ * collisions writing `candidate` (a component or a contract) would introduce
+ * into the bound tree, split by severity: an error refuses the write, a code
+ * the project tuned down rides along as a notice. Any other kind answers an
+ * empty verdict.
+ */
+export function introducedFindings(
+  kind: string,
+  candidate: ComponentSpec | InterfaceSpec,
+  opts: CandidateOptions = {},
+): CandidateVerdict {
+  if (kind !== 'component' && kind !== 'interface') return { errors: [], warnings: [], notices: [] };
+  // Step 1: the bound tree, its stored version of the candidate included.
+  const index = scanAllSpecs({ memberDepth: 0 });
+  // Steps 2-3: the built-ins under validate's codes and severities.
+  registerBuiltinRules();
+  const knownCodes = new Set(knownIssueCodes().map((rc) => rc.code));
+  const swapped = <T extends { id: string }>(list: T[], spec: T): T[] => {
+    const at = list.findIndex((s) => s.id === spec.id);
+    return at < 0 ? [...list, spec] : list.map((s, i) => (i === at ? spec : s));
+  };
+  // Steps 4-8: both contexts, the edge and route rules over each.
+  const run = (components: ComponentSpec[], interfaces: InterfaceSpec[]): ValidationIssue[] => {
+    const issues: ValidationIssue[] = [];
+    const ctx = buildRuleContext({
+      system: stubSystem(),
+      subsystems: index.subsystems,
+      components,
+      interfaces,
+      implementations: index.implementations,
+      types: index.types,
+      rules: opts.rules,
+      projectType: opts.projectType ?? 'backend',
+      extensions: opts.extensions,
+      roundTripIssues: [],
+      knownIssueCodes: knownCodes,
+      issues,
+    });
+    entrypointDepsRule.check(ctx);
+    dataBlockDepsRule.check(ctx);
+    portalsRule.check(ctx);
+    return issues.filter((i) => INTRODUCED_CODES.has(i.code));
+  };
+  const before = run(index.components, index.interfaces);
+  const after = kind === 'component'
+    ? run(swapped(index.components, candidate as ComponentSpec), index.interfaces)
+    : run(index.components, swapped(index.interfaces, candidate as InterfaceSpec));
+  // Step 9: only what the candidate adds.
+  const key = (i: ValidationIssue): string => `${i.code}|${i.specId ?? ''}|${i.message}`;
+  const held = new Set(before.map(key));
+  const added = after.filter((i) => !held.has(key(i)));
+  // Step 10.
+  return {
+    errors: added.filter((i) => i.severity === 'error'),
+    warnings: added.filter((i) => i.severity === 'warning'),
+    notices: added.filter((i) => i.severity === 'notice'),
   };
 }

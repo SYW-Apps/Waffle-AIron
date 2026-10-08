@@ -1,5 +1,6 @@
 import { pathKey, type RouteFact } from '../../../models/index.js';
 import { SddRule } from '../types.js';
+import { closedCallSites } from './call-conformance.js';
 
 // ---------------------------------------------------------------------------
 // Code↔contract for the ROUTES: does every route a router actually answers
@@ -81,10 +82,14 @@ interface ContractEndpoint {
  * with each first segment of the Portal's own HTTP endpoint paths. With none
  * (every endpoint at `/`), the segment stays open.
  */
-function completed(route: RouteFact, heads: string[]): ServedRoute[] {
-  const variants = route.segments[0] === '*' && heads.length > 0
-    ? heads.map(head => [head, ...route.segments.slice(1)])
-    : [route.segments];
+function completed(route: RouteFact, heads: string[], base: string[]): ServedRoute[] {
+  // A route that states the whole path carries the Portal's basePath in
+  // front, where the contract's endpoint paths are written under it.
+  const stated = base.length > 0 && base.every((segment, index) => route.segments[index] === segment)
+    ? route.segments.slice(base.length) : route.segments;
+  const variants = !route.fullPath && stated[0] === '*' && heads.length > 0
+    ? heads.map(head => [head, ...stated.slice(1)])
+    : [stated];
   return variants.map(segments => ({
     verb: route.verb.toUpperCase(),
     segments: segments.map(normalizeSegment),
@@ -105,7 +110,7 @@ export const routeCoverageRule: SddRule = {
   name: 'route-coverage',
   judges: 'code',
   description:
-    "Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal's endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract (including a write) could run for months without a single rule noticing. The Portal's own implementation names its router entry (`router`, code linkage), and the routes are read out of that function's guards. A leading path segment the router never checks is completed from the first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves which Portal is implementation, so no listener is consulted. One idiom is read (a method comparison with comparisons on the path's split segments), and a router that yields no route in it is reported as unread, never passed: a check that cannot see a router must say so rather than stay quiet.",
+    "Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal's endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract (including a write) could run for months without a single rule noticing. The Portal's own implementation names its router entry (`router`, code linkage), and the routes are read out of that function and the functions of its file it calls by name. Two idioms are read: guards (a method comparison with comparisons on the path's split segments), where a prefix the router strips before splitting the path is folded in front; and a route table the router names (an array of objects pairing a method with a `/a/:b` template or an anchored regular expression, or an object keyed `VERB /path`), read only when every entry settles. Every compared value is a literal or one the code's constants, concatenations and template literals settle — through the type checker, any module's constant and any expression it types as one string literal — and never a guess. A route that states the whole path is read under the Portal's basePath, which the contract's endpoint paths are written beneath; a leading path segment a guard router never checks is completed from the first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves which Portal is implementation, so no listener is consulted. A router that yields no route in either idiom is reported as unread, never passed: a check that cannot see a router must say so rather than stay quiet.",
   codes: [
     {
       code: 'UNDECLARED_ROUTE',
@@ -155,9 +160,17 @@ export const routeCoverageRule: SddRule = {
             && !!facts.functionParams && Object.prototype.hasOwnProperty.call(facts.functionParams, via);
         });
         if (holders.length === 0) continue;
+        // The entry's own routes, and those of the functions of its file it
+        // calls by name — a router delegating its matching to a helper that
+        // reads the route table is one router.
         const read: RouteFact[] = holders.flatMap((file) => {
           const routes = code.factsAt(file)!.functionRoutes;
-          return routes && Object.prototype.hasOwnProperty.call(routes, via) ? routes[via] : [];
+          if (!routes) return [];
+          const names = new Set<string>([via]);
+          for (const site of closedCallSites(code, file, via) ?? []) {
+            if (!site.member && pathKey(site.from ?? file) === file) names.add(site.name);
+          }
+          return [...names].flatMap(name => (Object.prototype.hasOwnProperty.call(routes, name) ? routes[name] : []));
         });
         const draftContext = ctx.isComponentDraft(portal.id) || ctx.isImplementationDraft(impl);
         const where = holders.map(file => `"${file}"`).join(', ');
@@ -168,11 +181,14 @@ export const routeCoverageRule: SddRule = {
             'warning',
             'UNREADABLE_ROUTER',
             `Portal "${portal.id}" names its router "${via}" (in ${where}), but no branch of `
-            + `"${via}" reads as a route — so none of its routes were checked against the contract at all. Only one `
-            + 'idiom is read: an `if` whose conditions, together with those of every enclosing `if`, compare '
-            + '`<request>.method` with a string and `parts[i]` / `parts.length` with literals. Silence here would '
-            + 'read as a clean router; it is only one this analysis cannot see. Write the router in that idiom, or '
-            + 'carry this finding with the reason it cannot be.',
+            + `"${via}" reads as a route — so none of its routes were checked against the contract at all. Only `
+            + 'two idioms are read, in the entry and in the functions of its file it calls by name: an `if` whose '
+            + 'conditions, together with those of every enclosing `if`, compare `<request>.method` with a string and '
+            + '`parts[i]` / `parts.length` with values the code spells out or its constants settle; and a route table '
+            + 'it names — an array of objects pairing a method with a path pattern (a `/a/:b` template or an anchored '
+            + 'regular expression), or an object keyed `VERB /path` — every entry of which settles. Silence here would '
+            + 'read as a clean router; it is only one this analysis cannot see. Write the router in one of those idioms, '
+            + 'or carry this finding with the reason it cannot be.',
             anchor,
             draftContext,
             undefined,
@@ -195,7 +211,8 @@ export const routeCoverageRule: SddRule = {
         const heads = [...new Set(endpoints
           .map(endpoint => endpoint.segments[0])
           .filter((head): head is string => !!head && head !== '*'))].sort();
-        const served = read.map(route => completed(route, heads));
+        const base = (portal.basePath ?? '').split('/').filter(Boolean);
+        const served = read.map(route => completed(route, heads, base));
 
         // ---- 6. both directions of the drift ----
         const undeclared = [...new Set(served

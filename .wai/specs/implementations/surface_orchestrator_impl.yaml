@@ -28,8 +28,10 @@ methods:
         description: >-
           Render the snapshot's HTTP entries as one OpenAPI 3.1 document per backing portal into
           renderedSet, handing the codec the render context: each declared external's pinned
-          snapshot (where a schema's `alias::name` resolves) and the version the project declares in
-          its package manifest (package.json, else Cargo.toml or pyproject.toml), read here
+          snapshot and each contained member project's surface as its L0 export table exports it now
+          (where a schema's `alias::name` resolves, a member's alias included) and the version the
+          project declares in its package manifest (package.json, else Cargo.toml or
+          pyproject.toml), read here
         type: call
         targetComponent: openapi_codec
         targetMethod: toOpenApiSet
@@ -44,7 +46,10 @@ methods:
           an HTTP Portal not shared at that audience, with the fix: drop --audience, or export it at
           the audience wanted) instead of calling it unknown. An OpenAPI export with no HTTP Portal
           at all (an in-process library) asked to write a file is refused naming why — OpenAPI does
-          not apply — and the native snapshot is never written in its place.
+          not apply — and the native snapshot is never written in its place. Every type a rendered
+          document still reads as `Unresolved type` is collected into the result's unresolvedTypes,
+          which the caller reports as a warning naming them — never a ✔ over a document whose
+          schemas are missing.
         type: local
       - stepNumber: 5
         description: An output path was given
@@ -229,14 +234,19 @@ methods:
           a snapshot is pinned, its content digest equals the new one, and it carries the same facts
           beside the signatures (SurfaceSnapshot.carriedFactChanges is empty — an abi, a transport,
           a role, an export kind, the producer's targetLanguage, a rename trace, an unresolved
-          re-export) and the same prose; provenance (stateId, generatedAt) aside
+          re-export) and the same prose; provenance (stateId, generatedAt, each entry's retired
+          names) aside
         onTrueStep: 18
         onFalseStep: 17
       - stepNumber: 17
         description: >-
-          Write the new snapshot to .wai/externals/<alias>.yaml — whenever anything it carries
-          moved, not only its digest: the rules read facts no digest covers (LANGUAGE_BRIDGE_MISSING
-          reads the abi), so a re-pin is the documented way to refresh them
+          Carry the removals into the new snapshot, then write it to .wai/externals/<alias>.yaml —
+          whenever anything it carries moved, not only its digest: the rules read facts no digest
+          covers (LANGUAGE_BRIDGE_MISSING reads the abi), so a re-pin is the documented way to
+          refresh them. Each kept entry's `retired` lists the method names the replaced snapshot's
+          entry held (or already listed as retired) that the new entry neither holds nor names in
+          any method's `formerly` — a removal, never a rename — so binding conformance can name a
+          removed verb a consumer's binding still declares
         type: call
         targetComponent: externals_repository
         targetMethod: saveSnapshot
@@ -250,8 +260,10 @@ methods:
           contained or same-repository producer records none), and `used` — each public name of the
           binding's usage mapped to each of its members' SurfaceSnapshot.memberDigest (an empty map
           for a name only depended on; a member the snapshot does not carry is reported missing and
-          not pinned). Usage exists for every producer since stage 8, so an outside producer's
-          `used` is filled too
+          not pinned — and one the producer does export, only to an audience narrower than the one
+          this project reads it at, is said so: the audience it is exported at, the one this project
+          reads at and the ranking, never "gone"). Usage exists for every producer since stage 8, so
+          an outside producer's `used` is filled too
         type: local
       - stepNumber: 19
         description: Next external
@@ -358,19 +370,23 @@ methods:
           are the whole change, so the consumer reads "follow the rename" rather than an anonymous
           signature change; one absent under its name is RENAMED when a live entry's `formerly` (the
           producer's rename trace) names it — renamedTo is that entry's public name (and member),
-          and its signature is still compared so the detail says whether it also changed — and
-          removed otherwise, the detail naming the source's rename when the live snapshot lists the
-          name among its unresolved re-exports; a name or member used now but not in the lock is
-          compared live too: gone from the live table it is renamed or removed (a break the live
-          producer already proves, pinned or not), present it is unlocked (not in the lock —
-          re-pin), named member by member as `wairon lock` names what it refuses; an unexported
-          reference of a family producer is unavailable — and a name already answered as renamed or
-          removed (under any member, a type's `type` included) is answered once, never a second time
-          for its unexported references. Stale when a used member changed, was renamed or went away;
-          drifted when the live content digest differs from the pinned one, or when the pinned
-          snapshot carries facts the live one no longer says (staleFacts =
-          SurfaceSnapshot.carriedFactChanges of the pinned snapshot against the live one) — so
-          `drifted` and the health agree on every surface — and a stale snapshot is never ok
+          and its signature is still compared so the detail says whether it also changed and how:
+          each parameter renamed per its trace (`parameter "code" renamed to "shortCode"`, which a
+          digest that ignores parameter names cannot see), each field of its closure renamed per its
+          trace, and whether anything beyond the renames moved (its answer or parameter types) —
+          never "unchanged" beside a parameter or answer that moved — and removed otherwise, the
+          detail naming the source's rename when the live snapshot lists the name among its
+          unresolved re-exports; a name or member used now but not in the lock is compared live too:
+          gone from the live table it is renamed or removed (a break the live producer already
+          proves, pinned or not), present it is unlocked (not in the lock — re-pin), named member by
+          member as `wairon lock` names what it refuses; an unexported reference of a family
+          producer is unavailable — and a name already answered as renamed or removed (under any
+          member, a type's `type` included) is answered once, never a second time for its unexported
+          references. Stale when a used member changed, was renamed or went away; drifted when the
+          live content digest differs from the pinned one, or when the pinned snapshot carries facts
+          the live one no longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned
+          snapshot against the live one) — so `drifted` and the health agree on every surface — and
+          a stale snapshot is never ok
         type: local
       - stepNumber: 10
         description: Next external
@@ -701,7 +717,14 @@ methods:
   - name: diff
     narrative:
       - stepNumber: 1
-        description: Project the bound project's surface now, at audience project (the whole table)
+        description: >-
+          Project the bound project's surface now, at audience project (the whole table) — with
+          every HTTP Portal of the bound project's own besides (its service API, exported to other
+          wairon projects or not), and every type its published shapes name from another project
+          expanded into the closure under its `alias::name`: a pinned external's from the pin the
+          tree holds, a contained member project's from what its L0 export table exports now — so a
+          re-pin (or a member's edit) that reshapes a type the project's own API answers with is a
+          change of the project's own surface
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
@@ -732,7 +755,8 @@ methods:
       - stepNumber: 6
         description: >-
           Project that tree's surface, its root bound for the projection and the caller's binding
-          restored, as the baseline
+          restored, as the baseline, projected the same way (its own HTTP Portals, the types it
+          names from other projects expanded from the pins and members of that tree)
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
@@ -799,4 +823,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-08T08:31:25.615Z'
+updatedAt: '2026-10-08T19:07:54.583Z'

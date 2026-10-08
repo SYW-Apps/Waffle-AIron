@@ -17,13 +17,15 @@ export interface BindingMember {
   name: string;
   /** A method's parameter names in order ('' for a destructured one); absent for a data field. */
   params?: string[];
+  /** A data field's declared type as written, when it declares one. */
+  type?: string;
 }
 
 /** binding_declaration — one exported declaration of a binding module. */
 export interface BindingDeclaration {
   name: string;
-  /** function | interface | class | type (an object type alias) | alias (any other type alias) | enum. */
-  kind: 'function' | 'interface' | 'class' | 'type' | 'alias' | 'enum';
+  /** function | interface | class | object (a CommonJS object literal) | type (an object type alias) | alias (any other type alias) | enum. */
+  kind: 'function' | 'interface' | 'class' | 'object' | 'type' | 'alias' | 'enum';
   /** A function's parameter names in order. */
   params?: string[];
   /** The members an interface, class or object type declares; an enum's member names as fields. */
@@ -39,6 +41,8 @@ export interface BindingModule {
   path: string;
   status: 'read' | 'missing' | 'escaped' | 'unreadable' | 'unsupported';
   declarations: BindingDeclaration[];
+  /** The export forms met but not seen into (`module.exports = require(…)`); absent when none. */
+  unreadForms?: string[];
 }
 
 const READ_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
@@ -81,7 +85,9 @@ function readOne(named: string, projectRoot: string): BindingModule {
   // Step 4: a language this reader reads.
   if (!READ_EXTENSIONS.has(path.extname(named).toLowerCase())) return answer('unsupported');
   // Steps 5-6.
-  return answer('read', readDeclarations(buffer.toString('utf8')));
+  const text = buffer.toString('utf8');
+  const unreadForms = readUnreadForms(text);
+  return { ...answer('read', readDeclarations(text)), ...(unreadForms.length ? { unreadForms } : {}) };
 }
 
 // ── the syntax-level reader ────────────────────────────────────────────────
@@ -212,15 +218,15 @@ function skipTypeParams(clean: string, i: number): number {
   return i;
 }
 
-/** The members of an interface, class or object type body (its inner text). */
-function readMembers(body: string, isClass: boolean): BindingMember[] {
+/** The members of an interface, class, object type or (CommonJS) object literal body (its inner text). */
+function readMembers(body: string, mode: 'type' | 'class' | 'object'): BindingMember[] {
   const members: BindingMember[] = [];
-  for (const raw of splitTop(body, isClass ? ';\n' : ';,\n')) {
+  for (const raw of splitTop(body, mode === 'class' ? ';\n' : mode === 'object' ? ',' : ';,\n')) {
     let seg = raw.replace(/^(?:(?:public|readonly|static|abstract|declare|override|async)\s+)+/, '');
     if (/^(?:private|protected)\b/.test(seg) || seg.startsWith('#')) continue;
     const accessor = /^(?:get|set)\s+(?=[A-Za-z_$])/.exec(seg);
     if (accessor) seg = seg.slice(accessor[0].length);
-    if (seg.startsWith('[') || seg.startsWith('(') || seg.startsWith('<') || /^new\b/.test(seg)) continue;
+    if (seg.startsWith('[') || seg.startsWith('(') || seg.startsWith('<') || seg.startsWith('...') || /^new\b/.test(seg)) continue;
     const name = IDENT.exec(seg)?.[0];
     if (name === undefined || name === 'constructor') continue;
     let i = name.length;
@@ -236,6 +242,12 @@ function readMembers(body: string, isClass: boolean): BindingMember[] {
       continue;
     }
     if (seg[i] === ':') {
+      if (mode === 'object') {
+        // An object literal's value: a function or arrow function is a method, anything else a field.
+        const params = functionValueParams(seg.slice(i + 1));
+        members.push(params !== null ? { name, params } : { name });
+        continue;
+      }
       // A function-typed field is a method: `name: (a: A) => R`.
       let j = skipTypeParams(seg, i + 1);
       j = skipSpace(seg, j);
@@ -246,14 +258,138 @@ function readMembers(body: string, isClass: boolean): BindingMember[] {
           continue;
         }
       }
+      const type = declaredType(seg.slice(i + 1));
+      members.push(type ? { name, type } : { name });
+      continue;
     }
     members.push({ name });
   }
   return members;
 }
 
+/** A data field's declared type text: up to an initializer at depth zero, whitespace collapsed. */
+function declaredType(text: string): string | undefined {
+  const [type] = splitTop(text, '=');
+  const out = (type ?? '').replace(/\s+/g, ' ').trim();
+  return out === '' ? undefined : out;
+}
+
+/** The parameter names of a function or arrow-function value (`function (a, b) {…}`, `async (a) => …`, `a => …`); null for any other value. */
+function functionValueParams(text: string): string[] | null {
+  let t = text.trim().replace(/^async\s+/, '');
+  const fn = /^function\s*\*?\s*(?:[A-Za-z_$][\w$]*)?\s*/.exec(t);
+  if (fn) t = t.slice(fn[0].length);
+  t = t.slice(skipTypeParams(t, 0));
+  if (t.startsWith('(')) {
+    const end = closeOf(t, 0);
+    if (fn || /^\s*(?::[^=]*)?=>/.test(t.slice(end))) return paramNames(t.slice(1, end - 1));
+    return null;
+  }
+  const single = /^([A-Za-z_$][\w$]*)\s*=>/.exec(t);
+  return single ? [single[1]] : null;
+}
+
+/** The `alias::name` (or `alias::name.method`) a doc comment names. */
+const TAG_RE = /\b([a-z0-9][a-z0-9_-]*)::([A-Za-z0-9_-]+(?:\.[A-Za-z_$][\w$]*)?)/;
+
+/** The tag of the doc comment that ends right before `start`, if any. */
+function tagBefore(clean: string, docs: Scanned['docs'], start: number): string | undefined {
+  const doc = docs.filter((d) => d.end <= start && clean.slice(d.end, start).trim() === '').pop();
+  const tagMatch = doc ? TAG_RE.exec(doc.text) : null;
+  return tagMatch ? `${tagMatch[1]}::${tagMatch[2]}` : undefined;
+}
+
+/** The 1-based line an index of the text sits on. */
+function lineAt(clean: string, index: number): number {
+  return clean.slice(0, index).split('\n').length;
+}
+
+/**
+ * One CommonJS export's value read as a declaration: a function or arrow
+ * function is a function, an object literal an object of methods and fields,
+ * a class expression a class; null for a value it cannot see into (a
+ * require, an identifier, a call).
+ */
+function commonJsDeclaration(value: string, base: { name: string; line: number; tag?: string }): BindingDeclaration | null {
+  const t = value.trim();
+  if (t.startsWith('{')) return { ...base, kind: 'object', members: readMembers(t.slice(1, closeOf(t, 0) - 1), 'object') };
+  const params = functionValueParams(t);
+  if (params !== null) return { ...base, kind: 'function', params, members: [] };
+  const cls = /^class\b[^{]*\{/.exec(t);
+  if (cls) {
+    const open = cls[0].length - 1;
+    return { ...base, kind: 'class', members: readMembers(t.slice(open + 1, closeOf(t, open) - 1), 'class') };
+  }
+  return null;
+}
+
+/** `exports.X =` / `module.exports.X =`, and `module.exports =`. */
+const CJS_NAMED_RE = /(?<![\w$.])(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
+const CJS_WHOLE_RE = /(?<![\w$.])module\.exports\s*=(?!=)/g;
+
+/** The value text after an assignment at `from`, up to the statement's end at depth zero. */
+function valueAt(clean: string, from: number): string {
+  return splitTop(clean.slice(from), ';')[0] ?? '';
+}
+
+/** Every CommonJS export of a JavaScript binding module, read as declarations. */
+function readCommonJs(clean: string, docs: Scanned['docs']): BindingDeclaration[] {
+  const out: BindingDeclaration[] = [];
+  for (const match of clean.matchAll(CJS_NAMED_RE)) {
+    const start = match.index ?? 0;
+    const tag = tagBefore(clean, docs, start);
+    const decl = commonJsDeclaration(valueAt(clean, start + match[0].length), { name: match[1], line: lineAt(clean, start), ...(tag ? { tag } : {}) });
+    if (decl) out.push(decl);
+  }
+  for (const match of clean.matchAll(CJS_WHOLE_RE)) {
+    const start = match.index ?? 0;
+    const open = skipSpace(clean, start + match[0].length);
+    if (clean[open] !== '{') continue;
+    // `module.exports = { … }`: each property is an export of its own.
+    const body = clean.slice(open + 1, closeOf(clean, open) - 1);
+    let offset = open + 1;
+    for (const raw of splitTop(body, ',')) {
+      const found = clean.indexOf(raw, offset);
+      const at = found < 0 ? start : found;
+      if (found >= 0) offset = found + raw.length;
+      const seg = raw.replace(/^async\s+/, '');
+      const name = IDENT.exec(seg)?.[0];
+      if (name === undefined) continue;
+      const tag = tagBefore(clean, docs, at);
+      const base = { name, line: lineAt(clean, at), ...(tag ? { tag } : {}) };
+      const rest = seg.slice(name.length).trimStart();
+      if (rest.startsWith('(')) {
+        out.push({ ...base, kind: 'function', params: paramNames(rest.slice(1, closeOf(rest, 0) - 1)), members: [] });
+      } else if (rest.startsWith(':')) {
+        const decl = commonJsDeclaration(rest.slice(1), base);
+        if (decl) out.push(decl);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The export forms a module uses that the reader cannot see into, as written:
+ * `module.exports = require(…)`, or an export bound to a bare identifier or a
+ * call — what a module that declares nothing comparable is reported for.
+ */
+export function readUnreadForms(text: string): string[] {
+  const { clean } = scan(text);
+  const forms = new Set<string>();
+  const shown = (value: string): string => (/^require\s*\(/.test(value) ? 'require(…)' : `${IDENT.exec(value)?.[0] ?? '…'}${/^[A-Za-z_$][\w$.]*\s*\(/.test(value) ? '(…)' : ''}`);
+  for (const match of clean.matchAll(CJS_WHOLE_RE)) {
+    const value = valueAt(clean, (match.index ?? 0) + match[0].length).trim();
+    if (!value.startsWith('{')) forms.add(`module.exports = ${shown(value)}`);
+  }
+  for (const match of clean.matchAll(CJS_NAMED_RE)) {
+    const value = valueAt(clean, (match.index ?? 0) + match[0].length).trim();
+    if (commonJsDeclaration(value, { name: match[1], line: 0 }) === null) forms.add(`exports.${match[1]} = ${shown(value)}`);
+  }
+  return [...forms];
+}
+
 const EXPORT_RE = /\bexport\s+(?:default\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(function\s*\*?|interface|class|type|enum|const\s+enum)\s+([A-Za-z_$][\w$]*)/g;
-const TAG_RE = /\b([a-z0-9][a-z0-9_-]*)::([A-Za-z0-9_-]+)/;
 
 /** Every exported declaration of a TypeScript or JavaScript binding module, in source order. */
 export function readDeclarations(text: string): BindingDeclaration[] {
@@ -263,10 +399,8 @@ export function readDeclarations(text: string): BindingDeclaration[] {
     const start = match.index ?? 0;
     const keyword = match[1].replace(/\s+/g, ' ').replace(/\s*\*$/, '');
     const name = match[2];
-    const line = clean.slice(0, start).split('\n').length;
-    const doc = docs.filter((d) => d.end <= start && clean.slice(d.end, start).trim() === '').pop();
-    const tagMatch = doc ? TAG_RE.exec(doc.text) : null;
-    const tag = tagMatch ? `${tagMatch[1]}::${tagMatch[2]}` : undefined;
+    const line = lineAt(clean, start);
+    const tag = tagBefore(clean, docs, start);
     const base = { name, line, ...(tag ? { tag } : {}) };
     let i = start + match[0].length;
     if (keyword === 'function') {
@@ -277,13 +411,13 @@ export function readDeclarations(text: string): BindingDeclaration[] {
     } else if (keyword === 'interface' || keyword === 'class') {
       const open = clean.indexOf('{', i);
       const body = open < 0 ? '' : clean.slice(open + 1, closeOf(clean, open) - 1);
-      out.push({ ...base, kind: keyword, members: readMembers(body, keyword === 'class') });
+      out.push({ ...base, kind: keyword, members: readMembers(body, keyword === 'class' ? 'class' : 'type') });
     } else if (keyword === 'type') {
       i = skipTypeParams(clean, i);
       i = skipSpace(clean, i);
       if (clean[i] === '=') i = skipSpace(clean, i + 1);
       if (clean[i] === '{') {
-        out.push({ ...base, kind: 'type', members: readMembers(clean.slice(i + 1, closeOf(clean, i) - 1), false) });
+        out.push({ ...base, kind: 'type', members: readMembers(clean.slice(i + 1, closeOf(clean, i) - 1), 'type') });
       } else {
         out.push({ ...base, kind: 'alias', members: [] });
       }
@@ -294,5 +428,11 @@ export function readDeclarations(text: string): BindingDeclaration[] {
       out.push({ ...base, kind: 'enum', members });
     }
   }
-  return out;
+  // CommonJS exports: `exports.X = …`, `module.exports.X = …`, `module.exports = { … }`.
+  const seen = new Set(out.map((d) => d.name));
+  for (const decl of readCommonJs(clean, docs)) {
+    if (!seen.has(decl.name)) out.push(decl);
+    seen.add(decl.name);
+  }
+  return out.sort((a, b) => a.line - b.line);
 }

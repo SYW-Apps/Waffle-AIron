@@ -187,7 +187,12 @@ methods:
           Fetch that commit and check the repository already holds the member at `dir`; nothing is
           scaffolded in a repository wairon does not own — its content decides what the member is (a
           part there must carry its PartOf naming the bound project, else MEMBER_KIND_MISMATCH) —
-          and the commit goes into the declaration as `#<commit>`
+          and the commit goes into the declaration as `#<commit>`. A git project member is read at
+          audience `instance`, as any consumer outside its family: one whose L0 export table exports
+          names, but none at `instance` or wider, is refused, writing nothing, with the audience
+          reason `wairon externals add` gives — the narrower audience its names are exported at, the
+          audience this project reads it at and the ranking, narrowest first — so it is never
+          declared only for every later check to call its names gone
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
@@ -1527,6 +1532,26 @@ methods:
         type: throw
         error: 'unknown-key: the delta names a field the level does not have'
       - stepNumber: 10
+        label: identity-guard
+        description: 'Guard: a delta edits what a spec says, never which spec it is or where it lives'
+        type: branch
+        condition: >-
+          the delta changes the spec's id or createdAt, a component's or a type's subsystem (unless
+          the stored subsystem is one the tree does not have — the repair of a stray), an
+          interface's component or an implementation's contract, by value or by unset
+        onFalseStep: 12
+      - stepNumber: 11
+        label: identity-refused
+        description: >-
+          Refuse the whole delta in one sentence naming the field and the tool that owns the change
+          — sdd_rename_component or sdd_rename_type for an id (a contract or implementation id
+          follows its component's rename), sdd_move_methods to move behaviour to another component —
+          and saying so where no tool exists yet (moving a component or a type to another subsystem,
+          renaming a subsystem): the engine would otherwise write a second spec under the new id, or
+          move the file, and leave every reference behind
+        type: throw
+        error: 'identity-refused: the delta changes which spec this is or where it lives'
+      - stepNumber: 12
         description: >-
           Merge the delta onto the stored spec: references qualify against the spec's namespace
           first (a removal marker's value included), identity-keyed arrays upsert element by element
@@ -1555,16 +1580,19 @@ methods:
           and must never die on one with a raw TypeError. A step delete is refused outright when it
           addresses no step, when a stored jump still targets it, when a restated label or
           description does not match it, or when it is a region header whose body would be left
-          standing
+          standing. When the delta names exactly the stored elements of a list — the same
+          identities, none added, none removed, no marker — in another order, the merged list takes
+          the delta's order: a reorder is an edit, never a silent no-op, while an element the delta
+          adds still appends
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Resolve the narratives' symbolic label references against the merged numbering, a label
           supplied by the delta replacing the stored number it twins; an unresolved reference aborts
           the whole update, because a dropped reference would silently become a dangling numeric
           jump
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Collect every difference between the stored spec and the merged one as an addressed
           change, both read through the level's canonical schema so a key the writer would drop
@@ -1575,32 +1603,45 @@ methods:
           permissive delta cannot refuse, and one whose value the stored spec already held. Read the
           stored FILE raw as well and name every key it carries that the level's canonical schema
           does not know, each as `path: value` (strippedKeys): the parse already discarded them, and
-          the write re-serializes through the schema, so they would otherwise be lost without a word
+          the write re-serializes through the schema, so they would otherwise be lost without a
+          word. A list whose elements stayed the same but changed place is reported as reordered,
+          before and after naming both orders; a list of plain values (a requirement written as text
+          or as its description alike) is compared value by value, so a mixed edit reads as the
+          values added and removed, never as the whole list set; and an unset that puts a defaulted
+          list back at its default counts as the removal it is
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: Decide whether there is anything to write
         type: branch
         condition: the merged spec matches what is stored
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Write nothing, leave the stored updatedAt untouched, and report that the delta matched
           what is stored, naming the paths it did not act on; a caller asking only what the delta
           would do is answered the same way, because there is nothing it would do
         type: return
         outcome: unchanged
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Run the caller's injected judgement on the merged spec — the last point before anything
           could reach disk, and run for a caller asking only what the delta would do as well, so an
           answer that reports changes reports a write that would really be accepted
         type: local
-      - stepNumber: 16
+      - stepNumber: 18
+        label: stage
+        description: >-
+          Stage the write exactly as the save will make it: the merged spec prepared for its level's
+          writer, parsed through the writer schema, and its home checked against the write reach —
+          for a dry run too, so a dry run is refused exactly when the write would be (an object in a
+          list of plain values, an unset required field) and the disk is the only thing it skips
+        type: local
+      - stepNumber: 19
         description: Decide whether the caller wanted the write or only the account of it
         type: branch
         condition: the caller asked only what the delta would do
-        onFalseStep: 18
-      - stepNumber: 17
+        onFalseStep: 21
+      - stepNumber: 20
         label: dry-run
         description: >-
           Answer with the changes the write would make, the paths it would not act on and the stored
@@ -1608,14 +1649,14 @@ methods:
           stamped and not one byte of the stored file moves
         type: return
         outcome: dry run
-      - stepNumber: 18
+      - stepNumber: 21
         description: >-
           Stamp updatedAt and persist the merged spec through the saver for its level, allowing a
           deliberate status demotion when the delta carried an explicit status
         type: call
         targetComponent: spec_loader
         targetMethod: saveComponentSpec
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
           Report what was written: every change it made, every path of the delta it did not act on,
           the stored keys the write dropped (strippedKeys), the store's placement notices and the
@@ -2780,7 +2821,10 @@ methods:
           Collect where a consumer reaches the field (publishedIn): the types that carry it — the
           renamed type, and every type whose field types name a carrying type, transitively — then
           each L1 and L0 export entry publishing a carrying type (member `type`) or a contract whose
-          methods name one in a param or returns (those methods)
+          methods name one in a param or returns (those methods, a method taking its signature from
+          one included, as the loader resolves it); each entry carrying its former public names
+          (formerNames) and each method its former names (formerMembers), so a consumer still
+          writing a name an earlier rename retired is named among the breaks
         type: local
       - stepNumber: 6
         label: fieldDryRun
@@ -2829,7 +2873,7 @@ methods:
           anything is read further
         type: branch
         condition: the component exists and is not inside a chained subproject
-        onFalseStep: 17
+        onFalseStep: 20
       - stepNumber: 3
         description: >-
           Load every interface spec, and collect the contracts of the component that declare the
@@ -2839,89 +2883,117 @@ methods:
         targetMethod: loadInterfaceSpecs
       - stepNumber: 4
         description: >-
+          Does the method take its signature from another of this project's own contract methods (a
+          Portal verb whose signatureFrom names `component.method` of this project)?
+        type: branch
+        condition: >-
+          every moving contract's method forwards its signature from one source method of this
+          project, which declares the parameter
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Route the request to the source the signature comes from: rename the parameter there, dry
+          run or not as asked, so it reaches this method through its signatureFrom
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameParam
+      - stepNumber: 6
+        description: Answer the source's ParamRename with routedFrom naming the method asked for
+        type: return
+        outcome: ParamRename (routed to the source)
+      - stepNumber: 7
+        label: paramGuard
+        description: >-
           Guard, before any write: the method must be declared (method-missing) and declare the
-          parameter on every moving contract (param-missing); the new name must be an identifier
-          (identifier.problemAs param), never a word the target language reserves for a parameter
-          (identifier.reservedIn — a keyword in TypeScript, Rust or Python), and — when
-          rules.naming.variables is set and no contract of the component implements another
-          project's extension point — in that casing (invalid-name); and no other parameter of the
-          method may hold it (name-taken) or list it in its previousNames (name-retired)
+          parameter on every moving contract (param-missing — a method that takes its signature from
+          another project's method or from a signature type is refused naming that source, and
+          saying a rename made there reaches this method through its signatureFrom); the new name
+          must be an identifier (identifier.problemAs param), never a word the target language
+          reserves for a parameter (identifier.reservedIn — a keyword in TypeScript, Rust or
+          Python), and — when rules.naming.variables is set and no contract of the component
+          implements another project's extension point — in that casing (invalid-name); and no other
+          parameter of the method may hold it (name-taken) or list it in its previousNames
+          (name-retired)
         type: branch
         condition: >-
           the method and parameter are declared, the new name is acceptable, and it is neither taken
           nor retired on the method
-        onFalseStep: 17
-      - stepNumber: 5
+        onFalseStep: 20
+      - stepNumber: 8
         description: >-
           Collect the followers — every contract method in the bound tree whose signatureFrom takes
           `<component>.<method>`'s signature, so it reads the renamed parameter through the loader —
-          and the export entries (L1 and L0) publishing a moving contract (publishedIn)
+          and what publishes the method: the export entries (L1 and L0) publishing a moving
+          contract, each with the method's name, and the entries publishing each follower's
+          contract, each with the follower's verb — every member with its former names
+          (previousNames) and every entry with its former public names — as published, its public
+          names as publishedIn
         type: local
-      - stepNumber: 6
+      - stepNumber: 9
         description: >-
           Judge every interface file the rename would write — the moving contracts and each follower
           whose HTTP binding spells the old placeholder — against the hosted request's write reach
         type: local
-      - stepNumber: 7
+      - stepNumber: 10
         label: paramDryRun
         description: A dry run stops here, refused exactly as the real rename above
         type: branch
         condition: dryRun is set
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 12
+      - stepNumber: 11
         description: >-
           Answer the ParamRename the rename would produce — the interfaces it would move in, every
           placeholder it would respell (the own bindings' and the followers') and publishedIn —
           marked dryRun; nothing was written
         type: return
         outcome: ParamRename (dry run)
-      - stepNumber: 9
+      - stepNumber: 12
         label: contractLoop
         description: Rename the parameter on each moving contract
         type: loop
         over: the moving contracts
-        endStep: 11
-      - stepNumber: 10
+        endStep: 14
+      - stepNumber: 13
         description: >-
           Rename the parameter in place, appending its old name to the parameter's previousNames,
           re-derive the method's signature text from its params, and respell an HTTP endpoint path
           placeholder on the method's own binding in the form it was written — `{old}` to `{new}`,
           the Express idiom `/:old` to `/:new` — recording each
         type: local
-      - stepNumber: 11
+      - stepNumber: 14
         description: Save the interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 12
+      - stepNumber: 15
         label: followerLoop
         description: Respell the placeholder on each follower
         type: loop
         over: the followers whose HTTP binding names the old placeholder
-        endStep: 14
-      - stepNumber: 13
+        endStep: 17
+      - stepNumber: 16
         description: >-
           Respell the follower's HTTP endpoint path placeholder in the form it was written — `{old}`
           to `{new}`, `/:old` to `/:new` — recording each; its params are the source's, which the
           loader resolves
         type: local
-      - stepNumber: 14
+      - stepNumber: 17
         description: Save the follower's interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 15
+      - stepNumber: 18
         description: Drop the loader cache so the next read sees the renamed parameter
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 16
+      - stepNumber: 19
         description: >-
           Answer the ParamRename: component, method, from, to, the interfaces it moved in, the
           placeholders respelled (own and followers') and publishedIn
         type: return
         outcome: ParamRename
-      - stepNumber: 17
+      - stepNumber: 20
         label: refuse
         description: >-
           Refuse with the reason that applies (component-missing, chained-component, method-missing,
@@ -2949,4 +3021,4 @@ methods:
         outcome: success
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T09:00:07.486Z'
+updatedAt: '2026-10-08T19:07:52.614Z'

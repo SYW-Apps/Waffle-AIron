@@ -309,27 +309,31 @@ describe('authoring: updateSpecGated', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('refuses moving a component to a subsystem the tree does not have, and writes nothing', () => {
+  it('refuses moving a component out of a subsystem the tree has — placement is not a delta field (r7) — and writes nothing', () => {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
     writeSpec('component', 'orch', 'schemaVersion: 1.0.0\nid: orch\nname: Orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator');
     invalidateSpecCache();
 
     expect(() => updateSpecGated('component', 'orch', { subsystem: 'ghost' }))
-      .toThrow(/Parent subsystem "ghost" does not exist\. Nothing was written\./);
+      .toThrow(/"subsystem" is where the component lives.*Nothing was written\./s);
 
     invalidateSpecCache();
     expect(loadComponentSpec('orch')?.subsystem).toBe('sub-a');
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('refuses moving a type to a subsystem the tree does not have', () => {
+  it('refuses moving a type out of its subsystem (r7), and repairs a system-level one only into a subsystem the tree has', () => {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
     writeSpec('type', 'money', 'kind: value-object\nid: money\nname: Money\nsubsystem: sub-a\nfields: []\nmethods: []');
     invalidateSpecCache();
 
     expect(() => updateSpecGated('type', 'money', { subsystem: 'ghost' }))
+      .toThrow(/no tool moves a type to another subsystem/);
+    writeSpec('type', 'coin', 'kind: value-object\nid: coin\nname: Coin\nfields: []\nmethods: []');
+    invalidateSpecCache();
+    expect(() => updateSpecGated('type', 'coin', { subsystem: 'ghost' }))
       .toThrow(/Owning subsystem "ghost" does not exist/);
     fs.rmSync(tempDir, { recursive: true, force: true });
   });

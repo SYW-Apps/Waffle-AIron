@@ -719,7 +719,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     const bindingNote = bindings.length > 0
       ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as the pin has them (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.\n`
       : '\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as `bindings` — code linkage, no re-lock — so `validate` compares it with the pin.\n';
-    instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot, never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
+    instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot (for a member project, its live L0 export table), never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
     readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
   }
 
@@ -1033,6 +1033,8 @@ interface ExternalUse {
   pinned: boolean;
   /** The producer Portal's transport and abi per used name, where the pin records them. */
   bindings: Map<string, { transport?: string; abi?: string }>;
+  /** A contained member project, read live and never pinned: its id and its L0 spec, project-relative. */
+  member?: { id: string; system: string };
 }
 
 /** The components a record implements: those whose implementations name a file it owns, or the one its id names. */
@@ -1063,6 +1065,8 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
   for (const c of components) refs.push(...c.dependsOn, ...(c.owns ?? []));
   const contracts = loadInterfaceSpecs().filter((i) => ids.has(i.component));
   for (const contract of contracts) if (contract.implements) refs.push(contract.implements);
+  // The types its contracts name: a types-only library is reached through them.
+  for (const contract of contracts) for (const m of contract.methods) refs.push(...methodTypeRefs(m));
   const contractIds = new Set(contracts.map((i) => i.id));
   for (const impl of loadImplementationSpecs()) {
     if (!contractIds.has(impl.contract)) continue;
@@ -1071,18 +1075,35 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
       for (const call of method.calls ?? []) refs.push(call.slice(0, call.lastIndexOf('.')));
     }
   }
+  // A first segment names another project unless it is one of this project's
+  // own subsystems (which qualifies a local item); a contained member is named
+  // by its alias or its project id (the bound references spell it by its id).
+  const root = getProjectRoot();
+  const externals = new Set(Object.keys(projectConfigRepository.load()?.externals ?? {}));
+  const local = new Set(loadSubsystemSpecs().filter((s) => !s.id.includes('::')).map((s) => s.id));
+  const members = graph().nodes.filter((n) => n.parent === '' && n.namespace !== '');
+  const memberOf = (segment: string) => members.find((n) => n.mountAlias === segment || n.namespace === segment);
   const byAlias = new Map<string, Set<string>>();
   for (const ref of refs) {
     const cut = ref.indexOf('::');
     if (cut <= 0) continue;
-    const alias = ref.slice(0, cut);
+    const segment = ref.slice(0, cut);
+    const node = externals.has(segment) ? undefined : memberOf(segment);
+    if (!externals.has(segment) && !node && local.has(segment)) continue;
+    const alias = node?.mountAlias ?? segment;
     const names = byAlias.get(alias) ?? new Set<string>();
     names.add(ref.slice(cut + 2));
     byAlias.set(alias, names);
   }
-  const root = getProjectRoot();
   const out: ExternalUse[] = [];
   for (const [alias, names] of [...byAlias].sort(([a], [b]) => a.localeCompare(b))) {
+    const node = externals.has(alias) ? undefined : memberOf(alias);
+    if (node) {
+      // A contained member is read live: its L0 export table is the contract, never a pin.
+      const system = path.relative(root, path.join(node.directory, '.wai', 'specs', '.index.yaml')).replace(/\\/g, '/');
+      out.push({ alias, names: [...names].sort(), pin: system, pinned: true, bindings: new Map(), member: { id: node.id ?? node.namespace, system } });
+      continue;
+    }
     const pin = `.wai/externals/${alias}.yaml`;
     const bindings = new Map<string, { transport?: string; abi?: string }>();
     let pinned = false;
@@ -1112,5 +1133,8 @@ function describeExternal(use: ExternalUse): string {
     const how = [binding?.transport ? `transport ${binding.transport}` : '', binding?.abi ? `abi ${binding.abi}` : ''].filter(Boolean).join(', ');
     return `\`${use.alias}::${name}\`${how ? ` (${how})` : ''}`;
   });
-  return `- **${use.alias}** — uses ${names.join(', ')}; pinned snapshot \`${use.pin}\`${use.pinned ? '' : ' (not pinned yet — run `wairon externals pin` before coding against it)'}`;
+  if (use.member) {
+    return `- **${use.alias}** — uses ${names.join(', ')}; a member project (\`${use.member.id}\`), read live and never pinned: code against what its L0 export table (\`${use.member.system}\`) exports now`;
+  }
+  return `- **${use.alias}** — uses ${names.join(', ')}; pinned snapshot \`${use.pin}\`${use.pinned ? '' : ` (not pinned yet — run \`wairon externals pin ${use.alias}\` before coding against it)`}`;
 }

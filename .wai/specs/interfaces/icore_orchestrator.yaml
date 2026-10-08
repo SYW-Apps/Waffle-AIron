@@ -561,22 +561,27 @@ methods:
       exactly what changed. The delta merges onto the spec in its STORED form
       (method_signature.storedForm): a method that takes its signature from a source carries only
       the source, never the params and returns the scan resolved into it, so a delta that leaves
-      such a method alone cannot write them back. Refuses a spec that does not exist, a mis-selected
-      kind on the singleton L0, and a delta key the level's canonical schema does not know — an
-      unknown key is dropped on write, so the edit would otherwise report success and change
-      nothing. Merges identity-keyed arrays element by element at every depth, applies narrative
-      step deltas in ascending order with every jump relocating around the inserted and deleted
-      steps, rebuilds a step whose type changes for its new type, refuses a delete that addresses no
-      step, that a jump still targets, that a restated label or description does not match, or that
-      would leave a region body standing without its header, honours `unset` and `[]` at each level,
-      and resolves symbolic label references against the merged numbering, a label in the delta
-      replacing the stored number it twins. Names every path the delta carried that the write did
-      not act on — one the level's schema drops at a depth the permissive delta cannot refuse, or
-      one whose value the stored spec already held. Compares the result with what is stored and
-      writes NOTHING when they match. A dry run runs the whole write, the caller's judgement
-      included, and answers with the report it would have produced without persisting it. The
-      caller's hooks, when given, judge the merged spec at the last point before anything reaches
-      disk.
+      such a method alone cannot write them back. Refuses a spec that does not exist, a delta that
+      changes the spec's identity or placement (its id or createdAt, a component's or type's
+      subsystem, a contract's component, an implementation's contract — the delta engine would
+      otherwise write a second spec under the new id or move the file and leave every reference
+      behind; the refusal names the tool that owns the change), a mis-selected kind on the singleton
+      L0, and a delta key the level's canonical schema does not know — an unknown key is dropped on
+      write, so the edit would otherwise report success and change nothing. Merges identity-keyed
+      arrays element by element at every depth (a list restated with exactly its stored elements in
+      another order takes that order), applies narrative step deltas in ascending order with every
+      jump relocating around the inserted and deleted steps, rebuilds a step whose type changes for
+      its new type, refuses a delete that addresses no step, that a jump still targets, that a
+      restated label or description does not match, or that would leave a region body standing
+      without its header, honours `unset` and `[]` at each level, and resolves symbolic label
+      references against the merged numbering, a label in the delta replacing the stored number it
+      twins. Names every path the delta carried that the write did not act on — one the level's
+      schema drops at a depth the permissive delta cannot refuse, or one whose value the stored spec
+      already held. Compares the result with what is stored and writes NOTHING when they match. A
+      dry run runs the whole write, the caller's judgement and the staging through the writer schema
+      and write reach included, so it is refused exactly when the write would be, and answers with
+      the report it would have produced without persisting it. The caller's hooks, when given, judge
+      the merged spec at the last point before anything reaches disk.
     signature: >-
       updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, hooks?: SpecWriteHooks,
       dryRun?: bool): SpecChangeReport
@@ -1266,11 +1271,13 @@ methods:
       exported contract whose methods name such a type. Refuses, writing nothing: a type that does
       not exist (type-missing), one in another project (chained-type), a field the type does not
       declare (field-missing), a new name that is not an identifier (invalid-name), and a name
-      another field of the type holds or retired in its trace (name-taken, name-retired). With
-      dryRun it answers what it would respell and where the field is published, refusing exactly as
-      the real rename would, and writes nothing. A lock goes stale as with any edit. Inside a hosted
-      request every spec it would write is judged against the request's write reach before the first
-      write (SubsystemWriteDenied).
+      another field of the type holds (name-taken), or any field of the type — the renamed one
+      included — retired in its trace (name-retired): renaming back to a former name is refused as a
+      method rename refuses it, since the trace would list the field's own name. With dryRun it
+      answers what it would respell and where the field is published, refusing exactly as the real
+      rename would, and writes nothing. A lock goes stale as with any edit. Inside a hosted request
+      every spec it would write is judged against the request's write reach before the first write
+      (SubsystemWriteDenied).
     signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
     returns: FieldRename
     params:
@@ -1300,18 +1307,27 @@ methods:
       (or `/:old`) on the method's own binding AND on every follower method's binding — any contract
       method in the bound tree whose signatureFrom takes this method's signature — is respelled in
       the form it was written (the URL a caller sends is unchanged — only the name binding the
-      segment to the parameter moves). The report names the export entries publishing the method
-      (publishedIn). Prose is never rewritten. Refuses, writing nothing: a component that does not
-      exist (component-missing), one inside a chained subproject (chained-component), a method no
-      contract of the component declares (method-missing), a parameter the method does not declare
-      (param-missing), a new name that is not an identifier — or, when rules.naming.variables is set
-      and no contract of the component implements another project's extension point, not in that
-      casing (invalid-name) — and a name another parameter of the method holds or retired in its
-      trace (name-taken, name-retired). With dryRun it answers what it would move and respell,
-      refusing exactly as the real rename would, and writes nothing. A lock goes stale as with any
-      edit. Inside a hosted request every spec it would write — the moving contracts and every
-      follower's — is judged against the request's write reach before the first write
-      (SubsystemWriteDenied).
+      segment to the parameter moves). Asked of a method that takes its signature from another of
+      this project's contract methods (a Portal verb with signatureFrom), the rename is made on that
+      source and reaches the asked method through its signatureFrom; the report says so
+      (routedFrom). The report names the export entries publishing the method and every follower's
+      verb (publishedIn), method-granular with their former names (published), so a consumer calling
+      a published Portal verb that forwards the method is named among the breaks. Prose is never
+      rewritten. Refuses, writing nothing: a component that does not exist (component-missing), one
+      inside a chained subproject (chained-component), a method no contract of the component
+      declares (method-missing), a parameter the method does not declare, or one it takes from
+      another project's method or a signature type — the refusal names the source and says a rename
+      made there reaches this method (param-missing), a new name that is not an identifier — or,
+      when rules.naming.variables is set and no contract of the component implements another
+      project's extension point, not in that casing (invalid-name) — a name another parameter of the
+      method holds (name-taken), and a name any parameter of the method retired in its trace — its
+      own included, so renaming back to a former name is refused as a method rename refuses it,
+      since the trace would then list the parameter's own name (RENAME_TRACE_CONFLICT) and a
+      consumer holding the old key could not tell the two apart; unsetting that previousNames
+      releases it (name-retired). With dryRun it answers what it would move and respell, refusing
+      exactly as the real rename would, and writes nothing. A lock goes stale as with any edit.
+      Inside a hosted request every spec it would write — the moving contracts and every follower's
+      — is judged against the request's write reach before the first write (SubsystemWriteDenied).
     signature: >-
       renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
       bool): ParamRename
@@ -1346,4 +1362,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T08:40:47.787Z'
+updatedAt: '2026-10-08T19:00:52.794Z'

@@ -213,7 +213,24 @@ export interface ParameterFact {
   type?: string;
   /** Whether a caller may leave it out — marked optional, given a default, or a rest parameter. */
   optional: boolean;
+  /**
+   * True when the parameter is named and PROVABLY unused: no identifier of its
+   * name appears in the function's body or in another parameter's default
+   * value, and the body never reads `arguments`. A shadowing local counts as a
+   * use, which can only keep a parameter judged.
+   */
+  unused?: boolean;
+  /**
+   * The kind of value the type checker says the parameter takes, nullability
+   * set aside; absent when the checker settles no one kind (any, unknown, an
+   * unresolvable name, a union of kinds). What tells a substitution from a
+   * rename where the annotation's own spelling cannot.
+   */
+  kind?: ParameterKind;
 }
+
+/** The kinds of value a parameter can take, as the type checker settles them. */
+export type ParameterKind = 'string' | 'number' | 'boolean' | 'list' | 'object' | 'function';
 
 /**
  * One route a router function handles, rebuilt from the conditions that guard
@@ -227,10 +244,13 @@ export interface ParameterFact {
  * already guarantees, which the router never re-checks — so it is left open
  * here and completed by whoever knows the mount.
  *
- * Only one idiom is read: a method comparison together with comparisons on the
- * path's split segments and their count. A router written another way yields
- * nothing, and the reader reports that as unread rather than passing it — a
- * check that cannot see a router must say so rather than stay quiet.
+ * Two idioms are read: a method comparison together with comparisons on the
+ * path's split segments and their count (with a prefix the router strips
+ * before splitting folded in front, where its value settles), and an entry of
+ * a route table pairing a method with a path pattern. Every compared value is
+ * a literal or one the code's constants settle. A router written another way
+ * yields nothing, and the reader reports that as unread rather than passing it
+ * — a check that cannot see a router must say so rather than stay quiet.
  */
 export interface RouteFact {
   /** The HTTP method the branch requires. */
@@ -243,6 +263,31 @@ export interface RouteFact {
    * with the same leading segments.
    */
   exactLength: boolean;
+  /**
+   * True when the segments are the whole request path the router compares — a
+   * stripped prefix the router spells out folded in front, or a route-table
+   * pattern — so no leading segment is left for a mount to supply.
+   */
+  fullPath?: boolean;
+}
+
+/**
+ * One import a file makes from ANOTHER project's source that resolves to
+ * nothing: the module is gone, or it does not export the name imported. A
+ * type-only import of another project is erased at run time, so nothing but a
+ * compiler notices — and the gate reads the file with one.
+ */
+export interface CrossProjectImportFact {
+  /** The module specifier as the import writes it. */
+  specifier: string;
+  /** The name imported from it that the module does not export; absent when the module itself does not resolve. */
+  name?: string;
+  /** The other project's root the import reaches into, relative to the analyzed project's root. */
+  project: string;
+  /** The 1-based line of the import. */
+  line: number;
+  /** Whether the import binds the name as a type only. */
+  typeOnly: boolean;
 }
 
 /** How a type shape's members were read: listed by the shape itself, or followed one hop from an alias to the value its shape comes from. */
@@ -547,6 +592,14 @@ export interface SourceFileFacts {
    * the shape facts follow the spellings they know.
    */
   resolvedCalls?: ResolvedCallFact[];
+  /**
+   * Each import of the file — a runtime or a type-only one — from ANOTHER
+   * project's source (a folder holding its own .wai/project.yaml that is not
+   * the analyzed project's root) that the type checker resolves to nothing:
+   * the module is gone, or it does not export the name imported. Recorded only
+   * where a type checker read the file; absent when every such import resolves.
+   */
+  crossProjectImports?: CrossProjectImportFact[];
 }
 
 /**
@@ -618,6 +671,13 @@ export interface ResolvedCallFact {
    * can be invoked anywhere the value travels.
    */
   reference?: boolean;
+  /**
+   * True when every place the call lands is a member declared in an interface
+   * or type shape that no class of the project realizes — a port nothing
+   * written implements yet, or one implemented by a value the checker cannot
+   * name. Its landings name the port alone, never what will answer it.
+   */
+  port?: boolean;
 }
 
 export interface CodeModel {

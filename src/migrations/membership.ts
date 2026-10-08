@@ -20,7 +20,7 @@ import {
 } from '../models/project.js';
 import { familyNode, type ProjectFamily, type ProjectNode } from '../models/project-family.js';
 import { SURFACE_AUDIENCES } from '../models/specs.js';
-import { readExternalSource, type ExternalSource } from '../models/project.js';
+import { parseMemberSource, readExternalSource, type ExternalSource } from '../models/project.js';
 /** An external declaration's source in its object form, whichever form was written (readExternalSource). */
 function externalSourceOf(declaration: { source?: unknown } | undefined): ExternalSource | undefined {
   return readExternalSource(declaration?.source).source;
@@ -124,9 +124,20 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   const plan = emptyPlan(family, request);
   const node = boundNode(family, bound);
   const alias = request.alias ?? '';
-  // Step 1: the path, under the containment guard.
-  const dir = files.resolve(node.directory, request.path ?? '');
-  if (dir === null) refuse(plan, 'not-contained', bound, `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)} (${node.directory})`);
+  // Step 1: the path, read as a member location is (`member add`): inside the
+  // project under the containment guard, or — a leading `../`, the explicit way
+  // out — a sibling, resolved lexically. Any other escape is not-contained.
+  const location = parseMemberSource(request.path ?? '');
+  const sibling = location.storage === 'path' && location.problem === undefined
+    ? path.resolve(node.directory, request.path ?? '')
+    : null;
+  const holdsBound = sibling !== null && !path.relative(sibling, node.directory).startsWith('..');
+  const dir = sibling !== null && !holdsBound ? sibling : files.resolve(node.directory, request.path ?? '');
+  if (dir === null) {
+    refuse(plan, 'not-contained', bound, holdsBound
+      ? `the path "${request.path ?? ''}" names a directory holding ${label(bound)} itself (${node.directory}), never a member of it`
+      : `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)} (${node.directory}), and is not a sibling written with a leading \`../\`${location.problem ? ` (${location.problem})` : ''}`);
+  }
   // Step 2: the alias against the bound project's alias table.
   const config = configAt(node.directory) ?? ({} as ProjectConfig);
   // A completed attach plans nothing: the alias already declares this directory.

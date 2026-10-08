@@ -2,10 +2,10 @@ kind: value-object
 id: spec_deletion
 name: SpecDeletion
 description: >-
-  What a delete answers with, as data: which spec, whether a file was actually removed, and the
-  tests that encode a method the deletion took away. Deleting a contract or an implementation
-  removes every method it held, which invalidates their tests exactly as removing one method by
-  delta does — so the delete reports them the same way.
+  What a delete answers with, as data: which spec, whether it was removed, every spec the deletion
+  took with it (a container's content), every reference another spec still holds to them, and the
+  tests that encode a method the deletion took away. A dry run answers the same plan and removes
+  nothing.
 subsystem: sdd_authoring
 fields:
   - name: kind
@@ -18,7 +18,9 @@ fields:
     optional: false
   - name: deleted
     type: bool
-    description: 'False when no spec held the id: nothing was removed'
+    description: >-
+      True when the spec and its subtree were removed; false on a dry run, and when no spec held the
+      id
     optional: false
   - name: testsToRevisit
     type: list<TestsToRevisit>
@@ -27,7 +29,24 @@ fields:
       the spec held no methods, when the project declares no test roots, or when nothing references
       them
     optional: false
+  - name: dryRun
+    type: bool
+    description: 'True when the caller asked what the deletion would do: nothing was removed'
+    optional: false
+  - name: removed
+    type: list<SpecRef>
+    description: >-
+      Every spec the deletion removes (or, on a dry run, would remove), innermost first and the
+      addressed spec last
+    optional: false
+  - name: references
+    type: list<SpecReference>
+    description: >-
+      Every reference a spec outside the removed set holds to one of them. A deletion that would
+      leave any is refused unless the caller forces it; forced, these are the references left
+      dangling, each of which validate reports
+    optional: false
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-10-04T23:37:53.890Z'
+updatedAt: '2026-10-08T18:50:03.445Z'

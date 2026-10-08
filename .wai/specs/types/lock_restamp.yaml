@@ -25,7 +25,16 @@ fields:
     type: string
     description: The command that refreshed it (`wairon lock`), never a person
     optional: false
+  - name: subject
+    type: string
+    description: >-
+      The composition subject (`<algorithm>:<digest>`) of the human approval this restamp carried
+      over — the stateId the record held when a person approved it, kept through every later
+      restamp. A restamp is not a re-approval, so this, not the refreshed stateId, is what a parent
+      pins of this project (lock_record.approvalSubject): a member's restamp never moves its
+      parent's gate identity. Absent on a restamp written before it existed.
+    optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-10-08T08:35:30.128Z'
-updatedAt: '2026-10-08T08:35:31.888Z'
+updatedAt: '2026-10-08T18:51:13.807Z'

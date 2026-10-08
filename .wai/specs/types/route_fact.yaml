@@ -2,13 +2,19 @@ kind: value-object
 id: route_fact
 name: RouteFact
 description: >-
-  One route a router function handles, rebuilt from the conditions that guard the branch serving it
-  — the branch's own and every enclosing one, since routers nest (an outer check on the first
-  segment, an inner one on the rest). A segment is the literal the code compares it to, or `*` where
-  nothing constrains it; a leading `*` is usually the segment the listener's mount guarantees and
-  the router never re-checks. Only one idiom is read: a method comparison together with comparisons
-  on the path's split segments and their count. A router written another way yields nothing, and
-  that is reported as unread rather than passed.
+  One route a router function handles, read one of two ways. In the guard idiom it is rebuilt from
+  the conditions that guard the branch serving it — the branch's own and every enclosing one, since
+  routers nest (an outer check on the first segment, an inner one on the rest): a method comparison
+  together with comparisons on the path's split segments and their count, each compared value a
+  string the code spells out or one its constants, concatenations and template literals settle. In
+  the table idiom it is one entry of a route table the router reads — an array of objects pairing a
+  method with a path pattern (a `/a/:b` template or a regular expression literal), or an object
+  keyed `VERB /path` — each value settled the same way. A segment is the literal the code compares
+  it to, or `*` where nothing constrains it; a leading `*` is usually the segment the listener's
+  mount guarantees and the router never re-checks — unless the router strips a prefix it spells out
+  (`path.slice(BASE.length)`), which is then folded in front of the segments. A router written
+  another way yields nothing, and that is reported as unread rather than passed; an entry or prefix
+  whose value cannot be settled is never guessed at.
 subsystem: sdd_validator
 fields:
   - name: verb
@@ -25,7 +31,15 @@ fields:
       Whether the branch pins the number of segments; when it does not, the path may continue past
       the last one read
     optional: false
+  - name: fullPath
+    type: bool
+    description: >-
+      True when the segments are the whole request path the router compares — a stripped prefix the
+      router spells out folded in front, or a route-table pattern — so no leading segment is left
+      for a mount to supply; absent when the leading segment may be the one the listener's mount
+      guarantees
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-24T20:30:22.052Z'
-updatedAt: '2026-10-04T10:21:00.107Z'
+updatedAt: '2026-10-08T18:51:27.642Z'

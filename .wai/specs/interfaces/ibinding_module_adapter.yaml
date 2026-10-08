@@ -11,11 +11,16 @@ methods:
       project root (absolute or escaping paths are answered escaped, never read), answer missing for
       a file not on disk, unreadable for a binary or unreadable one, unsupported for a language
       other than TypeScript or JavaScript, and otherwise the exported declarations it holds in
-      source order — exported functions (and `declare function`s) with their parameter names;
-      exported interfaces, classes, object type aliases and enums with their members (methods with
-      their parameter names, data fields by name; a function-typed field counts as a method), each
-      with the line it starts on and the `alias::name` its leading doc comment names. Never throws
-      for a file: a file it cannot read is answered with its status.
+      source order — ES module exports: exported functions (and `declare function`s) with their
+      parameter names; exported interfaces, classes, object type aliases and enums with their
+      members (methods with their parameter names, data fields by name with the type they are
+      declared with; a function-typed field counts as a method); and CommonJS exports: `exports.X =
+      …` / `module.exports.X = …` and each property of `module.exports = { … }`, a function or arrow
+      function read as a function and an object literal as an object of methods and fields — each
+      with the line it starts on and the `alias::name` (or `alias::name.method`) its leading doc
+      comment names. An export form it meets but cannot see into (`module.exports = require(…)`, an
+      export of a bare identifier) is listed in the module's unreadForms. Never throws for a file: a
+      file it cannot read is answered with its status.
     signature: 'readBindingModules(paths: list<string>, projectRoot: string): list<BindingModule>'
     returns: list<BindingModule>
     params:
@@ -28,4 +33,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-10-08T08:21:44.643Z'
-updatedAt: '2026-10-08T08:21:45.409Z'
+updatedAt: '2026-10-08T18:48:36.003Z'

@@ -77,6 +77,44 @@ methods:
       spec as the renamed one.
     sourcePath: src/models/specs.ts
     symbol: specIndexRetiredBy
+  - name: subtreeOf
+    signature: 'subtreeOf(kind: WritableSpecKind, id: string): list<SpecRef>'
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of the spec being deleted (never system)
+      - name: id
+        type: string
+        description: Its id; a type within its owner
+    returns: list<SpecRef>
+    description: >-
+      Every spec deleting this one takes with it, the spec itself last: an implementation is only
+      itself; a contract takes its implementations; a component takes its contracts with their
+      implementations and the members it owns, each with its own subtree; a subsystem takes its
+      components and the types it owns. A container's content means nothing without it, so leaving
+      it behind is an orphan, never a choice. Empty when no spec of the kind holds the id.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexSubtreeOf
+  - name: referencesTo
+    signature: 'referencesTo(targets: list<SpecRef>, system?: SystemSpec): list<SpecReference>'
+    params:
+      - name: targets
+        type: list<SpecRef>
+        description: The specs a deletion would remove
+      - name: system
+        type: SystemSpec
+        description: The L0, whose export table a scan's index does not carry
+        optional: true
+    returns: list<SpecReference>
+    description: >-
+      Every reference a spec OUTSIDE the targets holds to one of them, each with its position: a
+      component's subsystem, owns, dependsOn and dispatch; a contract's component and the head of a
+      signature source; an implementation's contract, a call, register or dispatch step's target and
+      a declared call; a subsystem's published interfaces, lifecycle entrypoints and trusted links;
+      the L0's export table; and every type position that names a target type by its name or id. A
+      reference from one target to another is not listed: it leaves with both.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexReferencesTo
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-07T21:47:24.687Z'
+updatedAt: '2026-10-08T19:06:18.980Z'

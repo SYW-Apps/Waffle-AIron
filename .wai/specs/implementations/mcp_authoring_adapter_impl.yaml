@@ -35,10 +35,10 @@ methods:
   - name: deleteSpec
     narrative:
       - stepNumber: 1
-        description: Call deleteSpec on the authoring portal
+        description: Call deleteSpec on the authoring portal, with the dry-run and force requests
         type: call
         targetComponent: authoring_portal
         targetMethod: deleteSpec
 status: complete
 createdAt: '2026-09-18T21:43:42.731Z'
-updatedAt: '2026-09-25T20:49:25.740Z'
+updatedAt: '2026-10-08T18:55:08.828Z'

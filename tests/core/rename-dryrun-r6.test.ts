@@ -107,9 +107,11 @@ describe('renameParam through signatureFrom, and its dry run', () => {
 
   it('names the export entries publishing the method', () => {
     project();
-    expect(renameParam('habit-flow', 'show', 'habitId', 'id', true).publishedIn).toEqual([]);
-    // habit-api publishes `show`, but its params come from habit-flow: renamed there.
-    expect(() => renameParam('habit-api', 'show', 'habitId', 'id', true)).toThrow(/param-missing/);
+    // Round 7: habit-api publishes `show` and `peek`, both forwarding habit-flow.show — the rename reaches them.
+    expect(renameParam('habit-flow', 'show', 'habitId', 'id', true).publishedIn).toEqual(['habit-api']);
+    // Asked on habit-api, whose params come from habit-flow: routed there.
+    const routed = renameParam('habit-api', 'show', 'habitId', 'id', true);
+    expect(routed).toMatchObject({ component: 'habit-flow', method: 'show', routedFrom: 'habit-api.show' });
   });
 });
 
@@ -206,7 +208,7 @@ describe('surfaceChanges counts each rename once', () => {
     expect(surfaceChanges(snap({ interfaces: [entry('contracts')] }), snap({ interfaces: [entry('platform')] }))).toEqual([]);
   });
 
-  it('a type rename and a field rename are two rows, never a shape change of each type embedding them', () => {
+  it('a type rename and a field rename are two rows, never a shape change of each type embedding them — which say what they embed (round 7)', () => {
     const types = (renamed: boolean) => [
       renamed
         ? { id: 'customer_ref', name: 'customer_ref', kind: 'value-object', holds: 'string', fields: [], formerly: ['customer_id'] }
@@ -221,8 +223,8 @@ describe('surfaceChanges counts each rename once', () => {
       { id: 'order', type: 'order', audience: 'instance' },
       { id: 'refund', type: 'refund', audience: 'instance' },
     ];
-    const changes = surfaceChanges(snap({ types: types(true), exportedTypes: exported(true) }), snap({ types: types(false), exportedTypes: exported(false) }))
-      .map((c) => `${c.kind} ${c.name}${c.member ? `.${c.member}` : ''}`);
-    expect(changes).toEqual(['renamed customer_ref', 'renamed money.amount']);
+    const changes = surfaceChanges(snap({ types: types(true), exportedTypes: exported(true) }), snap({ types: types(false), exportedTypes: exported(false) }));
+    expect(changes.map((c) => `${c.kind} ${c.name}${c.member ? `.${c.member}` : ''}`)).toEqual(['renamed customer_ref', 'renamed money.amount', 'changed order', 'changed refund']);
+    expect(changes.find((c) => c.name === 'order')?.detail).toBe('embeds renamed type "customer_id" → "customer_ref"; renamed field "money.amountMinor" → "amount"');
   });
 });

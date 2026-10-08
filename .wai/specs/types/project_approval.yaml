@@ -34,8 +34,10 @@ fields:
   - name: subject
     type: string
     description: >-
-      Its composition subject: the stateId its own lock record carries, rendered
-      `<algorithm>:<digest>`. Absent when state is never.
+      Its composition subject: what its approval stands for (lock_record.approvalSubject) — the
+      stateId its own lock record carries, or, when that record's release stamp was refreshed
+      without a re-approval, the subject the human approval had — rendered `<algorithm>:<digest>`.
+      Absent when state is never.
     optional: true
   - name: upgraded
     type: bool
@@ -91,7 +93,15 @@ fields:
       (lock_record.movedGateParts), so every verdict names the one that did — the network
       declaration, the rule tuning, a consumed contract's pin — instead of listing every candidate.
     optional: true
+  - name: partsIgnored
+    type: string?
+    description: >-
+      Set when the record's gateParts do not break down its stateId (lock_record.partsProblem): why,
+      in one clause. They are ignored — no input is named from them and no approval is carried over
+      by them — and every surface says so as a notice; `wairon lock` rewrites them from the identity
+      when it still matches.
+    optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-08T08:35:42.963Z'
+updatedAt: '2026-10-08T18:51:23.106Z'

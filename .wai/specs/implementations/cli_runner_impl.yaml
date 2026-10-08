@@ -726,13 +726,16 @@ methods:
           document printed to stdout is the document and nothing else; it is a warning, never a
           success mark, when the projection holds no interface and no type (naming that the export
           table publishes nothing at that audience) or when the gate found errors (their count and
-          codes, and `wairon validate` to see them). Every written path is listed — with several
-          portals and no --portal, one file per portal is written and each path is listed. Without
-          an out path, print the single document when one portal remains, else list the available
-          portals (portalId + name) so the caller can pick with --portal, rather than printing
-          nothing. An OpenAPI export with no HTTP Portal (an in-process library) is refused naming
-          why, never answered with the native entries, and one whose operations collide on a path
-          and verb is refused naming both (nothing written).
+          codes, and `wairon validate` to see them). An OpenAPI document with a type it could not
+          resolve (the result's unresolvedTypes) is a warning too, naming each type and how to
+          resolve it (pin the external, or export the type from the member's or external's L0), gate
+          errors or not. Every written path is listed — with several portals and no --portal, one
+          file per portal is written and each path is listed. Without an out path, print the single
+          document when one portal remains, else list the available portals (portalId + name) so the
+          caller can pick with --portal, rather than printing nothing. An OpenAPI export with no
+          HTTP Portal (an in-process library) is refused naming why, never answered with the native
+          entries, and one whose operations collide on a path and verb is refused naming both
+          (nothing written).
         type: return
         outcome: exported
       - stepNumber: 5
@@ -1143,10 +1146,11 @@ methods:
         targetMethod: runGenerate
       - stepNumber: 18
         description: >-
-          Print the lock record, each direct member's state, and the code results plainly on their
-          own line — "code: N errors, M warnings recorded beside the claim (analyzer <version>,
-          grade <grade>)" — so an approval taken over failing code is never mistaken for clean code;
-          then return
+          Print the lock record — written, or, when the lock re-recorded nothing (the same approval
+          on file), that .wai/lock.json was left untouched, as the summary promised — each direct
+          member's state, and the code results plainly on their own line — "code: N errors, M
+          warnings recorded beside the claim (analyzer <version>, grade <grade>)" — so an approval
+          taken over failing code is never mistaken for clean code; then return
         type: return
         outcome: locked
     symbol: lockCommand
@@ -3392,7 +3396,9 @@ methods:
     sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
-        description: Plan the request from the current project
+        description: >-
+          Plan the request from the current project, asking it to announce the findings its result
+          will have (announce: true) — printed among the plan's notes before anything is confirmed
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: plan
@@ -4003,15 +4009,17 @@ methods:
         targetMethod: renameParam
       - stepNumber: 4
         description: >-
-          Keep the consumers whose specs call the method on a public name the report says publishes
-          it (external_consumer.reaches): the projects that must follow the rename
+          Keep the consumers the report's published list reaches — each public name publishing the
+          method or a follower's verb, a call by a former method name and a broken former public
+          name included (external_consumer.narrowedToUses): the projects that must follow the rename
         type: local
       - stepNumber: 5
         description: >-
-          Print the move (or what would move), the interfaces it moved in, the placeholders
-          respelled (followers' included), the export entries publishing the method and each
-          consumer that calls it — or that none in reach calls it, naming --search; a dry run ends
-          with "Nothing was written", a real one with the re-lock the rename owes
+          Print the move (or what would move) — saying when the request named a Portal verb and the
+          rename was made on the source its signature comes from — the interfaces it moved in, the
+          placeholders respelled (followers' included), the export entries publishing the method and
+          each consumer that calls it — or that none in reach calls it, naming --search; a dry run
+          ends with "Nothing was written", a real one with the re-lock the rename owes
         type: return
   - name: runMethodRename
     sourcePath: src/commands/method.ts
@@ -4066,4 +4074,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:41:10.437Z'
+updatedAt: '2026-10-08T20:19:42.255Z'

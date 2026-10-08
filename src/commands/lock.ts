@@ -28,11 +28,15 @@ import {
   type StateId,
 } from '../core/index.js';
 import { effectiveProjectId, projectIdentity } from '../models/project.js';
+import { approvalKeyIn } from '../models/project-family.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { AI_PATHS } from '../config/paths.js';
 import { WaironError } from '../utils/errors.js';
 import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
-import { approvalStamp, describeGateParts, designOnly, movedGateParts, memberPinOf, type CodeAnalysis, type ProjectApproval, type ReleaseVerdict } from '../models/lock.js';
+import {
+  approvalStamp, approvalSubject, describeApprover, describeGateParts, designOnly, gatePartsProblem, movedGateParts, memberPinOf, usableGateParts,
+  type CodeAnalysis, type ProjectApproval, type ReleaseVerdict,
+} from '../models/lock.js';
 import { ownGet } from '../utils/own.js';
 import { canonicalize } from '../utils/canonical-json.js';
 
@@ -238,7 +242,10 @@ export function checkApproval(strict: boolean): ApprovalCheck {
         state: 'locked',
         approved: true,
         message: (never.length > 0 ? 'This project\'s own design is the approved design — ' : 'The design in this tree is the approved design — ')
-          + `approved ${approvalStamp(record!)}.${release?.carried ? ` ${carriedLine(release)}` : ''}${family}${carry}`,
+          + `approved ${approvalStamp(record!)}.${release?.carried ? ` ${carriedLine(release)}` : ''}${family}${carry}`
+          + (ownEntry?.partsIgnored !== undefined
+            ? ` Notice: the record's gate parts are ignored — ${ownEntry.partsIgnored}; the identity alone decided this, and \`wairon lock\` rewrites them.`
+            : ''),
       };
     }
     case 'stale': {
@@ -356,6 +363,17 @@ export function coverageVerdict(record: LockRecord, own: ProjectApproval | undef
   // is stale for exactly them.
   // Set only when the identity does not match: the stale case.
   const release = own?.release;
+  if (release && !release.carried && release.reason) {
+    // The record cannot prove the project's own inputs unchanged (no gate
+    // parts, parts that do not break down its identity, a newer or invalid
+    // stamp): one sentence, and never the claim that every input is as approved.
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The approval on record (${approvalStamp(record)}) is not carried over to this release. ${release.reason} `
+        + 'Fix: run `wairon lock` (a real approval — it reviews and records the design and its inputs), then commit .wai/lock.json.',
+    };
+  }
   if (release && !release.carried) {
     return {
       state: 'stale',
@@ -613,8 +631,9 @@ function inputsMoved(previous: LockRecord | null, captured: StateId, projectId: 
     moved.push(`the project id (${previous.projectId} → ${projectId})`);
   }
   const sameIdentity = previous.stateId.algorithm === captured.algorithm && previous.stateId.digest === captured.digest;
-  // A record with gate parts names exactly the inputs that moved.
-  const parts = sameIdentity ? null : movedGateParts(previous, captured.parts);
+  // A record with gate parts that break down its identity names exactly the inputs that moved.
+  const usable = usableGateParts(previous, captured);
+  const parts = sameIdentity || !usable ? null : movedGateParts({ gateParts: usable }, captured.parts);
   if (parts && parts.length > 0 && moved.length === 0) {
     moved.push(describeGateParts(parts));
     return moved;
@@ -622,7 +641,9 @@ function inputsMoved(previous: LockRecord | null, captured: StateId, projectId: 
   if (!sameIdentity && moved.length === 0) {
     moved.push(previous.stateId.algorithm !== captured.algorithm
       ? `the gate identity this wairon release computes (approved by wairon ${previous.validatorVersion ?? 'an earlier release'})`
-      : 'an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval');
+      : !usable
+        ? `an input the gate identity covers — the approval on record (wairon ${previous.validatorVersion ?? 'an unrecorded release'}) carries no gate parts that break down its identity, so which input moved cannot be told; this re-approval records them`
+        : 'an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval');
   }
   return moved;
 }
@@ -682,7 +703,18 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
     if (moved.length > 0) {
       logger.info(`No spec changed since the last approval, but what the design is approved under did: ${moved.join('; ')}. This re-approves the unchanged design under it, and refreshes the generated outputs of this project.`);
     } else {
-      logger.info('Nothing has changed since the last approval — this re-records the approval only if something it records moved (an approval already on record as it would be written keeps its lockedAt, and .wai/lock.json is left untouched), and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
+      const previous = readLockRecord();
+      const me = localApprover();
+      if (previous && !sameApprover(previous.lockedBy, me)) {
+        logger.info(`Nothing has changed since the last approval (${approvalStamp(previous)}), but you (${describeApprover(me)}) are not its approver: this records YOUR approval of the unchanged design, with a new lockedAt, and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).`);
+      } else {
+        const refreshed = previous ? evidenceRefresh(previous, gate, captured) : null;
+        logger.info('Nothing has changed since the last approval — the approval on record stays as it is: its lockedAt, release stamp and any restamp trace are kept, and '
+          + (refreshed
+            ? `only the evidence recorded beside it is refreshed (${refreshed.what.join('; ')}) — no re-approval. `
+            : '.wai/lock.json is left untouched. ')
+          + 'This refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
+      }
     }
   } else {
     logger.info(`${diffSize(diff)} spec(s) changed since the last approval:`);
@@ -739,7 +771,9 @@ export function restampRelease(own: ProjectApproval | undefined, captured: State
         stateId: { algorithm: captured.algorithm, digest: captured.digest },
         ...(captured.parts ? { gateParts: captured.parts } : {}),
         validatorVersion: WAIRON_VERSION,
-        restamped: { at: new Date().toISOString(), fromVersion: own.release.from, toVersion: own.release.to, by: 'wairon lock' },
+        // The approval's subject is kept: a parent pins the approval, and a
+        // restamp is none — so it never reads as a re-approval one level up.
+        restamped: { at: new Date().toISOString(), fromVersion: own.release.from, toVersion: own.release.to, by: 'wairon lock', subject: approvalSubject(onFile) },
       };
       writeLockRecord(restampedRecord);
       logger.info(`The approval of ${approvalStamp(onFile)} was taken under wairon ${own.release.from} and re-validated clean under ${own.release.to}: `
@@ -800,7 +834,10 @@ export function assertApprovable(members: ProjectApproval[]): void {
  * certifies.
  */
 export async function runLock(options: LockOptions, gate: ValidationResult, captured: StateId): Promise<LockRecord | null> {
-  // Steps 1-3: what is being approved, and each direct member at its own root.
+  // Steps 2-4: a --subsystem lock narrows a RE-approval, never a first one,
+  // and only when nothing outside its scope moved — refused before anything else.
+  assertScopeApprovable(options, captured);
+  // Steps 5-7: what is being approved, and each direct member at its own root.
   const approvals = familyApprovals(1);
   const members = approvals.filter((a) => a.parent === '');
   // Steps 3-5: an approval a change of the release carried over has its
@@ -838,16 +875,10 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   // per spec, so an edit after approval returns that spec to draft context on
   // its own instead of staying marked complete.
 
-  // A scoped approval covers only its subsystem; everything else keeps the
-  // approval it already had.
+  // A scoped approval passed the scope check: nothing outside its scope moved,
+  // so the rest is carried forward as previously approved — which is exactly
+  // the whole tree's capture, the record agreeing with the whole-tree identity.
   const root = getProjectRoot();
-  const scope = options.subsystem
-    ? {
-      paths: new Set(
-        specPathsInScope(options.subsystem).map((p) => path.relative(root, p).split(path.sep).join('/')),
-      ),
-    }
-    : undefined;
 
   // --- Persist the commit-scoped lock record at the CAPTURED gate identity ---
   // The GATE identity from the validator portal, not the content one: the
@@ -863,7 +894,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   // The project's effective id, recorded so a later id change is caught
   // (PROJECT_ID_CHANGED) rather than silently re-keying everything that keys on it.
   const projectId = config ? effectiveProjectId(config) : null;
-  const specs = captureApprovedSpecs(root, scope);
+  const specs = captureApprovedSpecs(root);
   const lockedBy = localApprover();
 
   // Steps 11-13: did any input move while the lock ran — between the capture
@@ -905,16 +936,137 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   // would only leave .wai/lock.json modified with no change in it).
   let onFile: LockRecord | null = null;
   try { onFile = readLockRecord(); } catch { onFile = null; }
-  if (onFile && sameApproval(onFile, record)) return onFile;
+  if (onFile && sameApproval(onFile, record)) {
+    // The same approval: the record on file stays — lockedAt, release stamp
+    // and restamp trace. Only the evidence beside it that moved (the code
+    // results, the design counts, gate parts that are missing or do not break
+    // down the identity it still matches) is refreshed; nothing moved, nothing written.
+    const refreshed = evidenceRefresh(onFile, gate, captured);
+    if (!refreshed) return onFile;
+    writeLockRecord(refreshed.record);
+    return refreshed.record;
+  }
   // Step 26: the only file this lock writes.
   writeLockRecord(record);
   return record;
 }
 
-/** Whether two lock records are one approval: equal in every field but lockedAt. */
+/**
+ * Whether two lock records are one APPROVAL: the same identity, specs and
+ * reading, format, members, project id and approver. lockedAt,
+ * validatorVersion, gateParts, validationResult, code and a restamp trace are
+ * the evidence recorded beside the approval, not the approval.
+ */
 function sameApproval(a: LockRecord, b: LockRecord): boolean {
-  const comparable = (r: LockRecord): string => canonicalize({ ...r, lockedAt: '' });
-  return comparable(a) === comparable(b);
+  const approval = (r: LockRecord): string => canonicalize({
+    stateId: { algorithm: r.stateId.algorithm, digest: r.stateId.digest },
+    specs: r.specs ?? null,
+    specsReading: r.specsReading ?? null,
+    format: r.format ?? null,
+    members: r.members ?? null,
+    projectId: r.projectId ?? null,
+    lockedBy: r.lockedBy ?? null,
+  });
+  return approval(a) === approval(b);
+}
+
+/**
+ * The record on file with the evidence recorded BESIDE its approval brought
+ * up to date — the code results, the design counts, and gate parts that are
+ * missing or do not break down the identity it still matches — every other
+ * field kept (lockedAt, lockedBy, validatorVersion, a restamp trace), with
+ * what was refreshed named; null when nothing beside the approval moved.
+ */
+function evidenceRefresh(onFile: LockRecord, gate: ValidationResult, captured: StateId): { record: LockRecord; what: string[] } | null {
+  const what: string[] = [];
+  let record: LockRecord = { ...onFile };
+  const code = gate.analysis ? withoutCodes(gate.analysis) : undefined;
+  if (code && canonicalize(code) !== canonicalize(onFile.code ?? null)) {
+    record = { ...record, code };
+    what.push(`the code results (${code.errors} error(s), ${code.warnings} warning(s), analyzer ${code.analyzer.validatorVersion})`);
+  }
+  const design = designOnly(gate);
+  const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
+  const counts = { valid: design.valid, errors: count('error'), warnings: count('warning'), notices: count('notice') };
+  if (canonicalize(counts) !== canonicalize(onFile.validationResult ?? null)) {
+    record = { ...record, validationResult: counts };
+    what.push('the design counts');
+  }
+  const repair = gatePartsRepair(onFile, captured);
+  if (repair !== null && captured.parts) {
+    record = { ...record, gateParts: captured.parts };
+    what.push(`its gate parts, rewritten from its identity (${repair})`);
+  }
+  return what.length > 0 ? { record, what } : null;
+}
+
+/** Whether two approvers are one identity. */
+function sameApprover(a: LockRecord['lockedBy'] | undefined, b: LockRecord['lockedBy']): boolean {
+  return canonicalize(a ?? null) === canonicalize(b ?? null);
+}
+
+/**
+ * Why a record whose identity still matches needs its gate parts rewritten —
+ * they are missing, or do not break down that identity — or null when they
+ * need nothing (or the identity no longer matches: then this is no repair).
+ */
+function gatePartsRepair(record: LockRecord, captured: StateId): string | null {
+  const matches = record.stateId.algorithm === captured.algorithm && record.stateId.digest === captured.digest;
+  if (!matches || !captured.parts) return null;
+  if (!record.gateParts) return 'the record carries none';
+  return gatePartsProblem(record, captured);
+}
+
+/**
+ * Steps 2-4 of lockTree: refuse, writing nothing, a --subsystem lock that
+ * cannot be approved alone. The gate identity a record certifies is the whole
+ * design's, so a scope may only re-approve: a first approval covers the whole
+ * tree, and a scoped one needs a record whose gate parts show nothing but the
+ * design moved and no spec outside the scope changed, was added or removed.
+ */
+function assertScopeApprovable(options: LockOptions, captured: StateId): void {
+  if (!options.subsystem) return;
+  const scope = options.subsystem;
+  const root = getProjectRoot();
+  // Keyed as the approval keys them: a part's file under members/<alias>/… (stage 8).
+  const scanned = projectFamily().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const inScope = new Set(specPathsInScope(scope).map((p) => approvalKeyIn(path.resolve(root, p), root, scanned)));
+  const previous = readLockRecord();
+  const diff = diffAgainstApproval();
+  if (!previous || !diff) {
+    throw new LockRefusedError(
+      `\`wairon lock --subsystem ${scope}\` re-approves one subsystem of an approved design, and this is a first approval`
+        + `${previous ? ' (the record on file carries no per-spec digests)' : ''}: the identity a lock certifies is the whole design's, `
+        + 'so a first approval covers the whole tree. Run `wairon lock` without --subsystem. Nothing was written.',
+    );
+  }
+  const parts = usableGateParts(previous, captured);
+  const sameIdentity = previous.stateId.algorithm === captured.algorithm && previous.stateId.digest === captured.digest;
+  if (!parts && !sameIdentity) {
+    throw new LockRefusedError(
+      `\`wairon lock --subsystem ${scope}\` cannot show that nothing outside the subsystem moved: the approval on record `
+        + `(${approvalStamp(previous)}) carries no gate parts that break down its identity. Run \`wairon lock\` once without --subsystem; `
+        + 'later scoped locks then work. Nothing was written.',
+    );
+  }
+  const inputs = parts ? (movedGateParts({ gateParts: parts }, captured.parts) ?? []).filter((p) => p !== 'design') : [];
+  if (inputs.length > 0) {
+    throw new LockRefusedError(
+      `\`wairon lock --subsystem ${scope}\` re-approves one subsystem, but what the whole design is approved under moved too: `
+        + `${describeGateParts(inputs)}. That is the whole project's to approve: run \`wairon lock\` without --subsystem. Nothing was written.`,
+    );
+  }
+  const outside = [
+    ...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`),
+  ].filter((entry) => !inScope.has(entry.slice(2)));
+  if (outside.length > 0) {
+    throw new LockRefusedError(
+      `\`wairon lock --subsystem ${scope}\` re-approves only that subsystem, but ${outside.length} spec(s) outside it moved since the approval `
+        + `(${outside.slice(0, 5).join(', ')}${outside.length > 5 ? ', …' : ''}): the identity a lock certifies is the whole design's, so it cannot `
+        + 'approve the subsystem while they stay unreviewed. Run `wairon lock` without --subsystem to approve them all (or revert them). Nothing was written.',
+    );
+  }
+  logger.info(`--subsystem ${scope}: ${inScope.size} spec file(s) in scope; nothing outside it moved since the approval, so the rest stays approved as it was.`);
 }
 
 /**

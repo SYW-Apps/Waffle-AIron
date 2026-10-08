@@ -515,15 +515,17 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Delete the spec through the authoring client adapter, which reports the tests a removed
-          method invalidated
+          Delete the spec with its subtree through the authoring client adapter, carrying the
+          caller's dry-run and force requests; it refuses a referenced deletion unless forced and
+          reports the tests a removed method invalidated
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: deleteSpec
       - stepNumber: 2
         description: >-
-          Answer with the deletion: false says the spec was not there, which is not a failure but is
-          not a deletion either
+          Answer with the deletion: every spec removed (or, on a dry run, that would be), the
+          references left, and the tests to revisit; false says the spec was not there, which is not
+          a failure but is not a deletion either
         type: return
         outcome: answered
     symbol: sdd_delete_spec
@@ -791,14 +793,16 @@ methods:
         targetMethod: renameParam
       - stepNumber: 4
         description: >-
-          Shape the tool response from the report: the component, method, from and to, the
-          interfaces it moved in, the placeholders respelled (its followers' through signatureFrom
-          included), publishedIn, and `breaks` — every consumer read above whose specs call the
-          method on a public name the report says publishes it (external_consumer.reaches), narrowed
-          to that method (external_consumer.narrowedTo)
+          Shape the tool response from the report: the component, method, from and to (and
+          routedFrom, when the request named a method forwarding its signature and the rename was
+          made on its source), the interfaces it moved in, the placeholders respelled (its
+          followers' through signatureFrom included), publishedIn — the entries publishing the
+          method and every follower's verb — and `breaks`: every consumer read above that the
+          report's published list reaches, each narrowed to what it calls there, a call by a former
+          method name and a broken former public name included (external_consumer.narrowedToUses)
         type: return
         outcome: ParamRename
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-08T08:25:57.021Z'
+updatedAt: '2026-10-08T19:00:49.158Z'

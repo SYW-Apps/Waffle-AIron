@@ -170,19 +170,28 @@ methods:
       surface's targetLanguage — and inside each contract kept, each method added, removed, renamed
       per its trace, or changed in signature (memberDigest), and each parameter renamed per its
       trace (`parameter "old" renamed to "new"`). An exported type's field renamed per its trace is
-      a rename row naming the field with its new name. Every row beyond a rename is judged against
-      this snapshot with its TRACED RENAMES UNDONE: each closure type renamed per its trace
-      (`formerly`) read back under its old id, each field renamed per its trace read back under its
-      old name, and each type another project supplies whose reference only changed alias (`a::name`
-      → `b::name`, the same local name and shape) read under the older spelling — so a type or field
-      rename is counted once, as its rename, and never again as a shape change of every type or
-      method that names it, and an alias respelling is no change at all. A signature row is written
-      only when the signature still reads differently once the method's own rename and those renames
-      are undone (a renamed method whose shape is unchanged is one row, its rename); a method whose
-      signature reads the same but whose digest still moved because a type it names changed shape
-      says exactly that, naming the type, and is left out when every such type is an exported name
-      whose own shape change is already listed. Prose and provenance are never a change. Sorted by
-      name, then member. Pure.
+      a rename row naming the field with its new name — also when the type itself was renamed, so a
+      field rename is never folded into "type renamed". An exported type whose public name changed
+      with no rename trace of its own, but whose entry gives the same definition (an L0 `as`
+      changed, the type id kept), is a rename of the public name, never a removal plus an addition.
+      An exported type whose shape moved only through renames it embeds (a renamed type or field
+      anywhere in its closure, its own fields kept) is a `changed` row naming each of them (`embeds
+      renamed field "money.currency" → "currencyCode"`), so release notes list every type a rename
+      reshapes; a contract method whose signature moved only through such renames of types the
+      surface exports under no name of its own (another project's types expanded into it) says so on
+      the method the same way. Every row beyond a rename is judged against this snapshot with its
+      TRACED RENAMES UNDONE: each closure type renamed per its trace (`formerly`) read back under
+      its old id, each field renamed per its trace read back under its old name, and each type
+      another project supplies whose reference only changed alias (`a::name` → `b::name`, the same
+      local name and shape) read under the older spelling — so a type or field rename is counted
+      once, as its rename, and never again as a shape change of every type or method that names it,
+      and an alias respelling is no change at all. A signature row is written only when the
+      signature still reads differently once the method's own rename and those renames are undone (a
+      renamed method whose shape is unchanged is one row, its rename); a method whose signature
+      reads the same but whose digest still moved because a type it names changed shape says exactly
+      that, naming the type, and is left out when every such type is an exported name whose own
+      shape change is already listed. Prose and provenance are never a change. Sorted by name, then
+      member. Pure.
     sourcePath: src/models/surface-references.ts
     symbol: surfaceChanges
   - name: fieldRenames
@@ -229,4 +238,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-08T08:27:15.588Z'
+updatedAt: '2026-10-08T19:06:51.765Z'

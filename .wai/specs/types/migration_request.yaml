@@ -84,7 +84,15 @@ fields:
       and no reference, export or lock entry changes — or project, today's externalize: the moved
       subsystem becomes a member project (externalize, then promote, in one plan).
     optional: true
+  - name: announce
+    type: bool
+    description: >-
+      true: the door (the CLI's migration commands, the MCP member tools) asks the plan to announce
+      the findings its result will have that the projects it changes do not report now — two
+      owner's-gate runs per changed project, on copies of their .wai trees. Absent: an internal plan
+      (re-planned at apply, doctor's, a test's) is not judged twice.
+    optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:03.011Z'
-updatedAt: '2026-10-04T23:39:55.325Z'
+updatedAt: '2026-10-08T20:19:41.353Z'

@@ -29,6 +29,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: implementsProblem
+  - name: introducedFindings
+    narrative:
+      - stepNumber: 1
+        description: Call introducedFindings on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: introducedFindings
 status: complete
 createdAt: '2026-09-18T21:13:03.714Z'
-updatedAt: '2026-10-07T18:51:02.663Z'
+updatedAt: '2026-10-08T18:50:39.927Z'

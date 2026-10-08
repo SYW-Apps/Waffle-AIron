@@ -132,9 +132,11 @@ fields:
     description: >-
       The digest of each input of the certified gate identity, as computed beside it
       (StateId.parts): what lets a later check name the input that moved, and judge a change of the
-      wairon release alone by re-validation instead of by digest. Absent on a record written before
-      this release; such a record is judged by its validatorVersion, its per-spec digests and its
-      members' pins.
+      wairon release alone by re-validation instead of by digest. They count only while they break
+      down the stateId they sit beside (partsProblem); parts that do not are ignored with a notice.
+      Absent on a record written before this release: such a record cannot prove the project's own
+      inputs (rule tuning, packs, network, pins) unchanged, so a later release never carries it over
+      — it is stale with one sentence until one `wairon lock` records them.
     optional: true
   - name: restamped
     type: LockRestamp?
@@ -165,6 +167,48 @@ methods:
       gateParts. Pure.
     sourcePath: src/models/lock.ts
     symbol: movedGateParts
+  - name: approvalSubject
+    signature: 'approvalSubject(): string'
+    params: []
+    returns: string
+    description: >-
+      The composition subject this record's APPROVAL stands for, `<algorithm>:<digest>`: the subject
+      its restamp kept (restamped.subject) when the release stamp was refreshed without a
+      re-approval, else its own stateId. What a parent's gate identity and member pin read of this
+      project, so a restamp — which changes the stateId because the release is part of it — never
+      reads as the member re-approving. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: approvalSubject
+  - name: releaseStampAgainst
+    signature: 'releaseStampAgainst(running: string): string'
+    params:
+      - name: running
+        type: string
+        description: The running wairon release
+    returns: string
+    description: >-
+      How this record's validatorVersion compares with the running release: `older`, `same`,
+      `newer`, or `invalid` when it is absent or not a wairon version (X.Y.Z with an optional
+      pre-release suffix). Only an older or same stamp can be a change of the release a
+      re-validation may judge; a newer stamp was written by a newer wairon, and an invalid one says
+      nothing. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: releaseStampAgainst
+  - name: partsProblem
+    signature: 'partsProblem(current: StateId): string?'
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands, with its parts
+    returns: string?
+    description: >-
+      Why this record's gateParts do not break down the stateId they sit beside, or null when they
+      do or it carries none: a part every identity has is missing; the stateId equals the current
+      identity while a part differs from the current one; or, under the same algorithm, the stateId
+      differs while no part does. Parts that fail it are IGNORED by every verdict (with a notice) —
+      they can name no input and carry no approval over. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: gatePartsProblem
 componentClass: lock_store
 invariants:
   - id: single-record-per-project
@@ -174,4 +218,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-08T08:35:56.515Z'
+updatedAt: '2026-10-08T18:51:28.588Z'

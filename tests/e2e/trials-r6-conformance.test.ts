@@ -112,8 +112,12 @@ describe('r6 (solo-app, platform): a Portal\'s unnarrated call through an Orches
 describe('r6 (lib-and-app R6-17): a node:http handler\'s imposed parameters', () => {
   const handler = (signature: string): string => habits({ portal: portalFile({ signature, field: NO_FIELD, head: '', dispatch: "params.id ?? ''" }) });
 
-  it('`checkIn(_req, _url, params)` realizing `checkIn(id)` → no UNDECLARED_PARAM, no PARAM_NAME_MISMATCH, --ci exits 0', async () => {
-    const r = await sb.run(['validate', '--ci'], handler('_req: object, _url: URL, params: Record<string, string>'));
+  // Round 7 tightened this: an underscore is believed only where the
+  // parameter is provably unused, and a params bag in the place of the
+  // contract's id is a substitution (tests/e2e/trials-r7-conformance.test.ts).
+  // The honest shape takes the contract's own id after the unused handles.
+  it('`checkIn(_req, _url, id)` realizing `checkIn(id)`, the handles unused → no UNDECLARED_PARAM, no PARAM_NAME_MISMATCH, --ci exits 0', async () => {
+    const r = await sb.run(['validate', '--ci'], habits({ portal: portalFile({ signature: '_req: object, _url: URL, id: string', field: NO_FIELD, head: '' }) }));
     expect(countCode(r.all, 'UNDECLARED_PARAM'), transcript(r)).toBe(0);
     expect(countCode(r.all, 'PARAM_NAME_MISMATCH')).toBe(0);
     expect(r.code, transcript(r)).toBe(0);

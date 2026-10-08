@@ -447,10 +447,12 @@ methods:
       unresolved; both resolving is ambiguous, and the finding names both candidates and asks the
       author to qualify the reference; a source that itself names a signatureFrom is a chain, which
       is never followed (when that source's own source is a signature type, the finding names it as
-      the one to take directly); a method source whose component the method's component does not
-      name in dependsOn or owns is off the design's edges; a stored method that names a source and
-      also states params or returns that differ from the source's restates it, and the source's are
-      in force. Every finding sits at the method.
+      the one to take directly); a method source in the method's own project whose component the
+      method's component does not name in dependsOn or owns is off the design's edges — another
+      project's export (`alias::name.method`) is licensed by the declared relation to that project,
+      an external or a member alike; a stored method that names a source and also states params or
+      returns that differ from the source's restates it, and the source's are in force. Every
+      finding sits at the method.
     signature: 'signatureSources(ctx: RuleContext): void'
     returns: void
     params:
@@ -683,4 +685,4 @@ methods:
           identifier
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-08T08:31:47.600Z'
+updatedAt: '2026-10-08T18:55:08.682Z'
