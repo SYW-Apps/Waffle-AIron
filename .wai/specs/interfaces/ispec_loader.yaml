@@ -280,9 +280,12 @@ methods:
     description: >-
       Read a spec of an EXTERNAL from the pinned snapshot this project holds of it, by
       `alias::name`: the alias one this project declares as an external, the name a public name its
-      pin recorded — an export entry (for a component or an interface asked for) or an exported type
-      (for a type). Null when the alias is no declared external, its pin is absent or unreadable, or
-      the pin holds no such name. Read-only: the answer says it is pinned, and nothing is written.
+      pin recorded — an export entry (for a component or an interface asked for, or no kind) or a
+      type (for a type asked for, or no kind when no entry holds the name): the exported type, else
+      a type the pinned shapes carry without exporting it (by its closure id, or the local segment
+      of exactly one), answered with the public names carrying it. Null when the alias is no
+      declared external, its pin is absent or unreadable, or the pin holds no such name. Read-only:
+      the answer says it is pinned, and nothing is written.
     signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
     returns: PinnedSpecRead?
     params:
@@ -293,6 +296,14 @@ methods:
         type: string
         description: The `alias::name` asked for
     effect: read
+  - name: inspectLock
+    description: >-
+      The bound project's spec-tree write lock as its file stands, or none. Pure 1:1 forward to the
+      file store.
+    signature: 'inspectLock(): TreeLockState?'
+    returns: TreeLockState?
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T12:16:34.840Z'
+updatedAt: '2026-10-09T16:55:44.429Z'

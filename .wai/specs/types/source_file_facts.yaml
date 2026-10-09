@@ -284,6 +284,15 @@ fields:
       route table read by the same router is written under. EXACT grade only, re-read with the type
       checker settling each value where one was loaded
     optional: true
+  - name: tableSpreads
+    type: map<string, list<string>>
+    description: >-
+      The names each top-level const spreads into itself, by const name — `routes =
+      [...ingestRoutes, ...statsRoutes]` spreads ingestRoutes and statsRoutes — as the code spells
+      them (a local table or an import binding), for an array or object literal spreading at least
+      one identifier; absent otherwise. EXACT grade only. What tells a route table the server
+      dispatches from the parts it dispatches them as
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -402,4 +411,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-09T00:42:22.754Z'
+updatedAt: '2026-10-09T16:54:34.913Z'

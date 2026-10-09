@@ -132,9 +132,16 @@ methods:
     description: >-
       Refresh the record's release stamp when the own approval carried a change of the release over
       — the approved design unchanged and re-validated clean under this release — without a review:
-      new stateId, gateParts and validatorVersion, `restamped` provenance, lockedAt and lockedBy
-      kept. None when there is nothing to refresh. Writes this project's .wai/lock.json only.
-    signature: 'restampRelease(own: ProjectApproval?, captured: StateId, options: LockOptions): LockRecord?'
+      new stateId, gateParts and validatorVersion, `restamped` provenance, and the evidence recorded
+      beside the approval (the code results and the design counts of the gate just run) brought up
+      to date; lockedAt and lockedBy kept. Only when every direct member is judged now exactly as
+      the record pinned it (its state, subject and kind): a member drifted at its own root since the
+      record is no release change, so the ordinary path reports it drifted with the bottom-up
+      warning and never records it approved. None when there is nothing to refresh. Writes this
+      project's .wai/lock.json only.
+    signature: >-
+      restampRelease(own: ProjectApproval?, captured: StateId, options: LockOptions, members:
+      list<ProjectApproval>, gate: ValidationResult): LockRecord?
     returns: LockRecord?
     params:
       - name: own
@@ -146,6 +153,14 @@ methods:
       - name: options
         type: LockOptions
         description: The lock's flags (a scoped lock never restamps)
+      - name: members
+        type: list<ProjectApproval>
+        description: The direct members' approval entries, each judged at its own root now
+      - name: gate
+        type: ValidationResult
+        description: >-
+          The as-complete result the caller gated on: its code half and design counts are the
+          evidence a restamp refreshes
     effect: write
   - name: assertApprovable
     description: >-
@@ -159,4 +174,4 @@ methods:
         description: The direct members' approval entries
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-08T18:53:39.844Z'
+updatedAt: '2026-10-09T16:44:13.339Z'

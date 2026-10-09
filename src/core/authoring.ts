@@ -56,15 +56,17 @@ import {
   moveMethods as coreMoveMethods,
   moveSpec as coreMoveSpec,
   publishedUsesOf,
+  rehearsalCopy,
+  discardRehearsal,
   saveSpec,
   scanAllSpecs,
   updateSpec,
 } from './adapters/authoring-core.js';
-import { validateComponentCandidate, introducedFindings, findTestsReferencing, implementsProblem } from './adapters/authoring-validator.js';
+import { validateComponentCandidate, introducedFindings, findTestsReferencing, implementsProblem, validateProject, listRules } from './adapters/authoring-validator.js';
 import type { TestsToRevisit } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from '../models/candidate.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // The AUTHORING seam — gated spec writes, shared by every access path.
@@ -1628,11 +1630,10 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
     'sdd_move_spec',
   );
   if (foreign !== undefined) throw new Error(foreign);
-  // Step 4: types carry no edges — each is planned first, so one refused type refuses them all.
+  // Steps 4 and 12: types carry no edges — each is planned first, so one refused type refuses them all.
   if (kind !== 'component') {
-    const plans = ids.map((sid) => coreMoveSpec(kind, sid, subsystem, true));
-    if (dryRun) return foldMoves(plans, true);
-    return foldMoves(ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false)), false);
+    for (const sid of ids) coreMoveSpec(kind, sid, subsystem, true);
+    return rehearsedMove(kind, id, ids, subsystem, dryRun === true, []);
   }
   // Step 5: the settings the move is judged with.
   const bound = candidateOptions();
@@ -1665,11 +1666,73 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   }
   // Step 11: a curable boundary finding rides along.
   const notices = noticesFrom(verdict);
-  // Steps 12-13: the moves themselves, one after another (or, on a dry run,
-  // the plan), with the gate's notices: the set was judged as a whole, so no
-  // move in between is judged on its own.
-  const report = dryRun ? plan : foldMoves(owners.map((sid) => coreMoveSpec(kind, sid, subsystem, false)), false);
-  return { ...report, notices: [...report.notices, ...notices] };
+  // Steps 13-25: rehearsed, then (unless a dry run) written, with the gate's notices.
+  return rehearsedMove(kind, id, owners, subsystem, dryRun === true, notices);
+}
+
+/** A finding of the rehearsal: its severity, code and spec, and its message with the copy's folder read as the project's. */
+interface RehearsedFinding { severity: string; key: string; text: string }
+
+/**
+ * Steps 13-25 of moveSpec: rehearse the move in a private copy of the bound
+ * tree — written there, the copy judged before and after — then answer the
+ * rehearsal as the plan (a dry run), refuse a move that leaves a new error,
+ * or write it for real. The report carries the files and references the move
+ * writes, and the design errors and warnings it brings.
+ */
+function rehearsedMove(kind: WritableSpecKind, id: string, ids: string[], subsystem: string | undefined, dryRun: boolean, notices: string[]): SpecMove {
+  const root = getProjectRoot();
+  // Step 13.
+  const copy = rehearsalCopy();
+  let reports: SpecMove[];
+  let added: RehearsedFinding[];
+  try {
+    ({ reports, added } = runWithProjectRoot(copy, () => {
+      // Step 14: the findings that judge code are set aside — a copy holds the design alone.
+      const codeCodes = new Set(listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+      const judged = (): RehearsedFinding[] => validateProject().issues
+        .filter((i) => (i.severity === 'error' || i.severity === 'warning') && !codeCodes.has(i.code))
+        .map((i) => ({
+          severity: i.severity,
+          key: `${i.severity}|${i.code}|${i.specId ?? ''}`,
+          text: `${i.severity} ${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.split(copy).join(root).replace(/\.\s*$/, '')}`,
+        }));
+      // Steps 15-17.
+      const before = judged();
+      const written = ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false));
+      const after = judged();
+      // Step 19: what the result reports that the tree does not, counted by code and spec.
+      const seen = new Map<string, number>();
+      for (const f of before) seen.set(f.key, (seen.get(f.key) ?? 0) + 1);
+      const fresh: RehearsedFinding[] = [];
+      for (const f of after) {
+        const left = seen.get(f.key) ?? 0;
+        if (left > 0) seen.set(f.key, left - 1);
+        else fresh.push(f);
+      }
+      return { reports: written, added: fresh };
+    }));
+  } finally {
+    // Step 18.
+    discardRehearsal(copy);
+  }
+  const findings = added.map((f) => f.text);
+  // Steps 20-21: a dry run answers the rehearsal.
+  if (dryRun) {
+    const plan = foldMoves(reports, true);
+    return { ...plan, notices: [...plan.notices, ...notices], findings };
+  }
+  // Steps 22-23: a move that leaves a new error is refused before anything is written.
+  const errors = added.filter((f) => f.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(
+      `Refused: moving ${kind} ${ids.length > 1 ? ids.map((sid) => `"${sid}"`).join(', ') : `"${id}"`} to ${subsystem ? `subsystem "${subsystem}"` : 'system level'} would leave ${errors.length === 1 ? 'an error' : `${errors.length} errors`} validate reports — the move was rehearsed in a copy of the tree:\n`
+      + `${errors.map((e) => `- ${e.text}`).join('\n')}\n\nNothing was written.`,
+    );
+  }
+  // Steps 24-25: written for real, one move after another — the set was judged and rehearsed whole.
+  const report = foldMoves(ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false)), false);
+  return { ...report, notices: [...report.notices, ...notices], findings };
 }
 
 /** Whether the component `owner` owns `member`, directly or through a member it owns. */
@@ -1709,6 +1772,8 @@ function foldMoves(moves: SpecMove[], dryRun: boolean): SpecMove {
     moved: moves.flatMap((m) => m.moved),
     rewritten: [...new Set(moves.flatMap((m) => m.rewritten))],
     notices: moves.flatMap((m) => m.notices),
+    files: [...new Set(moves.flatMap((m) => m.files ?? []))],
+    references: moves.flatMap((m) => m.references ?? []),
     ...(dryRun ? { dryRun: true } : {}),
   };
 }

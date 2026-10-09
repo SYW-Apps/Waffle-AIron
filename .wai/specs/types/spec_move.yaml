@@ -52,7 +52,29 @@ fields:
       True when this report is a dry run: what the move would relocate and rewrite, refused exactly
       as the move would be, with nothing written
     optional: true
+  - name: files
+    type: list<string>
+    description: >-
+      Every file the move writes, each relative to the project root: a moved file as `<old path> →
+      <new path>`, a file rewritten in place by its path — on a dry run, the files its rehearsal in
+      a copy of the tree wrote
+    optional: true
+  - name: references
+    type: list<string>
+    description: >-
+      Every reference the move respells or re-points, each `<spec>: <what> <before> → <after>` — a
+      type reference qualified by the old subsystem, an L0 export entry's `from`, an L1 export entry
+      moved, added or dropped
+    optional: true
+  - name: findings
+    type: list<string>
+    description: >-
+      The design errors and warnings the tree will report after the move that it does not report
+      now, found by rehearsing the move in a copy of the tree and validating both sides —
+      `<severity> <CODE> [<spec>] <message>`; a real move refuses, writing nothing, when the
+      rehearsal finds a new error
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-09T00:25:06.826Z'
-updatedAt: '2026-10-09T11:30:37.082Z'
+updatedAt: '2026-10-09T17:09:16.466Z'

@@ -5,7 +5,8 @@ description: >-
   A spec of another project read from the pinned snapshot this project holds of it
   (.wai/externals/<alias>.yaml): never a stored spec of this tree, never written back. An external's
   specs are written from that project's own root; this project only reads what its pin recorded —
-  the export entry or the exported type under its public name.
+  the export entry or the exported type under its public name, or a type the pinned shapes carry
+  without exporting it.
 subsystem: sdd_core
 fields:
   - name: alias
@@ -40,7 +41,13 @@ fields:
       The snapshot's entry exactly as pinned: a contract entry with its methods, or a type
       definition
     optional: false
+  - name: carriedBy
+    type: list<string>
+    description: >-
+      Set for a type the producer does not export under its own name, read from the closure its
+      pinned shapes carry: the public names whose shapes reach it
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-10-09T11:28:51.049Z'
-updatedAt: '2026-10-09T11:28:51.869Z'
+updatedAt: '2026-10-09T16:51:12.893Z'

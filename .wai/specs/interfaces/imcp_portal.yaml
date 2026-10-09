@@ -371,8 +371,8 @@ methods:
       endpoint schema before the contract is saved. A binding for an InProcess Portal is refused:
       its verbs are its contract methods.
     signature: >-
-      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool):
-      SpecChangeReport
+      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool, search?:
+      list<string>): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: interfaceId
@@ -386,6 +386,12 @@ methods:
       - name: dryRun
         type: bool
         description: Answer the change report the binding would give and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, read when a binding moves a
+          route: the move names the consumers it breaks, as a rename does
         optional: true
     endpoint:
       transport: JSONRPC
@@ -1306,4 +1312,4 @@ methods:
       method: tools/call sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T11:36:45.147Z'
+updatedAt: '2026-10-09T16:51:05.092Z'

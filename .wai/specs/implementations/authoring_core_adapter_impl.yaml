@@ -105,6 +105,20 @@ methods:
         type: call
         targetComponent: spec_store_portal
         targetMethod: moveSpec
+  - name: rehearsalCopy
+    narrative:
+      - stepNumber: 1
+        description: Copy the bound tree through the core subsystem's published face
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: rehearsalCopy
+  - name: discardRehearsal
+    narrative:
+      - stepNumber: 1
+        description: Remove the copy through the core subsystem's published face
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: discardRehearsal
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-10-09T00:27:03.621Z'
+updatedAt: '2026-10-09T17:09:34.767Z'

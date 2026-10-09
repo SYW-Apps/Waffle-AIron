@@ -214,8 +214,11 @@ methods:
     description: >-
       Published write: create a member of the bound project at a source in the members grammar — a
       part by default, a project with `as: project` (stage 8: creating the project content is what
-      makes it one) — and declare it in `members`. Routed through the core orchestrator.
-    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
+      makes it one) — and declare it in `members`; with `report`, the plan, refused exactly as the
+      write would be, and nothing written. Routed through the core orchestrator.
+    signature: >-
+      createMember(alias: string, source: string, description?: string, as?: string, report?: bool):
+      MemberCreation
     returns: MemberCreation
     params:
       - name: alias
@@ -231,6 +234,10 @@ methods:
       - name: as
         type: string
         description: project to create the project content; omitted creates a part
+        optional: true
+      - name: report
+        type: bool
+        description: Answer the plan and write nothing
         optional: true
   - name: rewriteReferences
     description: >-
@@ -392,4 +399,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-09T11:36:18.988Z'
+updatedAt: '2026-10-09T17:03:26.317Z'

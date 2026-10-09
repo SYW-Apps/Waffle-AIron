@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as nodePath from 'path';
 import type { FileChange, Rehearsal, TransactionScope } from './types.js';
+import { removeFile, renamePath } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // family_file_adapter — file I/O on the LIVE family's .wai trees for a staged
@@ -320,7 +321,8 @@ export function digest(path: string): string | null {
 
 /** ifamily_file_adapter.replace — rename a staged file over a live path, with the bounded retries. */
 export function replace(source: string, target: string): void {
-  retrying('replace', target, () => fs.renameSync(source, target));
+  // Through the shared helper: the tree write guard sees the swap (the owner's lock is held by the commit).
+  retrying('replace', target, () => renamePath(source, target));
 }
 
 /** ifamily_file_adapter.place — bytes onto a live path the way a swap does: temporary sibling, fsync, rename. */
@@ -335,7 +337,7 @@ export function place(path: string, bytes: Uint8Array): void {
     fs.closeSync(fd);
   }
   try {
-    retrying('place', path, () => fs.renameSync(tmp, path));
+    retrying('place', path, () => renamePath(tmp, path));
   } catch (e) {
     try { fs.unlinkSync(tmp); } catch { /* already gone */ }
     throw e;
@@ -344,13 +346,7 @@ export function place(path: string, bytes: Uint8Array): void {
 
 /** ifamily_file_adapter.remove — delete a live file with the same retries; absent is success. */
 export function remove(path: string): void {
-  retrying('remove', path, () => {
-    try {
-      fs.unlinkSync(path);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-    }
-  });
+  retrying('remove', path, () => removeFile(path));
 }
 
 /** ifamily_file_adapter.makeDirs — create a directory and its missing parents, answering the created ones shallowest first. */

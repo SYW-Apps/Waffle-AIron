@@ -412,11 +412,24 @@ methods:
           Create the member through the core adapter at the source — a part by default, a project
           with --project (its project content created) — each piece only when absent, and declare it
           in this project's `members` by the shorthand, with --description when given; idempotent,
-          so a re-run completes a partial scaffold
+          so a re-run completes a partial scaffold. With --report the same call answers the plan
+          instead, refused exactly as the write would be, and writes nothing
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createMember
       - stepNumber: 5
+        description: Was it a report?
+        type: branch
+        condition: '--report was given (the creation answered written false)'
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Print the plan — the part or project, where it lies, and each file or folder it would
+          create with where it lies (or that it is already in place and declared) — and say nothing
+          was written
+        type: return
+        outcome: report printed
+      - stepNumber: 7
         description: >-
           Print confirmation: the alias, part or project, where it lives (and a git member's pinned
           commit); for a project whose configuration was created, the required packs it applied
@@ -520,7 +533,12 @@ methods:
         type: return
         outcome: member created
       - stepNumber: 15
-        description: Bootstrap the standard .wai directory structure
+        description: >-
+          Bootstrap the standard .wai directory structure, with .wai/.gitignore keeping the spec
+          tree's write lock (.spec-write.lock) out of git — created when absent, the line added when
+          the file lacks it, anything else in it kept. Inside .wai it covers the project whether or
+          not it keeps a root .gitignore, and travels with .wai/ wherever a team commits it, so a
+          lock a crashed session left behind is never committed
         type: local
       - stepNumber: 16
         description: Does this folder already hold a project configuration (a half-finished init)?
@@ -1996,21 +2014,30 @@ methods:
         targetComponent: cli_migration_adapter
         targetMethod: recover
       - stepNumber: 55
+        description: >-
+          Write lock: report a .wai/.spec-write.lock that is present — the process it names and
+          whether that process is live, gone, or cannot be read from the file, how old it is, and
+          whether the next write breaks it (a holder that is gone, or a lock no holder can be read
+          from past its short grace) or waits for it; silent when there is none
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: inspectLock
+      - stepNumber: 56
         description: 'Spec filenames: list the spec files still stored under a legacy name'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 56
+      - stepNumber: 57
         description: 'Chained subprojects: list the ones with specs but no project.yaml'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: findChainingSubprojectsMissingConfig
-      - stepNumber: 57
+      - stepNumber: 58
         description: >-
           Report whether the system spec is present, whether the spec filenames are current, and any
           chained subproject with specs but no project.yaml
         type: local
-      - stepNumber: 58
+      - stepNumber: 59
         description: >-
           Spec tree: with a system spec and a valid configuration, run the family gate — the bound
           project's own gate and every member's — and report its error, warning and notice counts,
@@ -2019,7 +2046,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateFamily
-      - stepNumber: 59
+      - stepNumber: 60
         description: >-
           Stereotypes: plan the Specialist retirement with apply false and report each Specialist
           with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
@@ -2027,7 +2054,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 60
+      - stepNumber: 61
         description: >-
           Narrative steps: plan the foreign-field repair with apply false and report each step
           carrying a field its own type cannot have — the implementation, the method, the step and
@@ -2035,7 +2062,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 61
+      - stepNumber: 62
         description: >-
           Signatures: plan the signature repair with apply false and report each interface or type
           whose stored signature text its params contradict, and each method restating its source's
@@ -2044,7 +2071,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
-      - stepNumber: 62
+      - stepNumber: 63
         description: >-
           Type spellings: plan the type-spelling repair with apply false and report each interface
           or type holding a type position that is an alias of its canonical spelling, pointing at
@@ -2055,14 +2082,14 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairTypeSpellings
-      - stepNumber: 63
+      - stepNumber: 64
         description: >-
           Reachability: plan the reachability migration with apply false and report each rewrite it
           would make and each form it would only report, with the one re-lock it implies
         type: call
         targetComponent: cli_core_adapter
         targetMethod: migrateReachability
-      - stepNumber: 64
+      - stepNumber: 65
         description: >-
           Members: for each member project below the bound root, bound to its root, plan the same
           repairs with apply false (as steps 60-65 do here) and report one line per member with
@@ -2072,7 +2099,7 @@ methods:
           into every member inside this root, or in the member's own directory for one outside it;
           silent when no member has anything pending
         type: local
-      - stepNumber: 65
+      - stepNumber: 66
         description: >-
           Chaining: plan the migration through the migration portal without a rehearsal and report
           how much is pending — ids, L0s, entries, externals, pins, mounts to move, references to
@@ -2082,14 +2109,14 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: plan
-      - stepNumber: 66
+      - stepNumber: 67
         description: >-
           Ask where the derived context documents live, so the staleness check reports on the
           generated pair and never on the two a person wrote
         type: call
         targetComponent: cli_core_adapter
         targetMethod: derivedDocPaths
-      - stepNumber: 67
+      - stepNumber: 68
         description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
@@ -2097,7 +2124,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 68
+      - stepNumber: 69
         description: >-
           Ask which derived context documents a regenerate would change in CONTENT (the project
           context they embed, the domain map): each is reported `stale — its content differs from
@@ -2106,19 +2133,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: staleDerivedDocs
-      - stepNumber: 69
+      - stepNumber: 70
         description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
           write now, reporting the missing and stale ones
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
-      - stepNumber: 70
+      - stepNumber: 71
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 71
+      - stepNumber: 72
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           approved (lock_record.approvalStamp), warning when it predates per-spec approval; a stale
@@ -2130,14 +2157,14 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 72
+      - stepNumber: 73
         description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 73
+      - stepNumber: 74
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed on this machine but not applied (only
@@ -2145,12 +2172,12 @@ methods:
           developer's home store is never doctrine, so --fix never selects it into a project), and
           those applied from the machine-wide store
         type: local
-      - stepNumber: 74
+      - stepNumber: 75
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 75
+      - stepNumber: 76
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -4092,4 +4119,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T11:40:06.500Z'
+updatedAt: '2026-10-09T17:06:35.829Z'

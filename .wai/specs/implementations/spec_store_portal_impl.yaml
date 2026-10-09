@@ -46,6 +46,20 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveSpec
+  - name: rehearsalCopy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: rehearsalCopy
+  - name: discardRehearsal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: discardRehearsal
 status: complete
 createdAt: '2026-09-25T17:33:02.197Z'
-updatedAt: '2026-10-09T00:26:59.198Z'
+updatedAt: '2026-10-09T17:09:30.156Z'

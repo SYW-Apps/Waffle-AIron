@@ -260,6 +260,23 @@ export interface ParameterFact {
    */
   reads?: string[];
   /**
+   * The member names the body reads DIRECTLY off the parameter — `args.habitId`
+   * reads habitId, `args['date']` reads date: the first link of every chain,
+   * no flow followed. Absent when the parameter is unnamed, unused or read for
+   * no member. What says a value the code types as admitting anything is USED
+   * as an object, where the contract declares a scalar.
+   */
+  members?: string[];
+  /**
+   * True when the parameter is a request handle (req, request, ctx, context,
+   * event, url) the body hands WHOLE to a function — as the call's first
+   * argument, any function but a collaborator's method — whose result it binds
+   * to a local and then uses whole: passed on, returned, placed into an object
+   * or a list, assigned (`const cart = await readJsonBody(req)`, then
+   * `place(cart)`). The node:http spelling of reading the body whole.
+   */
+  handedWhole?: boolean;
+  /**
    * True when the type checker says the parameter's type admits any value —
    * any, unknown, object, {}, or an index signature alone
    * (`Record<string, unknown>`) — nullability set aside: a type naming no
@@ -606,6 +623,15 @@ export interface SourceFileFacts {
    * is written under.
    */
   routePrefixes?: Record<string, string>;
+  /**
+   * The names each top-level const spreads into itself, by const name —
+   * `routes = [...ingestRoutes, ...statsRoutes]` spreads ingestRoutes and
+   * statsRoutes — as the code spells them (a local table or an import
+   * binding), for an array or object literal spreading at least one
+   * identifier; absent otherwise. EXACT grade only. What tells a route table
+   * the server dispatches from the parts it dispatches them as.
+   */
+  tableSpreads?: Record<string, string[]>;
   /**
    * The named function-likes in the file that complete LATER — declared
    * `async`, or annotated to return a Promise — listed once per such BODY, in
@@ -991,13 +1017,22 @@ const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
  * `path#name` (an entry or route table another module exports — a central
  * routes.ts), and `path` alone (that module, every route-bearing export of it
  * read as one router). A value is a path when it holds a `/` or ends in a
- * source extension; the path is project-relative.
+ * source extension; the path is project-relative. An entry that is a class's
+ * method is written `Class.method` (`HabitPortal.handle`, or
+ * `src/http/habit-portal.ts#HabitPortal.handle`): `name` is then the method and
+ * `owner` the class, the export a caller reaches it through.
  */
-export function routerLinkage(router: string): { file?: string; name?: string } {
+export function routerLinkage(router: string): { file?: string; name?: string; owner?: string } {
+  const entry = (text: string): { name: string; owner?: string } => {
+    const dot = text.indexOf('.');
+    return dot > 0 && dot < text.length - 1 && text.indexOf('.', dot + 1) < 0
+      ? { owner: text.slice(0, dot), name: text.slice(dot + 1) }
+      : { name: text };
+  };
   const hash = router.lastIndexOf('#');
-  if (hash > 0) return { file: router.slice(0, hash), ...(hash < router.length - 1 ? { name: router.slice(hash + 1) } : {}) };
+  if (hash > 0) return { file: router.slice(0, hash), ...(hash < router.length - 1 ? entry(router.slice(hash + 1)) : {}) };
   if (router.includes('/') || EXTENSION_LANGUAGE[path.extname(router).toLowerCase()] !== undefined) return { file: router };
-  return { name: router };
+  return entry(router);
 }
 
 /**

@@ -27,7 +27,7 @@ import {
   contentDigest,
   memberDigest,
   carriedFactChanges,
-  fieldRenamesSince,
+  fieldChangesSince,
   surfaceChanges,
   type SurfaceChange,
   declaredExternals,
@@ -785,24 +785,34 @@ function openApiContext(): OpenApiRenderContext {
  * snapshot, and each contained member project's surface as its L0 export
  * table exports it now — read at its own root, under its alias and its id.
  * A member that cannot be projected (a part, an unreadable tree) and an
- * unreadable pin are left out: their types read as unresolved.
+ * unreadable pin are left out: their types read as unresolved. `members`,
+ * when given, are the member surfaces to use by alias instead of reading each
+ * where the bound tree's configuration locates it — a baseline tree in the
+ * fetch cache holds no `../` sibling.
  */
-export function foreignSurfaces(): Map<string, SurfaceSnapshot> {
+export function foreignSurfaces(members?: ReadonlyMap<string, SurfaceSnapshot>): Map<string, SurfaceSnapshot> {
   const out = new Map<string, SurfaceSnapshot>();
   try {
     for (const p of listPinnedExternals()) if (p.snapshot) out.set(p.alias, p.snapshot);
   } catch {
     // An unreadable pin resolves nothing.
   }
-  let members: { alias: string; path?: string; source: { path?: string }; storage: string; problem?: string }[] = [];
+  let declared: { alias: string; path?: string; source: { path?: string }; storage: string; problem?: string }[] = [];
   try {
     const config = loadProjectConfig();
-    members = config ? declaredMembers(config) : [];
+    declared = config ? declaredMembers(config) : [];
   } catch {
-    members = [];
+    declared = [];
   }
   const root = getProjectRoot();
-  for (const m of members) {
+  for (const m of declared) {
+    // A member surface handed in (the baseline's, as its approval recorded it) is used as it is.
+    const given = members?.get(m.alias);
+    if (given && !out.has(m.alias)) {
+      out.set(m.alias, given);
+      if (given.projectId && !out.has(given.projectId)) out.set(given.projectId, given);
+      continue;
+    }
     // A contained member and a `../` sibling are read live, where they are
     // stored (round 8) — a sibling's location is its source path (round 9:
     // only a contained member carried `path`, so a sibling never resolved).
@@ -1548,14 +1558,18 @@ function goneUse(live: SurfaceSnapshot, publicName: string, member: string | und
 /**
  * What a changed use's detail says when the pinned snapshot is at hand: the
  * fields renamed inside its closure, with their new names, per the producer's
- * rename trace — and whether the renames are the whole change. Nothing when
- * no field was renamed (the change is then said as a signature change).
+ * rename trace, and each field added to or removed from a closure type the
+ * pin held — by name, so a consumer never reads the producer's files to learn
+ * a new field — and whether those are the whole change. Nothing when no field
+ * moved (the change is then said as a signature change).
  */
 function changedDetail(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string, digest: string): { detail?: string } {
   if (!pinned) return {};
-  const { renames, renameOnly } = fieldRenamesSince(pinned, live, publicName, member, digest);
-  if (renames.length === 0) return {};
-  return { detail: `${renames.join('; ')}${renameOnly ? ' (its shape is otherwise unchanged) — follow the rename' : ' (and its shape changed beyond that)'}` };
+  const { renames, added, removed, fieldsOnly } = fieldChangesSince(pinned, live, publicName, member, digest);
+  const said = [...renames, ...added, ...removed];
+  if (said.length === 0) return {};
+  const follow = renames.length ? ' — follow the rename' : '';
+  return { detail: `${said.join('; ')}${fieldsOnly ? ` (its shape is otherwise unchanged)${follow}` : ' (and its shape changed beyond that)'}` };
 }
 
 /** A wire endpoint as a status line shows it: an HTTP verb and path (with its stated status), another transport's address, or none. */
@@ -1583,36 +1597,63 @@ function endpointMove(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, pub
     : { removed: true, detail: `endpoint ${routeOf(was)} removed — the verb is bound to no route any more, so a client calling it over the wire breaks` };
 }
 
+/**
+ * The members a contract used as a whole stands for: each method the pinned
+ * snapshot's entry holds, with its digest there. None when the snapshot is
+ * not at hand or the name is no contract (an exported type is used as `type`).
+ */
+function wholeContractMembers(pinned: SurfaceSnapshot | null, publicName: string): [string, string][] {
+  const entry = pinned?.interfaces.find((e) => e.id === publicName);
+  if (!pinned || !entry) return [];
+  return entry.methods
+    .map((m) => [m.name, memberDigest(pinned, publicName, m.name)] as const)
+    .filter((pair): pair is readonly [string, string] => pair[1] !== null)
+    .map(([member, digest]) => [member, digest]);
+}
+
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
 function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
   const locked = entry?.used ?? {};
   const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
+  // One member compared with its baseline digest: gone (renamed or removed),
+  // the same signature (its route said beside it when it moved), or changed.
+  const compared = (publicName: string, member: string, digest: string): ExternalUseStatus => {
+    const now = memberDigest(live, publicName, member);
+    if (now === null) return goneUse(live, publicName, member, digest, pinned);
+    // The route a client spells moved, or went: said beside the signature verdict.
+    const route = endpointMove(pinned, live, publicName, member);
+    if (now === digest) {
+      return route === null
+        ? { publicName, member, state: 'unchanged' }
+        : { publicName, member, state: route.removed ? 'changed' : 'unchanged', detail: route.detail };
+    }
+    const changed = changedDetail(pinned, live, publicName, member, digest);
+    const detail = [changed.detail, route?.detail].filter((d): d is string => !!d).join('; ');
+    return { publicName, member, state: 'changed', ...(detail ? { detail } : {}) };
+  };
   for (const [publicName, members] of Object.entries(locked)) {
     if (Object.keys(members).length === 0) {
-      uses.push(liveHas(publicName) ? { publicName, state: 'unchanged' } : goneUse(live, publicName, undefined, undefined));
+      if (!liveHas(publicName)) {
+        uses.push(goneUse(live, publicName, undefined, undefined));
+        continue;
+      }
+      // A contract used as a whole (a bare dependency, no member named): the
+      // code reaching it through that dependency — a binding, a client — may
+      // call any of its methods, so every method the pinned snapshot holds is
+      // compared (external_consumer.narrowedToUses reads such a use the same
+      // way): one renamed, removed or moved is said by name, never folded
+      // into an unchanged contract.
+      const moved = wholeContractMembers(pinned, publicName)
+        .map(([member, digest]) => compared(publicName, member, digest))
+        .filter((u) => u.state !== 'unchanged' || u.detail !== undefined);
+      uses.push(...(moved.length ? moved : [{ publicName, state: 'unchanged' as const }]));
       continue;
     }
     for (const [member, locked] of Object.entries(members)) {
       // The baseline re-read from the pinned snapshot when it is at hand: a
       // digest an older release recorded for the same snapshot is no change.
-      const digest = (pinned ? memberDigest(pinned, publicName, member) : null) ?? locked;
-      const now = memberDigest(live, publicName, member);
-      if (now === null) {
-        uses.push(goneUse(live, publicName, member, digest, pinned));
-        continue;
-      }
-      // The route a client spells moved, or went: said beside the signature verdict.
-      const route = endpointMove(pinned, live, publicName, member);
-      if (now === digest) {
-        uses.push(route === null
-          ? { publicName, member, state: 'unchanged' }
-          : { publicName, member, state: route.removed ? 'changed' : 'unchanged', detail: route.detail });
-        continue;
-      }
-      const changed = changedDetail(pinned, live, publicName, member, digest);
-      const detail = [changed.detail, route?.detail].filter((d): d is string => !!d).join('; ');
-      uses.push({ publicName, member, state: 'changed', ...(detail ? { detail } : {}) });
+      uses.push(compared(publicName, member, (pinned ? memberDigest(pinned, publicName, member) : null) ?? locked));
     }
   }
   // A use the lock does not hold is still compared with the live producer: one
@@ -1918,7 +1959,12 @@ export function diff(against?: string): SurfaceDiff {
     label = `the saved surface ${path.resolve(against)}`;
   } else {
     const revision = approvedRevision(against);
-    baseline = runWithProjectRoot(revision.directory, ownSurface);
+    // Each live member as the baseline's own lock recorded its approval — a
+    // `../` sibling is no part of the revision's tree, and read live it would
+    // compare a member's change since with nothing, or an unchanged member
+    // with its types unexpanded (round 10: every verb naming one "changed").
+    const members = membersAsRecordedIn(revision.directory);
+    baseline = runWithProjectRoot(revision.directory, () => withForeignTypes(projectOwnSurface('project', true), foreignSurfaces(members)));
     carriedEmpty = new Set(runWithProjectRoot(revision.directory, () => entriesPublishingNothing()));
     label = revision.label;
   }
@@ -1929,6 +1975,28 @@ export function diff(against?: string): SurfaceDiff {
     changes.push({ kind: 'added', name: 'L0 export table', detail: `export entry added, but it publishes nothing — it ${detail} (EXPORT_INVALID in \`wairon validate\`)` });
   }
   return { project: current.projectId ?? current.projectName, against: label, changes };
+}
+
+/**
+ * Step 6 of diff: each live member of the bound project, by alias, as the
+ * baseline knew it: a member stored inside the bound project's tree as that
+ * tree holds it at the revision (`recordedIn`); a member stored outside it (a
+ * `../` sibling, which the revision's tree does not hold) as the approval
+ * that tree's lock records for it — its own last committed approval when the
+ * lock records none — or live when no revision of it can be read.
+ */
+function membersAsRecordedIn(recordedIn: string): Map<string, SurfaceSnapshot> {
+  const out = new Map<string, SurfaceSnapshot>();
+  const bound = path.resolve(getProjectRoot());
+  for (const member of memberRevisions(recordedIn)) {
+    const inside = path.relative(bound, member.root);
+    const contained = inside !== '' && !inside.startsWith('..') && !path.isAbsolute(inside);
+    const surface = contained
+      ? projectedAt(path.join(recordedIn, inside))
+      : projectedAt(member.revision?.directory ?? member.root);
+    if (surface) out.set(member.alias, surface);
+  }
+  return out;
 }
 
 /**

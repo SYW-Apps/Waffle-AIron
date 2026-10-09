@@ -28,8 +28,13 @@ re-run `wairon init` for an independent project).
 **What to commit.** All of `.wai/` — the specs, `project.yaml`, `lock.json`,
 `externals/` and `externals.lock.yaml`, vendored packs: the gate reads committed
 files only (a migration's scratch folder, `.wai/transactions/`, ignores itself).
-The one exception is `.wai/.spec-write.lock`, the short-lived lock spec writers
-take so two sessions never lose a write: add it to `.gitignore`.
+The one exception is `.wai/.spec-write.lock`, the short-lived lock every write
+into `.wai` takes so two sessions never lose a write: `wairon init` writes
+`.wai/.gitignore` ignoring it (in an older project, add that line yourself). A
+writer that read a spec another session changed before it wrote is refused with
+`spec-write-conflict` — nothing is written to that file; run it again. A lock
+wairon cannot read is broken by the next write once it is 10 s old, and
+`wairon doctor` names a lock that is present.
 The generated `CLAUDE.md`/`GEMINI.md`, `.claude/` (or `.gemini/`) skills and
 `.mcp.json` hold no machine path: commit them and every clone's assistant starts
 with them, or ignore them and run `wairon generate` after a clone — either way
@@ -294,7 +299,10 @@ realizes it, in order. A framework handler is green without any design change:
   `Record<string, unknown>` (or not annotated at all, in TypeScript) names no field
   to compare, and an object missing the record's fields or adding its own
   (`{ stops; secret }`) is another shape: both are `PARAM_TYPE_MISMATCH`. The check
-  fails closed on them, as it does on an `any` receiver.
+  fails closed on them, as it does on an `any` receiver. A scalar (a string, a
+  number, a boolean, a date) realized by an `any`-typed parameter the body reads
+  as an object (`args.habitId` where the contract declares `date`) is
+  `PARAM_TYPE_MISMATCH` too; one read only as the scalar it is is not.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the
@@ -308,8 +316,14 @@ realizes it, in order. A framework handler is green without any design change:
   `new URL(req.url, base)`): that realizes the parameter through the handle. So
   does a helper the request is passed to, written in the same file or in a module
   no implementation claims (`const { orderId } = pathParams(req)`), and the one
-  record parameter is realized by reading the body whole (`req.body`). A
-  parameter never read off it stays `UNREALIZED_PARAM`.
+  record parameter is realized by reading the body whole: `req.body`, or — plain
+  node:http has none — the request handed as the first argument to a function,
+  any function (an imported body parser included) but a collaborator's method,
+  whose result the handler binds and uses whole (`const cart = await
+  readJsonBody(req)`, then passes `cart` on). A result only destructured or only
+  read for fields is not the body. A parameter never read off it stays
+  `UNREALIZED_PARAM`, and one left unrealized because `injectedParams` names the
+  contract's own parameter says so.
 - **`conformance: off`** on an implementation or a method is for code wairon is
   not meant to compare with its contract (generated or vendored code). It switches
   the realization checks off — method, parameters, async, whether narrated calls
@@ -319,10 +333,18 @@ realizes it, in order. A framework handler is green without any design change:
   said: `REALIZATION_UNCHECKED` (a notice per implementation) and a
   `Conformance off:` line in `wairon status`.
 
-A Portal's `router` (code linkage) names the entry its own file exports
-(`handleOrderRequest`), a central module's entry or table
-(`src/routes.ts#ROUTES`), or a module alone (`src/routes.ts`, every route-bearing
-export read). Several Portals may name one router — a module, or one table both
+A Portal's `router` (code linkage) names the table or function the server
+actually dispatches: the entry its own file exports (`handleOrderRequest`), a
+class's method as `Class.method` (`HabitPortal.handle`, the class exported), a
+central module's entry or table (`src/routes.ts#routes`, or
+`src/routes.ts#Class.method`), or a module alone (`src/routes.ts`, every
+route-bearing export read). Where the server dispatches an aggregate spreading
+each Portal's table, name the aggregate: a Portal's own table is read as it
+stands, so one left out of the spread reads clean — the only signal is
+`ROUTER_NOT_DISPATCHED`, a notice when a sibling aggregate of its module leaves
+it out (which process dispatches which table is never read). A module-private
+table or function cannot be named; `ROUTER_UNDECLARED` lists what can, and says
+"export it" for the rest. Several Portals may name one router — a module, or one table both
 name (`router: routes`) — and a route is declared when any of them declares it.
 Guards on `<request>.method` and `parts[i]` are read, and so are route tables — an
 array of `{ method, path }` objects or an object keyed `VERB /path`
@@ -1224,7 +1246,7 @@ widen it (`EXPORT_WIDENS_AUDIENCE`).
 
 | Command | Description |
 |---------|-------------|
-| `wairon member add <alias> <source> [--project] [--description <text>]` | Create a member at `<source>` (`path`, `../path` or `git-url[#commit]`) and declare it by the shorthand. A **part** by default: a specs folder (and, outside this project, its `partOf`). With `--project` a project: its `project.yaml` declaring `<alias>` as its id and its L0, each only when absent. A git member is never scaffolded: it is pinned at the commit given, else the default branch head, and its content decides what it is. A git project is read from outside its family, at audience `instance`: one whose L0 exports its names only more narrowly (`project`, `department`) is refused, naming the audience it exports at and the one it is read at — widen the producer's export, or make it a path member. Then pin it (`wairon externals pin <alias>`), and a pin of a name exported too narrowly says so instead of calling it gone |
+| `wairon member add <alias> <source> [--project] [--description <text>] [--report]` | Create a member at `<source>` (`path` inside this project, `../<name>` — a sibling checkout ONE level up, any deeper climb refused — or `git-url[#commit]`) and declare it by the shorthand; `--report` prints what it would create, refused exactly as the write would be, and writes nothing. A **part** by default: a specs folder (and, outside this project, its `partOf`). With `--project` a project: its `project.yaml` declaring `<alias>` as its id and its L0, each only when absent. A git member is never scaffolded: it is pinned at the commit given, else the default branch head, and its content decides what it is. A git project is read from outside its family, at audience `instance`: one whose L0 exports its names only more narrowly (`project`, `department`) is refused, naming the audience it exports at and the one it is read at — widen the producer's export, or make it a path member. Then pin it (`wairon externals pin <alias>`), and a pin of a name exported too narrowly says so instead of calling it gone |
 | `wairon member promote <alias> [--id <id>]` | Make a part an independent project **in place**: its id, an L0 exporting exactly what this project uses of it, references across the new boundary respelled `alias::name` (`<parent id>::name` the other way), the parent declared as its external, pins on both sides. Refused for a part fetched from git, a trustedLink that would cross the boundary, a component used across it that its subsystem does not publish, or an id already taken |
 | `wairon member demote <alias> [--home <subsystem>] [--packs adopt\|drop]` | Make a project member a part **in place** — promote's inverse: its own metadata goes home (as `internalize` sends it), its L0, lock and pins end, references across the old boundary become local ids. Refused while another family project consumes it, or for a member fetched from git |
 | `wairon member update <alias> [--ref <ref> \| --commit <sha>] [--report]` | Move a git member's pinned commit to its ref's head (or the ref or commit given), printing the spec files it adds, changes and removes; `--report` writes nothing. The only way a git member's content changes; this project's lock reads stale until re-locked when the content moved |
@@ -1488,7 +1510,7 @@ return the impact of every pack they applied in their results.
 | `wairon externals remove <alias> [--dry-run] [--json]` | Remove one external: its declaration and its pin (`.wai/externals/<alias>.yaml` and its lock entry) together. An orphaned pin — one whose declaration was deleted by hand, which `externals list` shows — is removed too. Exits 1 when the alias is neither declared nor pinned |
 | `wairon externals consumers [--search <dirs...>] [--json]` | From a producer's root: the projects that consume it — each with the alias and section it declares it under and the public names its specs use — so a producer sees who breaks before it changes its surface. Without `--search`, the family read from the highest root in reach. `--search ..` (any folders) also scans those folders and the project roots directly under them for projects declaring this one as an external by a path that resolves here, or by git — a sibling checkout is found this way. A hosted consumer, or one on another machine, declares its dependency on its own side and is not visible here (`sdd_list_consumers` is the same answer for an assistant) |
 | `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
-| `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
+| `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. A contract used whole (a bare `dependsOn`, no call named) stands for every method its pin holds, each compared by name. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
 | `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration, and an orphaned pin whose declaration is gone, are listed with their problem, never hidden |
 | `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal), import one, or list them. OpenAPI defaults to the `project` audience, so every HTTP Portal of the project's own is described — one its L0 export table never exports included (a wider `--audience` narrows to what the table shares there); the native snapshot defaults to `instance`. In the OpenAPI document a path placeholder — `{name}`, or the Express spelling `:name`, which is rewritten to `{name}` — is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH — the one object-typed param left IS the body, as a client sends it — an optional one or a `T?` too, the body then optional or nullable, never wrapped under its name (named under `x-wairon-body-param`, so `surface import` puts it back), and several are the properties of a body object. The Portal's `basePath` is joined into every path (the document carries no `servers` entry: where it is served is deployment, not design). The parameter that carries the credential the Portal's `auth` binds (a bearer `token`, say) is left out of the parameters and the body — `security` describes it — and named under `x-wairon-credential-param` so a wairon reader can restore it. Each operation answers the success `status` its endpoint states (`sdd_set_endpoints` `status`: `202` Accepted, a `3xx` redirect with a `Location` header and no body, a `201` for a workflow verb that files something), else its conventional code — `204` with no content for a method returning nothing; `201 Created` for a POST that creates: a method whose `effect` is `lifecycle`, or one whose effect is undeclared, `write` or `io` and whose name says it creates (`createHabit`, `placeOrder`, `signUp`); else `200` (a cancel, an archive, a log-in) — and a method returning `result<T, E>` also answers a `default` error response carrying E's schema (`surface import` reads both back). A `custom` auth becomes an `apiKey` scheme only when the Portal's `auth.name` (with `auth.in`, default header) names where the credential travels; naming none, it is an `http` scheme `custom` with the design's description — no header name is invented. Two operations of one Portal on the same verb and path (placeholders compared by position) are refused naming both, never dropped (`validate` reports them as `ENDPOINT_ROUTE_DUPLICATE`). A type another project publishes resolves from its pin, or — for a member project — from what the member exports now; a type nothing resolves is named in a warning (`The document has no schema for N type(s) it names: …`), never passed under a ✔. The components are exactly the types the operations reach, each ONCE — a member's type reached under its alias, its project id or another producer's closure is one component, keyed `<alias>.<id>` (a qualified id's `::` written `.`, so every key matches `^[a-zA-Z0-9._-]+$`); a field or parameter typed `T?` is not `required` (it stays nullable), and a field's description is carried on its property. Every status line goes to stderr, so `surface export --format openapi > api.json` writes the JSON alone; an export that publishes nothing, or of a design `validate` refuses (its error count and codes), is a warning, never a ✔. An unknown `--portal` is refused naming the portals the surface renders |
 | `wairon surface diff [--against <ref\|file>] [--json]` | The public-surface changelog: this project's export table now against the same table at its last **committed** approval (or at a git revision, or in a saved native snapshot from `surface export`) — every exported name and contract method `added`, `removed`, `renamed` (from its rename trace) or `changed` (signature or type shape), and how many a consumer may have to follow. A field renamed per its trace keeps its own row beside its type's rename (traced, or a changed public name of the same definition — never "removed + added"), and an exported type reshaped only by a rename it embeds says which (`embeds renamed field "money.currency" → "currencyCode"`). Against a revision it also covers the project's own HTTP Portals (its service API, exported or not), with every type they name from a pinned external or a member project expanded from the pin or member of each side: a re-pin that reshapes the project's own wire format (`GET /routes/:id/tiles` answering a renamed field) is a change of its own surface, named on the verb. What a producer writes release notes from before it re-locks; `wairon externals consumers --search <dir>` then says who uses what. Read-only. With no approval ever committed it says so (lock and commit first, or name `--against`). An L0 export entry added since that publishes nothing (a wildcard over a subsystem that publishes nothing) is listed as such, never read as no change. `--against` takes a native snapshot or a git revision: an OpenAPI document, or a file the native schema does not read, is refused in one line. `sdd_surface_diff` is the same answer for an assistant |

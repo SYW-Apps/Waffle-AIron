@@ -348,6 +348,19 @@ methods:
       - name: id
         type: string
         description: The `alias::name` asked for
+  - name: publishedUsesOf
+    description: >-
+      Forward to spec_tree_portal.publishedUsesOf: the public names publishing the given contract
+      methods — what a removal, or a route move, takes from a consumer
+    signature: 'publishedUsesOf(removed: list<SpecRef>, methods: list<string>): list<ExportUse>'
+    returns: list<ExportUse>
+    params:
+      - name: removed
+        type: list<SpecRef>
+        description: The specs a deletion removes (none for a route move)
+      - name: methods
+        type: list<string>
+        description: The contract methods, as <interface>.<method>
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T12:16:44.357Z'
+updatedAt: '2026-10-09T16:51:08.149Z'

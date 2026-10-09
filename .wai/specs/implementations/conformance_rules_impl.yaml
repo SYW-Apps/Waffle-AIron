@@ -1689,17 +1689,20 @@ methods:
           function inside it; and each Portal implementation's `router`, the entry whatever serves
           the Portal calls to hand it its requests, which belongs to the Portal's own files — or,
           written `<module>#<name>` (or as a module alone), to the module it names, which must
-          export that name (a module named alone must be on disk), and is reported against the
-          implementation when it does not. Read a handle only where its file was analysed at exact
-          grade; below that nothing separates an export from a mention, so no verdict on it could be
-          backed, and a handle whose file the run never read at all is skipped rather than guessed
-          at. A portal may be realized across several files, and its router entry may live in any of
-          them: it is reported missing only when EVERY one of those files was read at exact grade
-          and none exports it, since a file read below that, or not at all, may be the one holding
-          it. A handle the file does export becomes promised surface. One that is missing is
-          reported against the spec that declares it, naming the handle and the file, and does not
-          count as allowed: a route nobody can import cannot be the reason a name is promised, and
-          without that the field would be a free-text way to silence the rule
+          export that name (a module named alone must be on disk); a class's method is written
+          `Class.method`, the class the export, which must hold the method, and is reported against
+          the implementation when it does not. Read a handle only where its file was analysed at
+          exact grade; below that nothing separates an export from a mention, so no verdict on it
+          could be backed, and a handle whose file the run never read at all is skipped rather than
+          guessed at. A portal may be realized across several files, and its router entry may live
+          in any of them: it is reported missing only when EVERY one of those files was read at
+          exact grade and none exports it, since a file read below that, or not at all, may be the
+          one holding it. A handle the file does export becomes promised surface. One that is
+          missing is reported against the spec that declares it, naming the handle and the file, and
+          does not count as allowed: a route nobody can import cannot be the reason a name is
+          promised, and without that the field would be a free-text way to silence the rule. A
+          refused bare name that is a method of an exported class in those files is told its
+          `Class.method` spelling, and one they declare without exporting is told to be exported
         type: local
       - stepNumber: 3
         description: >-
@@ -1978,15 +1981,23 @@ methods:
           the same file or of a file no implementation claims reads off it when the handle is passed
           to it, or its result yields), which realizes it through that handle, the green path for a
           framework that hands its handlers the request alone; and the one RECORD parameter left
-          unpaired is realized by the request's body read whole (`req.body`) — and a realized
-          parameter with no pair is an argument a caller must supply that the design never mentions,
-          the shape that hid a credential in a signature nobody had read against its contract. Where
-          parameters left over (or substituted) stand ahead of every kept pair under a name
-          transports give their handles (req, request, res, response, reply, url, ctx, context,
-          next, event, socket), the finding names the one green path for them: the handles in the
-          implementation's injectedParams, the contract's own parameters after them in order —
-          spelled out as the method's signature — the router unpacking the path, query and body into
-          them, or the contract's parameters read off the injected request by their own names
+          unpaired is realized by the request's body read whole — `req.body`, or the request handed
+          as a call's first argument to any function but a collaborator's method, whose result the
+          handler binds to a local and then uses whole (parameter_fact.handedWhole: `const cart =
+          await readJsonBody(req)`, then passed on); a result only destructured or only read for
+          members is named reads, never the body — and a realized parameter with no pair is an
+          argument a caller must supply that the design never mentions, the shape that hid a
+          credential in a signature nobody had read against its contract. Where parameters left over
+          (or substituted) stand ahead of every kept pair under a name transports give their handles
+          (req, request, res, response, reply, url, ctx, context, next, event, socket), the finding
+          names the one green path for them: the handles in the implementation's injectedParams, the
+          contract's own parameters after them in order — spelled out as the method's signature —
+          the router unpacking the path, query and body into them, or the contract's parameters read
+          off the injected request by their own names. A declared parameter left unrealized because
+          the implementation injects its own name is said so in the finding (the injection set the
+          code's parameter of that name aside as wiring), and where an injected request handle is
+          wiring, the finding names both ways a parameter is read off it, with this method's own
+          names
         type: local
       - stepNumber: 7
         label: compare
@@ -2008,7 +2019,12 @@ methods:
           only some of the record's fields or adding fields of its own, report PARAM_TYPE_MISMATCH
           (warning; site the method; units the parameter names) naming the fields missing and added:
           its type cannot hold what the design declares, and the analysis fails closed on it as on
-          an opaque receiver. Otherwise, for a pair whose names differ, report a rename where the
+          an opaque receiver. Where the contract declares a scalar (a string, a number, a boolean,
+          an enum or a named scalar as what it holds, or a date, a datetime or a duration as any
+          value it is written as) and the code's parameter is opaque as above and the body reads a
+          member directly off it that no such value has (parameter_fact.members: `args.habitId`
+          where a date is declared), report PARAM_TYPE_MISMATCH too: an object stands in the
+          scalar's place. Otherwise, for a pair whose names differ, report a rename where the
           declared type agrees: through the file's dialect (source_file_facts.dialect, then
           type_dialect.agrees on the code's annotation and the contract's canonical type, a named
           type matching through its code-level name), as the same primitive kind of value (string,
@@ -2048,22 +2064,30 @@ methods:
       - stepNumber: 1
         description: >-
           For each Portal implementation that names a router, read the linkage's three spellings: a
-          bare name is an entry the Portal's own files hold; `<module>#<name>` an entry or a route
-          table another module holds (a central routes.ts); a module alone, every route-bearing
-          export of it. Find the routes the analyzer read (source_file_facts.functionRoutes — a
-          function's, or a route table const's under its name, a spread table's entries included)
-          from that entry and from the functions of its file it calls by name: a router delegating
-          its matching to a helper that reads a route table is one router. Note the ONE prefix those
-          functions strip off the path before matching (source_file_facts.routePrefixes), where
-          exactly one settles. Routers resolving to the same entry in the same files are one router,
-          read once against every Portal naming it, however each linkage spells it. A Portal that
-          binds HTTP endpoints and names no router, while a file of its implementation is read at
-          exact grade, is reported once as ROUTER_UNDECLARED (notice; site router), naming the
-          route-bearing functions and tables its files hold: its routes are checked against nothing,
-          and that is said, never left silent. A router linkage naming a declaration of an
-          exact-grade file that holds neither a function body nor a route table is reported as
-          unread (step 4); one naming nothing the module declares is export-conformance's
-          UNREALIZED_EXPORT_HANDLE
+          bare name is an entry the Portal's own files hold, `Class.method` a method whose body sits
+          in that class; `<module>#<name>` (or `<module>#Class.method`) an entry or a route table
+          another module holds (a central routes.ts); a module alone, every route-bearing export of
+          it. Find the routes the analyzer read (source_file_facts.functionRoutes — a function's, or
+          a route table const's under its name, a spread table's entries included) from that entry
+          and from the functions of its file it calls by name: a router delegating its matching to a
+          helper that reads a route table is one router. Note the ONE prefix those functions strip
+          off the path before matching (source_file_facts.routePrefixes), where exactly one settles.
+          Routers resolving to the same entry in the same files are one router, read once against
+          every Portal naming it, however each linkage spells it. A Portal that binds HTTP endpoints
+          and names no router, while a file of its implementation is read at exact grade, is
+          reported once as ROUTER_UNDECLARED (notice; site router), naming what its files hold, each
+          spelled as the linkage accepts it — an exported router or table by its name, a method of
+          an exported class as `Class.method`, an exported entry calling into a router of its file —
+          and, apart, what reads as a router or a table but is not exported, to be exported before
+          it can be named: its routes are checked against nothing, and that is said, never left
+          silent. A router linkage naming a declaration of an exact-grade file that holds neither a
+          function body nor a route table is reported as unread (step 4); one naming nothing the
+          module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router naming a route
+          TABLE that no table of the exact-grade code spreads and that spreads none itself, where a
+          sibling table spreading other tables of its module (source_file_facts.tableSpreads, in
+          that module or through an import binding in another) leaves it out, is reported as
+          ROUTER_NOT_DISPATCHED (notice; site the router): if the server dispatches the sibling,
+          none of its routes is served, while coverage reading the table itself reads them as served
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
@@ -2344,4 +2368,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-09T11:39:15.565Z'
+updatedAt: '2026-10-09T16:54:30.181Z'

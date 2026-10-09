@@ -18,6 +18,7 @@ owns: []
 dependsOn:
   - transaction_repository
   - family_file_adapter
+  - migration_core_adapter
 status: complete
 createdAt: '2026-09-30T20:28:13.363Z'
-updatedAt: '2026-09-30T21:33:42.160Z'
+updatedAt: '2026-10-09T16:56:00.341Z'

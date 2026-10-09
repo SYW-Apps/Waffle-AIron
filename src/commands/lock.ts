@@ -896,32 +896,77 @@ function ownInputLines(previous: LockRecord | null, captured: StateId): string[]
  * cli_lock_adapter.restampRelease — refresh the record's release stamp when
  * the own approval carried a change of the release over (the approved design
  * unchanged and re-validated clean under this release), without a review:
- * new stateId, gateParts and validatorVersion, `restamped` provenance,
- * lockedAt and lockedBy kept. Null when there is nothing to refresh.
+ * new stateId, gateParts and validatorVersion, `restamped` provenance, the
+ * code results and design counts of the gate just run, lockedAt and lockedBy
+ * kept — and only while every direct member stands as the record pinned it.
+ * Null when there is nothing to refresh.
  */
-export function restampRelease(own: ProjectApproval | undefined, captured: StateId, options: LockOptions): LockRecord | null {
-  // Steps 3-6: an approval a change of the release carried over — the design
+export function restampRelease(
+  own: ProjectApproval | undefined,
+  captured: StateId,
+  options: LockOptions,
+  members: ProjectApproval[],
+  gate: ValidationResult,
+): LockRecord | null {
+  // Step 1: an approval a change of the release carried over — the design
   // and every input the project decides as approved, re-validated clean under
   // this release — has its release stamp refreshed without a re-approval.
   if (own?.release?.carried && !options.subsystem) {
     const onFile = readLockRecord();
-    if (onFile) {
+    // Step 2: a member's own unlocked edit leaves its subject — and so the
+    // gate identity — as recorded, so the release verdict cannot see it. A
+    // member judged now otherwise than the record pinned it is no release
+    // change: the ordinary path reports it drifted, with the bottom-up warning.
+    if (onFile && membersAsPinned(onFile, members)) {
+      // Step 4: the evidence beside the approval comes from the gate just run,
+      // so the record never tells one story for the stamp and another for the code.
+      const design = designOnly(gate);
+      const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
+      const code = gate.analysis ? withoutCodes(gate.analysis) : undefined;
       const restampedRecord: LockRecord = {
         ...onFile,
         stateId: { algorithm: captured.algorithm, digest: captured.digest },
         ...(captured.parts ? { gateParts: captured.parts } : {}),
         validatorVersion: WAIRON_VERSION,
+        validationResult: { valid: design.valid, errors: count('error'), warnings: count('warning'), notices: count('notice') },
+        ...(code ? { code } : {}),
         // The approval's subject is kept: a parent pins the approval, and a
         // restamp is none — so it never reads as a re-approval one level up.
         restamped: { at: new Date().toISOString(), fromVersion: own.release.from, toVersion: own.release.to, by: 'wairon lock', subject: approvalSubject(onFile) },
       };
+      // Step 5.
       writeLockRecord(restampedRecord);
       logger.info(`The approval of ${approvalStamp(onFile)} was taken under wairon ${own.release.from} and re-validated clean under ${own.release.to}: `
-        + 'its design and every input the project decides are as approved, so the record\'s release stamp is refreshed — no review needed, the approval stays the approver\'s.');
+        + 'its design and every input the project decides are as approved, so the record\'s release stamp is refreshed — no review needed, the approval stays the approver\'s'
+        + (code ? ` (the code results beside it refreshed too: ${code.errors} error(s), ${code.warnings} warning(s), analyzer ${code.analyzer.validatorVersion}).` : '.'));
+      // Step 6.
       return restampedRecord;
     }
   }
+  // Step 7.
   return null;
+}
+
+/**
+ * Step 2 of restampRelease: whether every direct member is judged now as the
+ * record pinned it — state and subject, and the kind, project id and a part's
+ * content digest where the record carries them (an older record predates
+ * them); the commit it was read at is provenance and never compared.
+ */
+function membersAsPinned(record: LockRecord, members: ProjectApproval[]): boolean {
+  const recorded = record.members ?? {};
+  const now = memberPins(members);
+  const aliases = new Set([...Object.keys(recorded), ...Object.keys(now)]);
+  for (const alias of aliases) {
+    const was = ownGet(recorded, alias);
+    const is = ownGet(now, alias);
+    if (!was || !is) return false;
+    if (was.state !== is.state || (was.subject ?? null) !== (is.subject ?? null)) return false;
+    if (was.as !== undefined && was.as !== is.as) return false;
+    if (was.project !== undefined && was.project !== is.project) return false;
+    if (was.contentDigest !== undefined && was.contentDigest !== is.contentDigest) return false;
+  }
+  return true;
 }
 
 /**
@@ -982,7 +1027,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   const members = approvals.filter((a) => a.parent === '');
   // Steps 3-5: an approval a change of the release carried over has its
   // release stamp refreshed without a re-approval.
-  const restamped = restampRelease(approvals.find((a) => a.key === ''), captured, options);
+  const restamped = restampRelease(approvals.find((a) => a.key === ''), captured, options, members, gate);
   if (restamped) return restamped;
   summarize(gate, members, captured, options);
   // Step 9: what no lock may approve, refused before anything is written.

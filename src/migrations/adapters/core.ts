@@ -15,6 +15,9 @@
 export {
   // spec_tree_portal: the family graph, the export tables and the specs.
   resolveChainingParent,
+  // spec_tree_portal: each owner's spec-tree write lock, held across a commit.
+  lockTree,
+  unlockTree,
   projectFamily,
   resolveProjectExports,
   resolveSubsystemExports,

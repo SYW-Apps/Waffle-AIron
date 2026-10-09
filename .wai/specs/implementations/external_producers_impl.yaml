@@ -454,8 +454,9 @@ methods:
         targetMethod: graph
       - stepNumber: 4
         description: >-
-          Read the bound project's lock record, if any: the composition subject it records for each
-          member (`members.<alias>.subject`, `<algorithm>:<digest>`)
+          Read the bound project's lock record, if any — or, when recordedIn names another tree of
+          the bound project (its tree at an earlier revision), that tree's: the composition subject
+          it records for each member (`members.<alias>.subject`, `<algorithm>:<digest>`)
         type: local
       - stepNumber: 5
         label: member
@@ -504,4 +505,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-09T12:01:13.186Z'
+updatedAt: '2026-10-09T16:50:57.342Z'

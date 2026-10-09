@@ -127,8 +127,12 @@ export {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  // spec_tree_portal inspectLock: the bound tree's write lock as its file
+  // stands, for `wairon doctor`.
+  inspectLock,
 } from './specs.js';
 export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile, PinnedSpecRead } from './specs.js';
+export type { TreeLockState } from './spec-files.js';
 export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
 
 /**
@@ -416,7 +420,7 @@ export type { ComponentRename, MethodRename, TypeRename } from './provision.js';
 // on its own); spec_store_portal moveSpec (a component or a type moved to
 // another subsystem, the authoring seam judging it first); spec_tree_portal
 // publishedUsesOf (what a removal takes away from consumers) — 1:1 forwards.
-export { renameSpecId, moveSpec, publishedUsesOf } from './provision.js';
+export { renameSpecId, moveSpec, publishedUsesOf, rehearsalCopy, discardRehearsal } from './provision.js';
 export type { SpecIdRename, SpecMove } from './provision.js';
 // spec_tree_portal crossProjectWriteRefusal: the project boundary every
 // authored write asks before it writes — a 1:1 forward to the core orchestrator.

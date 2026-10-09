@@ -2,6 +2,8 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as files from './family-files.js';
+import * as core from './adapters/core.js';
+import { runWithProjectRoot } from '../utils/fs.js';
 import { transactionRepository as repository } from './transaction-store.js';
 import type {
   FileChange,
@@ -113,7 +115,67 @@ export function discard(rehearsal: Rehearsal): void {
 /** ifamily_transaction.commit — make the changes live, all or nothing. */
 export function commit(rehearsal: Rehearsal, changes: FileChange[], verb: string): TransactionOutcome {
   const owners = ownerRoots(rehearsal, changes);
-  // Steps 1-2: stage every owner; nothing live moves inside this region.
+  // Step 1: every owner's spec-tree write lock, in path order, each at its own
+  // root — no other session's write lands between the base check and the swap.
+  let locked: string[];
+  try {
+    locked = lockOwners(owners);
+  } catch (e) {
+    // Nothing staged, nothing live moved: the family is untouched.
+    repository.dropRehearsal(rehearsal.id);
+    return { committed: false, written: [], failure: `lock: ${errorText(e)}`, restored: true, unrestored: [] };
+  }
+  try {
+    return commitLocked(rehearsal, changes, verb, owners);
+  } finally {
+    // Steps 9, 13, 19 and 21: released on every way out.
+    unlockOwners(locked, rehearsal.familyRoot);
+  }
+}
+
+/** Take each owner's tree lock in path order (one order for every committer, so two never wait on each other); the roots taken. */
+function lockOwners(owners: string[]): string[] {
+  const taken: string[] = [];
+  try {
+    for (const owner of [...owners].sort()) {
+      runWithProjectRoot(owner, () => core.lockTree());
+      taken.push(owner);
+    }
+  } catch (e) {
+    unlockOwners(taken);
+    throw e;
+  }
+  return taken;
+}
+
+/** Release the holds lockOwners took. */
+function unlockOwners(taken: string[], familyRoot?: string): void {
+  for (const owner of [...taken].reverse()) {
+    runWithProjectRoot(owner, () => core.unlockTree());
+    // A swap that emptied an owner's .wai (a demoted or internalized member),
+    // or moved the owner away whole, could not prune it while the lock file
+    // stood in it: its emptied .wai and folders are pruned now, as the swap
+    // would have, never past the family root.
+    // Up to the family root for an owner inside it; a sibling checkout's own folder is never removed.
+    const top = familyRoot !== undefined ? path.resolve(familyRoot) : undefined;
+    const stop = top !== undefined && path.resolve(owner).startsWith(top + path.sep) ? top : path.resolve(owner);
+    for (let at = path.join(owner, '.wai'); ; at = path.dirname(at)) {
+      const resolved = path.resolve(at);
+      if (stop === undefined || resolved === stop || !resolved.startsWith(stop + path.sep)) break;
+      try {
+        if (fs.readdirSync(resolved).length > 0) break;
+        fs.rmSync(resolved, { recursive: true, force: true });
+      } catch {
+        // Gone already: keep walking up only from a folder that existed.
+        if (fs.existsSync(resolved)) break;
+      }
+    }
+  }
+}
+
+/** Steps 2-22 of commit, under every owner's lock. */
+function commitLocked(rehearsal: Rehearsal, changes: FileChange[], verb: string, owners: string[]): TransactionOutcome {
+  // Steps 2-3: stage every owner; nothing live moves inside this region.
   let journals: TransactionJournal[];
   try {
     journals = stage(rehearsal, changes, verb);

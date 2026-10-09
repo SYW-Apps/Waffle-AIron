@@ -245,9 +245,7 @@ methods:
         type: throw
         error: 'chained-spec: the spec lives in another project'
       - stepNumber: 4
-        description: >-
-          Decide whether components move: types carry no edges, so the type and every type moving
-          together with it are moved one after another without judgement
+        description: 'Decide whether components move: their edges are judged first; a type carries no edges'
         type: branch
         condition: the kind is component
         onFalseStep: 12
@@ -299,19 +297,96 @@ methods:
       - stepNumber: 11
         description: >-
           Keep the verdict's warnings and notices — a curable boundary finding the move introduces —
-          for the report
-        type: local
+          for the report; the components are planned, go to the rehearsal
+        type: jump
+        toStep: 13
       - stepNumber: 12
         description: >-
-          Move each spec through the core client adapter in turn — the addressed one first, then
-          each moving together with it — forwarding the caller's dry run; the gate already judged
-          the whole set, so no move in between is judged on its own. The reports fold into one: what
-          moved, what was rewritten
+          A type: plan it and each type moving together with it as a dry run through the core
+          adapter, refused exactly as the move would be, so one refused type refuses them all before
+          anything is written
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: moveSpec
       - stepNumber: 13
-        description: Return the move's report with the gate's notices
+        label: rehearse
+        description: >-
+          Rehearse the move, as the family migrations rehearse theirs: a private copy of the bound
+          tree to write it on
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: rehearsalCopy
+      - stepNumber: 14
+        description: >-
+          Bound to the copy, read the active rule set, to set aside the findings that judge code — a
+          copy holds the design alone
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 15
+        description: 'Judge the copy as it stands: the owner''s gate, its design errors and warnings'
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 16
+        description: >-
+          Write the move on the copy through the core client adapter — each moving spec in turn, the
+          addressed one first — collecting its reports: every spec moved and rewritten, every file
+          written (a moved file as old → new) and every reference re-pointed
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: moveSpec
+      - stepNumber: 17
+        description: Judge the copy as the move leaves it, the same way
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 18
+        description: Discard the copy, whatever the rehearsal did
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: discardRehearsal
+      - stepNumber: 19
+        description: >-
+          The findings the move brings: each error and warning the copy reports after the move that
+          it did not report before, counted by code and spec (a message naming the copy's folder
+          read as the project's)
+        type: local
+      - stepNumber: 20
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 22
+      - stepNumber: 21
+        description: >-
+          Return the rehearsal's report, marked dryRun — the specs it moves and rewrites, the files
+          and references, the findings the result will have and the gate's notices; nothing was
+          written
+        type: return
+        outcome: SpecMove (dry run)
+      - stepNumber: 22
+        description: Does the rehearsal leave a new error?
+        type: branch
+        condition: the findings hold an error
+        onFalseStep: 24
+      - stepNumber: 23
+        label: rehearsal-refused
+        description: >-
+          Refuse the move with the findings it would leave — each error's code, spec and message —
+          before anything is written
+        type: throw
+        error: the move would leave an error validate reports
+      - stepNumber: 24
+        description: >-
+          Move each spec through the core client adapter in turn — the addressed one first, then
+          each moving together with it; the whole set was judged and rehearsed, so no move in
+          between is judged on its own. The reports fold into one: what moved, what was rewritten,
+          the files and the references
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: moveSpec
+      - stepNumber: 25
+        description: Return the move's report with the gate's notices and the rehearsal's findings
         type: return
         outcome: SpecMove
   - name: writeSpec
@@ -670,4 +745,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-09T11:35:16.808Z'
+updatedAt: '2026-10-09T17:09:45.387Z'

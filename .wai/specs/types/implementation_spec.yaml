@@ -118,8 +118,9 @@ fields:
   - name: router
     type: string
     description: >-
-      Portal-only code linkage: the router entry this Portal's own file exports. Whatever process
-      serves the Portal hands it its requests through this entry, which replaces the retired
+      Portal-only code linkage: the router entry this Portal's own file exports — the table or
+      function the server actually dispatches; a class's method is written `Class.method`. Whatever
+      process serves the Portal hands it its requests through this entry, which replaces the retired
       listener mount's `via`. Route coverage reads the routes out of it, completing a route's
       unconstrained leading segment from the first segments of the Portal's own HTTP endpoint paths.
       Export conformance holds the file to it (UNREALIZED_EXPORT_HANDLE), and an import of it is
@@ -168,4 +169,4 @@ methods:
     symbol: implementationDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-08T08:21:08.624Z'
+updatedAt: '2026-10-09T16:54:35.834Z'

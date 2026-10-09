@@ -20,7 +20,10 @@ methods:
     intent: >-
       Reads the spec document at the given path (resolved by the caller) and parses it; returns null
       when the file is absent or empty, and propagates a parse error for malformed content. The
-      storage format — YAML — is decided here, not by the caller.
+      storage format — YAML — is decided here, not by the caller. The shared file helper tells the
+      store's guard what it read, so a digest of the bytes this process last saw of each spec
+      document is remembered (bounded: past a limit the memory is cleared, which only ever skips a
+      check).
     symbol: readSpecFile
   - name: write
     sourcePath: src/core/spec-files.ts
@@ -34,7 +37,12 @@ methods:
       .gitattributes sets for it, else the endings most files beside it (or in the folders above it,
       up to the project) already use, else LF — so a re-save, a doctor repair or a migration never
       turns a file into a whole-file diff. The shared file helper every .wai writer goes through
-      does the same. The path is the caller's — the registry resolves a spec's home, a part's folder
+      does the same, and calls the guard this module installs into it before every write, rename or
+      delete inside a .wai tree: the tree's write lock is taken for that one write unless this
+      process holds it already, and a spec document whose bytes on disk are no longer the ones this
+      process last read or wrote is refused with spec-write-conflict (SpecWriteConflictError) — the
+      other session's write is kept, nothing is written to the file, and the caller is told to run
+      again. The path is the caller's — the registry resolves a spec's home, a part's folder
       included, and never hands it a path inside the git fetch cache, which is read-only.
     symbol: writeSpecFile
   - name: listTree
@@ -111,10 +119,13 @@ methods:
       Creates the lock file beside the tree (<root>/.wai/.spec-write.lock) exclusively — the one
       filesystem operation every platform, Windows included, makes atomic — writing the holder's pid
       and the time into it. A process that already holds the lock counts one more hold and returns
-      at once (reentrant), so a write tool that calls another write path never waits on itself. When
-      another holder has the file, it waits in short synchronous sleeps: a lock whose holder process
-      is gone, or older than any write could take, is removed and taken over; after a bounded wait
-      it throws, naming the holder's pid, so a stuck writer never hangs the session. A root holding
+      at once (reentrant, keyed by the lock file's path as the platform compares paths), so a write
+      tool that calls another write path never waits on itself. When another holder has the file, it
+      waits in short synchronous sleeps: a lock whose holder process is gone, older than any write
+      could take, this process's own with no hold counted, or one no holder can be read from that is
+      older than a ten-second grace (a holder caught between creating and filling it takes
+      milliseconds) is removed and taken over; after a bounded wait it throws, naming the holder's
+      pid and pointing at `wairon doctor`, so a stuck writer never hangs the session. A root holding
       no .wai folder has no tree to guard: nothing is created.
   - name: unlockTree
     sourcePath: src/core/spec-files.ts
@@ -124,6 +135,15 @@ methods:
       Counts one hold down; the last hold removes the lock file, and only when this process wrote it
       — a lock taken over by another process after this one was judged gone is never removed by the
       late original holder. Releasing a lock this process does not hold does nothing.
+  - name: inspectLock
+    sourcePath: src/core/spec-files.ts
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads <root>/.wai/.spec-write.lock when it is there: the holder's pid and time when they can
+      be read, the file's age, whether the holder process is alive, and whether the next write would
+      break it by the same rule lockTree waits by. Writes and removes nothing; none when the file is
+      absent.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-09T12:14:22.289Z'
+updatedAt: '2026-10-09T16:55:40.585Z'

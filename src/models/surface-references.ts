@@ -436,6 +436,70 @@ export function fieldRenamesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot
   return { renames, renameOnly: memberDigest(back, publicName, member) === pinnedDigest };
 }
 
+/** field_change_reading — the field-level changes inside a used member's closure, and whether they are its whole change. */
+export interface FieldChangeReading {
+  /** Each traced rename, read `field "<type>.<old>" renamed to "<new>"`. */
+  renames: string[];
+  /** Each field added to a closure type the pin held, read `field "<type>.<name>" added`. */
+  added: string[];
+  /** Each field gone from a closure type with no trace naming it, read `field "<type>.<name>" removed`. */
+  removed: string[];
+  /** Whether undoing the renames, dropping the added fields and restoring the removed ones gives back the pinned member digest exactly. */
+  fieldsOnly: boolean;
+}
+
+/** The closure type ids one used member reaches in a snapshot: a contract method's (a capability's bound method's), or an exported type's. */
+function memberClosureIds(snapshot: SurfaceSnapshot, publicName: string, member: string): string[] {
+  if (member === 'type') {
+    const exported = snapshot.exportedTypes?.find((t) => t.id === publicName);
+    const def = exported ? snapshot.types.find((t) => t.id === exported.type) : undefined;
+    return def ? closureOfDef(snapshot, def) : [];
+  }
+  const entry = snapshot.interfaces.find((e) => e.id === publicName);
+  const name = member.startsWith('capability:') ? entry?.dispatch?.find((b) => b.capability === member.slice('capability:'.length))?.method : member;
+  const method = entry?.methods.find((m) => m.name === name);
+  return method ? closureIds(snapshot, method) : [];
+}
+
+/**
+ * surface_snapshot.fieldChangesSince — every field change inside the live
+ * closure of one used member since a pinned snapshot: the renames its trace
+ * records (as fieldRenamesSince reads them), and each field ADDED to or
+ * REMOVED from a closure type the pin held under the same id — so a consumer
+ * reads the new field by name instead of "its shape changed" — and whether
+ * those field changes are the whole change. Pure.
+ */
+export function fieldChangesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot, publicName: string, member: string, pinnedDigest: string): FieldChangeReading {
+  const pinnedDefs = new Map(pinned.types.map((d) => [d.id, d] as const));
+  const closure = new Set(memberClosureIds(live, publicName, member));
+  const renames: string[] = [];
+  const added: string[] = [];
+  const removed: string[] = [];
+  const restored = new Map<string, SurfaceTypeDef>();
+  for (const def of live.types) {
+    const was = pinnedDefs.get(def.id);
+    if (!was) continue;
+    const moved = fieldRenames(was, def);
+    for (const r of moved) renames.push(`field "${def.id}.${r.from}" renamed to "${r.to}"`);
+    let back = moved.length ? withFieldsRenamedBack(def, moved) : def;
+    // Added and removed fields are read inside the member's own closure only:
+    // another type's change is another member's.
+    if (closure.has(def.id)) {
+      const before = new Set(was.fields.map((f) => f.name));
+      const after = new Set(back.fields.map((f) => f.name));
+      const fresh = back.fields.filter((f) => !before.has(f.name));
+      const gone = was.fields.filter((f) => !after.has(f.name));
+      for (const f of fresh) added.push(`field "${def.id}.${f.name}" added`);
+      for (const f of gone) removed.push(`field "${def.id}.${f.name}" removed`);
+      if (fresh.length || gone.length) back = { ...back, fields: [...back.fields.filter((f) => before.has(f.name)), ...gone] };
+    }
+    if (back !== def) restored.set(def.id, back);
+  }
+  if (renames.length === 0 && added.length === 0 && removed.length === 0) return { renames, added, removed, fieldsOnly: false };
+  const undone: SurfaceSnapshot = { ...live, types: live.types.map((d) => restored.get(d.id) ?? d) };
+  return { renames, added, removed, fieldsOnly: memberDigest(undone, publicName, member) === pinnedDigest };
+}
+
 /** A method's wire endpoint as a changelog shows it: an HTTP verb and path (with its stated status), another transport's address fields, or none. */
 function shownEndpoint(endpoint: MethodSignature['endpoint']): string {
   if (!endpoint) return 'none';

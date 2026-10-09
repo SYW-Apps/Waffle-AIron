@@ -38,9 +38,14 @@ import { RuleContext, SddRule } from '../types.js';
 // the member projects that table re-exports from.
 // ---------------------------------------------------------------------------
 
-/** A reached interface or type, under the alias the consumer declares its project by; `approved` when its retired names come from a member's approved surface, not a pin. */
-interface PinnedEntry { alias: string; entry: SurfaceContractEntry; approved?: boolean }
-interface PinnedType { alias: string; def: SurfaceTypeDef }
+/**
+ * A reached interface or type, under the alias the consumer declares its
+ * project by; `approved` when its retired names come from a member's approved
+ * surface, not a pin; `live` when it is a member's live export, never a pin —
+ * so a difference names the member's method or type, not "the pin's".
+ */
+interface PinnedEntry { alias: string; entry: SurfaceContractEntry; approved?: boolean; live?: boolean }
+interface PinnedType { alias: string; def: SurfaceTypeDef; live?: boolean }
 
 /** A former name as a trace records it: `<interface>.<method>` for a method, the bare name otherwise. */
 const lastSegment = (key: string): string => key.slice(key.lastIndexOf('.') + 1);
@@ -100,12 +105,13 @@ function memberSurface(ctx: RuleContext, node: ProjectNode, alias: string): { en
         alias,
         entry: { id: e.publicName, name: e.publicName, component: e.component, methods, ...(retired.length ? { retired } : {}) } as unknown as SurfaceContractEntry,
         ...(retired.length ? { approved: true } : {}),
+        live: true,
       });
       for (const m of methods) pending.push(...methodTypeRefs(m));
     } else if (e.kind === 'type' && e.typeDef) {
       const type = memberType(e.typeDef);
       if (!type) continue;
-      types.push({ alias, def: asDef(type, e.publicName) });
+      types.push({ alias, def: asDef(type, e.publicName), live: true });
       for (const f of type.fields ?? []) pending.push(...extractTypeIdentifiers(f.type));
     }
   }
@@ -124,7 +130,8 @@ function memberSurface(ctx: RuleContext, node: ProjectNode, alias: string): { en
     const key = `${ownerAlias}::${nameKey(id)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    types.push({ alias: ownerAlias, def: asDef(type, id) });
+    // Live only when the member owns it: a type it takes from a pinned external is that pin's.
+    types.push({ alias: ownerAlias, def: asDef(type, id), ...(owner === ns || !(ctx.pinnedExternals ?? []).some((p) => p.alias === ownerAlias) ? { live: true } : {}) });
     for (const f of type.fields ?? []) pending.push(...extractTypeIdentifiers(f.type));
   }
   return { entries, types };
@@ -196,17 +203,19 @@ function pinnedParams(method: SurfaceContractEntry['methods'][number]): { name: 
 }
 
 /** How a binding's parameter list differs from the pinned method's; empty when it agrees. */
-function paramDrift(where: string, params: string[], method: SurfaceContractEntry['methods'][number]): string[] {
+function paramDrift(where: string, params: string[], method: SurfaceContractEntry['methods'][number], live = false): string[] {
   const pinned = pinnedParams(method);
+  // A member is compared with its live export, never a pin: said so.
+  const theirs = live ? "the member's" : "the pin's";
   if (params.length !== pinned.length) {
-    return [`"${where}" takes ${params.length} parameter(s) (${params.map((p) => p || '{…}').join(', ') || 'none'}), the pin's "${method.name}" takes ${pinned.length} (${pinned.map((p) => p.name).join(', ') || 'none'})`];
+    return [`"${where}" takes ${params.length} parameter(s) (${params.map((p) => p || '{…}').join(', ') || 'none'}), ${theirs} "${method.name}" takes ${pinned.length} (${pinned.map((p) => p.name).join(', ') || 'none'})`];
   }
   const out: string[] = [];
   params.forEach((name, i) => {
     if (name === '' || nameKey(name) === nameKey(pinned[i].name)) return;
     out.push(pinned[i].previous.some((prev) => nameKey(prev) === nameKey(name))
       ? `parameter "${name}" of "${where}" was renamed to "${pinned[i].name}" — follow the rename`
-      : `parameter ${i + 1} of "${where}" is "${name}", the pin's is "${pinned[i].name}"`);
+      : `parameter ${i + 1} of "${where}" is "${name}", ${theirs} is "${pinned[i].name}"`);
   });
   return out;
 }
@@ -223,7 +232,7 @@ function retiredIn(entry: PinnedEntry, key: string): boolean {
 function methodDrift(where: string, params: string[], entry: PinnedEntry, reportMissing: boolean, method?: string): string[] {
   const key = nameKey(method ?? where);
   const current = entry.entry.methods.find((m) => nameKey(m.name) === key);
-  if (current) return paramDrift(where, params, current);
+  if (current) return paramDrift(where, params, current, entry.live === true);
   const renamed = entry.entry.methods.find((m) => (m.formerly ?? []).some((f) => nameKey(f) === key));
   if (renamed) return [`"${method ?? where}" was renamed to "${renamed.name}" in ${entry.alias}::${entry.entry.id} — follow the rename`];
   if (retiredIn(entry, key)) return [`"${method ?? where}" was removed from ${entry.alias}::${entry.entry.id} (${entry.approved ? 'the member\'s approved design held it' : 'an earlier pin held it'}) — drop it from the binding, and the calls that use it`];
@@ -246,6 +255,8 @@ function formerType(name: string, types: PinnedType[]): PinnedType | undefined {
 function fieldDrift(members: BindingMember[], type: PinnedType, types: PinnedType[]): string[] {
   if (type.def.holds !== undefined || type.def.kind === 'enum' || type.def.kind === 'signature') return [];
   const fields = type.def.fields;
+  // A member's type is its live export, never a pinned one: said so.
+  const theirs = type.live ? "the member's type" : "the pinned type";
   const out: string[] = [];
   const explained = new Set<string>();
   for (const member of members.filter((m) => m.params === undefined)) {
@@ -256,14 +267,14 @@ function fieldDrift(members: BindingMember[], type: PinnedType, types: PinnedTyp
         explained.add(renamed.name);
         out.push(`field "${member.name}" was renamed to "${renamed.name}" — follow the rename`);
       } else {
-        out.push(`field "${member.name}" is not in the pinned type`);
+        out.push(`field "${member.name}" is not in ${theirs}`);
       }
     }
   }
   out.push(...fieldTypeDrift(members, types));
   const held = new Set(members.map((m) => nameKey(m.name)));
   for (const field of fields) {
-    if (!held.has(nameKey(field.name)) && !explained.has(field.name)) out.push(`the pinned type has field "${field.name}" the binding does not declare`);
+    if (!held.has(nameKey(field.name)) && !explained.has(field.name)) out.push(`${theirs} has field "${field.name}" the binding does not declare`);
   }
   return out;
 }

@@ -392,6 +392,13 @@ methods:
         type: call
         targetComponent: agent_context_portal
         targetMethod: staleDerivedDocs
+  - name: inspectLock
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: inspectLock
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T08:41:08.434Z'
+updatedAt: '2026-10-09T16:55:52.751Z'

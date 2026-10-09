@@ -201,10 +201,17 @@ methods:
       Forward to the core portal: each live member of the bound project with its usage and its tree
       at the approval it is judged against — what a member consumer's relation and binding are
       compared with.
-    signature: 'memberRevisions(): list<member_revision>'
+    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
     returns: list<member_revision>
-    params: []
+    params:
+      - name: recordedIn
+        type: string
+        description: >-
+          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
+          whose lock records the member approvals to read instead of the bound root's — surface
+          diff's baseline reads each member as THAT approval recorded it
+        optional: true
     effect: io
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-09T11:37:57.139Z'
+updatedAt: '2026-10-09T16:50:52.504Z'

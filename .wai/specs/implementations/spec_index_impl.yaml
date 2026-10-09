@@ -553,22 +553,58 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Answer the path the workspace's index records for the subsystem's spec. Every id this path
-          is built from — the subsystem's own and the owner it is placed under — must be path-safe
-          first (letters, digits, `-` and `_` per `::`-segment): one that is not is refused before
+          Refuse an id that is not path-safe (letters, digits, `-` and `_` per `::`-segment) before
           any path exists, so no write lands outside the tree
         type: local
+      - stepNumber: 2
+        description: >-
+          Answer the path the workspace's index records under the id exactly as given (a member's
+          spec is recorded under its member key), or the file of the legacy L1 mount the id names
+        type: local
+      - stepNumber: 3
+        description: >-
+          A member-qualified id not recorded is placed in that member's own tree, by the member's
+          local id
+        type: local
+      - stepNumber: 4
+        description: >-
+          A bare id is the bound project's own: ids are per project, so a recorded key that ends in
+          the id answers it only when it is of the same project — a member's same-named subsystem
+          never does (only a deprecated legacy L1 mount still answers a bare id by suffix, until
+          doctor --fix rewrites it)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Otherwise answer where a new subsystem of the bound project is placed in its own specs
+          folder (flat or per-subsystem layout)
+        type: return
+        outcome: string
     symbol: getSubsystemPath
   - name: componentPath
     narrative:
       - stepNumber: 1
         description: >-
-          Answer the path the index records for the component's spec, or its placement under its
-          subsystem when it is not stored yet. Every id this path is built from — the component's
-          own and the owner it is placed under — must be path-safe first (letters, digits, `-` and
-          `_` per `::`-segment): one that is not is refused before any path exists, so no write
-          lands outside the tree
+          Refuse a component or subsystem id that is not path-safe (letters, digits, `-` and `_` per
+          `::`-segment) before any path exists, so no write lands outside the tree
         type: local
+      - stepNumber: 2
+        description: >-
+          Answer the path the index records under the id exactly as given; a member-qualified id not
+          recorded is placed in that member's own tree
+        type: local
+      - stepNumber: 3
+        description: >-
+          An owned member nests inside its owning pattern's folder — only an owner of the
+          component's OWN project: a member's Repository owning a component of the same local id is
+          another project's, and neither the placement nor the layout normalization after a write
+          ever draws a local component into its folder
+        type: local
+      - stepNumber: 4
+        description: >-
+          Otherwise place it under its subsystem's folder as subsystemPath places the subsystem —
+          the bound project's own for a bare subsystem id
+        type: return
+        outcome: string
     symbol: getComponentPath
   - name: interfacePath
     narrative:
@@ -649,4 +685,4 @@ methods:
     symbol: getTypePath
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-09T11:36:21.714Z'
+updatedAt: '2026-10-09T18:35:09.915Z'

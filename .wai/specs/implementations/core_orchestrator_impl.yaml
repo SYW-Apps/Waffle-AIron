@@ -150,28 +150,41 @@ methods:
           is inside .wai
       - stepNumber: 3
         description: >-
-          Resolve the member directory: the bound project root joined with a contained or `../`
-          sibling path
-        type: local
+          Resolve the member directory — the bound project root joined with a contained or `../`
+          sibling path — and read the declaring project's configuration through the project config
+          Repository: the members and externals it declares, and the packs it requires of its
+          members (project_config.requiredPolicies) — the bound project's own requirements only:
+          nothing above it is read
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
       - stepNumber: 4
         description: >-
-          Containment guard, for a contained path: reject one that escapes the declaring project —
-          absolute, with an inner `..`, or through a link. Leaving the root is only ever a leading
-          `../`, which is not guarded
+          May it be created there, under that alias? A contained path must resolve strictly within
+          the project (absolute, inner-`..` and link-escaping paths escape); a `../` source must be
+          a sibling checkout ONE level up (`../<name>`, folders below it allowed) — one climbing
+          further out, or naming the project's own folder or one holding it, would scaffold a .wai
+          outside the family where nobody looks; and the alias must not already name an external, or
+          a member at another source (an equal declaration is a re-run completing a partial
+          scaffold). Each is refused before anything is scaffolded
         type: branch
         condition: >-
-          the resolved child project directory is not contained within the bound project root (an
-          absolute path or a ../-escaping projectPath)
+          the path escapes, climbs more than one folder out, names the project's own folder, or the
+          alias is already declared otherwise
         onFalseStep: 6
       - stepNumber: 5
-        description: Reject a path that resolves outside the project root
+        description: >-
+          Refuse, writing nothing, naming where the source lands and the accepted forms — inside the
+          project (`services/<name>`) or a sibling one level up (`../<name>`); a project that
+          already lives further away is declared with `wairon member attach` or `wairon externals
+          add`, never scaffolded — or the declaration that stands under the alias
         type: throw
-        error: a member path must resolve within the project root
+        error: the member cannot be created there, or the alias is declared otherwise
       - stepNumber: 6
         description: Is the member in a git repository?
         type: branch
         condition: the member is declared by a git source
-        onFalseStep: 10
+        onFalseStep: 12
       - stepNumber: 7
         description: >-
           Resolve the commit: the source's `#<commit>` when given, else the remote's default branch
@@ -187,61 +200,69 @@ methods:
           and the commit goes into the declaration as `#<commit>`. A git project member is read at
           audience `instance`, as any consumer outside its family: one whose L0 export table exports
           names, but none at `instance` or wider, is refused, writing nothing, with the audience
-          reason `wairon externals add` gives — the narrower audience its names are exported at, the
-          audience this project reads it at and the ranking, narrowest first — so it is never
-          declared only for every later check to call its names gone
+          reason `wairon externals add` gives
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
       - stepNumber: 9
+        description: A report (`--report`)?
+        type: branch
+        condition: report is set
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Answer the declaration it would write — the git member resolved, fetched and judged
+          exactly as above — written false, nothing written
+        type: return
+        outcome: MemberCreation (report)
+      - stepNumber: 11
         description: A git member is only declared
         type: jump
         toStep: 23
-      - stepNumber: 10
+      - stepNumber: 12
+        description: >-
+          A report (`--report`)? Every refusal a path member meets is made here as the write would
+          make it — a part over a folder that already holds a project, a part outside the project
+          while this project has no id — and the plan answered: each file or folder it would create
+          (the specs folder, the member's configuration, its L0, the declaration in members), named
+          with where it lies
+        type: branch
+        condition: report is set
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Answer the plan, written false; nothing was written
+        type: return
+        outcome: MemberCreation (report)
+      - stepNumber: 14
         label: kind
         description: A part (the default) or a project? A project is created by creating its content
         type: branch
         condition: 'a project is asked for (as: project)'
         onFalseStep: 22
-      - stepNumber: 11
-        description: >-
-          Read the declaring project's configuration through the project config Repository, for the
-          packs it requires of its members (project_config.requiredPolicies) — the bound project's
-          own requirements only: nothing above it is read
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: load
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Scope the project root to the member directory, so the next reads and writes address the
-          member project
-        type: local
-      - stepNumber: 13
-        description: Check whether the member already has a configuration
+          member project, and check whether the member already has a configuration
         type: call
         targetComponent: project_config_repository
         targetMethod: exists
-      - stepNumber: 14
+      - stepNumber: 16
         description: 'Complete only what is missing: an existing configuration is never overwritten'
         type: branch
         condition: the member has no configuration
-        onFalseStep: 18
-      - stepNumber: 15
+        onFalseStep: 19
+      - stepNumber: 17
         description: >-
           List the packs installed in this wairon install's store, every version with its digest and
-          recorded origin
+          recorded origin, and scaffold the requirements once: for each required pack the highest
+          installed version its range admits (pack_requirement.admits), as `pack use --pin` records
+          it; a requirement no installed version satisfies is collected as unadopted and nothing is
+          written for it; when exactly one adopted requirement names a profile, it becomes the
+          member's projectType
         type: call
         targetComponent: extension_orchestrator
         targetMethod: listInstalledPacks
-      - stepNumber: 16
-        description: >-
-          Scaffold the requirements, once: for each required pack pick the highest installed version
-          its range admits (pack_requirement.admits) and build the selection `pack use --pin`
-          records (name, that version, its digest, its origin when fetchable); a requirement no
-          installed version satisfies is collected as unadopted and nothing is written for it. When
-          exactly one adopted requirement names a profile, it becomes the member's projectType
-        type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Write the member's default configuration, named after the alias (or the display name
           given), declaring the alias as its project id, and carrying the scaffolded selections in
@@ -252,13 +273,13 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: create
-      - stepNumber: 18
+      - stepNumber: 19
         label: bootstrap_l0
         description: 'Keep an existing spec tree intact: bootstrap an L0 only for a member that has none'
         type: branch
         condition: the member has no L0 system spec
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 21
+      - stepNumber: 20
         description: >-
           Persist the member's bootstrap L0 system spec, creating its specs directory — its vision
           is the description given, else one line naming it a member of this project — so a fresh
@@ -266,11 +287,8 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 20
-        description: Restore the declaring project's scope
-        type: local
       - stepNumber: 21
-        description: The project is scaffolded
+        description: 'Restore the declaring project''s scope: the project is scaffolded'
         type: jump
         toStep: 23
       - stepNumber: 22
@@ -289,8 +307,7 @@ methods:
         description: >-
           Declare the member in the declaring project's `members` — the shorthand `alias: <source>`
           (a git source with its `#<commit>`), the long form only to carry a description — through
-          the project config Repository; an equal declaration writes nothing and a different one
-          under the alias is refused
+          the project config Repository; an equal declaration writes nothing
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
@@ -1922,8 +1939,11 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Walk the spec tree's own layout and collect every spec file path inside the scope, or all
-          of them when no subsystem was named
+          Walk the spec tree's own layout and collect every spec file path inside the scope — the
+          subsystem's index, its components with their contracts and implementations, and every type
+          whose `subsystem` names it (a subsystem's own type is inside it, wherever the layout
+          stores its file) — or all of them when no subsystem was named, the L0 and the
+          project-level types included
         type: local
       - stepNumber: 2
         description: >-
@@ -3332,8 +3352,9 @@ methods:
       - stepNumber: 9
         description: >-
           Plan what follows the old subsystem: its export entries and lifecycle entrypoints naming a
-          moved component go to the new subsystem, and an L0 re-export from the old subsystem naming
-          one is re-pointed at the new
+          moved component — by its component or one of its contracts — go to the new subsystem, and
+          an L0 re-export from the old subsystem naming one is re-pointed at the new; each file it
+          will write and each reference it re-points is recorded for the report
         type: local
       - stepNumber: 10
         description: A dry run stops here
@@ -3372,12 +3393,11 @@ methods:
       - stepNumber: 16
         description: >-
           Guard: the type exists, is the bound project's own, the target is another subsystem of the
-          bound tree (or system level), the target holds no type of that id, and a type moving to
-          system level is exported by no subsystem
+          bound tree (or system level), and the target holds no type of that id
         type: branch
         condition: >-
-          the type is missing or in another project, the target is missing or where it lives, the id
-          is taken there, or an L1 export would be left naming a system-level type
+          the type is missing or in another project, the target is missing or where it lives, or the
+          id is taken there
         onFalseStep: 18
       - stepNumber: 17
         label: type-refused
@@ -3393,8 +3413,13 @@ methods:
           position, a generic argument (`list<old.type>`, `map<string, old::type>`), an optional
           (`old::type?`), a union, a result, a returns, a field, a signature type — is respelled to
           name the new subsystem in the same spelling (the bare id at system level), through the one
-          type-reference rewriter every type move shares; its L1 export entries move with it, and an
-          L0 re-export from the old subsystem naming it is re-pointed
+          type-reference rewriter every type move shares; and the export tables follow: its L1
+          export entries move with it to the target subsystem, an L0 re-export from the old
+          subsystem naming it is re-pointed at the new, an L0 entry publishing it as a project-level
+          type (no `from`) re-exports it `from` the target subsystem — whose L1 gains the type's
+          export entry — and, for a type made system-level, its L0 entries lose `from` (keeping the
+          public name its L1 entry gave) and its L1 entries go. Each file to write and each
+          reference respelled or re-pointed is recorded for the report
         type: local
       - stepNumber: 19
         description: A dry run stops here
@@ -3406,12 +3431,17 @@ methods:
         type: return
         outcome: SpecMove (dry run)
       - stepNumber: 21
-        description: Rewrite the references and the export entries across the bound tree
+        description: >-
+          Rewrite the references and the export entries across the bound tree, each touched spec
+          keeping its updatedAt: a move is placement, not an edit, so moving back leaves the tree
+          byte-identical
         type: local
       - stepNumber: 22
         description: >-
-          Write the type under its new owner, its stored file cleared first (the loader never moves
-          a file on a save) and restored, byte for byte, when the save fails
+          Write the type under its new owner, its updatedAt and its line endings kept: its stored
+          file is removed first through the store (the loader never moves a file on a save), pruning
+          each folder the removal leaves empty — a subsystem's types folder a type moved out of is
+          never left behind — and restored, byte for byte, when the save fails
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
@@ -3421,9 +3451,32 @@ methods:
         targetComponent: spec_loader
         targetMethod: invalidateCache
       - stepNumber: 24
-        description: Return what moved and what was rewritten
+        description: >-
+          Return what moved, what was rewritten, the files written (a moved file as old → new) and
+          the references respelled or re-pointed
         type: return
         outcome: SpecMove
+  - name: rehearsalCopy
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Make a temporary folder and copy the bound project's .wai into it — the specs, the
+          configuration, the lock record and pins, the rules — leaving out what no judgement reads
+          and a copy must never carry: the generated outputs, the derived context, an unfinished
+          transaction and the write lock; a specs folder configured outside .wai is copied to the
+          same place relative to the copy
+        type: local
+      - stepNumber: 2
+        description: Answer the copy's root
+        type: return
+        outcome: string
+  - name: discardRehearsal
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Remove the copy's folder and everything in it
+        type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T11:39:55.346Z'
+updatedAt: '2026-10-09T17:38:42.922Z'

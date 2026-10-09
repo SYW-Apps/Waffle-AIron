@@ -315,6 +315,20 @@ methods:
       the approval it carries — a storage move counted as moved, never as a change — or null when it
       carries none.
     signatureFrom: approval_portal.diffAgainstApproval
+  - name: lockTree
+    description: >-
+      Forward to spec_tree_portal.lockTree: take the cross-process write lock of the bound root's
+      spec tree (reentrant), refused after a bounded wait naming the holder
+    signature: 'lockTree(): void'
+    returns: void
+    params: []
+  - name: unlockTree
+    description: >-
+      Forward to spec_tree_portal.unlockTree: release one hold of the bound root's spec-tree write
+      lock
+    signature: 'unlockTree(): void'
+    returns: void
+    params: []
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-07T10:54:45.803Z'
+updatedAt: '2026-10-09T16:55:56.540Z'

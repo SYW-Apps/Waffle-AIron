@@ -126,3 +126,15 @@ export class ChainingMigrationRefusedError extends WaironError {
     this.name = 'ChainingMigrationRefusedError';
   }
 }
+
+/**
+ * Thrown by the spec store when a write would replace a spec document another
+ * session changed on disk after this one read it: the write is refused so the
+ * other session's change is kept, and nothing is written to that file.
+ */
+export class SpecWriteConflictError extends WaironError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpecWriteConflictError';
+  }
+}
