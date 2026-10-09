@@ -33,21 +33,26 @@ methods:
           A --subsystem lock narrows a RE-approval and never a first one: the gate identity a record
           certifies is the whole design's, so a record listing one subsystem while its identity
           covers the whole tree would pass lock-check over specs nobody reviewed. Is it a scoped
-          lock that cannot be approved alone — no approval on record with per-spec digests (a first
-          approval covers the whole tree), a record without gate parts that break down its identity
-          (it cannot show the rest unmoved), a spec OUTSIDE the scope that changed, was added or was
-          removed since the approval, or an input the identity covers besides the design (rule
-          tuning, packs, network, composition, a pin, a member's approval, the release) that moved?
+          lock that cannot be approved here — a subsystem of a member PROJECT
+          (`<member>::<subsystem>`: a member's subsystem is approved at the member's own root, never
+          by a parent, which never writes below itself), no approval on record with per-spec digests
+          (a first approval covers the whole tree), a record without gate parts that break down its
+          identity (it cannot show the rest unmoved), a spec OUTSIDE the scope that changed, was
+          added or was removed since the approval, or an input the identity covers besides the
+          design (rule tuning, packs, network, composition, a pin, a member's approval, the release)
+          that moved?
         type: branch
         condition: '--subsystem was given and the scope cannot be approved alone'
         onFalseStep: 5
       - stepNumber: 4
         description: >-
-          Refuse, writing nothing, saying why in one sentence: a first approval covers the whole
-          tree (`wairon lock` without --subsystem), or what moved outside the scope is named and the
-          whole project must be re-approved together. A scoped lock that passes re-approves its
-          scope and carries the rest forward exactly as previously approved — nothing outside it
-          moved — so the record, its identity, status and lock-check agree
+          Refuse, writing nothing, saying why in one sentence: a member's subsystem is locked at the
+          member's root (`wairon lock --subsystem <subsystem>` in its folder, named), a first
+          approval covers the whole tree (`wairon lock` without --subsystem), or what moved outside
+          the scope is named and the whole project must be re-approved together. A scoped lock that
+          passes re-approves its scope and carries the rest forward exactly as previously approved —
+          nothing outside it moved — so the record, its identity, status and lock-check agree; a
+          refused scope never reaches the "nothing has changed" summary or a success line
         type: throw
         error: a --subsystem lock that cannot be approved alone
       - stepNumber: 5
@@ -103,19 +108,29 @@ methods:
           storage moved with its content unchanged is a move (ApprovalDiff.moved), counted apart and
           never as a change; past a dozen paths per kind the list is summarized (the first few, then
           a count of the rest and `--all`, which lists every one); when no own spec moved, either
-          "nothing has changed" — the approval on record stays as it is, its lockedAt and
-          .wai/lock.json untouched, unless another approver is locking (then their approval is
-          recorded anew, said so) — or, when the identity or the project id moved, "no spec changed,
-          but what the design is approved under did", naming it (a record without gate parts says it
-          cannot tell which input moved and that this re-approval records them); when any spec of
-          any kind is still draft or design, how many of how many, counted per kind (subsystems,
-          components, contracts, implementations, types), and that the approval covers them as they
-          stand; the code results of the gate on a line of their own ("code: N errors, M warnings
-          recorded beside the claim — CI enforces them, not the lock"); then each direct project
-          member with its state (approved | drifted | never) and, where its pin moved, the subject
-          this approval recorded and the one it carries now — a project member's own edits never
-          appear in this project's spec diff; what the parent reviews is the member's approval
-          moving; then each part stored outside the project with the commit being approved
+          "nothing has changed" — the approval on record stays as it is, its lockedAt kept, and
+          .wai/lock.json left untouched by this run unless evidence beside the approval is refreshed
+          (named: the code results, the design counts, gate parts, a release stamp that is missing,
+          no version or newer than this release, which is replaced with this release) — unless
+          another approver is locking (then their approval is recorded anew, said so) — or, when the
+          identity or the project id moved, "no spec changed, but what the design is approved under
+          did", naming it (a record without gate parts says it cannot tell which input moved and
+          that this re-approval records them); whenever this lock records the project's own inputs
+          for the first time (a first approval, or a record without usable gate parts) or the rule
+          tuning or packs moved, the inputs it records as they stand: projectType, each design rule
+          severity override, the selected packs, a declared network, `composition` — so the human
+          sees the tuning they approve; when any spec of any kind is still draft or design, how many
+          of how many, counted per kind (subsystems, components, contracts, implementations, types),
+          and that the approval covers them as they stand; the code results of the gate on a line of
+          their own ("code: N errors, M warnings recorded beside the claim — CI enforces them, not
+          the lock"); then each direct project member with its state (approved | drifted | never)
+          and, where its pin moved, the subject this approval recorded and the one it carries now —
+          a project member's own edits never appear in this project's spec diff; what the parent
+          reviews is the member's approval moving; when a direct project member is drifted at its
+          own root, a warning that the right order is bottom-up — lock that member at its own root
+          first (its folder named), then here — because this lock records it drifted, lock-check
+          here fails until it is re-locked, and this project must lock again to pin it; then each
+          part stored outside the project with the commit being approved
         type: local
       - stepNumber: 12
         description: >-
@@ -202,11 +217,14 @@ methods:
         onFalseStep: 24
       - stepNumber: 23
         description: >-
-          Keep the record on file — its lockedAt, release stamp and `restamped` trace included — and
-          write nothing, and return it, so the generated outputs are still refreshed and
-          `.wai/lock.json` is left untouched as the summary said. Only when its gateParts are
-          missing or do not break down the identity it still matches are they rewritten from the
-          identity, every other field kept, and said so
+          Keep the record on file — its lockedAt and `restamped` trace included — and return it, so
+          the generated outputs are still refreshed. Write nothing unless evidence recorded beside
+          the approval moved: the code results, the design counts, gate parts that are missing or do
+          not break down the identity it still matches (rewritten from the identity), or a release
+          stamp that is missing, no wairon version or newer than this release
+          (lock_record.stampProblem: replaced with this release, which just verified the unchanged
+          approval) — each said, every other field kept; with none, `.wai/lock.json` is left
+          untouched by this run, as the summary said
         type: return
         outcome: LockRecord
       - stepNumber: 24
@@ -277,7 +295,7 @@ methods:
         targetMethod: familyApprovals
       - stepNumber: 7
         label: member-drift
-        description: Does a member project carry spec changes nobody approved at its own root?
+        description: Does a member project's approval not cover it at its own root?
         type: branch
         condition: a member project is drifted
         onTrueStep: 8
@@ -294,10 +312,16 @@ methods:
         label: verdict-member-drifted
         description: >-
           Refuse at every strictness: the merge gate is never green while a member's approval does
-          not cover it. Name each drifted member with its folder, what it owes — its `owed` sentence
-          when it carries one (a moved id, an external to pin), else that its design changed since
-          its own approval — and the remedy: `wairon lock` at that member's own root, then commit
-          its .wai/lock.json; and say whether this project's own approval needs one too.
+          not cover it. Name each drifted member with its folder and its real state, in the member's
+          own terms — its `owed` sentence (a moved id, an external to pin, a pack that cannot load);
+          an approval that predates recorded inputs (a record without gate parts whose design is
+          unchanged — `its approval predates recorded inputs — re-lock it once at its own root`); an
+          approval a release change did not carry (the release verdict's reason or findings); the
+          inputs that moved (inputsMoved); an earlier gate identity; else that its design changed
+          since its own approval — and say "spec changes nobody approved" only when a member's specs
+          did move; the remedy: `wairon lock` at that member's own root, then commit its
+          .wai/lock.json; and say whether this project's own approval needs one too, afterwards
+          (bottom-up).
         type: return
         outcome: member drifted
       - stepNumber: 10
@@ -358,9 +382,11 @@ methods:
           stamp without a re-approval); and how many member projects are approved at their own
           roots. A member that was never approved is named as NOT gated (only --strict fails it), so
           the verdict never calls the family approved while one of its projects was never approved.
-          When the record's gateParts do not break down its identity (the own entry's partsIgnored),
-          one notice says they are ignored and that `wairon lock` rewrites them — the identity alone
-          decided the pass.
+          When the record's gateParts do not break down its identity, or are missing (the own
+          entry's partsIgnored), one notice says they are ignored and that `wairon lock` rewrites
+          them; when its release stamp is missing, no version or newer than this release (the own
+          entry's stampProblem), one notice names it and that `wairon lock` replaces it — the
+          identity alone decided the pass.
         type: return
         outcome: locked
       - stepNumber: 17
@@ -528,7 +554,7 @@ methods:
         description: Is the L0 there?
         type: branch
         condition: the system spec loaded
-        onTrueStep: 7
+        onTrueStep: 10
         onFalseStep: 3
       - stepNumber: 3
         label: orphaned-files
@@ -558,13 +584,35 @@ methods:
         type: return
         outcome: unlocked (root missing)
       - stepNumber: 6
+        label: record-on-file
+        description: >-
+          No L0 and no spec file: read the approval on record. A project with an approval on record
+          opted in, so the tree it approved being gone is a deleted design, never no tree
+        type: call
+        targetComponent: approval_portal
+        targetMethod: readLockRecord
+      - stepNumber: 7
+        description: Does the record approve spec files (lock_record.missingTreeSentence)?
+        type: branch
+        condition: the record approved spec files
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        label: verdict-tree-missing
+        description: >-
+          Refuse at every strictness with lock_record.missingTreeSentence: the approval records N
+          spec files and the tree is gone, so the design it approved cannot be judged — restore it
+          from version control, or, to retire the design, delete .wai/lock.json in the same change
+        type: return
+        outcome: unlocked (tree missing)
+      - stepNumber: 9
         label: verdict-no-tree
         description: >-
           No tree: report that this repository carries no spec tree, approved unless strict was
           asked for
         type: return
         outcome: no-tree
-      - stepNumber: 7
+      - stepNumber: 10
         label: has-tree
         description: 'The L0 is there: no verdict from the tree''s presence'
         type: return
@@ -581,39 +629,57 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
+          Is the configuration the approval was taken under gone? A lock record certifies a design
+          under the inputs .wai/project.yaml declares (rule tuning, projectType, packs, network,
+          composition, the project id)
+        type: branch
+        condition: no configuration loads and no .wai/project.yaml is on disk
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse at every strictness, naming the missing .wai/project.yaml — never blaming the
+          inputs it held (the network, the rule tuning) as if they had been edited — and the fix:
+          restore it from version control
+        type: return
+        outcome: stale (configuration missing)
+      - stepNumber: 4
+        description: >-
           Resolve the configured identity against the recorded projectId —
           project_config.identity(record.projectId), the very resolution the project-identity rule
           judges PROJECT_ID_CHANGED and PROJECT_ID_RENAMED by. No record, or a configuration that
           does not load, names no problem here
         type: local
-      - stepNumber: 3
+      - stepNumber: 5
         description: >-
           Did the id move since the approval (changed by hand, or renamed with its re-lock not yet
           taken)?
         type: branch
         condition: the identity names a changed or renamed id
-        onFalseStep: 5
-      - stepNumber: 4
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Refuse at every strictness, naming the approved id and the configured one: changed by hand
           — restore it, then rename deliberately with `wairon project rename <id>` and re-lock;
           renamed — `wairon lock` re-approves the design under the new id
         type: return
         outcome: stale (project id)
-      - stepNumber: 5
+      - stepNumber: 7
         description: >-
-          Does the root's own entry owe an external — one declared but never pinned, or used beyond
-          what its pin records?
+          Does the root's own entry owe something its identity does not cover — an external declared
+          but never pinned or used beyond what its pin records, or a selected extension pack that
+          cannot load?
         type: branch
         condition: the own entry carries owed
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
-          Refuse, quoting what is owed and the fix in the order the lock takes it — pin first
-          (`wairon externals pin <alias>`), then `wairon lock`
+          Refuse, quoting what is owed and the fix in the order the lock takes it — for an external,
+          pin first (`wairon externals pin <alias>`), then `wairon lock`; for a pack that cannot
+          load, make it load (install or vendor it, or drop the selection), then `wairon lock`
         type: return
         outcome: stale (external pin)
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Does the root's own entry carry a release verdict that did NOT carry the approval over
           (family_validator.releaseVerdict: the approved design re-validated under this release
@@ -621,8 +687,8 @@ methods:
           that do not break down its identity, a newer or invalid stamp)?
         type: branch
         condition: the own entry's release verdict is not carried
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Refuse at every strictness, naming the cause exactly (release_verdict.staleSentence): its
           reason when it has one — `approved under <old> before wairon recorded its inputs
@@ -634,7 +700,7 @@ methods:
           unless its parts prove it
         type: return
         outcome: stale (release findings)
-      - stepNumber: 9
+      - stepNumber: 11
         description: 'Nothing owed: no verdict'
         type: return
         outcome: none
@@ -725,4 +791,4 @@ methods:
         outcome: ok
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-08T18:54:41.873Z'
+updatedAt: '2026-10-09T00:32:57.300Z'

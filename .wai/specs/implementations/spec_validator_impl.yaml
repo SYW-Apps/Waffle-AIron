@@ -892,8 +892,9 @@ methods:
       - stepNumber: 4
         description: >-
           Build two rule contexts over that index — the tree as stored, and the tree with the
-          candidate in place of the spec of its kind and id (added when there is none) — each with
-          the project's rules config and project type
+          candidate in place of the spec of its kind and id (added when there is none) and every
+          other changed component in place of its stored one — each with the project's rules config
+          and project type
         type: local
       - stepNumber: 5
         description: >-
@@ -902,7 +903,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the stored context and the candidate context
-        endStep: 8
+        endStep: 9
       - stepNumber: 6
         description: >-
           Judge the edges at the entry points: a Portal or Observer reaching the data layer,
@@ -918,18 +919,27 @@ methods:
         targetComponent: doctrine_rules
         targetMethod: dataBlockDependencies
       - stepNumber: 8
+        description: >-
+          Judge the edges that leave their subsystem: a non-Adapter crossing without a trustedLink,
+          a target outside the published surface, a target that is not a Portal
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: subsystemBoundaryDependencies
+      - stepNumber: 9
         description: Judge the Portals' endpoints, for two bound methods sharing one HTTP route
         type: call
         targetComponent: doctrine_rules
         targetMethod: portalEndpoints
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Keep the findings the candidate's context raises and the stored one did not, keyed by
-          code, spec and message, restricted to the codes no later write in the authoring order can
-          cure: an edge between two existing blocks whose stereotypes forbid it, and a route two
-          bound methods share
+          code, spec and message, restricted to what no later write in the authoring order can cure:
+          an edge between two existing blocks whose stereotypes forbid it, a cross-subsystem edge
+          whose target is not a Portal (every boundary finding on that edge), and a route two bound
+          methods share. A boundary finding on an edge into a Portal is curable and is kept as a
+          warning
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Return the verdict split by severity: an error refuses the write, a warning or notice (a
           code the project tuned down) rides along as one of its notices
@@ -950,4 +960,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T19:14:38.278Z'
+updatedAt: '2026-10-09T00:30:25.035Z'

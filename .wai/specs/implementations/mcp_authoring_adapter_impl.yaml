@@ -39,6 +39,13 @@ methods:
         type: call
         targetComponent: authoring_portal
         targetMethod: deleteSpec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Hand the move to the authoring seam's published gated move
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: moveSpec
 status: complete
 createdAt: '2026-09-18T21:43:42.731Z'
-updatedAt: '2026-10-08T18:55:08.828Z'
+updatedAt: '2026-10-09T00:33:48.929Z'

@@ -58,7 +58,7 @@ import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } fro
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
-import { aliasGrammarProblem, admits, declaredMembers, DesignDepthSchema, methodCasingFor, readExternalSource, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
+import { aliasGrammarProblem, admits, declaredMembers, DesignDepthSchema, methodCasingFor, readExternalSource, type ExternalDeclaration, type ExternalSource, effectiveProjectId, memberLocationOf, parseMemberSource, requiredPolicies, EXTERNAL_ALIAS_RE, type InternalizeDestination, type MemberDeclaration, type MemberKind, type MemberStorage, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 // extension_orchestrator: the installed packs a member's required packs are pinned from.
 import { listInstalledPacks, loadProjectExtensions } from './extensions.js';
 // The built-in subsystem profiles, so internalize stamps only a profile a subsystem can hold.
@@ -85,6 +85,7 @@ import {
   extractTypeIdentifiers,
   methodTypeRefs,
   type ExportUse,
+  type SpecRef,
   parseDeclaredCall,
   transportKind,
   type Transport,
@@ -1212,6 +1213,8 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   recordCrossingTopics(inside, outside, parentId || parentName, result);
   // Step 10 (declare): the new project declares the parent as its external when it references it.
   if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, {}));
+  // Step 10 (siblings): each other project the moved specs name through the parent's members or externals, declared too.
+  declareSiblings(family, inside, dir, alias, result);
   // Step 11: the parent's re-exports of the part's subsystems re-export the member.
   for (const s of inside.filter((x) => x.kind === 'subsystem')) restateReExports(s.id, alias);
   // Steps 12-13: what crosses is exported on its own side, and a bare type name imported by name;
@@ -1220,11 +1223,19 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   exportCrossings([...crossing.in, ...qualified.in], dir, alias, parentId, 'in', result);
   exportReExported(inside, dir, alias, result);
   invalidateSpecCache();
+  const memberKey = graph().nodes.find((n) => n.parent === '' && n.mountAlias === alias)?.namespace;
+  // Step 18 (named before the re-saves below write them): every signature text
+  // the respelling left stale, re-derived on either side.
+  rederiveSignatures(new Set(result.respelled.map((r) => r.specId)), result.signaturesRederived);
+  runWithProjectRoot(dir, () => {
+    invalidateSpecCache();
+    rederiveSignatures(new Set(result.memberRespelled.map((r) => localIn(r.specId, memberKey ?? alias))), result.signaturesRederived);
+  });
+  invalidateSpecCache();
   // Every re-saved spec spelled again from where it lives: a contained member
   // from this root, where the scan reads both sides; one stored outside it from
   // its own root, a reference it cannot spell canonically left as written.
   for (const spec of parentSide) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
-  const memberKey = graph().nodes.find((n) => n.parent === '' && n.mountAlias === alias)?.namespace;
   if (memberKey !== undefined) {
     for (const spec of memberSide) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, `${memberKey}::${spec.id}`);
   } else {
@@ -1243,15 +1254,64 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   invalidateSpecCache();
   // Step 17: every file path of the new project that escapes its root, re-expressed member-relative.
   rebaseEscapingPaths(dir, getProjectRoot(), result);
-  // Step 18: every signature text the respelling left stale, re-derived on either side.
-  rederiveSignatures(new Set(result.respelled.map((r) => r.specId)), result.signaturesRederived);
-  runWithProjectRoot(dir, () => {
-    invalidateSpecCache();
-    rederiveSignatures(new Set(result.memberRespelled.map((r) => localIn(r.specId, memberKey ?? alias))), result.signaturesRederived);
-  });
-  invalidateSpecCache();
   // Step 19: promoted; nothing locked — answered with what crossed.
   return result;
+}
+
+/**
+ * Step 10 of promoteMember (siblings): every other project the moved specs
+ * name — through an alias the parent declares under `members` or `externals`,
+ * or a bare name imported through one's `use` — is declared as the new
+ * project's external under the same alias, so its references keep resolving
+ * across the new boundary: a path re-expressed from the new project's root,
+ * any other source as written, the producer's id named when it is not the
+ * alias, and the imported names its specs use carried as its `use`. An alias
+ * the new project already declares is left as it is. Each one recorded; the
+ * plan pins the new project's externals last.
+ */
+function declareSiblings(family: ProjectFamily, inside: RawSpec[], dir: string, alias: string, result: PromoteResult): void {
+  const root = getProjectRoot();
+  const parent = projectConfigRepository.load() ?? ({} as ProjectConfig);
+  const ids = new Set(inside.map((s) => s.id));
+  const named = new Map<string, Set<string>>();
+  for (const ref of family.authoredReferences) {
+    if (!ids.has(ref.specId) || (family.owners.get(ref.specId) ?? '') !== '') continue;
+    const via = ref.form === 'alias' ? ref.authored.split('::')[0] : ref.importedVia;
+    if (via === undefined || via === alias || via.includes(',')) continue;
+    const names = named.get(via) ?? new Set<string>();
+    if (ref.form !== 'alias') names.add(ref.authored);
+    named.set(via, names);
+  }
+  const own = runWithProjectRoot(dir, () => projectConfigRepository.load());
+  for (const [sibling, imported] of named) {
+    if (ownGet(own?.externals, sibling) !== undefined || ownGet(own?.members, sibling) !== undefined) continue;
+    const member = declaredMembers(parent).find((m) => m.alias === sibling && !m.problem);
+    const external = ownGet(parent.externals, sibling);
+    let declaration: ExternalDeclaration;
+    if (member) {
+      const at = member.source.path !== undefined ? path.resolve(root, member.source.path) : undefined;
+      const id = at !== undefined ? configAt(at) : null;
+      const project = id ? effectiveProjectId(id) ?? undefined : undefined;
+      declaration = {
+        ...(project !== undefined && project !== sibling ? { project } : {}),
+        source: at !== undefined ? { path: toPosixPath(path.relative(dir, at)) || '.' } : member.source,
+      };
+    } else if (external !== undefined) {
+      const source = externalSourceOf(external);
+      declaration = {
+        ...(external.project !== undefined ? { project: external.project } : {}),
+        ...(source?.path !== undefined && !path.isAbsolute(source.path) ? { source: { path: toPosixPath(path.relative(dir, path.resolve(root, source.path))) } } : source ? { source } : {}),
+      };
+    } else continue;
+    const use = [...imported].filter((n) => !n.includes('::')).sort();
+    runWithProjectRoot(dir, () => {
+      projectConfigRepository.declareExternal(sibling, declaration);
+      if (use.length > 0) projectConfigRepository.importNames(sibling, use);
+    });
+    const written = typeof declaration.source === 'string' ? undefined : declaration.source;
+    const where = typeof declaration.source === 'string' ? declaration.source : written?.path ?? written?.git ?? written?.hosted ?? '';
+    (result.externalsDeclared ??= []).push(`${sibling}${declaration.project !== undefined ? ` (project ${declaration.project})` : ''}${where ? ` at ${where}` : ''}${use.length > 0 ? `, use ${use.join(', ')}` : ''}`);
+  }
 }
 
 /**
@@ -1355,6 +1415,8 @@ export interface PromoteResult {
   pathsRebased: string[];
   /** One line per contract or type method whose stored signature text the respelling left stale and was re-derived. */
   signaturesRederived: string[];
+  /** One line per external the new project declared for another project its moved specs name (a sibling of the family, or the parent's own external). */
+  externalsDeclared?: string[];
 }
 
 /** The calls a set of implementations makes into a set of Portals: portal → verb → the calling components. */
@@ -1903,13 +1965,28 @@ export interface InternalizeResult {
    */
   consumersRestored: string[];
   /**
-   * Demote only: one line per contract or type method whose stored signature
-   * text the respelling back left stale and was re-derived from its params.
+   * Internalize and demote: one line per contract or type method whose stored
+   * signature text the respelling across the old boundary left stale and was
+   * re-derived from its params.
    */
   signaturesRederived?: string[];
 }
 
-/** The member's .wai entries this write knows, by the group its deleted list names them under. */
+/**
+ * Every entry wairon itself writes under a project's .wai, by the group a
+ * deleted list names it under — each one a write that ends a project's
+ * boundary (demote, internalize) must recognise, or every project `wairon
+ * init` scaffolded is refused. The specs folder and an open transaction are
+ * handled apart. What a project defines for its design and the home project
+ * can hold — a variant, a vendored pack — is PLACED there (`place`); a file
+ * there of the same name that differs refuses, before anything moves. All the
+ * rest ends with the boundary and is deleted, each file listed: the
+ * configuration, lock and pins; outputs `generate` and `init` derive again;
+ * the design workbook (an assistant's log beside the specs, which hold the
+ * design — a workbook that differs from the home's is named in notCarried);
+ * and the project's bindings to a host or a producer, which bind a project
+ * that no longer exists.
+ */
 const MEMBER_WAI_GROUPS: ReadonlyMap<string, string> = new Map([
   ['project.yaml', 'project.yaml'],
   ['lock.json', 'lock'],
@@ -1923,7 +2000,77 @@ const MEMBER_WAI_GROUPS: ReadonlyMap<string, string> = new Map([
   ['rules', 'derived outputs'],
   ['templates', 'derived outputs'],
   ['topology.yaml', 'derived outputs'],
+  ['mcp', 'derived outputs'],
+  ['phased_design.md', 'design workbook'],
+  ['git.json', 'host and producer bindings'],
+  ['remote.json', 'host and producer bindings'],
+  ['producers.json', 'host and producer bindings'],
+  ['variants', 'placed in this project'],
+  ['packs', 'placed in this project'],
 ]);
+
+/** The .wai entries whose files go to the home project instead of being deleted. */
+const PLACED_WAI_ENTRIES: ReadonlySet<string> = new Set(['variants', 'packs']);
+
+/** Each file a member's placed .wai entries hold, by its path under .wai, with where it lands in the home project. */
+function placedWaiFiles(memberDir: string, homeRoot: string): { rel: string; from: string; to: string }[] {
+  const wai = path.join(memberDir, '.wai');
+  const home = path.join(homeRoot, '.wai');
+  return [...PLACED_WAI_ENTRIES].filter((entry) => fs.existsSync(path.join(wai, entry)))
+    .flatMap((entry) => listFilesRecursive(path.join(wai, entry), ''))
+    .map((from) => {
+      const rel = toPosixPath(path.relative(wai, from));
+      return { rel, from, to: path.join(home, rel) };
+    });
+}
+
+/**
+ * Every reason the member's .wai cannot end with its boundary, each named: an
+ * entry wairon never writes (someone else's file), and a file the home
+ * project already holds under the same name with other content.
+ */
+function waiRefusals(memberDir: string, homeRoot: string): string[] {
+  const out: string[] = [];
+  const wai = path.join(memberDir, '.wai');
+  for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
+    if (entry === 'specs' || entry === 'transactions' || MEMBER_WAI_GROUPS.has(entry)) continue;
+    out.push(`its .wai holds "${entry}", which this write does not recognise — move or delete it by hand`);
+  }
+  for (const f of placedWaiFiles(memberDir, homeRoot)) {
+    if (fs.existsSync(f.to) && !fs.readFileSync(f.to).equals(fs.readFileSync(f.from))) {
+      out.push(`its .wai/${f.rel} differs from this project's file of that name — reconcile the two by hand first`);
+    }
+  }
+  return out;
+}
+
+/**
+ * What the member defined that the home project keeps: each placed file moved
+ * into the home's .wai (one equal to the home's is left to be deleted), each
+ * named in `placed`; and a design workbook that says more than the home's,
+ * named in `notCarried` — it is deleted with the rest.
+ */
+function placeWaiEntries(memberDir: string, homeRoot: string, result: InternalizeResult): void {
+  for (const f of placedWaiFiles(memberDir, homeRoot)) {
+    if (fs.existsSync(f.to)) continue;
+    fs.mkdirSync(path.dirname(f.to), { recursive: true });
+    fs.copyFileSync(f.from, f.to);
+    result.placed.push(`.wai/${f.rel} → this project's .wai/${f.rel}`);
+  }
+  const workbook = path.join(memberDir, '.wai', 'phased_design.md');
+  if (!fs.existsSync(workbook)) return;
+  // A workbook is written for one project's name: compared with the home's, names aside.
+  const named = (dir: string, text: string): string => {
+    const name = configAt(dir)?.name;
+    return (name ? text.split(name).join('<project>') : text).replace(/\r\n/g, '\n');
+  };
+  const homeWorkbook = path.join(homeRoot, '.wai', 'phased_design.md');
+  const theirs = named(memberDir, fs.readFileSync(workbook, 'utf8'));
+  const ours = fs.existsSync(homeWorkbook) ? named(homeRoot, fs.readFileSync(homeWorkbook, 'utf8')) : null;
+  if (ours !== theirs) {
+    result.notCarried.push('.wai/phased_design.md: the member\'s design workbook differs from this project\'s — it is deleted with the boundary (the design itself is its specs, which move); copy what you want to keep from it first');
+  }
+}
 
 /** A member of the bound root as internalize reads it, before anything moves. */
 interface InternalizeScan {
@@ -1958,7 +2105,7 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   const part = family.nodes.find((n) => n.namespace === '')?.parts.find((p) => p.alias === alias);
   if (part) return internalizePart(alias, part);
   // A project in a `../` sibling checkout: demoted in place first, then moved in as the part it became.
-  if (family.nodes.find((n) => n.namespace === '')?.externals.some((e) => e.role === 'member' && e.sourceKind === 'path' && e.alias === alias)) {
+  if (storedAsSibling(alias)) {
     const demoted = demoteMember(alias, destination);
     const nowPart = graph().nodes.find((n) => n.namespace === '')?.parts.find((p) => p.alias === alias);
     if (!nowPart) throw new WaironError(`cannot internalize "${alias}": demoted, it does not read as a part of this project.`);
@@ -1995,10 +2142,13 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   carryPacks(scan, destination, result);
   // Step 20: the member leaves `members` (false for a legacy declaration).
   projectConfigRepository.removeMember(alias);
-  // Step 21: what remains of its .wai, each file listed.
+  // Step 21: what remains of its .wai, each file listed — what the home keeps placed there first.
+  placeWaiEntries(scan.memberDir, getProjectRoot(), result);
   result.deleted = deleteMemberWai(scan.memberDir);
   invalidateSpecCache();
-  // Step 22: every spec that referenced across the old boundary, re-saved.
+  // Step 22: every spec that referenced across the old boundary, re-saved — each
+  // signature text its respelled params contradict named, the re-save writing the derived one.
+  rederiveSignatures(new Set(rewritten.map((s) => s.id)), result.signaturesRederived ??= []);
   for (const spec of rewritten) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
   invalidateSpecCache();
   // Step 23.
@@ -2111,12 +2261,8 @@ function internalizeRefusals(scan: InternalizeScan, destination: InternalizeDest
     const held = exported.get(name);
     if (held !== undefined && held !== scan.alias) out.push(`the export "${name}" is a public name this project already exports for ${held}`);
   }
-  // A file of the member's .wai this write does not recognise.
-  const wai = path.join(scan.memberDir, '.wai');
-  for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
-    if (entry === 'specs' || entry === 'transactions' || MEMBER_WAI_GROUPS.has(entry)) continue;
-    out.push(`its .wai holds "${entry}", which this write does not recognise — move or delete it by hand`);
-  }
+  // A file of the member's .wai this write does not recognise, or one its home holds differently.
+  out.push(...waiRefusals(scan.memberDir, getProjectRoot()));
   return out;
 }
 
@@ -2383,12 +2529,18 @@ function deleteMemberWai(memberDir: string): string[] {
   return deleted.sort();
 }
 
+/** Whether the bound project declares the member under an alias in a `../` sibling checkout (stage 8). */
+function storedAsSibling(alias: string): boolean {
+  return declaredMembers(projectConfigRepository.load() ?? {}).find((m) => m.alias === alias)?.storage === 'path';
+}
+
 /** A project member of the bound root as demote finds it: where it lives, and whether it is contained. */
 function memberToDemote(family: ProjectFamily, alias: string): { dir: string; contained: boolean; key?: string } {
   const bound = family.nodes.find((n) => n.namespace === '');
   if (bound?.parts.some((p) => p.alias === alias)) throw new WaironError(`demote refused: "${alias}" is already a part of this project.`);
   const node = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias);
-  if (node) return { dir: node.directory, contained: true, key: node.namespace };
+  // A `../` sibling is a node of the family like a contained member; demoted, it is a part stored outside, naming its parent.
+  if (node) return { dir: node.directory, contained: !storedAsSibling(alias), key: node.namespace };
   const referenced = bound?.externals.find((e) => e.role === 'member' && e.alias === alias);
   if (referenced?.sourceKind === 'git') {
     throw new WaironError(`demote refused: the member "${alias}" is fetched from git — its files are the fetch cache's. Demote it from a checkout of its repository.`);
@@ -2430,11 +2582,7 @@ function demoteRefusals(scan: InternalizeScan, destination: InternalizeDestinati
     const held = exported.get(name);
     if (held !== undefined && held !== scan.alias) out.push(`the export "${name}" is a public name this project already exports for ${held}`);
   }
-  const wai = path.join(scan.memberDir, '.wai');
-  for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
-    if (entry === 'specs' || entry === 'transactions' || MEMBER_WAI_GROUPS.has(entry)) continue;
-    out.push(`its .wai holds "${entry}", which this write does not recognise — move or delete it by hand`);
-  }
+  out.push(...waiRefusals(scan.memberDir, getProjectRoot()));
   return out;
 }
 
@@ -2505,7 +2653,9 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
       patchKeepingStamp(s.file, (raw) => (raw.parentSystem === parentName ? false : (raw.parentSystem = parentName, true)));
     }
   }
-  // Steps 11-12: its project content goes — its L0, configuration, lock, pins and derived outputs, each listed.
+  // Steps 11-12: its project content goes — its L0, configuration, lock, pins and derived outputs, each listed;
+  // what the home keeps placed there first.
+  placeWaiEntries(dir, root, result);
   result.deleted = deleteProjectContent(dir);
   if (!contained && parentId !== undefined) {
     runWithProjectRoot(dir, () => projectConfigRepository.setPartOf({ project: parentId, path: toPosixPath(path.relative(dir, root)) || '.' }));
@@ -2523,10 +2673,10 @@ export function demoteMember(alias: string, destination: InternalizeDestination)
   // The exports that existed only for the boundary.
   retireBoundaryExports(family, crossed, key);
   invalidateSpecCache();
+  // Every signature text the respelling back left stale, named and re-derived from its params, then every re-saved spec spelled canonically.
+  rederiveSignatures(new Set([...parentSide, ...memberSide].map((s) => s.id)), result.signaturesRederived ??= []);
   for (const spec of [...parentSide, ...memberSide]) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
   invalidateSpecCache();
-  // Every signature text the respelling back left stale, re-derived from its params.
-  rederiveSignatures(new Set([...parentSide, ...memberSide].map((s) => s.id)), result.signaturesRederived ??= []);
   // Step 15.
   return result;
 }
@@ -3186,6 +3336,23 @@ function moveRenamedSpecs(
     saveImplementationSpec({ ...movedImplementation, id: implementationId, previousIds: traced(movedImplementation.previousIds, movedImplementation.id) });
   }
 
+  // Every OTHER contract of the component, and every implementation of its
+  // contracts, keeps its id but follows the component's folder: an
+  // implementation left in a folder named after a component that no longer
+  // exists is the debris a rename must never leave (the nested layout keeps a
+  // component's contract and implementation files beside its index).
+  invalidateSpecCache();
+  const oldFile = path.resolve(getComponentPath(componentId));
+  const oldDir = path.basename(oldFile) === '.index.yaml' ? path.dirname(oldFile) : null;
+  const moved = new Set([interfaceId, implementationId, ...(movingInterface ? [movingInterface.id] : []), ...(movingImplementation ? [movingImplementation.id] : [])]);
+  const staying = loadInterfaceSpecs().filter((i) => i.component === newId && !moved.has(i.id));
+  const contracts = new Set([...staying.map((i) => i.id), interfaceId]);
+  const stayingImplementations = loadImplementationSpecs().filter((impl) => contracts.has(impl.contract) && !moved.has(impl.id));
+  if (oldDir !== null) {
+    for (const contract of staying) relocateSpec('interface', contract, getInterfacePath(contract.id), oldDir);
+    for (const impl of stayingImplementations) relocateSpec('implementation', impl, getImplementationPath(impl.id), oldDir);
+  }
+
   // Remove each moved spec's old file, found by its old id — which the loader
   // still indexes beside the new one, so a folder a save moved is followed.
   removeSpecFile(getComponentPath(componentId), componentId);
@@ -3193,6 +3360,29 @@ function moveRenamedSpecs(
   if (movingImplementation) removeSpecFile(getImplementationPath(movingImplementation.id), movingImplementation.id);
 
   // The removed files changed the tree outside the save paths.
+  invalidateSpecCache();
+}
+
+/**
+ * Re-save one contract or implementation that keeps its id where the loader
+ * now places it, when its file sits directly in `fromDir` (a folder its owner
+ * left): the file is cleared first — the loader answers a stored spec's own
+ * path, and never moves a file on a save — and restored, byte for byte, when
+ * the save fails. A spec stored anywhere else is left as it is.
+ */
+function relocateSpec(kind: 'interface' | 'implementation', spec: InterfaceSpec | ImplementationSpec, file: string, fromDir: string): void {
+  if (!fs.existsSync(file) || path.dirname(path.resolve(file)) !== fromDir) return;
+  const backup = fs.readFileSync(file);
+  fs.unlinkSync(file);
+  invalidateSpecCache();
+  try {
+    if (kind === 'interface') saveInterfaceSpec(spec as InterfaceSpec);
+    else saveImplementationSpec(spec as ImplementationSpec);
+  } catch (e) {
+    fs.writeFileSync(file, backup);
+    invalidateSpecCache();
+    throw e;
+  }
   invalidateSpecCache();
 }
 
@@ -3282,6 +3472,393 @@ function removeSpecFile(file: string, id: string): void {
     if (fs.readdirSync(dir).length > 0) break;
     fs.rmdirSync(dir);
   }
+}
+
+// ---------------------------------------------------------------------------
+// A contract or an implementation renamed on its own, and a component or a
+// type moved to another subsystem — the tools a delta's identity and placement
+// refusals name.
+// ---------------------------------------------------------------------------
+
+/** What renaming one contract or implementation on its own changed (spec_id_rename). */
+export interface SpecIdRename {
+  /** interface or implementation. */
+  kind: WritableSpecKind;
+  /** The spec with its old and new id. */
+  renamed: SpecRename[];
+  /** Ids of the other specs whose references to the renamed id were rewritten. */
+  rewritten: string[];
+  /** Every edit the rename made to the debt register. */
+  carried: CarriedRekey[];
+  /** The export entries whose public name derived from the renamed contract's id: `as` written, the published name kept. */
+  keptPublicNames: string[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
+}
+
+/** What moving a component or a type to another subsystem changed (spec_move). */
+export interface SpecMove {
+  /** component or type. */
+  kind: WritableSpecKind;
+  /** The moved spec's id. */
+  id: string;
+  /** The subsystem it lived in; empty for a system-level type. */
+  from: string;
+  /** The subsystem it lives in now; empty for a type made system-level. */
+  to: string;
+  /** Every spec the move relocated: the addressed spec, the members it owns, their contracts and implementations. */
+  moved: SpecRef[];
+  /** Ids of the other specs whose references were rewritten to follow the move. */
+  rewritten: string[];
+  /** What the authoring gate said of the moved specs: a curable boundary finding the move introduces. */
+  notices: string[];
+  /** True when this report is a dry run: nothing was written. */
+  dryRun?: boolean;
+}
+
+/**
+ * core_orchestrator.renameSpecId — rename one contract or one implementation
+ * on its own and every reference to it: an implementation's contract and an
+ * export entry's interface (a public name derived from the old id kept with
+ * `as`), lint allows and debt-register entries keyed on it. The spec moves to
+ * its new id and file beside its owner, its old id in its rename trace.
+ * Every refusal happens before the first write; a dry run writes nothing.
+ */
+export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: boolean): SpecIdRename {
+  // Steps 1-2: the two kinds renamed here.
+  if (kind !== 'interface' && kind !== 'implementation') {
+    const owner = kind === 'component' ? 'sdd_rename_component' : kind === 'type' ? 'sdd_rename_type' : 'no tool yet';
+    throw new WaironError(`invalid-kind: sdd_rename_spec renames a contract (kind interface) or an implementation on its own; a ${kind} is renamed with ${owner}.`);
+  }
+  // Step 3: the spec.
+  const spec: InterfaceSpec | ImplementationSpec | null = kind === 'interface' ? loadInterfaceSpec(id) : loadImplementationSpec(id);
+  // Steps 4-5: it exists, is the bound project's own, and the new id fits.
+  if (!spec) throw new WaironError(`spec-missing: no ${kind} has the id "${id}".`);
+  if (id.includes('::')) {
+    throw new WaironError(`chained-spec: "${id}" lives in another project; rename it from that project's own root. ${memberRootWay(id, `sdd_rename_spec ${kind} ${id.slice(id.lastIndexOf('::') + 2)} <new id>`)}`);
+  }
+  if (!SpecIdSchema.safeParse(newId).success || (kind === 'interface' && !/^i[a-z0-9-_]+$/.test(newId))) {
+    throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator${kind === 'interface' ? ' beginning with "i", as a contract id does' : ''}.`);
+  }
+  if (newId === id) throw new WaironError(`name-unchanged: ${kind} "${id}" already has that id — nothing to do.`);
+  // Steps 6-8: the new id is free and never retired.
+  const taken = kind === 'interface' ? loadInterfaceSpecs().some((i) => i.id === newId) : loadImplementationSpecs().some((i) => i.id === newId);
+  if (taken) throw new WaironError(`id-taken: a ${kind} already has the id "${newId}".`);
+  refuseRetiredIds([{ kind, id: newId }]);
+  // Step 9: the move as findings are keyed by it, the register proven rewritable before the first write.
+  const rename: IdentityRename = { specs: [{ from: id, to: newId }] };
+  const registerEdits = projectConfigRepository.rekeyCarried(rename, true);
+  // Step 10: what the rewrite would change, collected without writing.
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const remap = (ref: string, position: RefPosition): string => (kind === 'interface' && position === 'interface' && ref === id ? newId : ref);
+  const derivesName = (entry: any): boolean => kind === 'interface' && entry.interface === id;
+  const others = (specs: RewrittenSpec[]): string[] => [...new Set(specs.filter((s) => !(s.kind === kind && s.id === id)).map((s) => s.id))];
+  const keptDry = keepPublicNames(specsDir, derivesName, true);
+  const wouldRewrite = [...keptDry.specs, ...rewriteRefFields(specsDir, remap, undefined, true), ...rekeyLintAllows(specsDir, rename, true)];
+  assertSpecsInReach([{ kind, id }, ...wouldRewrite], `renaming ${kind} "${id}"`, registerEdits.length > 0);
+  const renamed: SpecRename[] = [{ kind, from: id, to: newId }];
+  // Steps 11-12: a dry run stops here.
+  if (dryRun) return { kind, renamed, rewritten: others(wouldRewrite), carried: registerEdits, keptPublicNames: keptDry.names, dryRun: true };
+  // Step 13: the published names first, then every reference and lint allow.
+  const kept = keepPublicNames(specsDir, derivesName);
+  const rewritten = others([...kept.specs, ...rewriteRefFields(specsDir, remap), ...rekeyLintAllows(specsDir, rename)]);
+  // Step 14.
+  invalidateSpecCache();
+  // Step 15: the spec under its new id, as the rewrite left it, and the file it left.
+  const oldFile = kind === 'interface' ? getInterfacePath(id) : getImplementationPath(id);
+  if (kind === 'interface') {
+    const current = loadInterfaceSpec(id) ?? (spec as InterfaceSpec);
+    const next: InterfaceSpec = { ...current, id: newId, previousIds: traced(current.previousIds, id) };
+    if (path.resolve(getInterfacePath(newId, current.component)) === path.resolve(oldFile)) fs.unlinkSync(oldFile);
+    saveInterfaceSpec(next);
+  } else {
+    const current = loadImplementationSpec(id) ?? (spec as ImplementationSpec);
+    const next: ImplementationSpec = { ...current, id: newId, previousIds: traced(current.previousIds, id) };
+    if (path.resolve(getImplementationPath(newId, current.contract)) === path.resolve(oldFile)) fs.unlinkSync(oldFile);
+    saveImplementationSpec(next);
+  }
+  invalidateSpecCache();
+  removeSpecFile(oldFile, id);
+  // Step 16: the register, keyed by exactly the id just moved.
+  const carried = projectConfigRepository.rekeyCarried(rename);
+  invalidateSpecCache();
+  // Step 17.
+  return { kind, renamed, rewritten, carried, keptPublicNames: kept.names };
+}
+
+/**
+ * core_orchestrator.moveSpec — move a component or a type to another
+ * subsystem of the bound project with everything that follows it. Ids never
+ * change, so references by id stay; what names the OLD subsystem follows. A
+ * dry run answers the plan and writes nothing; every refusal happens first.
+ */
+export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean): SpecMove {
+  // Steps 1-2: the two kinds that move between subsystems.
+  if (kind !== 'component' && kind !== 'type') {
+    throw new WaironError(`invalid-kind: sdd_move_spec moves a component or a type to another subsystem; a ${kind} ${kind === 'interface' || kind === 'implementation' ? 'follows its component (sdd_move_methods moves behaviour between components)' : 'does not move'}.`);
+  }
+  // Step 3: the bound project's own subsystems.
+  const subsystems = loadSubsystemSpecs().filter((s) => !s.id.includes('::'));
+  const target = subsystem === undefined || subsystem === '' ? undefined : subsystem;
+  if (target !== undefined && !subsystems.some((s) => s.id === target)) {
+    throw new WaironError(`subsystem-missing: this project has no subsystem "${target}"${target.includes('::') ? ' — a spec never moves into another project' : ''}. Known subsystems: ${subsystems.map((s) => s.id).join(', ') || 'none'}.`);
+  }
+  // Step 4.
+  return kind === 'component' ? moveComponentSpec(id, target, subsystems, dryRun === true) : moveTypeSpec(id, target, subsystems, dryRun === true);
+}
+
+/** Steps 5-12 of moveSpec: a component with the members it owns, its contracts and implementations. */
+function moveComponentSpec(id: string, target: string | undefined, subsystems: SubsystemSpec[], dryRun: boolean): SpecMove {
+  // Step 5: every component.
+  const components = loadComponentSpecs();
+  const component = components.find((c) => c.id === id);
+  // Steps 6-7: it can move there.
+  if (!component) throw new WaironError(`spec-missing: no component has the id "${id}".`);
+  if (id.includes('::')) {
+    throw new WaironError(`chained-spec: "${id}" lives in another project; move it from that project's own root. ${memberRootWay(id, `sdd_move_spec component ${id.slice(id.lastIndexOf('::') + 2)} <subsystem>`)}`);
+  }
+  if (target === undefined) throw new WaironError(`subsystem-missing: name the subsystem component "${id}" moves to — a component always lives in a subsystem.`);
+  if (component.subsystem === target) throw new WaironError(`same-subsystem: component "${id}" already lives in "${target}" — nothing to move.`);
+  const owner = components.find((c) => (c.owns ?? []).includes(id));
+  if (owner) {
+    throw new WaironError(`owned: "${id}" is a member owned by "${owner.id}", and a pattern's members live with it — move "${owner.id}", which takes "${id}" along.`);
+  }
+  // Step 8: what moves — the component, every member it owns (transitively), their contracts and implementations.
+  const movingIds: string[] = [];
+  const visit = (cid: string): void => {
+    if (movingIds.includes(cid)) return;
+    movingIds.push(cid);
+    for (const member of components.find((c) => c.id === cid)?.owns ?? []) visit(member);
+  };
+  visit(id);
+  const contracts = loadInterfaceSpecs().filter((i) => movingIds.includes(i.component));
+  const implementations = loadImplementationSpecs().filter((impl) => contracts.some((i) => i.id === impl.contract));
+  const moved: SpecRef[] = [
+    ...movingIds.map((cid) => ({ kind: 'component' as const, id: cid })),
+    ...contracts.map((i) => ({ kind: 'interface' as const, id: i.id })),
+    ...implementations.map((impl) => ({ kind: 'implementation' as const, id: impl.id })),
+  ];
+  // Step 9: what follows the old subsystem.
+  const from = component.subsystem;
+  const fromSpec = subsystems.find((s) => s.id === from);
+  const toSpec = subsystems.find((s) => s.id === target)!;
+  const names = (ref: string | undefined): boolean => ref !== undefined && movingIds.includes(ref);
+  const exportsMoving = (fromSpec?.publicInterfaces ?? []).filter((e) => names(e.component));
+  const lifecycleMoving = (fromSpec?.lifecycle ?? []).filter((e) => names(e.component));
+  const system = loadSystemSpec();
+  const l0 = (system?.publicInterfaces ?? []) as unknown as Record<string, any>[];
+  const repointed = l0.filter((e) => e.from === from && names(e.component));
+  // A whole-subsystem re-export of the old subsystem (from alone) no longer reaches a moved export: it is re-exported by item.
+  const whole = l0.filter((e) => e.from === from && e.component === undefined && e.typeDef === undefined && e.interface === undefined);
+  const added = whole.length > 0 ? exportsMoving.map((e) => ({
+    from: target, component: e.component, ...(e.interface ? { interface: e.interface } : {}),
+    ...(e.as ? { as: e.as } : {}), ...(whole[0].audience ? { audience: whole[0].audience } : {}),
+  })) : [];
+  const rewritten = [
+    ...(exportsMoving.length + lifecycleMoving.length > 0 ? [from, target] : []),
+    ...(repointed.length + added.length > 0 ? ['system'] : []),
+  ];
+  assertSpecsInReach([...moved, ...rewritten.map((s) => (s === 'system' ? { kind: 'system', id: 'system' } : { kind: 'subsystem', id: s }))], `moving component "${id}"`);
+  const report: SpecMove = { kind: 'component', id, from, to: target, moved, rewritten: [...new Set(rewritten)], notices: [] };
+  // Steps 10-11: a dry run stops here.
+  if (dryRun) return { ...report, dryRun: true };
+  // Step 12: the subsystems and the L0 first, then each moved component under its new subsystem.
+  if (exportsMoving.length + lifecycleMoving.length > 0 && fromSpec) {
+    saveSpec('subsystem', {
+      ...fromSpec,
+      publicInterfaces: (fromSpec.publicInterfaces ?? []).filter((e) => !exportsMoving.includes(e)),
+      ...(fromSpec.lifecycle ? { lifecycle: fromSpec.lifecycle.filter((e) => !lifecycleMoving.includes(e)) } : {}),
+    } as SubsystemSpec);
+    saveSpec('subsystem', {
+      ...toSpec,
+      publicInterfaces: [...(toSpec.publicInterfaces ?? []), ...exportsMoving],
+      ...(lifecycleMoving.length > 0 || toSpec.lifecycle ? { lifecycle: [...(toSpec.lifecycle ?? []), ...lifecycleMoving] } : {}),
+    } as SubsystemSpec);
+  }
+  if (system && repointed.length + added.length > 0) {
+    saveSystemSpec({ ...system, publicInterfaces: [...l0.map((e) => (repointed.includes(e) ? { ...e, from: target } : e)), ...added] } as unknown as SystemSpec);
+  }
+  invalidateSpecCache();
+  // An owner before its members: the nested layout moves a pattern's folder with its members inside.
+  for (const cid of movingIds) {
+    const current = loadComponentSpec(cid);
+    if (current) saveComponentSpec({ ...current, subsystem: target });
+    invalidateSpecCache();
+  }
+  // Steps 22-23.
+  invalidateSpecCache();
+  return report;
+}
+
+/** Steps 14-23 of moveSpec: a type, its export entries and every reference qualified by its subsystem. */
+function moveTypeSpec(id: string, target: string | undefined, subsystems: SubsystemSpec[], dryRun: boolean): SpecMove {
+  // Step 14: every type.
+  const types = loadTypeSpecs();
+  const cut = id.lastIndexOf('::');
+  const qualifier = cut >= 0 ? id.slice(0, cut) : undefined;
+  if (qualifier !== undefined && !subsystems.some((s) => s.id === qualifier)) {
+    throw new WaironError(`chained-spec: "${id}" lives in another project; move it from that project's own root. ${memberRootWay(id, `sdd_move_spec type ${id.slice(cut + 2)} <subsystem>`)}`);
+  }
+  const bare = cut >= 0 ? id.slice(cut + 2) : id;
+  const matching = types.filter((t) => t.id === bare && (qualifier === undefined || t.subsystem === qualifier));
+  // Steps 15-16: it can move there.
+  if (matching.length === 0) throw new WaironError(`spec-missing: no type has the id "${id}" (a type is addressed by its bare id, or as <subsystem>::<id>).`);
+  if (matching.length > 1) throw new WaironError(`ambiguous: ${matching.length} types have the id "${bare}" — address it as <subsystem>::${bare} (${matching.map((t) => qualifiedTypeId(t)).join(', ')}).`);
+  const type = matching[0];
+  const from = type.subsystem ?? '';
+  if ((target ?? '') === from) throw new WaironError(`same-subsystem: type "${id}" already lives ${from ? `in "${from}"` : 'at system level'} — nothing to move.`);
+  if (types.some((t) => t !== type && t.id === bare && (t.subsystem ?? '') === (target ?? ''))) {
+    throw new WaironError(`id-taken: ${target ? `subsystem "${target}"` : 'the system level'} already holds a type with the id "${bare}".`);
+  }
+  const fromSpec = subsystems.find((s) => s.id === from);
+  const names = (ref: string | undefined): boolean => ref !== undefined && (ref === bare || ref === `${from}::${bare}`);
+  const exportsMoving = (fromSpec?.publicInterfaces ?? []).filter((e) => e.component === undefined && names(e.typeDef));
+  const system = loadSystemSpec();
+  const l0 = (system?.publicInterfaces ?? []) as unknown as Record<string, any>[];
+  const repointed = l0.filter((e) => from !== '' && e.from === from && names(e.typeDef));
+  if (target === undefined && exportsMoving.length + repointed.length > 0) {
+    throw new WaironError(`exported: subsystem "${from}" exports type "${bare}" (${exportsMoving.length + repointed.length} entr${exportsMoving.length + repointed.length === 1 ? 'y' : 'ies'}), and a system-level type is published by the L0 alone — move its export entries to the L0 first, or move the type to another subsystem.`);
+  }
+  // Step 17: the rewrites — a type position qualified by the old subsystem names the new one.
+  const oldToken = from ? `${from}::${bare}` : undefined;
+  const newToken = target ? `${target}::${bare}` : bare;
+  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const rewriteAll = (write: boolean): RewrittenSpec[] => {
+    if (oldToken === undefined) return [];
+    const out: RewrittenSpec[] = [];
+    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+      let raw: any;
+      try {
+        raw = readYamlFile(file);
+      } catch {
+        continue;
+      }
+      const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
+      if (!kind || !respellQualifiedType(raw, oldToken, newToken)) continue;
+      if (write) writeYamlFile(file, raw);
+      out.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
+    }
+    return out;
+  };
+  const would = rewriteAll(false);
+  const rewritten = [...new Set([
+    ...would.filter((s) => !(s.kind === 'type' && s.id === bare)).map((s) => s.id),
+    ...(exportsMoving.length > 0 && target !== undefined ? [from, target] : []),
+    ...(repointed.length > 0 ? ['system'] : []),
+  ])];
+  assertSpecsInReach([{ kind: 'type', id: qualifiedTypeId(type) }, ...would], `moving type "${id}"`);
+  const report: SpecMove = { kind: 'type', id: bare, from, to: target ?? '', moved: [{ kind: 'type', id: qualifiedTypeId(type) }], rewritten, notices: [] };
+  // Steps 18-19: a dry run stops here.
+  if (dryRun) return { ...report, dryRun: true };
+  // Step 20: the references and the export entries.
+  rewriteAll(true);
+  invalidateSpecCache();
+  if (exportsMoving.length > 0 && fromSpec && target !== undefined) {
+    const stated = loadSubsystemSpecs().find((s) => s.id === from) ?? fromSpec;
+    saveSpec('subsystem', { ...stated, publicInterfaces: (stated.publicInterfaces ?? []).filter((e) => !(e.component === undefined && names(e.typeDef))) } as SubsystemSpec);
+    invalidateSpecCache();
+    const toSpec = loadSubsystemSpecs().find((s) => s.id === target)!;
+    saveSpec('subsystem', { ...toSpec, publicInterfaces: [...(toSpec.publicInterfaces ?? []), ...exportsMoving.map((e) => ({ ...e, typeDef: bare }))] } as SubsystemSpec);
+  }
+  if (system && repointed.length > 0) {
+    const stated = loadSystemSpec() ?? system;
+    const current = (stated.publicInterfaces ?? []) as unknown as Record<string, any>[];
+    saveSystemSpec({ ...stated, publicInterfaces: current.map((e) => (e.from === from && names(e.typeDef) ? { ...e, from: target } : e)) } as unknown as SystemSpec);
+  }
+  invalidateSpecCache();
+  // Step 21: the type under its new owner, and the file it left.
+  const current = loadTypeSpecs().find((t) => t.id === bare && (t.subsystem ?? '') === from) ?? type;
+  const oldFile = typeFileOf(bare, current);
+  const backup = fs.existsSync(oldFile) ? fs.readFileSync(oldFile) : null;
+  if (backup) fs.unlinkSync(oldFile);
+  invalidateSpecCache();
+  try {
+    const { subsystem: _old, ...rest } = current;
+    saveSpec('type', (target !== undefined ? { ...rest, subsystem: target } : rest) as TypeSpec);
+  } catch (e) {
+    if (backup) fs.writeFileSync(oldFile, backup);
+    invalidateSpecCache();
+    throw e;
+  }
+  // Steps 22-23.
+  invalidateSpecCache();
+  return report;
+}
+
+/** The type-position keys a qualified type reference is respelled in; prose and rename traces never are. */
+const TYPE_POSITION_KEYS: ReadonlySet<string> = new Set(['type', 'returns', 'signature', 'signatureFrom', 'typeDef', 'references', 'linkedEntity', 'holds']);
+
+/**
+ * Respell, in place, every whole token `oldToken` (a type qualified by its
+ * subsystem) as `newToken` at the type positions of one spec document;
+ * answers whether anything changed.
+ */
+function respellQualifiedType(raw: unknown, oldToken: string, newToken: string): boolean {
+  let changed = false;
+  const escaped = oldToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (typeof value === 'string' && TYPE_POSITION_KEYS.has(key)) {
+        const next = value.replace(new RegExp(`(?<![A-Za-z0-9_:-])${escaped}(?![A-Za-z0-9_-])`, 'g'), newToken);
+        if (next !== value) {
+          (node as Record<string, unknown>)[key] = next;
+          changed = true;
+        }
+      } else if (value && typeof value === 'object' && key !== 'previousIds' && key !== 'previousNames') {
+        walk(value);
+      }
+    }
+  };
+  walk(raw);
+  return changed;
+}
+
+/**
+ * core_orchestrator.publishedUsesOf — every public name of the bound
+ * project's export tables a consumer reaches something a removal takes away
+ * through, with the members carrying it: a removed component's or contract's
+ * entries (all its methods), a removed type's carriers, and each removed
+ * contract method's publishing entries and forwarding verbs. Read before the
+ * removal; writes nothing.
+ */
+export function publishedUsesOf(removed: SpecRef[], methods: string[]): ExportUse[] {
+  // Step 1: every contract.
+  const contracts = loadInterfaceSpecs();
+  const uses: ExportUse[] = [];
+  // Step 2: a removed component or contract — every entry publishing it, all its methods.
+  for (const ref of removed) {
+    if (ref.kind === 'component') uses.push(...publishingUses(ref.id, contracts.filter((i) => i.component === ref.id), () => true));
+    if (ref.kind === 'interface') {
+      const contract = contracts.find((i) => i.id === ref.id);
+      if (contract) uses.push(...publishingUses(contract.component, [contract], () => true));
+    }
+  }
+  // Steps 3-4: a removed type — its carriers.
+  const types = loadTypeSpecs();
+  for (const ref of removed.filter((r) => r.kind === 'type')) {
+    const type = types.find((t) => t.id === ref.id || qualifiedTypeId(t) === ref.id);
+    if (type) uses.push(...publishedCarriers(type));
+  }
+  // Step 5: a removed contract method — its entries, and every published verb forwarding it.
+  for (const entry of methods) {
+    const cut = entry.lastIndexOf('.');
+    const contract = cut > 0 ? contracts.find((i) => i.id === entry.slice(0, cut)) : undefined;
+    if (!contract) continue;
+    const name = entry.slice(cut + 1);
+    const source = `${contract.component}.${name}`;
+    const followers = contracts.filter((i) => i !== contract && i.methods.some((m) => followsSource(m.signatureFrom, source, i.component)));
+    uses.push(
+      ...publishingUses(contract.component, [contract], (m) => m.name === name),
+      ...followers.flatMap((i) => publishingUses(i.component, [i], (m) => followsSource(m.signatureFrom, source, i.component))),
+    );
+  }
+  // Step 6.
+  return mergeUses(uses);
 }
 
 // ---------------------------------------------------------------------------
@@ -3705,6 +4282,8 @@ export interface TypeRename {
   rewritten: string[];
   /** The export entries (L0 and L1) that exported the type without an `as`: the rename wrote `as: <old name>` on them. */
   keptPublicNames: string[];
+  /** Every public name a consumer reaches the type through: an exported type that is or embeds it (member `type`), an exported contract whose methods name one in their signature closure (those methods). */
+  publishedIn: ExportUse[];
   /** Every edit the rename made to the debt register: an entry anchored on the type. */
   carried: CarriedRekey[];
   /** True when this report is a dry run: nothing was written. */
@@ -3877,6 +4456,10 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     `renaming type "${typeId}"`,
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
+  // Where a consumer reaches the type, read before anything moves: every
+  // exported type that is or embeds it, and every exported contract whose
+  // methods name one in their signature closure.
+  const publishedIn = publishedCarriers(type);
   // A dry run stops here, refused exactly as the real rename above.
   if (dryRun) {
     return {
@@ -3884,6 +4467,7 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
       to: qualifiedTypeId({ id: newId, subsystem: type.subsystem }),
       rewritten: [...new Set(wouldRewrite.filter((spec) => !(spec.kind === 'type' && spec.id === oldId)).map((spec) => spec.id))],
       keptPublicNames: keptDry.names,
+      publishedIn,
       carried: Array.isArray(registerEdits) ? registerEdits : [],
       dryRun: true,
     };
@@ -3914,6 +4498,7 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     to: qualifiedTypeId({ id: newId, subsystem: type.subsystem }),
     rewritten,
     keptPublicNames: kept.names,
+    publishedIn,
     carried,
   };
 }

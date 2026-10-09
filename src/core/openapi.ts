@@ -47,16 +47,24 @@ function idHit(name: string, ids: Iterable<string>): string | undefined {
   return [...ids].find(id => id.toLowerCase() === local);
 }
 
+/** A component key OpenAPI accepts (`^[a-zA-Z0-9._-]+$`): a qualified id's `::` written `.`, anything else outside the set `_`. */
+export function componentKey(name: string): string {
+  return name.replace(/::/g, '.').replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
 /**
  * Where a document's named type references resolve: the snapshot's own type
  * closure, and the pinned snapshot of each external the project declares
- * (`alias::name`), whose types are rendered under `<alias>.<id>`. A scope
- * bound to an alias resolves bare names inside that producer's own closure —
- * the names its types use for each other. Every external type a reference
- * reaches is recorded, so the document renders it as a component.
+ * (`alias::name`) or the live surface of each member. A type is identified by
+ * the project that owns it and its id there, so one reached under two aliases,
+ * under a member's project id, or through another producer's closure is ONE
+ * component, keyed `<alias>.<id>` by the first alias the context holds its
+ * project under. A scope bound to an alias resolves bare names inside that
+ * producer's own closure — the names its types use for each other. Every type
+ * a reference reaches is recorded, so the document renders exactly those.
  */
 interface SchemaScope {
-  /** The component name a reference resolves to, or undefined. */
+  /** The component key a reference resolves to (recording the type as reached), or undefined. */
   componentOf(name: string): string | undefined;
   /** Whether a type position names one data type with fields (an object a JSON body can be): not a scalar, collection, enum, named scalar or signature. */
   isObject(typeRef: string): boolean;
@@ -64,35 +72,66 @@ interface SchemaScope {
   within(alias: string): SchemaScope;
 }
 
-/** An external type a document reached: its alias and definition, rendered as `<alias>.<id>`. */
-interface ReachedExternal {
-  alias: string;
+/** A type a document reached, under its component key: its definition, and the alias whose closure its own references resolve in (none for an own type). */
+interface ReachedType {
+  alias?: string;
   def: SurfaceTypeDef;
 }
 
-/** The scope of a document over its own closure and the pinned externals; `reached` collects the external types it names. */
-function schemaScope(ownDefs: readonly SurfaceTypeDef[], externals: ReadonlyMap<string, SurfaceSnapshot>, reached: Map<string, ReachedExternal>, alias?: string): SchemaScope {
+/** The registry one document's scopes share: every reached type by component key, and each type's identity → its key. */
+interface SchemaRegistry {
+  reached: Map<string, ReachedType>;
+  keyOf: Map<string, string>;
+}
+
+/** The project a context surface stands for: its id, else its name. */
+function projectIdentity(surface: SurfaceSnapshot): string {
+  return surface.projectId ?? surface.projectName;
+}
+
+/** The scope of a document over its own closure and the context's surfaces; `registry` collects every type a reference reaches. */
+function schemaScope(ownDefs: readonly SurfaceTypeDef[], externals: ReadonlyMap<string, SurfaceSnapshot>, registry: SchemaRegistry, alias?: string): SchemaScope {
   const ownIds = ownDefs.map(t => t.id);
-  // An external's type by its public name first (an export may rename it), else by its closure id.
+  // An external's type by its public name first (an export may rename it), else by its exact closure id, else by its local segment.
   const externalId = (pinned: SurfaceSnapshot, name: string): string | undefined => {
     const exported = (pinned.exportedTypes ?? []).find(t => t.id === name || t.id.toLowerCase() === name.toLowerCase());
-    return exported && pinned.types.some(t => t.id === exported.type) ? exported.type : idHit(name, pinned.types.map(t => t.id));
+    if (exported && pinned.types.some(t => t.id === exported.type)) return exported.type;
+    if (pinned.types.some(t => t.id === name)) return name;
+    return idHit(name, pinned.types.map(t => t.id));
+  };
+  // The alias a project's components are keyed by: the first the context holds it under (an alias the project declares before a member's project id).
+  const aliasOf = (identity: string): string => [...externals].find(([, s]) => projectIdentity(s) === identity)?.[0] ?? identity;
+  const record = (identity: string, id: string, preferred: string, reached: ReachedType): string => {
+    const identityKey = `${identity}\u0000${id}`;
+    const held = registry.keyOf.get(identityKey);
+    if (held !== undefined) return held;
+    let key = componentKey(preferred);
+    for (let n = 2; registry.reached.has(key); n++) key = componentKey(`${preferred}_${n}`);
+    registry.keyOf.set(identityKey, key);
+    registry.reached.set(key, reached);
+    return key;
   };
   const external = (from: string, name: string): string | undefined => {
     const pinned = externals.get(from);
     const id = pinned ? externalId(pinned, name) : undefined;
     if (!pinned || id === undefined) return undefined;
-    const key = `${from}.${id}`;
-    if (!reached.has(key)) reached.set(key, { alias: from, def: pinned.types.find(t => t.id === id)! });
-    return key;
+    const identity = projectIdentity(pinned);
+    const keyAlias = aliasOf(identity);
+    const surface = externals.get(keyAlias) ?? pinned;
+    const def = surface.types.find(t => t.id === id) ?? pinned.types.find(t => t.id === id)!;
+    return record(identity, id, `${keyAlias}.${id}`, { alias: externals.has(keyAlias) ? keyAlias : from, def });
   };
+  const own = (id: string): string => record('', id, id, { def: ownDefs.find(t => t.id === id)! });
   return {
     componentOf(name: string): string | undefined {
-      // `alias::name` names another project's export: its pinned snapshot, never an own type of the same last segment.
+      // `alias::name` names another project's export: its surface, never an own type of the same last segment.
       const sep = name.indexOf('::');
       if (sep > 0 && externals.has(name.slice(0, sep))) return external(name.slice(0, sep), name.slice(sep + 2));
+      // A qualified id the closure holds as written (two subsystems' types of one name).
+      if (alias === undefined && ownIds.includes(name)) return own(name);
       if (alias !== undefined) return external(alias, name);
-      return idHit(name, ownIds);
+      const hit = idHit(name, ownIds);
+      return hit !== undefined ? own(hit) : undefined;
     },
     isObject(typeRef: string): boolean {
       const expr = expressionOf(typeRef);
@@ -101,14 +140,14 @@ function schemaScope(ownDefs: readonly SurfaceTypeDef[], externals: ReadonlyMap<
       const sep = name.indexOf('::');
       const from = sep > 0 && externals.has(name.slice(0, sep)) ? name.slice(0, sep) : alias;
       const pinned = from !== undefined ? externals.get(from) : undefined;
-      const local = sep > 0 ? name.slice(sep + 2) : name;
+      const local = sep > 0 && from !== alias ? name.slice(sep + 2) : name;
       const def = pinned
         ? pinned.types.find(t => t.id === externalId(pinned, local))
-        : ownDefs.find(t => t.id === idHit(name, ownIds));
+        : ownDefs.find(t => t.id === (ownIds.includes(name) ? name : idHit(name, ownIds)));
       return !!def && def.kind !== 'enum' && def.kind !== 'signature' && def.holds === undefined;
     },
     within(next: string): SchemaScope {
-      return schemaScope(ownDefs, externals, reached, next);
+      return schemaScope(ownDefs, externals, registry, next);
     },
   };
 }
@@ -198,8 +237,34 @@ function creates(method: MethodSignature): boolean {
   return CREATING_NAME.test(method.name);
 }
 
+/** The reason phrase a success response's description opens with. */
+const STATUS_TEXT: Record<string, string> = { '200': 'Success', '201': 'Created', '202': 'Accepted', '203': 'Success', '204': 'Success', '206': 'Partial content' };
+
 /**
- * An operation's responses: its success under the verb's conventional code —
+ * The success code an HTTP operation answers by convention, when its endpoint
+ * states none: 204 for a method returning nothing, 201 for a POST that
+ * creates, else 200.
+ */
+function conventionalStatus(method: MethodSignature, httpVerb: string): number {
+  const returns = method.returns ?? '';
+  if (!returns || returnsNothing(returns)) return 204;
+  return httpVerb === 'post' && creates(method) ? 201 : 200;
+}
+
+/** Whether a type position is `T?` — T or no value: a field or parameter that may be left out. */
+function admitsNoValue(typeRef: string): boolean {
+  return expressionOf(typeRef)?.form === 'optional';
+}
+
+/** A schema with a description beside it, when there is one (beside a $ref too, which OpenAPI 3.1 allows). */
+function described(schema: Record<string, unknown>, description: string | undefined): Record<string, unknown> {
+  // A schema that already says something (an unresolved type, a non-canonical position) keeps saying it.
+  return description && schema.description === undefined ? { ...schema, description } : schema;
+}
+
+/**
+ * An operation's responses: its success under the code its endpoint states
+ * (`status`), else under the verb's conventional code —
  * 204 with no content for a method returning nothing, else 201 for POST and
  * 200 otherwise — and, for a `result<T, E>`, a `default` response carrying
  * E's schema: the failure the design declares, never left out.
@@ -207,11 +272,18 @@ function creates(method: MethodSignature): boolean {
 function responsesFor(method: MethodSignature, httpVerb: string, scope: SchemaScope): Record<string, unknown> {
   const returns = method.returns ?? '';
   const nothing = !returns || returnsNothing(returns);
-  const code = nothing ? '204' : httpVerb === 'post' && creates(method) ? '201' : '200';
+  const stated = method.endpoint?.transport === 'HTTP' ? method.endpoint.status : undefined;
+  const code = String(stated ?? conventionalStatus(method, httpVerb));
+  const redirect = /^3/.test(code);
+  // A redirect sends the client on with a Location header and no body; 204 and 304 carry no body by definition.
+  const bodyless = nothing || redirect || code === '204';
   const responses: Record<string, unknown> = {
     [code]: {
-      description: nothing ? 'Success, with no content' : `Success: ${returns}`,
-      ...(nothing ? {} : { content: { 'application/json': { schema: schemaFor(returns, scope) } } }),
+      description: redirect
+        ? `Redirect${returns && !nothing ? `: the Location header is the ${returns} the method answers` : ''}`
+        : nothing ? `${STATUS_TEXT[code] ?? 'Success'}, with no content` : `${STATUS_TEXT[code] ?? 'Success'}: ${returns}`,
+      ...(redirect ? { headers: { Location: { description: 'Where the client is sent', schema: { type: 'string' } } } } : {}),
+      ...(bodyless ? {} : { content: { 'application/json': { schema: schemaFor(returns, scope) } } }),
     },
   };
   const failure = failureOf(returns);
@@ -336,7 +408,7 @@ function operationFor(method: MethodSignature, scope: SchemaScope, entry?: Surfa
   const parameter = (p: (typeof params)[number], where: 'path' | 'query'): Record<string, unknown> => ({
     name: p.name,
     in: where,
-    required: where === 'path' ? true : !p.optional,
+    required: where === 'path' ? true : !p.optional && !admitsNoValue(p.type),
     ...(p.description ? { description: p.description } : {}),
     schema: schemaFor(p.type, scope),
   });
@@ -347,7 +419,7 @@ function operationFor(method: MethodSignature, scope: SchemaScope, entry?: Surfa
       // One object-typed param IS the body, as a client sends it — never
       // wrapped under its name; the name rides along for a reader.
       op.requestBody = {
-        required: !bodyParam.optional,
+        required: !bodyParam.optional && !admitsNoValue(bodyParam.type),
         ...(bodyParam.description ? { description: bodyParam.description } : {}),
         content: { 'application/json': { schema: schemaFor(bodyParam.type, scope) } },
       };
@@ -359,8 +431,8 @@ function operationFor(method: MethodSignature, scope: SchemaScope, entry?: Surfa
           'application/json': {
             schema: {
               type: 'object',
-              properties: Object.fromEntries(rest.map(p => [p.name, schemaFor(p.type, scope)])),
-              required: rest.filter(p => !p.optional).map(p => p.name),
+              properties: Object.fromEntries(rest.map(p => [p.name, described(schemaFor(p.type, scope), p.description)])),
+              required: rest.filter(p => !p.optional && !admitsNoValue(p.type)).map(p => p.name),
             },
           },
         },
@@ -386,8 +458,9 @@ function typeComponent(t: SurfaceTypeDef, scope: SchemaScope): Record<string, un
   return {
     type: 'object',
     title: t.name,
-    properties: Object.fromEntries(t.fields.map(f => [f.name, schemaFor(f.type, scope)])),
-    required: t.fields.filter(f => !f.optional).map(f => f.name),
+    // A field's description travels on its property; a `T?` field may be left out, like an optional one.
+    properties: Object.fromEntries(t.fields.map(f => [f.name, described(schemaFor(f.type, scope), f.description)])),
+    required: t.fields.filter(f => !f.optional && !admitsNoValue(f.type)).map(f => f.name),
   };
 }
 
@@ -548,8 +621,8 @@ function renderDoc(
   opts: { title?: string } = {},
 ): Record<string, unknown> {
   const { schemes, securityByEntry } = buildSecurity(entries);
-  const reached = new Map<string, ReachedExternal>();
-  const scope = schemaScope(snapshot.types, context.externals ?? new Map(), reached);
+  const registry: SchemaRegistry = { reached: new Map(), keyOf: new Map() };
+  const scope = schemaScope(snapshot.types, context.externals ?? new Map(), registry);
 
   const paths: Record<string, Record<string, unknown>> = {};
   // Every operation by verb and path, placeholders compared by position: OpenAPI
@@ -575,18 +648,16 @@ function renderDoc(
     }
   }
 
+  // Exactly the types the operations reach, and the ones those name in turn —
+  // an external's resolved inside its own producer's closure — each once: a
+  // type the document never references is no component of it.
   const schemas: Record<string, unknown> = {};
-  for (const t of snapshot.types) schemas[t.id] = typeComponent(t, scope);
-  // Every pinned external type a schema named, and the ones those name in
-  // turn, each resolved inside its own producer's closure.
-  const rendered = new Set<string>();
   for (let more = true; more;) {
     more = false;
-    for (const [key, { alias, def }] of [...reached]) {
-      if (rendered.has(key)) continue;
-      rendered.add(key);
+    for (const [key, { alias, def }] of [...registry.reached]) {
+      if (key in schemas) continue;
       more = true;
-      schemas[key] = typeComponent(def, scope.within(alias));
+      schemas[key] = typeComponent(def, alias !== undefined ? scope.within(alias) : scope);
     }
   }
 
@@ -738,6 +809,21 @@ function describedWith(description: string | undefined, note: string | undefined
   return text ? { description: text } : {};
 }
 
+/**
+ * A property or parameter read back: optional when the document does not
+ * require it — unless its type is `T?`, whose `?` already says it may be left
+ * out (what the export writes a `T?` as).
+ */
+function leftOut(required: boolean, type: string): { optional?: true } {
+  return required || type.endsWith('?') ? {} : { optional: true };
+}
+
+/** The success code a document answers with, kept as the endpoint's `status` when it is not the one the export's convention would pick. */
+function statedStatus(code: string | undefined, method: MethodSignature, verb: string): { status?: number } {
+  if (code === undefined || !/^[23]\d\d$/.test(code)) return {};
+  return Number(code) === conventionalStatus(method, verb) ? {} : { status: Number(code) };
+}
+
 /** Reconstruct a PortalAuth from an OpenAPI securityScheme (round-trips toOpenApiSet). */
 function authFromSecurityScheme(scheme: Record<string, unknown>): PortalAuth | undefined {
   const desc = typeof scheme.description === 'string' ? { description: scheme.description } : {};
@@ -807,10 +893,11 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
       for (const p of (op.parameters as Record<string, unknown>[] | undefined) ?? []) {
         if (typeof p.name !== 'string') continue;
         const schema = p.schema as Record<string, unknown> | undefined;
+        const type = typeRefFromSchema(schema);
         params.push({
           name: p.name,
-          type: typeRefFromSchema(schema),
-          ...(p.required === true ? {} : { optional: true }),
+          type,
+          ...leftOut(p.required === true, type),
           ...describedWith(typeof p.description === 'string' ? p.description : undefined, inlineEnumNote(schema)),
         });
       }
@@ -830,10 +917,11 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         const required = new Set((bodySchema.required as string[] | undefined) ?? []);
         if (Object.keys(props).length) {
           for (const [pname, pschema] of Object.entries(props)) {
+            const type = typeRefFromSchema(pschema);
             params.push({
               name: pname,
-              type: typeRefFromSchema(pschema),
-              ...(required.has(pname) ? {} : { optional: true }),
+              type,
+              ...leftOut(required.has(pname), type),
               ...describedWith(typeof pschema.description === 'string' ? pschema.description : undefined, inlineEnumNote(pschema)),
             });
           }
@@ -848,7 +936,8 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
       const responses = (op.responses ?? {}) as Record<string, Record<string, unknown>>;
       const jsonSchema = (r: Record<string, unknown> | undefined): Record<string, unknown> | undefined =>
         ((r?.content as Record<string, Record<string, unknown>>)?.['application/json']?.schema) as Record<string, unknown> | undefined;
-      const successCode = Object.keys(responses).filter((c) => /^2\d\d$/.test(c)).sort()[0];
+      const successCode = Object.keys(responses).filter((c) => /^2\d\d$/.test(c)).sort()[0]
+        ?? Object.keys(responses).filter((c) => /^3\d\d$/.test(c)).sort()[0];
       const responseSchema = successCode !== undefined ? jsonSchema(responses[successCode]) : undefined;
       const failureCode = ['default', ...Object.keys(responses).filter((c) => /^[45](\d\d|XX)$/i.test(c)).sort()].find((c) => jsonSchema(responses[c]) !== undefined);
       const success = responseSchema ? typeRefFromSchema(responseSchema) : 'void';
@@ -876,7 +965,7 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
         signature: `${name}(${params.map(p => `${p.name}: ${p.type}`).join(', ')}): ${returns}`,
         returns,
         params,
-        endpoint: { transport: 'HTTP', method: verb.toUpperCase() as 'GET', path: rawPath },
+        endpoint: { transport: 'HTTP', method: verb.toUpperCase() as 'GET', path: rawPath, ...statedStatus(successCode, { name, returns, ...(effect ? { effect } : {}) } as MethodSignature, verb) },
         ...(guarantees.length ? { guarantees } : {}),
         ...(effect ? { effect } : {}),
         ...(ext ? { ext } : {}),
@@ -908,11 +997,15 @@ export function fromOpenApi(document: string, projectName: string): SurfaceSnaps
       id,
       name: typeof schema.title === 'string' ? schema.title : id,
       kind: 'value-object',
-      fields: Object.entries(props).map(([fname, fschema]) => ({
-        name: fname,
-        type: typeRefFromSchema(fschema),
-        ...(required.has(fname) ? {} : { optional: true }),
-      })),
+      fields: Object.entries(props).map(([fname, fschema]) => {
+        const type = typeRefFromSchema(fschema);
+        return {
+          name: fname,
+          type,
+          ...leftOut(required.has(fname), type),
+          ...(typeof fschema.description === 'string' ? { description: fschema.description } : {}),
+        };
+      }),
     });
   }
 

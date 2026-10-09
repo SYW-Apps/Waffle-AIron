@@ -97,7 +97,7 @@ describe('sdd_rename_type', () => {
     const result = await call({ id: 'entry', newId: 'posting' });
     expect(result.isError ?? false).toBe(false);
     expect(JSON.parse(textOf(result))).toEqual({
-      from: 'books::entry', to: 'books::posting', rewritten: ['iledger'], keptPublicNames: [], carried: [],
+      from: 'books::entry', to: 'books::posting', rewritten: ['iledger'], keptPublicNames: [], publishedIn: [], carried: [],
     });
     invalidateSpecCache();
     expect(loadTypeSpec('posting')?.previousIds).toEqual(['entry']);

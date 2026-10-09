@@ -162,8 +162,8 @@ methods:
       not act on, or that nothing changed and nothing was written. A dry run runs the whole write,
       gate included, and writes nothing.
     signature: >-
-      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
-      SpecChangeReport
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool, search?:
+      list<string>): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -181,6 +181,12 @@ methods:
           Ask what the delta would do instead of doing it; the report comes back marked dryRun with
           written false
         optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, read when the delta removes
+          contract methods
+        optional: true
   - name: setEndpoints
     description: >-
       The sdd_set_endpoints workflow: verify the L3 contract exists, read the Portal it belongs to,
@@ -191,7 +197,9 @@ methods:
       portalType does not carry is refused, naming the transport that portalType implies; so is a
       method the contract does not declare, or an endpoint the schema rejects — each before anything
       is saved.
-    signature: 'setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
+    signature: >-
+      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: interfaceId
@@ -202,6 +210,12 @@ methods:
         description: >-
           One binding per method: the method name, the transport, and that transport's address
           fields
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer the change report the binding would give — the gate and the writer's parse included
+          — and write nothing
+        optional: true
   - name: setPublicInterfaces
     description: >-
       The sdd_set_public_interfaces workflow: verify the subsystem exists, then REPLACE its export
@@ -263,12 +277,16 @@ methods:
       the notices name what was carried forward, what a dropped member removed and what an omission
       cleared, and the respellings each type position stored canonical. A type carries no lifecycle
       status, so the receipt states none.
-    signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
+    signature: 'addType(spec: TypeSpec, dryRun?: bool): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
       - name: spec
         type: TypeSpec
         description: The type as the tool's arguments describe it
+      - name: dryRun
+        type: bool
+        description: Answer the receipt the write would give — every judgement run — and write nothing
+        optional: true
   - name: moveMethods
     description: >-
       The sdd_move_methods workflow: verify both components exist, then hand the move to the
@@ -298,7 +316,9 @@ methods:
       tests to revisit — or that nothing was there. A spec that was not there answers false rather
       than throwing, so a repeated delete is not an error, but the caller is told which of the two
       happened.
-    signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
+    signature: >-
+      deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool, search?:
+      list<string>): SpecDeletion
     returns: SpecDeletion
     params:
       - name: kind
@@ -316,6 +336,12 @@ methods:
         description: >-
           Delete even though other specs still reference what goes, leaving those references for
           validate to report
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
         optional: true
   - name: getProjectConfig
     description: >-
@@ -375,9 +401,13 @@ methods:
       - idempotent
   - name: renameType
     description: >-
-      Resolve the type id, qualified by its owner if needed, against the bound tree, then rename it
-      through the core adapter — or, with dryRun, answer what the rename would do and write nothing
-    signature: 'renameType(id: string, newId: string, dryRun?: bool): TypeRename'
+      Resolve the type id, qualified by its owner if needed, against the bound tree, read the
+      projects that consume the bound project (the family in reach — members included — and the
+      searched folders' consumer checkouts), then rename it through the core adapter — or, with
+      dryRun, answer what the rename would do and write nothing — and name every consumer whose
+      specs reach a public name carrying the type (external_consumer.narrowedToUses): the ones whose
+      code spelling the old name breaks
+    signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
     returns: TypeRename
     params:
       - name: id
@@ -389,6 +419,10 @@ methods:
       - name: dryRun
         type: bool
         description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumer checkouts outside the family
         optional: true
   - name: renameField
     description: >-
@@ -455,6 +489,49 @@ methods:
           Folders to scan for consumer checkouts outside the family, relative to the bound project
           root or absolute
         optional: true
+  - name: renameSpec
+    description: >-
+      The sdd_rename_spec workflow: rename one contract or one implementation on its own through the
+      core client adapter and answer with what moved and what was rewritten; a dry run answers the
+      plan and writes nothing
+    signature: 'renameSpec(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: moveSpec
+    description: >-
+      The sdd_move_spec workflow: move a component or a type to another subsystem through the
+      authoring client adapter, gated, and answer with what moved, what was rewritten and the gate's
+      notices; a dry run answers the plan and writes nothing
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to; omitted for a type made system-level
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-08T18:55:05.376Z'
+updatedAt: '2026-10-09T00:33:58.070Z'

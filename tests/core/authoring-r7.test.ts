@@ -122,13 +122,13 @@ describe('N1: a delta never changes which spec it is or where it lives', () => {
     expect(() => updateSpecGated('type', 'hit_stats', { id: 'other' })).toThrow(/sdd_rename_type/);
   });
 
-  it('refuses moving a component or a type to another subsystem, saying no tool does it yet', () => {
+  it('refuses moving a component or a type to another subsystem, naming sdd_move_spec (r8: the owed tool exists)', () => {
     const proj = seed();
     const before = files(proj);
     expect(() => updateSpecGated('component', 'stats_portal', { subsystem: 'links' }))
-      .toThrow(/"subsystem" is where the component lives.*no tool moves a component to another subsystem.*\(owed\)/s);
-    expect(() => updateSpecGated('type', 'hit_stats', { subsystem: 'links' })).toThrow(/no tool moves a type/);
-    expect(() => updateSpecGated('type', 'hit_stats', { unset: ['subsystem'] })).toThrow(/no tool moves a type/);
+      .toThrow(/"subsystem" is where the component lives.*move it with sdd_move_spec/s);
+    expect(() => updateSpecGated('type', 'hit_stats', { subsystem: 'links' })).toThrow(/sdd_move_spec \(kind type\)/);
+    expect(() => updateSpecGated('type', 'hit_stats', { unset: ['subsystem'] })).toThrow(/sdd_move_spec \(kind type\)/);
     expect(files(proj)).toEqual(before);
   });
 

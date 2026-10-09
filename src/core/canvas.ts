@@ -186,6 +186,9 @@ export interface CanvasModel {
  */
 function memberProjectNodes(): CanvasModel['subsystems'] {
   const family = graph();
+  const top = family.nodes.find((n) => n.namespace === '')?.directory;
+  // A member in a `../` sibling checkout is composed like a contained one; its badge says where it is stored.
+  const sibling = (dir: string): boolean => top !== undefined && path.relative(top, dir).startsWith('..');
   const contained = family.nodes
     .filter((n) => n.namespace !== '')
     .map((n) => ({
@@ -194,10 +197,11 @@ function memberProjectNodes(): CanvasModel['subsystems'] {
       description: n.memberDescription ?? n.name ?? '',
       trustedLinks: [],
       project: true,
+      ...(sibling(n.directory) ? { storage: storageBadge('path', n.directory, undefined) } : {}),
     }));
-  // Stage 8: a referenced project member (a `../`, git or hosted source) is a
-  // project node too — composition decides what is drawn, storage only how it
-  // is labelled. Its specs are not read here: it is drawn from outside.
+  // Stage 8: a referenced project member (a git or hosted source) is a project
+  // node too — composition decides what is drawn, storage only how it is
+  // labelled. Its specs are not read here: it is drawn from outside.
   const rootExternals = family.nodes.find((n) => n.namespace === '')?.externals ?? [];
   const referenced = rootExternals
     .filter((e) => e.role === 'member')

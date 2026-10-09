@@ -323,18 +323,18 @@ describe('authoring: updateSpecGated', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('refuses moving a type out of its subsystem (r7), and repairs a system-level one only into a subsystem the tree has', () => {
+  it('refuses moving a type out of its subsystem (r7), and a system-level one into one (r8: a move, sdd_move_spec)', () => {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
     writeSpec('type', 'money', 'kind: value-object\nid: money\nname: Money\nsubsystem: sub-a\nfields: []\nmethods: []');
     invalidateSpecCache();
 
     expect(() => updateSpecGated('type', 'money', { subsystem: 'ghost' }))
-      .toThrow(/no tool moves a type to another subsystem/);
+      .toThrow(/"subsystem" is where the type lives.*sdd_move_spec/s);
     writeSpec('type', 'coin', 'kind: value-object\nid: coin\nname: Coin\nfields: []\nmethods: []');
     invalidateSpecCache();
     expect(() => updateSpecGated('type', 'coin', { subsystem: 'ghost' }))
-      .toThrow(/Owning subsystem "ghost" does not exist/);
+      .toThrow(/"subsystem" is where the type lives.*sdd_move_spec/s);
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 

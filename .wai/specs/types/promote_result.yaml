@@ -85,7 +85,16 @@ fields:
       signature text was re-derived from them, e.g. "ihit_client.reportHit: reportHit(hit: hit):
       async void → reportHit(hit: analytics::hit): async void" — so no stored text is left stale.
     optional: false
+  - name: externalsDeclared
+    type: list<string>
+    description: >-
+      One line per external the new project declared for another project its moved specs name
+      through the parent — a member of the family or the parent's own external — under the same
+      alias: its producer id when it is not the alias, its source re-expressed from the new
+      project's root, and the imported names its specs use as its `use`. The plan lists each, and
+      pins them with the new project's other externals.
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-05T23:34:25.221Z'
-updatedAt: '2026-10-07T06:20:36.608Z'
+updatedAt: '2026-10-09T00:59:00.674Z'

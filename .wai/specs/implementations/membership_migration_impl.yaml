@@ -133,9 +133,12 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
-          Resolve where the adoptee lives: locally, the external's source path from the bound
-          project's directory under the containment guard, lexically and through links, through the
-          family file adapter; with a relocation (hosted), the external must name a source.hosted
+          Resolve where the adoptee lives: locally, the external's source path read exactly as
+          attach and `member add` read a member location — from the bound project's directory under
+          the containment guard, lexically and through links, through the family file adapter, or,
+          with a leading `../` (member_source.parse: storage path), a sibling resolved lexically
+          against the bound directory (round 8: attach pointing at adopt and adopt refusing the
+          sibling was a loop); with a relocation (hosted), the external must name a source.hosted
           record, the adoptee is read at relocation.from, and request.path is resolved the same way
           as the member path it moves to
         type: call
@@ -143,12 +146,12 @@ methods:
         targetMethod: resolve
       - stepNumber: 3
         description: >-
-          Judge the external: none is not-an-external; locally no source path, or one not strictly
-          within the bound project, is not-contained; with a relocation, no source.hosted is
-          not-contained, and a member path that is not strictly within the bound project, or does
-          not equal relocation.to, is not-contained, and a target that already exists and is not an
-          empty directory is relocation-target-exists; a family node already at the directory is
-          already-member
+          Judge the external: none is not-an-external; locally no source path, an inner `..`, an
+          absolute path, or a sibling path naming a directory that holds the bound project is
+          not-contained; with a relocation, no source.hosted is not-contained, and a member path
+          that is not strictly within the bound project, or does not equal relocation.to, is
+          not-contained, and a target that already exists and is not an empty directory is
+          relocation-target-exists; a family node already at the directory is already-member
         type: local
       - stepNumber: 4
         description: Is there an external to adopt?
@@ -299,4 +302,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-08T18:55:03.079Z'
+updatedAt: '2026-10-09T01:00:54.165Z'

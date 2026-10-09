@@ -275,6 +275,15 @@ fields:
       type checker resolves to nothing: the module is gone, or it does not export the name imported.
       Recorded only where a type checker read the file; absent when every such import resolves
     optional: true
+  - name: routePrefixes
+    type: map<string, string>
+    description: >-
+      The ONE prefix each named function strips off a path before matching it
+      (`path.slice(BASE.length)`, `.replace(BASE, '')`), as the text it settles on, by function
+      name; a function stripping none, several, or one that does not settle has no entry. What a
+      route table read by the same router is written under. EXACT grade only, re-read with the type
+      checker settling each value where one was loaded
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -393,4 +402,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-08T18:51:47.678Z'
+updatedAt: '2026-10-09T00:42:22.754Z'

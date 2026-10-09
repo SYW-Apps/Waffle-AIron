@@ -154,7 +154,7 @@ async function runLock(options: LockOptions): Promise<void> {
   logger.success('Specs locked and generated outputs reconciled.');
   // Truthful about the file: the same approval re-recorded nothing.
   logger.info(before !== null && readFileOrNull(lockPath) === before
-    ? `Lock record unchanged (.wai/lock.json left untouched): stateId ${record.stateId.algorithm}:${record.stateId.digest} — approved ${record.lockedAt}.`
+    ? `Lock record unchanged (.wai/lock.json left untouched by this run): stateId ${record.stateId.algorithm}:${record.stateId.digest} — approved ${record.lockedAt}.`
     : `Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
   for (const [alias, pin] of Object.entries(record.members ?? {})) {
     logger.info(`  member ${alias}: ${pin.state}${pin.subject ? ` (${pin.subject.slice(0, 26)}…)` : ''}`);
@@ -220,15 +220,15 @@ export async function validateCommand(opts: { ci?: boolean; subsystem?: string; 
 }
 
 /** cli_runner.runStatus — hosted when attached, else the local dashboard. */
-export async function statusCommand(opts: { subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
+export async function statusCommand(options: { subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     logger.info(`Status of "${target.projectId}" on ${target.url}:`);
-    process.stdout.write(`${await statusAttached(target, opts.subsystem)}\n`);
+    process.stdout.write(`${await statusAttached(target, options.subsystem)}\n`);
     return;
   }
   // The flag at the edge: --no-recursive is a member depth of 0, the default every level.
-  await runStatus({ subsystem: opts.subsystem, ...(opts.recursive === false ? { memberDepth: 0 } : {}) }, opts.all === true);
+  await runStatus({ subsystem: options.subsystem, ...(options.recursive === false ? { memberDepth: 0 } : {}) }, options.all === true);
 }
 
 // ---------------------------------------------------------------------------

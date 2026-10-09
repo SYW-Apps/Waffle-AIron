@@ -1,4 +1,4 @@
-import { implementationSourceFiles, pathKey, typeSourceFiles } from '../../../models/index.js';
+import { implementationSourceFiles, pathKey, routerLinkage, typeSourceFiles } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ export const unclaimedSourceRule: SddRule = {
   name: 'unclaimed-source',
   judges: 'code',
   description:
-    'Code↔spec Level 1, asked the other way round: every source file under the project\'s declared source roots must be named by some spec — an implementation\'s sourcePath, a method\'s, a simPath, a binding module an implementation declares in `bindings`, or a type\'s — or be carried in the frozen `rules.conformance.unclaimed` list. A pure re-export barrel declares nothing of its own and only republishes other modules, so it has no code to claim and is exempt (exact grade only: a weaker grade cannot tell a barrel from a file it failed to parse). Declaring no source roots leaves the check silent, which is what makes it opt-in; the unclaimed list is a one-way debt register, so an entry the walk no longer finds unclaimed must be deleted and the list can only shrink.',
+    'Code↔spec Level 1, asked the other way round: every source file under the project\'s declared source roots must be named by some spec — an implementation\'s sourcePath, a method\'s, a simPath, a binding module an implementation declares in `bindings`, the module a Portal\'s router linkage names (`<module>#<name>`, or the module alone), or a type\'s — or be carried in the frozen `rules.conformance.unclaimed` list. A pure re-export barrel declares nothing of its own and only republishes other modules, so it has no code to claim and is exempt (exact grade only: a weaker grade cannot tell a barrel from a file it failed to parse). Declaring no source roots leaves the check silent, which is what makes it opt-in; the unclaimed list is a one-way debt register, so an entry the walk no longer finds unclaimed must be deleted and the list can only shrink.',
   codes: [
     { code: 'UNCLAIMED_SOURCE_FILE', defaultSeverity: 'warning', summary: 'A source file under a declared source root that no spec names and the frozen unclaimed list does not carry — code nobody designed' },
     { code: 'STALE_UNCLAIMED_ENTRY', defaultSeverity: 'warning', summary: 'An entry of the frozen unclaimed list names a file that is now claimed, or that the source-root walk no longer finds — delete it, the list only shrinks' },
@@ -64,6 +64,10 @@ export const unclaimedSourceRule: SddRule = {
       // A binding module is code linkage the implementation declares: the
       // file through which it reaches another project's code.
       for (const file of impl.bindings ?? []) claimed.add(pathKey(file));
+      // A router linkage naming a module of its own (a central routes.ts) is
+      // linkage the same way: the module the Portal's requests are routed by.
+      const routerFile = impl.router ? routerLinkage(impl.router).file : undefined;
+      if (routerFile) claimed.add(pathKey(routerFile));
     }
     for (const type of ctx.types) {
       for (const file of typeSourceFiles(type)) claimed.add(pathKey(file));

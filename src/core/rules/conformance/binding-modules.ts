@@ -95,19 +95,32 @@ function memberSurface(ctx: RuleContext, node: ProjectNode, alias: string): { en
       for (const f of type.fields ?? []) pending.push(...extractTypeIdentifiers(f.type));
     }
   }
-  // The closure the exported contracts and types name, as a pin's snapshot carries it.
-  const seen = new Set(types.map((t) => nameKey(t.def.id)));
+  // The closure the exported contracts and types name, as a pin's snapshot
+  // carries it — each type under the project that OWNS it: a type the member
+  // takes from another project (its own external, a sibling member) is that
+  // project's, named by the alias the bound root reaches it by, never the member's.
+  const seen = new Set(types.map((t) => `${t.alias}::${nameKey(t.def.id)}`));
   while (pending.length > 0) {
     const ref = pending.pop()!;
     const type = memberType(ref);
     if (!type) continue;
     const id = lastSegment(type.id.replace(/::/g, '.'));
-    if (seen.has(nameKey(id))) continue;
-    seen.add(nameKey(id));
-    types.push({ alias, def: asDef(type, id) });
+    const owner = type.id.includes('::') ? type.id.slice(0, type.id.indexOf('::')) : ns;
+    const ownerAlias = owner === ns ? alias : ownerAliasOf(ctx, owner);
+    const key = `${ownerAlias}::${nameKey(id)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    types.push({ alias: ownerAlias, def: asDef(type, id) });
     for (const f of type.fields ?? []) pending.push(...extractTypeIdentifiers(f.type));
   }
   return { entries, types };
+}
+
+/** The alias the bound root reaches a family project by: the alias it declares the member under, else the project's id, else its key. */
+function ownerAliasOf(ctx: RuleContext, namespace: string): string {
+  const node = (ctx.projectFamily?.nodes ?? []).find((n) => n.namespace === namespace);
+  const declared = [...(boundRoot(ctx)?.aliases.entries() ?? [])].find(([, key]) => key === namespace)?.[0];
+  return node?.mountAlias ?? declared ?? node?.id ?? namespace;
 }
 
 /** nameKey with a trailing Api, Port or Client dropped: `TilesApi` and `Tiles API` are the pin's `tiles`. */
@@ -208,6 +221,9 @@ function methodDrift(where: string, params: string[], entry: PinnedEntry, report
 /** The renamed type a type name in a binding still spells: one whose former id or name it is, and no reached type's current one. */
 function formerType(name: string, types: PinnedType[]): PinnedType | undefined {
   const key = nameKey(name);
+  // A name a reached type holds now — its id, or the display name code is
+  // written by (rename_type leaves it to the author) — is current. A binding
+  // that means the RETIRED id names it by tag, which matchOf reads first.
   if (types.some((t) => nameKey(t.def.id) === key || nameKey(t.def.name) === key)) return undefined;
   return types.find((t) => (t.def.formerly ?? []).some((f) => nameKey(f) === key));
 }
@@ -259,10 +275,14 @@ function matchOf(decl: BindingDeclaration, entries: PinnedEntry[], types: Pinned
     const name = rawName.split('.')[0];
     const entry = entries.find((e) => e.alias === alias && (nameKey(e.entry.id) === nameKey(name) || nameKey(e.entry.name) === nameKey(name)));
     if (entry) return { entry };
-    const type = types.find((t) => t.alias === alias && (nameKey(t.def.id) === nameKey(name) || nameKey(t.def.name) === nameKey(name)));
-    if (type) return { type };
+    // A tag names a public name or type id: the id first, then a former id (the
+    // type under its retired name), and a display name only when neither does.
+    const byId = types.find((t) => t.alias === alias && nameKey(t.def.id) === nameKey(name));
+    if (byId) return { type: byId };
     const renamed = types.find((t) => t.alias === alias && (t.def.formerly ?? []).some((f) => nameKey(f) === nameKey(name)));
     if (renamed) return { renamedType: renamed };
+    const byName = types.find((t) => t.alias === alias && nameKey(t.def.name) === nameKey(name));
+    if (byName) return { type: byName };
   }
   const methods = decl.members.filter((m) => m.params !== undefined);
   const byName = stem(decl.name);
@@ -315,7 +335,9 @@ function declarationDrift(decl: BindingDeclaration, entries: PinnedEntry[], type
   if (type) {
     // A declaration still named by the type's former name says the new one.
     const renamedFrom = formerType(decl.name, [type]) ?? (match.renamedType ? type : undefined);
-    const named = renamedFrom ? [`the type "${decl.name}" was renamed to "${type.def.name}" (${type.alias}::${type.def.id}) — follow the rename`] : [];
+    // The new name as the producer spells it now: its display name, else (a display name kept through the rename) its id.
+    const now = nameKey(type.def.name) === nameKey(decl.name) ? type.def.id : type.def.name;
+    const named = renamedFrom ? [`the type "${decl.name}" was renamed to "${now}" (${type.alias}::${type.def.id}) — follow the rename`] : [];
     const drift = decl.kind === 'alias' || decl.kind === 'enum' ? named : [...named, ...fieldDrift(decl.members, type, types)];
     return { against: `${type.alias}::${type.def.id}`, drift };
   }
@@ -386,7 +408,7 @@ function unreadReason(module: BindingModule, reach: Reach): string | null {
 export const bindingModulesRule: SddRule = {
   name: 'binding-modules',
   judges: 'code',
-  description: "Code-to-pin for a consumer's hand-written binding module (implementation_spec.bindings): the one file where the consumer's code spells another project's names is compared with what the projects the implementation's component reaches publish, so a re-pin (or a member's edit) that renamed, removed or reshaped a name the binding still declares is reported instead of surviving tsc and the tests on the binding's own stale declarations. A component reaches a project through every `alias::name` its specs write: a dependsOn, owns, narrative or declared call, an implements, and every named type its contract's params and returns write, directly or through the bound project's own types they name (so a binding to a types-only contracts library is reached by the types a contract names). A pinned external is compared with its pinned snapshot. A contained MEMBER project (an alias the bound root declares under `members` — named by that alias or by the member's project id — read live and never pinned) is compared the same way against what its L0 export table exports now: each exported contract's methods with their params and rename traces, each exported type's fields with theirs, so a parameter, field or method rename in a member reaches a member consumer at validate time, with the rename to follow. Each binding declaration is matched to a reached interface or type by the `alias::name` its doc comment names, else by name (nameKey of the interface's id or name, a type's id or name, with an Api/Port/Client suffix ignored), else — for an interface with methods — by the reached interface most of its member names belong to (a trace in `formerly` counts); an exported function is matched by name against the methods of every reached interface, or, when its doc comment names `alias::name` (or `alias::name.method`), against that interface alone. A matched member that is a former name is reported with the rename to follow; a member of a matched interface it does not hold, a function its tagged interface no longer holds, and a function or member a pinned entry's `retired` list names (a method the producer removed since an earlier pin) are reported removed; a parameter list whose arity or names differ from the method's (a param's previousNames giving the rename) is reported; a type declaration is compared field by field — a field the matched type does not declare (a field's `formerly` giving the rename), a field it declares that the binding lacks, a declaration still named by the type's former name, and a field whose declared type names a type the producer renamed are each reported with the new name. Names compare by nameKey, so snake_case and camelCase spellings of one name agree. A declaration nothing matches is the binding's own plumbing and is never judged. A binding that cannot be read, is not TypeScript or JavaScript, declares nothing the reader compares (naming each export form it met but cannot see into, such as a CommonJS `module.exports = require(…)`), or whose component reaches neither a pinned external nor a member project is reported once as unread — a member is named as a member (one that exports nothing is told to export there), and pinning is suggested only for a declared external, never for a member — a notice, so a planned binding passes a design-only gate.",
+  description: "Code-to-pin for a consumer's hand-written binding module (implementation_spec.bindings): the one file where the consumer's code spells another project's names is compared with what the projects the implementation's component reaches publish, so a re-pin (or a member's edit) that renamed, removed or reshaped a name the binding still declares is reported instead of surviving tsc and the tests on the binding's own stale declarations. A component reaches a project through every `alias::name` its specs write: a dependsOn, owns, narrative or declared call, an implements, and every named type its contract's params and returns write, directly or through the bound project's own types they name (so a binding to a types-only contracts library is reached by the types a contract names). A pinned external is compared with its pinned snapshot. A contained MEMBER project (an alias the bound root declares under `members` — named by that alias or by the member's project id — read live and never pinned) is compared the same way against what its L0 export table exports now: each exported contract's methods with their params and rename traces, each exported type's fields with theirs (a type its exports name that another project owns is that project's, compared and named under the alias the bound root reaches it by, never the member's), so a parameter, field or method rename in a member reaches a member consumer at validate time, with the rename to follow. Each binding declaration is matched to a reached interface or type by the `alias::name` its doc comment names (a public name or type id, never a display name: a tag naming a type's former id is that type under its retired name), else by name (nameKey of the interface's id or name, a type's id or name, with an Api/Port/Client suffix ignored), else — for an interface with methods — by the reached interface most of its member names belong to (a trace in `formerly` counts); an exported function is matched by name against the methods of every reached interface, or, when its doc comment names `alias::name` (or `alias::name.method`), against that interface alone. A matched member that is a former name is reported with the rename to follow; a member of a matched interface it does not hold, a function its tagged interface no longer holds, and a function or member a pinned entry's `retired` list names (a method the producer removed since an earlier pin) are reported removed; a parameter list whose arity or names differ from the method's (a param's previousNames giving the rename) is reported; a type declaration is compared field by field — a field the matched type does not declare (a field's `formerly` giving the rename), a field it declares that the binding lacks, a declaration still named by the type's former name, and a field whose declared type names a type the producer renamed are each reported with the new name. Names compare by nameKey, so snake_case and camelCase spellings of one name agree. A declaration nothing matches is the binding's own plumbing and is never judged. A binding that cannot be read, is not TypeScript or JavaScript, declares nothing the reader compares (naming each export form it met but cannot see into, such as a CommonJS `module.exports = require(…)`), or whose component reaches neither a pinned external nor a member project is reported once as unread — a member is named as a member (one that exports nothing is told to export there), and pinning is suggested only for a declared external, never for a member — a notice, so a planned binding passes a design-only gate.",
   codes: [
     { code: 'BINDING_DRIFT', defaultSeverity: 'warning', summary: 'A binding module declares a producer name its pin (or a member project\'s live export) renamed (with the rename to follow) or removed, a parameter list that differs from the method\'s, or a type whose name or fields differ from the producer\'s type — code calling into another project through a shape the producer no longer has' },
     { code: 'BINDING_UNREAD', defaultSeverity: 'notice', summary: 'A binding module an implementation names could not be compared: it is not on disk yet, escapes the root, cannot be read, is in a language the reader does not read, declares nothing the reader compares (naming the export forms it cannot see into), or its component reaches neither a pinned external nor a member project that exports something' },
@@ -420,7 +442,8 @@ export const bindingModulesRule: SddRule = {
         ...reach.pins.flatMap((p) => p.snapshot!.types.map((def) => ({ alias: p.alias, def }))),
         ...reach.members.flatMap((m) => m.surface.types),
       ];
-      const live = new Set(reach.members.map((m) => m.alias));
+      // Compared live: every alias a member surface spoke for — the member's own, and each project owning a type it names.
+      const live = new Set(reach.members.flatMap((m) => [m.alias, ...m.surface.types.map((t) => t.alias)]));
       // A tag names a project by its alias, or a member by its project id.
       const tagAlias = (alias: string): string => {
         if (reach.pins.some((p) => p.alias === alias)) return alias;

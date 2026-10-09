@@ -1,4 +1,4 @@
-import { parseTypeExpression, pathKey } from '../../../models/index.js';
+import { defaultConformanceTier, parseTypeExpression, pathKey } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ import { RuleContext, SddRule } from '../types.js';
 export const asyncConformanceRule: SddRule = {
   name: 'async-conformance',
   judges: 'code',
-  description: 'Code-to-contract for ASYNC: a contract method whose returns is `async T` is realized by a function that completes later, and one whose returns is not, by one that completes now — every caller in every language with async/await is shaped by the difference, so a contract that hides it misleads every implementer and translation built from it. Compared with source_file_facts.asyncFunctions for the method\'s realizing function (under its `symbol`), at exact grade only; where a name has several bodies only what they all agree on is reported, as param-conformance does. A method whose file only calls the function is methodRealization\'s finding.',
+  description: 'Code-to-contract for ASYNC: a contract method whose returns is `async T` is realized by a function that completes later, and one whose returns is not, by one that completes now — every caller in every language with async/await is shaped by the difference, so a contract that hides it misleads every implementer and translation built from it. Compared with source_file_facts.asyncFunctions for the method\'s realizing function (under its `symbol`), at exact grade only; where a name has several bodies only what they all agree on is reported, as param-conformance does. A method whose file only calls the function is methodRealization\'s finding, and a method whose conformance dial is off (its own, else its implementation\'s) is not judged.',
   codes: [
     {
       code: 'ASYNC_MISMATCH',
@@ -40,7 +40,9 @@ export const asyncConformanceRule: SddRule = {
   check(ctx: RuleContext): void {
     const code = ctx.codeIndex();
 
-    for (const { implementation, method, sourceFile, draftContext } of ctx.implementationMethods()) {
+    for (const { implementation, method, component, sourceFile, draftContext } of ctx.implementationMethods()) {
+      // ---- 0. the conformance dial: off is no realization check at all ----
+      if ((method.conformance ?? implementation.conformance ?? defaultConformanceTier(component)) === 'off') continue;
       // ---- 1. gather: the contract method, and the bodies realizing it ----
       const contractMethod = ctx.interfaceMap.get(implementation.contract)?.methods.find((m) => m.name === method.name);
       if (!contractMethod || typeof contractMethod.returns !== 'string' || !sourceFile) continue;

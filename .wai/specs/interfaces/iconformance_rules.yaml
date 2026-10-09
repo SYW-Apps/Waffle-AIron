@@ -189,26 +189,37 @@ methods:
       one no missed claim names is an unnarrated call to a method whose effect no narrative settles,
       never read through its body as the Portal's own write), never for a Portal's call into a data
       component (PORTAL_WRITE_SHORTCUT_IN_CODE's subject), and only where a type checker was loaded.
-      A call there the checker cannot follow — its receiver typed any or unknown, cast to either or
-      to an index signature, typed by an index signature naming no member of that name, or its
-      member picked by a computed key — under the name of such a write the method claims nowhere
-      (where the checker recorded the receiver's original type — every cast, non-null mark and
-      parenthesis taken off, an `await (x)` written outside an async function read as the x it
-      means, nullability set aside so an optional field is the class it holds, a name bound once by
-      a const read through its initializer, and an interface or shape no class realizes landing on
-      the file declaring it — a write of the component that type lands on, any of its writes when a
-      computed key names none; else a write of that name in the method's own subsystem or one its
-      component depends into) fails closed as CALL_ORIGIN_UNRESOLVED: neither proven an unnarrated
-      write nor cleared. A member picked by a key that names no single member, on a receiver that
-      was one of this project's classes before any cast, is such a call however the receiver or the
-      key is cast and whether it is invoked on the spot or taken as a value and invoked later
-      (`const f = store[k]; f.call(store, …)`); a key the checker types as one literal names its
-      member by that literal's value, never by the variable holding it. A method that claims nothing
-      at all is judged in neither direction: what it leaves unsaid is UNUSED_*'s subject. Order,
-      arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim
-      about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL's finding and
-      names no target here, the conformance dial (off) skips, and weaker analysis grades never
-      guess.
+      A call there the checker cannot follow, or a member read by name off such a receiver and taken
+      as a value (`const f = (store as any).save; f(x)`) — its receiver typed any or unknown however
+      it came to be (a cast, an untyped or any-typed parameter of a closure, a function result typed
+      any), cast to either or to an index signature, typed by an index signature naming no member of
+      that name, or its member picked by a computed key — under the name of such a write the method
+      claims nowhere (where the checker recorded the receiver's original type — every cast, non-null
+      mark and parenthesis taken off, an `await (x)` written outside an async function read as the x
+      it means, nullability set aside so an optional field is the class it holds, a name bound once
+      by a const read through its initializer, and an interface or shape no class realizes landing
+      on the file declaring it — a write of the component that type lands on, any of its writes when
+      a computed key names none; else a write of that name in the method's own subsystem or one its
+      component depends into — the design's write set, which a data component whose code is still
+      planned has too; a receiver landing only on the caller's own file, a port it declares for
+      itself, leaves it to that name as well) fails closed as CALL_ORIGIN_UNRESOLVED: neither proven
+      an unnarrated write nor cleared. A member picked by a key that names no single member, on a
+      receiver that was one of this project's classes before any cast, is such a call however the
+      receiver or the key is cast and whether it is invoked on the spot or taken as a value and
+      invoked later (`const f = store[k]; f.call(store, …)`); a key the checker types as one literal
+      names its member by that literal's value, never by the variable holding it. A method that
+      claims nothing at all is judged in neither direction: what it leaves unsaid is UNUSED_*'s
+      subject. Order, arguments and conditions stay unverified, dispatch steps (runtime-table
+      routed) are no claim about a call site, a malformed declared reference is
+      MALFORMED_DECLARED_CALL's finding and names no target here, the conformance dial set off skips
+      the forward direction — whether the claims are found in the code — but never the converse, so
+      off is no way past an unnarrated write or a call the analysis cannot follow; a claim whose
+      target's code is in ANOTHER language than the caller's file (every file the target's
+      implementations name is in a language a TypeScript call graph does not read, or, naming none,
+      the member or project it belongs to declares such a target language) is not judged by this
+      call graph at all, and the language boundary is said once per project and language
+      (CALL_ACROSS_LANGUAGE, a notice) — never as an unrealized call no code could ever clear, since
+      what crosses that boundary is the binding; and weaker analysis grades never guess.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -258,6 +269,13 @@ methods:
           A narrative call step or declared call written by name through a receiver nothing realizes
           yet, whose target component has no code yet (no file its implementations name exists) —
           planned, not unresolved; judged like any other claim once the target's realization begins
+      - code: CALL_ACROSS_LANGUAGE
+        severity: notice
+        summary: >-
+          Claimed calls from TypeScript or JavaScript code reach a component whose code is in
+          another language (a member or project written in Rust, say): the call graph cannot resolve
+          into it, so the claims are not judged by it, and the boundary is said once per project and
+          language
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -321,30 +339,44 @@ methods:
       loaded, the receiver is followed through the shape facts instead: a non-null assertion,
       parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field
       exactly as through the field itself. A call in a Portal's own code the analysis cannot resolve
-      at all — its receiver typed any or unknown, cast to either or to an index signature, its
-      member picked by a computed key, or typed nothing — under the name of a write- or
-      lifecycle-effect method of a data component, or reading a member by a key that names no single
-      member off a receiver that was a data component before any cast — invoked on the spot or taken
-      as a value, however the receiver or the key is cast (where the checker recorded the receiver's
-      ORIGINAL type, before any cast — an `await (x)` written outside an async function read as the
-      x it means, nullability set aside, a name bound once by a const read through its initializer,
-      an interface no class realizes landing on the file declaring it — a write of the data
-      component that type lands on — any of its writes when a computed key names none; else one in
-      the Portal's own subsystem or one it depends into), which the Portal does not already claim,
-      fails closed: it is neither proven a shortcut nor cleared, and it is a warning, so a CI gate
-      never passes what it could not read (PORTAL_CALL_UNRESOLVED). So does a call landing only on a
-      PORT no written class realizes — a member of an interface or shape declared where no
-      component's contract answers for it — under the name of such a write the Portal claims nowhere
-      and no narrative of the Portal names on any component: the design says what that port will be
-      before the code realizing it is written, and the finding says when the data component has no
-      code yet. And an import, runtime or type-only, from ANOTHER project's source — a folder
-      holding its own .wai/project.yaml that is not this project's root — that the type checker
-      resolves to nothing, the module gone or the name no longer exported, is
-      CROSS_PROJECT_IMPORT_UNRESOLVED: another project's code moves on its own release, and a
-      type-only import of it is erased at run time, so only a compiler would notice. And a file
-      importing a technology's package — itself, or through the UNOWNED modules it imports (a module
-      no component realizes, read as if inlined in its importer, transitively to a bounded depth,
-      the finding naming the hops; a module a component realizes is judged as its own) — while no
+      at all — its receiver typed any or unknown however it came to be (a cast, an untyped or
+      any-typed parameter of a closure, a local typed any, a function result typed any), cast to
+      either or to an index signature, its member picked by a computed key, or typed nothing — under
+      the name of a write- or lifecycle-effect method of a data component, or reading a member by a
+      key that names no single member off a receiver that was a data component before any cast —
+      invoked on the spot or taken as a value, however the receiver or the key is cast (where the
+      checker recorded the receiver's ORIGINAL type, before any cast — an `await (x)` written
+      outside an async function read as the x it means, nullability set aside, a name bound once by
+      a const read through its initializer, an interface no class realizes landing on the file
+      declaring it — a write of the data component that type lands on — any of its writes when a
+      computed key names none; else one in the Portal's own subsystem or one it depends into — the
+      design's write set, which a data component whose code is still planned has too, and what a
+      receiver landing only on the Portal's own file, a port it declares for itself, is judged by),
+      which the Portal does not already claim, fails closed — one finding per site and per function
+      it is written in, so one shortcut never hides another of the same name: it is neither proven a
+      shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read
+      (PORTAL_CALL_UNRESOLVED). So does a call landing only on a PORT no written class realizes — a
+      member of an interface or shape declared where no component's contract answers for it — under
+      the name of such a write the Portal claims nowhere and no narrative of the Portal names on any
+      component: the design says what that port will be before the code realizing it is written, and
+      the finding says when the data component has no code yet. And an import, runtime or type-only,
+      from ANOTHER project's source — a folder holding its own .wai/project.yaml that is not this
+      project's root — that the type checker resolves to nothing, the module gone or the name no
+      longer exported, is CROSS_PROJECT_IMPORT_UNRESOLVED: another project's code moves on its own
+      release, and a type-only import of it is erased at run time, so only a compiler would notice.
+      One that DOES resolve is judged like any other edge, because it is one: a name it imports that
+      the other project does not publish — not in its L0 export table as a member exports it now,
+      nor in the pinned snapshot of the external it is (an exported type by its id or code name, an
+      exported component by its contract methods and their code symbols; a project that is neither
+      publishes nothing to this one) — is code reaching into that project's internals past its
+      surface, which no pin and no binding compares (CROSS_PROJECT_SOURCE_IMPORT, a warning; the
+      finding says when the module it lands in realizes a data component of that project, since a
+      write through it is the persistence shortcut past the other project's surface). A binding
+      module an implementation declares is the sanctioned place for exactly that reach, compared by
+      binding conformance, so an import written in one is never reported here. And a file importing
+      a technology's package — itself, or through the UNOWNED modules it imports (a module no
+      component realizes, read as if inlined in its importer, transitively to a bounded depth, the
+      finding naming the hops; a module a component realizes is judged as its own) — while no
       component it realizes is that technology's home is the leak TECH_LEAKAGE refuses in the design
       (TECH_LEAKAGE_IN_CODE): a technology's packages are its declared tokens (its name, or its
       `matches`), the curated built-in table of the common packages its name is known by (postgres:
@@ -401,6 +433,13 @@ methods:
           .wai/project.yaml — a module that is gone or a name it no longer exports: a type-only
           import is erased at run time, so only a compiler would notice, and the gate reads the file
           with one
+      - code: CROSS_PROJECT_SOURCE_IMPORT
+        severity: warning
+        summary: >-
+          A source file imports a name from ANOTHER project's source that the project does not
+          export — code reaching into its internals past its surface, which no pin and no binding
+          compares (a write into its Store through it included); a declared binding module is the
+          sanctioned place for that reach
   - name: integrationSimDeclaration
     description: >-
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
@@ -550,7 +589,8 @@ methods:
       Rule unclaimed-source. Code↔spec Level 1, asked the other way round: every source file under
       the project's declared source roots must be named by some spec — an implementation's
       sourcePath, a method's, a simPath, a binding module an implementation declares in `bindings`,
-      or a type's — or be carried in the frozen `rules.conformance.unclaimed` list. A pure re-export
+      the module a Portal's router linkage names (`<module>#<name>`, or the module alone), or a
+      type's — or be carried in the frozen `rules.conformance.unclaimed` list. A pure re-export
       barrel declares nothing of its own and only republishes other modules, so it has no code to
       claim and is exempt (exact grade only: a weaker grade cannot tell a barrel from a file it
       failed to parse). Declaring no source roots leaves the check silent, which is what makes it
@@ -620,13 +660,15 @@ methods:
       `exportedVia` names the export a consumer imports to REACH it: the value that composes it,
       which `symbol` cannot name because `symbol` names the function inside. A Portal
       implementation's `router` names the entry whatever serves the Portal calls to hand it its
-      requests. Both are declared publication, and a declared handle the file does not actually
-      export is itself a finding, so naming one can never become a free-text suppression. Both
-      questions are asked only of a file read at exact grade, and a taker counts only when its own
-      import specifier resolves to the file it is accused of taking from: below that nothing
-      separates an export from a mention, or a shared word from a shared module. A taker inside the
-      owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or
-      another member of the same pattern, importing a member's class is the owns relation made real.
+      requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names,
+      which must export that name (a module named alone must be on disk). Both are declared
+      publication, and a declared handle the file does not actually export is itself a finding, so
+      naming one can never become a free-text suppression. Both questions are asked only of a file
+      read at exact grade, and a taker counts only when its own import specifier resolves to the
+      file it is accused of taking from: below that nothing separates an export from a mention, or a
+      shared word from a shared module. A taker inside the owns fence is no crossing: a pattern
+      constructs the blocks it owns, so the owner's file, or another member of the same pattern,
+      importing a member's class is the owns relation made real.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -704,13 +746,15 @@ methods:
       the parameters of the function that realizes the method. A contract could promise an argument
       the code does not take, take one the contract never mentions — including a secret — or name
       the same argument two different things, and the brief handed to an implementer would carry the
-      contract's version. What a realization takes BEFORE the contract's own parameters is wiring,
-      declared on the implementation as `injectedParams` rather than inferred, because an inferred
-      prefix cannot be told from a renamed first argument; only a leading run of the names it
-      declares is dropped. A parameter whose name starts with an underscore means UNUSED, and it is
-      set aside only where the analysis proves it is — named, with no identifier of that name in the
-      body or in another parameter's default value and no read of `arguments`, as the request and
-      URL a transport hands a handler that never reads them: a used `_secret` is judged like any
+      contract's version. What a realization takes besides the contract's own parameters, at either
+      end of its list, is wiring, declared on the implementation as `injectedParams` rather than
+      inferred, because an inferred prefix cannot be told from a renamed first argument; a leading
+      run and a trailing run of the names it declares are dropped, each name matching with or
+      without its leading underscore, and a trailing one only where the contract declares no
+      parameter of that name. A parameter whose name starts with an underscore means UNUSED, and it
+      is set aside only where the analysis proves it is — named, with no identifier of that name in
+      the body or in another parameter's default value and no read of `arguments`, as the request
+      and URL a transport hands a handler that never reads them: a used `_secret` is judged like any
       parameter, and a name compared for a rename is read without its leading underscores. The rest
       are PAIRED in order, since a caller passes arguments in order: among the order-keeping
       pairings, the one where the most names agree, then the most declared types, then the most
@@ -727,19 +771,39 @@ methods:
       function; a platform class the checker's fixed library leaves out — a URL, a Request,
       node:http's IncomingMessage — is an object), compared with the kind the contract's type is (a
       primitive's, a list, a map or set as an object, an enum as a string, a named scalar as what it
-      holds, a record type as an object, a signature as a function; a date, bytes and anything
-      unsettled compare with nothing). A paired parameter whose name differs and whose type agrees —
-      or whose kind is the same primitive — is a rename; one whose name differs and whose kind of
-      value differs is a SUBSTITUTION, a different argument in the declared one's place, so the
-      declared parameter is unrealized and the code's undeclared: `getRoute(params: Record<string,
-      string>)` realizing `getRoute(id: string)` is never a silent pairing. Where neither side
-      settles a type, nothing is said about the name. A parameter standing ahead of every kept pair
-      under a name transports give their handles (req, request, res, response, reply, url, ctx,
-      context, next, event, socket) is how a transport handle arrives, and the finding names the one
-      green path for it: the handle in `injectedParams`, the contract's own parameters after it in
-      order, the router unpacking the request into them. A name with several bodies is judged on
-      what they all agree on, and a method the named file only CALLS is left to `methodRealization`,
-      which already reports that the body is not here.
+      holds, a record type as an object, a signature as a function; a date or a datetime as a string
+      or an object, a duration as a number or a string, bytes as an object, a list or a string;
+      anything unsettled compares with nothing). A paired parameter whose name differs and whose
+      type agrees — or whose kind is the same primitive, or one of the kinds a date or bytes is
+      written as — is a rename, said with the contract's former name when the code still uses it;
+      one whose name differs and whose kind of value differs is a SUBSTITUTION, a different argument
+      in the declared one's place, so the declared parameter is unrealized and the code's
+      undeclared: `getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` is
+      never a silent pairing. Where the contract's type is a record, an object is compared
+      STRUCTURALLY, by the property names the checker gives its type: one holding every field of the
+      record is a rename, one sharing none of them a substitution whatever either side calls it, and
+      a platform transport class (node:http's IncomingMessage, a fetch Request or Response, a URL, a
+      socket) where a record is declared is a substitution too — so `planRoute(req:
+      IncomingMessage)` and `planRoute(session: { user: string })` realizing `planRoute(request:
+      plan_request)` are never silent pairings. Where the code settles no kind — unannotated
+      JavaScript, a parameter typed any — a paired parameter named as a transport handle (req, res,
+      ctx, request, response, next, reply) standing where the contract declares an argument of its
+      own is a substitution: `cancelOrder(req, res)` realizing `cancelOrder(orderId, customerId)` is
+      a handler's shape, not the contract's. Where neither side settles a type and no handle name
+      speaks, nothing is said about the name. A parameter standing ahead of every kept pair under a
+      name transports give their handles (req, request, res, response, reply, url, ctx, context,
+      next, event, socket) is how a transport handle arrives, and the finding names the one green
+      path for it: the handle in `injectedParams`, the contract's own parameters after it in order,
+      the router unpacking the request into them — or, where the framework hands the function the
+      handles alone, the contract's parameters read off the injected request by their own names: a
+      contract parameter the code does not take but reads off an injected request handle (req,
+      request, ctx, context, event) by its own name — `req.params.code`, `req.query['limit']`, a
+      destructuring of such a read — is realized through that handle. An injected name none of the
+      implementation's realizing functions read in this run takes is stale linkage
+      (UNUSED_INJECTED_PARAM): it would wave through the next parameter of that name unread. A name
+      with several bodies is judged on what they all agree on, and a method the named file only
+      CALLS is left to `methodRealization`, which already reports that the body is not here; a
+      method whose conformance dial is off (its own, else its implementation's) is not judged.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -768,27 +832,43 @@ methods:
         summary: >-
           A contract and its realization disagree about whether a parameter may be left out — one of
           them is telling a caller an argument is required when it is not, or the reverse
+      - code: UNUSED_INJECTED_PARAM
+        severity: warning
+        summary: >-
+          An implementation declares an injected parameter that none of its realizing functions
+          takes — stale linkage that would wave through the next parameter of that name, wherever it
+          appears
   - name: routeCoverage
     description: >-
       Rule route-coverage. Code-to-contract for the ROUTES: does every route a router actually
       answers have a contract endpoint, and does every contract endpoint have a route that answers
       it? A portal's endpoints are what its contract promises; the router is what the code serves;
       nothing compared the two, so a route with no contract (including a write) could run for months
-      without a single rule noticing. The Portal's own implementation names its router entry
-      (`router`, code linkage), and the routes are read out of that function and the functions of
-      its file it calls by name. Two idioms are read: guards (a method comparison with comparisons
-      on the path's split segments), where a prefix the router strips before splitting the path is
-      folded in front; and a route table the router names (an array of objects pairing a method with
-      a `/a/:b` template or an anchored regular expression, or an object keyed `VERB /path`), read
-      only when every entry settles. Every compared value is a literal or one the code's constants,
-      concatenations and template literals settle — through the type checker, any module's constant
-      and any expression it types as one string literal — and never a guess. A route that states the
-      whole path is read under the Portal's basePath, which the contract's endpoint paths are
-      written beneath; a leading path segment a guard router never checks is completed from the
-      first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the
-      Portal routes on. Which process serves which Portal is implementation, so no listener is
-      consulted. A router that yields no route in either idiom is reported as unread, never passed:
-      a check that cannot see a router must say so rather than stay quiet.
+      without a single rule noticing. The Portal's own implementation names its router (`router`,
+      code linkage): an entry its own files export, an entry or route table another module exports
+      (`<module>#<name>`, a central routes.ts), or a module alone, every route-bearing export of
+      which is read as one router; the routes are read out of that entry and the functions of its
+      file it calls by name. A router several Portals name is read once against them all: a route is
+      declared when any of them declares it, and an endpoint is unrouted per Portal. Two idioms are
+      read: guards (a method comparison with comparisons on the path's split segments), where a
+      prefix the router strips before splitting the path is folded in front; and a route table — a
+      const the router names, one it returns or states in place unnamed, or the table the linkage
+      names itself — (an array of objects pairing a method with a `/a/:b` template or an anchored
+      regular expression, or an object keyed `VERB /path`, a key written as a template literal or a
+      concatenation over constants settling like any other value), read only when every entry
+      settles. A table is written under the ONE prefix its router strips off the path before
+      matching it (`path.slice(BASE.length)`, `.replace(BASE, '')`), which is folded in front of
+      every entry that does not already state it, so a stripped prefix that is not the Portal's
+      basePath is read as the different URL it is, and the finding names both. Every compared value
+      is a literal or one the code's constants, concatenations and template literals settle —
+      through the type checker, any module's constant and any expression it types as one string
+      literal — and never a guess. A route that states the whole path is read under the Portal's
+      basePath, which the contract's endpoint paths are written beneath; a leading path segment a
+      guard router never checks is completed from the first segments of the Portal's own HTTP
+      endpoint paths, the segments whatever serves the Portal routes on. Which process serves which
+      Portal is implementation, so no listener is consulted. A router that yields no route in either
+      idiom is reported as unread, never passed: a check that cannot see a router must say so rather
+      than stay quiet.
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
     params:
@@ -869,7 +949,8 @@ methods:
       with source_file_facts.asyncFunctions for the method's realizing function (under its
       `symbol`), at exact grade only; where a name has several bodies only what they all agree on is
       reported, as param-conformance does. A method whose file only calls the function is
-      methodRealization's finding.
+      methodRealization's finding, and a method whose conformance dial is off (its own, else its
+      implementation's) is not judged.
     signature: 'asyncConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -898,9 +979,12 @@ methods:
       alias the bound root declares under `members` — named by that alias or by the member's project
       id — read live and never pinned) is compared the same way against what its L0 export table
       exports now: each exported contract's methods with their params and rename traces, each
-      exported type's fields with theirs, so a parameter, field or method rename in a member reaches
-      a member consumer at validate time, with the rename to follow. Each binding declaration is
-      matched to a reached interface or type by the `alias::name` its doc comment names, else by
+      exported type's fields with theirs (a type its exports name that another project owns is that
+      project's, compared and named under the alias the bound root reaches it by, never the
+      member's), so a parameter, field or method rename in a member reaches a member consumer at
+      validate time, with the rename to follow. Each binding declaration is matched to a reached
+      interface or type by the `alias::name` its doc comment names (a public name or type id, never
+      a display name: a tag naming a type's former id is that type under its retired name), else by
       name (nameKey of the interface's id or name, a type's id or name, with an Api/Port/Client
       suffix ignored), else — for an interface with methods — by the reached interface most of its
       member names belong to (a trace in `formerly` counts); an exported function is matched by name
@@ -945,4 +1029,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-08T19:37:23.041Z'
+updatedAt: '2026-10-09T00:42:25.774Z'

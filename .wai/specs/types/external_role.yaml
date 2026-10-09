@@ -13,7 +13,8 @@ values:
     description: Declared under externals
   - name: member
     description: >-
-      A referenced project member: declared under members with a ../, git or hosted source, its
-      content a project's
+      A referenced project member: declared under members with a git or hosted source, its content a
+      project's (a `../` sibling member is a node of the family, composed live like a contained one
+      — referenced only when the scan could not open it)
 createdAt: '2026-10-04T23:33:19.300Z'
-updatedAt: '2026-10-04T23:33:19.824Z'
+updatedAt: '2026-10-09T00:59:05.423Z'

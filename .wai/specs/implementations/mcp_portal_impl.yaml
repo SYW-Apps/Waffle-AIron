@@ -397,6 +397,22 @@ methods:
         targetComponent: mcp_externals_orchestrator
         targetMethod: diff
     symbol: sdd_surface_diff
+  - name: renameSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameSpec
+    symbol: sdd_rename_spec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the moveSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: moveSpec
+    symbol: sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T11:00:37.113Z'
+updatedAt: '2026-10-09T00:34:04.451Z'

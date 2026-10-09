@@ -286,14 +286,17 @@ methods:
       the pin stays the reproducible gate. A used member that changed, was renamed or vanished live
       since the pin is EXTERNAL_LIVE_INCOMPATIBLE (warning), one finding per external naming each
       moved member and how (changed at signature level; renamed to <new name> per the producer's
-      rename trace; gone from its export table), every spec of this project that uses it, and the
-      fix: adapt the uses (follow the rename), then re-pin (`wairon externals pin <alias>`). A
-      producer that moved while nothing used did is EXTERNAL_DRIFTED (notice: re-pin when
-      convenient). A producer that could not be read live — unreachable, unresolved, a git source
-      not fetched offline, a hosted record out of reach — is EXTERNAL_LIVE_UNCOMPARED (notice)
-      naming why and the command that compares it (`wairon externals status`): honest, never a pass,
-      and never a failure of the owner gate. Each severity is the project's own sddRuleSeverity
-      override, else the default. Writes nothing.
+      rename trace; gone from its export table), every spec of this project that uses it, every
+      binding module those specs' implementations declare (implementation_spec.bindings) — named,
+      never compared live: a binding is compared with the pin, so the finding says it draws
+      BINDING_DRIFT once the re-pin lands and is where the code follows — and the fix: adapt the
+      uses (follow the rename), then re-pin (`wairon externals pin <alias>`). A producer that moved
+      while nothing used did is EXTERNAL_DRIFTED (notice: re-pin when convenient). A producer that
+      could not be read live — unreachable, unresolved, a git source not fetched offline, a hosted
+      record out of reach — is EXTERNAL_LIVE_UNCOMPARED (notice) naming why and the command that
+      compares it (`wairon externals status`): honest, never a pass, and never a failure of the
+      owner gate. Each severity is the project's own sddRuleSeverity override, else the default.
+      Writes nothing.
     signature: 'advise(composed?: list<string>): list<ValidationIssue>'
     returns: list<ValidationIssue>
     params:
@@ -432,4 +435,4 @@ methods:
         description: Its gate identity as computed now, with its parts
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-08T18:51:39.617Z'
+updatedAt: '2026-10-09T00:22:32.671Z'

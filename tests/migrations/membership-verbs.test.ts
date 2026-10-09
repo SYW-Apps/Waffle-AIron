@@ -286,7 +286,9 @@ describe('stage 6 — the membership verbs', () => {
     fs.mkdirSync(path.join(f.top, 'empty'));
     standalone(path.join(f.top, 'twin'), 'Twin', 'billing');
     repo.declareExternal('nopath', { project: 'crm' });
-    repo.declareExternal('outside', { source: { path: '../elsewhere' } });
+    // A `../` sibling is a location adopt reads (round 8); an inner `..` escaping the project is not.
+    repo.declareExternal('outside', { source: { path: 'sub/../../elsewhere' } });
+    repo.declareExternal('sibling', { source: { path: '../elsewhere' } });
     repo.declareExternal('hollow', { source: { path: 'empty' } });
     repo.declareExternal('member', { project: 'ledger', source: { path: 'ledger' } });
     repo.declareExternal('twin', { project: 'billing', source: { path: 'twin' } });
@@ -295,6 +297,7 @@ describe('stage 6 — the membership verbs', () => {
       ['nopath', 'not-contained'],
       ['outside', 'not-contained'],
       ['hollow', 'not-a-project'],
+      ['sibling', 'not-a-project'],
       ['member', 'already-member'],
       ['twin', 'id-collision'],
     ];

@@ -369,6 +369,26 @@ methods:
     returns: void
     params: []
     effect: write
+  - name: renameSpecId
+    description: >-
+      Forward to core_orchestrator.renameSpecId: rename one contract or implementation on its own
+      and every reference to it
+    signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-08T08:25:21.796Z'
+updatedAt: '2026-10-09T00:26:40.304Z'

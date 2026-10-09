@@ -226,3 +226,37 @@ describe('binding conformance, round 7', () => {
     expect(readUnreadForms("module.exports = require('./build/Release/geo.node');\nexports.raw = addon;\n")).toEqual(['module.exports = require(…)', 'exports.raw = addon']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Round 8: CommonJS in every shape, private helpers, whole-object tags, a
+// retired id under a tag, and the project that owns a member's closure type.
+// ---------------------------------------------------------------------------
+
+import { round8 } from '../rules-matrix/families/conformance-binding.fixtures.js';
+
+describe('binding conformance, round 8', () => {
+  it('compares a class exported by shorthand, as the whole module, or by a TypeScript `export =`', () => {
+    for (const fixture of [round8.commonJsShorthand, round8.wholeModuleClass, round8.tsExportEquals]) {
+      expect(messages(fixture)).toContain('"tileFor" was renamed to "tileAt" in geokit::tiles — follow the rename');
+    }
+    // The private `_call` helper is never "not exported", and the module is read, never unread.
+    expect(messages(round8.commonJsShorthandControl)).toBe('');
+    expect(messages(round8.commonJsShorthandRead)).toBe('');
+  });
+
+  it('judges each member of an object tagged as a whole against what its tag names', () => {
+    expect(messages(round8.wholeObjectTag)).toContain('"tileLegacy" is not exported by geokit::tiles');
+    expect(messages(round8.wholeObjectTagControl)).toBe('');
+  });
+
+  it('reads a tag naming a type\'s retired id as that type under its former name, even when the display name was kept', () => {
+    expect(messages(round8.retiredTag)).toContain('the type "TileCoord" was renamed to "tile_key" (geokit::tile_key) — follow the rename');
+    expect(messages(round8.retiredTagControl)).toBe('');
+  });
+
+  it('names the project that owns a type a member\'s verb answers, never the member', () => {
+    const text = messages(round8.ownerAlias);
+    expect(text).toContain('"TileKey" no longer matches shared::tile_key as its member project exports it now — field "zoom" was renamed to "z"');
+    expect(text).not.toContain('geokit::tile_key');
+  });
+});

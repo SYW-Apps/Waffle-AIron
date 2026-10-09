@@ -397,6 +397,32 @@ methods:
         description: A git revision; the last committed approval when omitted
         optional: true
     effect: io
+  - name: crossProjectWriteRefusal
+    description: >-
+      Forward to core_orchestrator.crossProjectWriteRefusal: the sentence refusing a write that
+      lands in another project, or undefined
+    signature: 'crossProjectWriteRefusal(targets: list<SpecRef>, tool: string): string?'
+    returns: string?
+    params:
+      - name: targets
+        type: list<SpecRef>
+        description: Every spec the write would write, create under or delete
+      - name: tool
+        type: string
+        description: The tool the caller answers for
+  - name: publishedUsesOf
+    description: >-
+      Forward to core_orchestrator.publishedUsesOf: the public names a removal takes something away
+      from
+    signature: 'publishedUsesOf(removed: list<SpecRef>, methods: list<string>): list<ExportUse>'
+    returns: list<ExportUse>
+    params:
+      - name: removed
+        type: list<SpecRef>
+        description: The specs a deletion removes
+      - name: methods
+        type: list<string>
+        description: The contract methods removed, as <interface>.<method>
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T10:53:59.057Z'
+updatedAt: '2026-10-09T00:26:35.666Z'

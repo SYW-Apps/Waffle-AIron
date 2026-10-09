@@ -74,7 +74,8 @@ describe('stage 6 — the verbs on the CLI (runMigration)', () => {
     expect(dirHash(f.top)).toEqual(before);
 
     const unanswered = await cli(f.top, home, 'project', 'rename', 'books-ledger', '--project', 'ledger');
-    expect(unanswered.code).toBe(0);
+    // Not applied and nobody declined it: a script must not read success (round 8).
+    expect(unanswered.code).toBe(1);
     expect(unanswered.stdout).toContain('re-run with --yes to apply it. Nothing was written.');
     expect(dirHash(f.top)).toEqual(before);
 

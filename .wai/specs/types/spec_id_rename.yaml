@@ -1,0 +1,46 @@
+kind: value-object
+id: spec_id_rename
+name: SpecIdRename
+description: >-
+  What renaming one contract or implementation on its own changed: the spec moved to its new id and
+  file, and the specs whose references were rewritten. A contract's id is referenced by the
+  implementations realizing it and by L1 and L0 export entries; an implementation's id only by
+  findings keyed on it.
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: interface or implementation
+    optional: false
+  - name: renamed
+    type: list<SpecRename>
+    description: The spec with its old and new id
+    optional: false
+  - name: rewritten
+    type: list<string>
+    description: >-
+      Ids of the other specs whose references to the renamed id were rewritten — an implementation's
+      contract, an export entry's interface, lint allows anchored on it
+    optional: false
+  - name: carried
+    type: list<CarriedRekey>
+    description: >-
+      Every edit the rename made to the debt register (.wai/project.yaml rules.conformance.carried):
+      an entry anchored on the renamed spec. Empty when the register names none
+    optional: false
+  - name: keptPublicNames
+    type: list<string>
+    description: >-
+      The export entries (L0 and L1) whose public name was derived from the renamed contract's id
+      (no `as`), each by its public name: the rename wrote `as: <that name>` on them, so the
+      published surface and every consumer's pin stay
+    optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when this report is a dry run: what the rename would move and rewrite, with nothing
+      written
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-10-09T00:25:04.809Z'
+updatedAt: '2026-10-09T00:25:05.490Z'

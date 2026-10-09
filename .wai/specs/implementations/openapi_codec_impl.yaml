@@ -23,13 +23,15 @@ methods:
           Map operations to contract methods: parameters/requestBody to structured params (a body
           x-wairon-body-param names, or one that is a $ref to a component, read back as that one
           param — named as the extension says, else after its type — and an object body's properties
-          as one param each), the first 2xx response in code order to returns (no JSON body, as a
-          204, reads void) — and a `default`, 4XX or 5XX response with a JSON body makes it
-          `result<T, E>` with E that body's type — method+path to endpoints — a document's
-          x-wairon-base-path taken back off each path and set as the entry's basePath, and the
-          parameter an operation's x-wairon-credential-param names put back first among its params —
-          each schema read back into its canonical type expression's text (an inline anonymous enum
-          as string, its values listed in the description)
+          as one param each), the first 2xx response in code order (else the first 3xx) to returns
+          (no JSON body, as a 204 or a redirect, reads void) — and a `default`, 4XX or 5XX response
+          with a JSON body makes it `result<T, E>` with E that body's type — method+path to
+          endpoints, the success code kept as the endpoint's status when it is not the one the
+          export's convention would pick — a document's x-wairon-base-path taken back off each path
+          and set as the entry's basePath, and the parameter an operation's
+          x-wairon-credential-param names put back first among its params — each schema read back
+          into its canonical type expression's text (an inline anonymous enum as string, its values
+          listed in the description)
         type: local
       - stepNumber: 5
         description: >-
@@ -100,17 +102,24 @@ methods:
           query on a verb without a body, or the JSON body on POST/PUT/PATCH — the one object-typed
           param left (a named data type, never a scalar, list, map or enum) AS the body, named under
           x-wairon-body-param so a reader puts it back, and several params as the properties of a
-          body object; the success response under its code — 204 with no content for a method
-          returning nothing; 201 Created for a POST that creates: a method whose effect is
+          body object — a param or field required unless it is optional or typed `T?`; the success
+          response under the endpoint's own `status` when it states one (a 3xx a redirect with a
+          Location header and no body), else its conventional code — 204 with no content for a
+          method returning nothing; 201 Created for a POST that creates: a method whose effect is
           `lifecycle` (it brings an entity into existence), or one whose effect is undeclared,
           `write` or `io` and whose name says it creates (create, add, new, register, sign up,
           place, open, insert, submit, upload, start, issue, book); else 200 and, for a `result<T,
           E>` returns, a `default` response whose body is E's schema; guarantees and effect noted as
           extensions; each param and return type parsed (type_expression.parse) and rendered from
-          its canonical expression; render the embedded type closure as JSON-Schema components, then
-          every pinned external type a schema reached (`alias::name`, from the context's pinned
-          snapshot, as `<alias>.<id>`, resolving the names it uses inside that producer's own
-          closure) until none is left unrendered; derive components.securitySchemes from the
+          its canonical expression; the components are exactly the types the operations reach,
+          transitively, each identified by its owning project and its id there — an own type by its
+          id, `alias::name` from the context's pinned snapshot or member surface, a qualified
+          closure id naming a project the context holds read as that project's type — so a type
+          reached under several aliases, a member's project id or another producer's closure is
+          rendered ONCE, under `<alias>.<id>` for the first alias the context holds its project
+          under, every key matching `^[a-zA-Z0-9._-]+$` (`::` written `.`), each field's description
+          carried on its property, resolving the names a producer's type uses inside that producer's
+          own closure, until none is left unrendered; derive components.securitySchemes from the
           entries' projected auth (deduplicating identical schemes, attaching each requirement —
           with oauth2 scopes — to its operations; a custom scheme an apiKey only where auth.name
           names its header or parameter, else an http scheme `custom`); name the basePath once as
@@ -185,4 +194,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-08T19:07:12.479Z'
+updatedAt: '2026-10-09T00:18:56.628Z'

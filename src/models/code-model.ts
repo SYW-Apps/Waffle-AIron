@@ -227,6 +227,32 @@ export interface ParameterFact {
    * rename where the annotation's own spelling cannot.
    */
   kind?: ParameterKind;
+  /**
+   * The property names the type checker says an OBJECT-kind parameter's type
+   * has, nullability set aside; absent for any other kind, where no checker
+   * read the file, and for a type with no property it can name. What a
+   * declared record type is compared with structurally: an object sharing
+   * none of the record's fields is a different argument, whatever either side
+   * calls it.
+   */
+  fields?: string[];
+  /**
+   * True when the annotation names a platform transport class — a request, a
+   * response, a socket, a URL or its headers (node:http's IncomingMessage, a
+   * fetch Request…) — resolved or not: a handle whatever serves the method
+   * hands it, never a domain record.
+   */
+  transport?: boolean;
+  /**
+   * The member names and literal keys the body reads off the parameter, at
+   * any depth of a chain (`req.params.code` reads params and code;
+   * `req.query['limit']` reads query and limit), and the property names a
+   * destructuring of such a read binds (`const { code } = req.params`).
+   * Absent when the parameter is unnamed or nothing is read off it. What says
+   * a contract parameter an injected request handle carries is realized
+   * through it.
+   */
+  reads?: string[];
 }
 
 /** The kinds of value a parameter can take, as the type checker settles them. */
@@ -269,13 +295,21 @@ export interface RouteFact {
    * pattern — so no leading segment is left for a mount to supply.
    */
   fullPath?: boolean;
+  /**
+   * True when the route is an entry of a route TABLE rather than a guard: a
+   * table is written under whatever prefix the router strips before matching
+   * it, which a reader folds in front from SourceFileFacts.routePrefixes.
+   */
+  table?: boolean;
 }
 
 /**
- * One import a file makes from ANOTHER project's source that resolves to
- * nothing: the module is gone, or it does not export the name imported. A
+ * One import a file makes from ANOTHER project's source: one that resolves to
+ * nothing — the module is gone, or it does not export the name imported (a
  * type-only import of another project is erased at run time, so nothing but a
- * compiler notices — and the gate reads the file with one.
+ * compiler notices, and the gate reads the file with one) — or one that
+ * resolves, under each name it binds (`resolved`), which reaches into that
+ * project's code.
  */
 export interface CrossProjectImportFact {
   /** The module specifier as the import writes it. */
@@ -288,6 +322,15 @@ export interface CrossProjectImportFact {
   line: number;
   /** Whether the import binds the name as a type only. */
   typeOnly: boolean;
+  /**
+   * True when the import RESOLVES — the module is there and binds the name
+   * (`*` for a namespace import, absent for a side-effect import): code
+   * reaching into the other project's source, which the gate holds to what
+   * that project exports. Absent for an import that resolves to nothing.
+   */
+  resolved?: boolean;
+  /** For a resolved import: the module it lands in, relative to the other project's root. */
+  module?: string;
 }
 
 /** How a type shape's members were read: listed by the shape itself, or followed one hop from an alias to the value its shape comes from. */
@@ -536,9 +579,19 @@ export interface SourceFileFacts {
    * empty one — an empty guess would read as "a router with no routes", and
    * the reader needs to tell a router it could not read from one it read.
    * Same-named bodies union their routes; nested NAMED functions carry their
-   * own entries, while anonymous callbacks count into the enclosing one.
+   * own entries, while anonymous callbacks count into the enclosing one. A
+   * route TABLE bound to a top-level const records an entry under the const's
+   * name too, so a router linkage may name the table itself.
    */
   functionRoutes?: Record<string, RouteFact[]>;
+  /**
+   * The ONE prefix each named function strips off a path before matching it
+   * (`path.slice(BASE.length)`, `.replace(BASE, '')`), as the text it settles
+   * on, by function name; a function stripping none, several, or one that
+   * does not settle has no entry. What a route table read by the same router
+   * is written under.
+   */
+  routePrefixes?: Record<string, string>;
   /**
    * The named function-likes in the file that complete LATER — declared
    * `async`, or annotated to return a Promise — listed once per such BODY, in
@@ -595,9 +648,11 @@ export interface SourceFileFacts {
   /**
    * Each import of the file — a runtime or a type-only one — from ANOTHER
    * project's source (a folder holding its own .wai/project.yaml that is not
-   * the analyzed project's root) that the type checker resolves to nothing:
-   * the module is gone, or it does not export the name imported. Recorded only
-   * where a type checker read the file; absent when every such import resolves.
+   * the analyzed project's root): one the type checker resolves to nothing —
+   * the module is gone, or it does not export the name imported — and, marked
+   * `resolved`, one that lands, under each name it binds. Recorded only where
+   * a type checker read the file; absent when the file imports no other
+   * project's source.
    */
   crossProjectImports?: CrossProjectImportFact[];
 }
@@ -915,6 +970,21 @@ const EXTENSION_LANGUAGE: Readonly<Record<string, string>> = {
   '.c': 'c', '.h': 'c', '.cpp': 'cpp', '.cc': 'cpp', '.hpp': 'cpp',
   '.rb': 'ruby', '.php': 'php', '.kt': 'kotlin', '.swift': 'swift',
 };
+
+/**
+ * implementation_spec.router — what a Portal's router linkage names, read off
+ * its three spellings: `name` (an entry the Portal's own files export),
+ * `path#name` (an entry or route table another module exports — a central
+ * routes.ts), and `path` alone (that module, every route-bearing export of it
+ * read as one router). A value is a path when it holds a `/` or ends in a
+ * source extension; the path is project-relative.
+ */
+export function routerLinkage(router: string): { file?: string; name?: string } {
+  const hash = router.lastIndexOf('#');
+  if (hash > 0) return { file: router.slice(0, hash), ...(hash < router.length - 1 ? { name: router.slice(hash + 1) } : {}) };
+  if (router.includes('/') || EXTENSION_LANGUAGE[path.extname(router).toLowerCase()] !== undefined) return { file: router };
+  return { name: router };
+}
 
 /**
  * The language a source file is analyzed as, read from its extension; undefined

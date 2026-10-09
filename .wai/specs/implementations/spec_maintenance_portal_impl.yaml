@@ -210,6 +210,13 @@ methods:
         type: call
         targetComponent: demo_orchestrator
         targetMethod: seedTree
+  - name: renameSpecId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameSpecId
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-07T22:40:36.173Z'
+updatedAt: '2026-10-09T00:27:01.211Z'

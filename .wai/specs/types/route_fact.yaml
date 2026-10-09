@@ -39,7 +39,14 @@ fields:
       for a mount to supply; absent when the leading segment may be the one the listener's mount
       guarantees
     optional: true
+  - name: table
+    type: bool
+    description: >-
+      True when the route is an entry of a route TABLE rather than a guard: a table is written under
+      whatever prefix the router strips before matching it, which a reader folds in front from
+      source_file_facts.routePrefixes
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-24T20:30:22.052Z'
-updatedAt: '2026-10-08T18:51:27.642Z'
+updatedAt: '2026-10-09T00:42:22.009Z'

@@ -3,9 +3,9 @@ id: spec_deletion
 name: SpecDeletion
 description: >-
   What a delete answers with, as data: which spec, whether it was removed, every spec the deletion
-  took with it (a container's content), every reference another spec still holds to them, and the
-  tests that encode a method the deletion took away. A dry run answers the same plan and removes
-  nothing.
+  took with it (a container's content), every reference another spec still holds to them, every
+  public name a consumer reaches what goes through, and the tests that encode a method the deletion
+  took away. A dry run answers the same plan and removes nothing.
 subsystem: sdd_authoring
 fields:
   - name: kind
@@ -46,7 +46,23 @@ fields:
       leave any is refused unless the caller forces it; forced, these are the references left
       dangling, each of which validate reports
     optional: false
+  - name: published
+    type: list<ExportUse>
+    description: >-
+      Every public name of the bound project's L1 and L0 export tables a consumer reaches what the
+      deletion removes through, each with the members carrying it: an export of a removed component
+      or contract (its methods), of a removed type or a type embedding it, and an exported contract
+      whose methods name one. Read before anything goes. Empty when nothing removed is published.
+    optional: false
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers in reach (family members included, and checkouts in the searched folders) whose
+      specs reach one of the published names on a member it carries — the projects the deletion
+      breaks, narrowed to what they use. Filled by the door that read the consumers; absent when
+      none breaks.
+    optional: true
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-10-08T18:50:03.445Z'
+updatedAt: '2026-10-09T00:25:01.272Z'

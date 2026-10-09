@@ -552,7 +552,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       // gate identity covers moved. A moved member pin explains itself below.
       const owes = own?.state === 'drifted' && !own.upgraded
         ? (own.owed !== undefined
-          ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock-check\` fails until it is cleared${/never pinned|beyond its pin/.test(own.owed) ? ' — pin first (`wairon externals pin`), then `wairon lock`' : ' — `wairon lock` re-approves the unchanged design'}.`
+          ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock-check\` fails until it is cleared${/never pinned|beyond its pin/.test(own.owed) ? ' — pin first (`wairon externals pin`), then `wairon lock`' : /extension pack\(s\) selected/.test(own.owed) ? ' — make the pack load (install or vendor it, or drop the selection), then `wairon lock`' : ' — `wairon lock` re-approves the unchanged design'}.`
           : own.release && !own.release.carried
             ? (own.release.reason
               ? ` But ${own.release.reason}`
@@ -569,7 +569,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
         : '';
       const ignored = own?.partsIgnored !== undefined ? ` Notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them.` : '';
       return {
-        text: `\nApproved: ${stamp} — no spec has changed since.${released}${owes}${ignored}${childNote}${carry}\n`,
+        text: `\nApproved: ${stamp} — no spec has changed since.${released}${owes}${ignored}${stampNotice(own)}${childNote}${carry}\n`,
         drifted: pinDrift || own?.state === 'drifted',
       };
     }
@@ -579,9 +579,10 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
     if (diff.added.length) parts.push(`${diff.added.length} added`);
     if (diff.removed.length) parts.push(`${diff.removed.length} removed`);
 
-    // Name a few, then say how many more — enough to orient without becoming
-    // the wall of text the old banner was trying not to be.
-    const named = [...diff.changed, ...diff.added, ...diff.removed].slice(0, 5);
+    // Name every one up to VERDICT_LIST_LIMIT; past it the first ones, the
+    // count of the rest and the command that lists them — never a cut list
+    // that reads as the whole account.
+    const named = [...diff.changed, ...diff.added, ...diff.removed].slice(0, VERDICT_LIST_LIMIT);
     const rest = diffSize(diff) - named.length;
 
     // One category needs no breakdown: "1 spec changed since approval (1
@@ -596,8 +597,9 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
     return {
       text: `\n${headline} — approved ${stamp}:\n`
         + named.map((p) => `  ${p}`).join('\n')
-        + (rest > 0 ? `\n  … and ${rest} more` : '')
+        + (rest > 0 ? `\n  … and ${rest} more — \`wairon status --all\` lists every one` : '')
         + (own?.owed !== undefined ? `\nThe approval also owes: ${own.owed}.` : '')
+        + (own?.stampProblem !== undefined ? `\n${stampNotice(own).trim()}` : '')
         + childNote
         + carry
         + '\n',
@@ -607,6 +609,16 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
   } catch {
     return quiet; // never let a report line break the report
   }
+}
+
+/** How many moved specs the verdict names before it counts the rest. */
+const VERDICT_LIST_LIMIT = 40;
+
+/** The notice for a release stamp this wairon cannot stand behind; empty when there is none. */
+function stampNotice(own: ProjectApproval | undefined): string {
+  return own?.stampProblem !== undefined
+    ? ` Notice: ${own.stampProblem} — the identity alone decided this, and \`wairon lock\` replaces the stamp with this release.`
+    : '';
 }
 
 /**

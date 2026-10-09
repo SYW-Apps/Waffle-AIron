@@ -240,16 +240,16 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // UNDECLARED_PARAM — fire: a declared injection name appearing AFTER the
-  // contract's own parameters is not wiring.
+  // UNDECLARED_PARAM — control (round 8): a declared injection at the
+  // TRAILING end is wiring too — the position a framework imposes.
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'UNDECLARED_PARAM',
-    severity: 'warning',
-    anchoredTo: 'consumption_rater_impl',
-    expectFire: true,
+    expectFire: false,
+    reason:
+      'The trailing config is named in the implementation\'s `injectedParams`: wiring stands at either end of a signature, wherever the framework handing it puts it, and what remains is exactly the contract\'s own two parameters.',
     scenario:
-      'The consumption rater takes its config LAST, after the two parameters its contract declares, so a caller of the contract must supply an argument the design never mentions even though the implementation names that config as wiring.',
+      'The consumption rater takes its config LAST, after the two parameters its contract declares, and the implementation declares that config as the wiring it is handed.',
     tree: raterTree(METERED_VOLUME, [
       WIRING_DECLARATIONS,
       'export function rateConsumption(connectionId: string, kilolitres: number, cfg: BillingConfig): number {',

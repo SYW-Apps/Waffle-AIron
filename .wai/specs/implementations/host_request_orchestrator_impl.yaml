@@ -14,7 +14,6 @@ contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
 injectedParams:
   - cfg
-  - dataDir
   - req
   - res
 methods:
@@ -648,4 +647,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-06T19:42:58.577Z'
+updatedAt: '2026-10-09T00:42:33.236Z'

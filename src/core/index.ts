@@ -404,6 +404,15 @@ export function removeDomain(id: string): void {
 export { renameComponent, renameMethod, renameType, renameField, renameParam } from './provision.js';
 export type { FieldRename, ParamRename } from './provision.js';
 export type { ComponentRename, MethodRename, TypeRename } from './provision.js';
+// spec_maintenance_portal renameSpecId (a contract or an implementation renamed
+// on its own); spec_store_portal moveSpec (a component or a type moved to
+// another subsystem, the authoring seam judging it first); spec_tree_portal
+// publishedUsesOf (what a removal takes away from consumers) — 1:1 forwards.
+export { renameSpecId, moveSpec, publishedUsesOf } from './provision.js';
+export type { SpecIdRename, SpecMove } from './provision.js';
+// spec_tree_portal crossProjectWriteRefusal: the project boundary every
+// authored write asks before it writes — a 1:1 forward to the core orchestrator.
+export { crossProjectWriteRefusal } from './specs.js';
 export { retireSpecialists } from './stereotype-migration.js';
 export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
 export { repairForeignStepFields } from './narrative-repair.js';

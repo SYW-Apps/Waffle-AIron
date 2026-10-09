@@ -96,12 +96,22 @@ fields:
   - name: partsIgnored
     type: string?
     description: >-
-      Set when the record's gateParts do not break down its stateId (lock_record.partsProblem): why,
-      in one clause. They are ignored — no input is named from them and no approval is carried over
-      by them — and every surface says so as a notice; `wairon lock` rewrites them from the identity
-      when it still matches.
+      Set when the record's gateParts do not break down its stateId (lock_record.partsProblem), or
+      when a record whose identity still matches carries no gate parts at all (every record wairon
+      5.1.1-dev.111 and later writes carries them): why, in one clause. They are ignored — no input
+      is named from them and no approval is carried over by them — and every surface says so as a
+      notice; `wairon lock` rewrites them from the identity when it still matches.
+    optional: true
+  - name: stampProblem
+    type: string?
+    description: >-
+      Set when the record's release stamp is missing, no wairon version, or newer than the running
+      release (lock_record.stampProblem) and no release verdict already names it: the clause, which
+      every surface — lock-check, status, sdd_get_status, validate — reports as a notice beside the
+      verdict the identity decided, and which `wairon lock` clears by replacing the stamp with the
+      running release. Never decides the state on its own.
     optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-08T18:51:23.106Z'
+updatedAt: '2026-10-09T00:16:44.909Z'

@@ -10,7 +10,7 @@ import * as boundary from './boundary.js';
 import * as transaction from './transaction.js';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, getWriteReach, runWithHostedLookup, runWithProjectBinding, runWithProjectRoot, writeReachDenials } from '../utils/fs.js';
 import type { ChainingMigrationPlan } from './chaining-migration.js';
-import type { ProjectFamily } from '../models/project-family.js';
+import { dependencyCycles, type ProjectFamily } from '../models/project-family.js';
 import {
   blocked,
   isEmpty,
@@ -214,9 +214,14 @@ const NOTE_HEAD = 5;
  * and warning severity, and every finding the result has that the project
  * does not report now, counted by project, code and spec (a path that differs
  * between two copies never reads as new), as one note per severity:
- * `after <verb>: N new error(s) …`. Both sides are copies of the .wai trees,
- * so neither reads code, and the live sources are never analysed for it. A
- * run that throws names nothing.
+ * `after <verb>: N new error(s) …`. A changed folder is judged on a side only
+ * where it is a project root of the family there: one the plan turns into a
+ * part, or empties, is judged through the project that holds it, exactly as
+ * the applied result is. The family's own checks over the projects' relations
+ * — a dependency loop the plan closes — are read off each side's family
+ * graph, since a project's own gate never sees a loop. Both sides are copies
+ * of the .wai trees, so neither reads code, and the live sources are never
+ * analysed for it. A run that throws names nothing.
  */
 function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: TransactionScope, changes: FileChange[]): string[] {
   const owners = [...new Set(changes.map((c) => path.resolve(c.project)))];
@@ -224,13 +229,17 @@ function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: Transacti
   type Found = { owner: string; issue: ValidationIssue };
   const run = (copy: Rehearsal): Found[] | null => {
     try {
-      return owners.flatMap((owner) => runWithProjectRoot(rehearsalRoot(copy, owner), () => {
-        // The design half: a copy holds .wai trees only, so a code finding is no evidence there.
-        const codeCodes = new Set(validator.listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
-        return validator.validateFamily({ memberDepth: 0 }).issues
-          .filter((i) => (i.severity === 'error' || i.severity === 'warning') && !codeCodes.has(i.code))
-          .map((issue) => ({ owner, issue }));
-      }));
+      const shape = familyShape(plan, copy);
+      return [
+        ...owners.filter((owner) => shape.roots.has(path.resolve(rehearsalRoot(copy, owner)))).flatMap((owner) => runWithProjectRoot(rehearsalRoot(copy, owner), () => {
+          // The design half: a copy holds .wai trees only, so a code finding is no evidence there.
+          const codeCodes = new Set(validator.listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+          return validator.validateFamily({ memberDepth: 0 }).issues
+            .filter((i) => (i.severity === 'error' || i.severity === 'warning') && !codeCodes.has(i.code))
+            .map((issue) => ({ owner, issue }));
+        })),
+        ...shape.loops.map((loop) => ({ owner: `loop ${loop.where}`, issue: loop.issue })),
+      ];
     } catch {
       return null;
     }
@@ -269,6 +278,38 @@ function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: Transacti
     notes.push(`after ${plan.request.verb}: ${these.length} new ${severity}(s) the projects it changes do not report now: ${named.join('; ')}${rest > 0 ? `; … and ${rest} more` : ''}.`);
   }
   return notes;
+}
+
+/**
+ * One side of an announcement, read off the family graph at the copy's family
+ * root: the folders that are project roots there, and each dependency loop of
+ * the family as the finding the family run reports for it
+ * (PROJECT_DEPENDENCY_CYCLE, a warning) — keyed by the loop's projects' folders
+ * relative to the copy, so the same loop on both sides reads as one.
+ */
+function familyShape(plan: MigrationPlan, copy: Rehearsal): { roots: Set<string>; loops: { where: string; issue: ValidationIssue }[] } {
+  const top = rehearsalRoot(copy, plan.familyRoot);
+  const family = runWithProjectRoot(top, () => core.projectFamily());
+  const roots = new Set(family.nodes.map((n) => path.resolve(n.directory)));
+  const label = (key: string): string => {
+    const node = family.nodes.find((n) => n.namespace === key);
+    return `"${node?.id ?? node?.name ?? key}"${key === '' ? '' : ` (member "${node?.mountAlias ?? key}")`}`;
+  };
+  const loops = dependencyCycles(family).map((loop) => {
+    const where = [...new Set(loop)].map((k) => posixPath(path.relative(top, family.nodes.find((n) => n.namespace === k)?.directory ?? top))).sort().join(',');
+    const issue: ValidationIssue = {
+      severity: 'warning',
+      code: 'PROJECT_DEPENDENCY_CYCLE',
+      message: `Projects ${loop.map(label).join(' -> ')} depend on each other in a loop, so neither can be approved or released before the other`,
+    };
+    return { where, issue };
+  });
+  return { roots, loops };
+}
+
+/** A path in POSIX form. */
+function posixPath(p: string): string {
+  return p.split(path.sep).join('/');
 }
 
 /** The relocated project's directory and where it goes, when the plan moves one (a hosted detach or adopt). */
@@ -354,12 +395,13 @@ function pathProducers(plan: MigrationPlan, family: ProjectFamily): string[] {
 /**
  * Step 4 (stage 8): each family project's parts stored inside the family root
  * — the project's own subsystems in another folder, which a promote, demote,
- * internalize or externalize writes — and the sibling checkout (a part or a
- * project member stored at `../`) the verb acts on: the family transaction
- * lays it out beside the family, so its files change all-or-nothing with the
- * rest (each repository still gets its own commit). A git member is never an
- * owner: its files are the fetch cache's. A folder an externalize creates
- * needs no copy: the rehearsal finds every .wai tree it holds.
+ * internalize or externalize writes — and the sibling part (stored at `../`)
+ * the verb acts on: the family transaction lays it out beside the family, so
+ * its files change all-or-nothing with the rest (each repository still gets
+ * its own commit). A project member in a `../` sibling checkout is a node of
+ * the family, copied with every other node. A git member is never an owner:
+ * its files are the fetch cache's. A folder an externalize creates needs no
+ * copy: the rehearsal finds every .wai tree it holds.
  */
 function partDirectories(plan: MigrationPlan, family: ProjectFamily): string[] {
   const inside = (dir: string): boolean => {
@@ -367,11 +409,8 @@ function partDirectories(plan: MigrationPlan, family: ProjectFamily): string[] {
     return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
   };
   const subject = plan.request.alias;
-  const parts = family.nodes.flatMap((n) => n.parts.filter((p) => p.storage !== 'git' && p.directory !== undefined
+  return family.nodes.flatMap((n) => n.parts.filter((p) => p.storage !== 'git' && p.directory !== undefined
     && (inside(p.directory) || p.alias === subject)).map((p) => p.directory!));
-  const siblings = family.nodes.flatMap((n) => n.externals.filter((e) => e.role === 'member' && e.sourceKind === 'path'
-    && e.directory !== undefined && e.alias === subject).map((e) => e.directory!));
-  return [...parts, ...siblings];
 }
 
 /** Step 4: the roots a verb writes that the family graph does not hold yet — a project attached or adopted. */

@@ -88,21 +88,23 @@ methods:
         label: bind-externals
         description: >-
           Bind each of the node's project_config.declaredExternals() to its producer (role
-          external), then each of its referenced project members (a `../`, git or hosted source
-          whose content the scan found to be a project's; role member, bound exactly like an
-          external — stage 8). A declaration with a problem is unresolved with that problem. With a
-          source.path: the path resolved against the node's directory; the family node at that
-          directory makes it a family producer (a declared producer id that differs from that node's
-          id is the problem), any other directory makes it a path producer at audience instance —
-          whether a project lives there is established when it is pinned, since the index does no
-          I/O of its own. With a source.git: a git producer at audience instance — an external's
-          directory left for the external producers workflow to resolve and materialize, a
-          referenced member's taken from where the scan located it (ScannedProjectRoot.referenced:
-          the fetch cache at its pinned commit, with that commit; unavailable with the scan's
-          reason). With a source.hosted: left for the hosted lookup. Without a source: the family
-          nodes whose id equals the producer id — none leaves it unresolved, two leave it unresolved
-          as ambiguous, one makes it a family producer at audience project, related to the consumer
-          as its parent, a sibling (same parent), a member, or otherwise family
+          external), then each of its referenced project members (a git or hosted source whose
+          content the scan found to be a project's, and a `../` sibling only when the scan could not
+          open it; role member, bound exactly like an external — stage 8). A `../` sibling the scan
+          followed is a node of the family, never an external (round 8). A declaration with a
+          problem is unresolved with that problem. With a source.path: the path resolved against the
+          node's directory; the family node at that directory makes it a family producer (a declared
+          producer id that differs from that node's id is the problem), any other directory makes it
+          a path producer at audience instance — whether a project lives there is established when
+          it is pinned, since the index does no I/O of its own. With a source.git: a git producer at
+          audience instance — an external's directory left for the external producers workflow to
+          resolve and materialize, a referenced member's taken from where the scan located it
+          (ScannedProjectRoot.referenced: the fetch cache at its pinned commit, with that commit;
+          unavailable with the scan's reason). With a source.hosted: left for the hosted lookup.
+          Without a source: the family nodes whose id equals the producer id — none leaves it
+          unresolved, two leave it unresolved as ambiguous, one makes it a family producer at
+          audience project, related to the consumer as its parent, a sibling (same parent), a
+          member, or otherwise family
         type: local
       - stepNumber: 13
         description: >-
@@ -141,4 +143,4 @@ methods:
       method's own name, each once in declared order. An unknown contract answers none.
 status: complete
 createdAt: '2026-09-26T17:41:29.805Z'
-updatedAt: '2026-10-07T10:54:19.946Z'
+updatedAt: '2026-10-09T01:00:51.736Z'

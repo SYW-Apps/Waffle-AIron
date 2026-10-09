@@ -107,7 +107,7 @@ import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, 
 // The pure export resolver the scan resolves every project's tables through,
 // before it binds any `alias::name` against them.
 import { followProducerRenames, resolveProjectTable, resolveSubsystemTables } from './exports.js';
-import type { ExportUsage, ResolvedExport, ResolvedExportTable } from '../models/exports.js';
+import type { ExportUsage, ExportUse, ResolvedExport, ResolvedExportTable } from '../models/exports.js';
 import {
   approvalKeyIn,
   keyIn,
@@ -123,7 +123,7 @@ import { projectConfigRepositoryAt } from '../config/project-config.js';
 // The project family index is an owned face of this Repository: the facade
 // forwards its graph 1:1 (spec_loader graph).
 import { projectFamilyGraph } from './project-family.js';
-import type { ImportSection, MountForm } from '../models/project-family.js';
+import type { ExternalConsumer, ImportSection, MountForm } from '../models/project-family.js';
 import type { WebGraphModel } from '../server/types.js';
 // The pure signature resolver the scan runs last, once every reference of the
 // family is bound: sourced methods filled, every params-bearing method's text derived.
@@ -775,6 +775,18 @@ function headAcross(rootDir: string, dir: string): string | undefined {
   const key = (p: string): string => (process.platform === 'win32' ? p.toLowerCase() : p);
   if (ours !== null && key(ours) === key(theirs)) return undefined;
   return gitSource.head(dir) ?? undefined;
+}
+
+/**
+ * Whether a member's project is followed and composed live by the scan: one
+ * contained in the declaring root, or a `../` sibling checkout beside it — a
+ * folder of the same family on disk, read where it is, never through a pin.
+ * A git member (the fetch cache at its pinned commit) and a hosted one stay
+ * referenced. A hosted instance never reads a `../` source: there its root is
+ * unavailable before this is asked.
+ */
+function followsLive(decl: { storage: MemberStorage }): boolean {
+  return decl.storage === 'contained' || decl.storage === 'path';
 }
 
 /** The fields a part's configuration must not declare: they are a project's (stage 8). */
@@ -2273,6 +2285,19 @@ export interface SpecChangeReport {
    * on a write that changes nothing, because nothing is re-serialized then.
    */
   strippedKeys?: string[];
+  /**
+   * Each implementation method entry the write removed with a contract method
+   * it removed, as `<implementation>.<method>` (on a dry run, would remove).
+   * Absent when the write removed no contract method.
+   */
+  cascaded?: string[];
+  /**
+   * Every public name a consumer reaches a contract method this write removed
+   * through, read before the write. Absent when no removed method is published.
+   */
+  published?: ExportUse[];
+  /** The consumers whose specs call a removed method on a published name. Filled by the door that read them. */
+  breaks?: ExternalConsumer[];
 }
 
 /**
@@ -3080,6 +3105,7 @@ export function ineffectiveDeltaPaths(
   delta: Record<string, unknown>,
   merged: Record<string, any>,
   stored: Record<string, any>,
+  respellings?: ReadonlyArray<{ written: string; stored: string }>,
 ): string[] {
   const out: string[] = [];
   const isPlain = (v: unknown): v is Record<string, unknown> =>
@@ -3101,8 +3127,10 @@ export function ineffectiveDeltaPaths(
       if (plain.length > 0) {
         const text = (v: unknown): string => (v && typeof v === 'object' ? String((v as Record<string, unknown>).description ?? JSON.stringify(v)) : String(v));
         const holds = (list: unknown, x: unknown): boolean => Array.isArray(list) && list.some((y) => text(y) === String(x));
+        // A list the write reordered was acted on: its values were held, their order was not.
+        const order = (list: unknown): string[] => (Array.isArray(list) ? list.map(text) : []);
         if (plain.some((x) => !holds(m, x))) say(path, 'the level does not keep this value, so the write dropped it');
-        else if (plain.every((x) => holds(s, x)) && d.every((x) => plain.includes(x))) say(path, 'the stored spec already held this value');
+        else if (plain.every((x) => holds(s, x)) && d.every((x) => plain.includes(x)) && same(order(m), order(s))) say(path, 'the stored spec already held this value');
         if (d.every((x) => plain.includes(x) || carriesEditMarker(x))) return;
       }
       for (const element of d) {
@@ -3126,8 +3154,11 @@ export function ineffectiveDeltaPaths(
       walk(d, m, s, path, field);
       return;
     }
-    if (!same(m, d)) say(path, 'the write did not store it — the level\'s schema does not keep this value');
-    else if (same(s, d)) say(path, 'the stored spec already held this value');
+    // A type position the write respelled to its canonical form was stored, in that form.
+    const respelled = typeof d === 'string' && typeof m === 'string'
+      && (respellings ?? []).some((r) => r.written === d && r.stored === m);
+    if (!same(m, d) && !respelled) say(path, 'the write did not store it — the level\'s schema does not keep this value');
+    else if (same(s, d) || (respelled && same(s, m))) say(path, 'the stored spec already held this value');
   };
 
   function walk(d: Record<string, unknown>, m: unknown, s: unknown, path: string, container: string): void {
@@ -3388,10 +3419,14 @@ export class SpecWorkspace {
     // the root's own, at every depth bound.
     for (const decl of raw.members) this.readMemberKind(raw, decl);
     if (depth >= maxDepth) return;
-    // Steps 13-14: follow each contained project member (a part is the root's
-    // own; a referenced project member is judged against its pin).
+    // Steps 13-14: follow each project member stored in reach — contained, or
+    // a `../` sibling checkout, which composes exactly as a contained one (a
+    // part is the root's own; a git or hosted project member is referenced,
+    // judged against its pin).
     for (const decl of raw.members) {
-      if (decl.kind === 'part' || decl.storage !== 'contained') continue;
+      if (decl.kind === 'part' || !followsLive(decl)) continue;
+      // One the scan could not open (a hosted instance never reads a `../` source) stays referenced, unavailable.
+      if (raw.record.referenced.some((r) => r.alias === decl.alias)) continue;
       const childDir = this.followableMember(raw, decl, ancestors);
       if (!childDir) continue;
       const before = raws.length;
@@ -3416,7 +3451,8 @@ export class SpecWorkspace {
       return null;
     }
     const childDir = path.resolve(raw.dir, decl.path);
-    if (projectPathEscapesRoot(raw.dir, decl.path, childDir)) {
+    // A `../` sibling leaves the root by its declaration: only a contained path is held to it.
+    if (decl.storage !== 'path' && projectPathEscapesRoot(raw.dir, decl.path, childDir)) {
       this.loaderIssues.push({
         severity: 'error',
         code: 'PROJECTPATH_ESCAPE',
@@ -3517,7 +3553,7 @@ export class SpecWorkspace {
         : 'its tree declares no id, holds no L0 and carries no lock — drop the `as`, or create the project content with `wairon member promote`'}`);
     }
     if (kind === 'part') this.readPart(raw, decl, located.dir, located.commit);
-    else if (decl.storage !== 'contained') this.recordReferenced(raw, decl, located.dir, located.commit);
+    else if (!followsLive(decl)) this.recordReferenced(raw, decl, located.dir, located.commit);
   }
 
   /**
@@ -5343,7 +5379,12 @@ export class SpecWorkspace {
     const rawRewritten = refKind === 'component' ? withUniqueTargets(rewritten as ComponentSpec) : rewritten;
     this.carryDisabled = true;
     try {
-      if (JSON.stringify(this.prepareForKind(refKind, rawRewritten)) === asStored) return false;
+      // Both sides are prepared forms, which derive every method's text from
+      // its params — so a stored text a raw rewrite left stale (its params
+      // respelled, its text not) is compared with the file itself, or the
+      // re-save that writes the derived text would never happen.
+      const prepared = this.prepareForKind(refKind, rawRewritten);
+      if (JSON.stringify(prepared) === asStored && !this.storedTextsStale(refKind, id, prepared)) return false;
       this.saveOfKind(refKind, rawRewritten, { preserveUpdatedAt: true });
     } finally {
       this.carryDisabled = false;
@@ -5391,9 +5432,27 @@ export class SpecWorkspace {
       );
     }
     if (JSON.stringify(document) === JSON.stringify(stored)) return false;
+    // A method's text is derived from its params: a respelled param or returns
+    // type moves the text with it, as any save writes it.
+    if (kind === 'interface' || kind === 'type') deriveMergedTexts(kind, document);
     this.writeHome(file, document, kind as SpecDocumentKind);
     registryInvalidateCache();
     return true;
+  }
+
+  /**
+   * Whether the stored file of one interface or type holds a method text its
+   * prepared form re-derives differently: the text a raw rewrite of its params
+   * left behind.
+   */
+  private storedTextsStale(kind: WritableSpecKind, id: string, prepared: unknown): boolean {
+    if (kind !== 'interface' && kind !== 'type') return false;
+    const file = this.storedFileOf(kind, id);
+    if (!file || !pathExists(file)) return false;
+    const stored = readSpecFile(file) as { methods?: { name?: unknown; signature?: unknown }[] } | null;
+    const storedText = new Map((stored?.methods ?? []).filter((m) => m && typeof m === 'object').map((m) => [m.name, m.signature] as const));
+    const methods = ((prepared as { methods?: { name: string; signature?: string }[] }).methods ?? []);
+    return methods.some((m) => m.signature !== undefined && storedText.has(m.name) && storedText.get(m.name) !== m.signature);
   }
 
   /** The file holding one stored spec, by its in-memory key from the bound root; a system by its project's key. */
@@ -5770,8 +5829,8 @@ export class SpecWorkspace {
     const renamedBy: Partial<Record<WritableSpecKind, string>> = {
       component: 'rename it with sdd_rename_component, which moves its contract and implementation with it and rewrites every reference',
       type: 'rename it with sdd_rename_type, which rewrites every reference',
-      interface: 'a contract\'s id follows its component\'s: sdd_rename_component renames both; no tool renames a contract alone yet',
-      implementation: 'an implementation\'s id follows its component\'s: sdd_rename_component renames both; no tool renames an implementation alone yet',
+      interface: 'rename it with sdd_rename_spec (kind interface), which rewrites every implementation\'s contract and every export entry naming it',
+      implementation: 'rename it with sdd_rename_spec (kind implementation), which moves its file and keys its findings to the new id',
       subsystem: 'no tool renames a subsystem yet',
     };
     if (kind !== 'system' && changes('id')) {
@@ -5782,9 +5841,11 @@ export class SpecWorkspace {
     }
     if ((kind === 'component' || kind === 'type') && changes('subsystem')) {
       const owner = typeof stored.subsystem === 'string' ? stored.subsystem : undefined;
-      // A stray (an owner the tree does not have) or a system-level type is repaired, not moved.
-      if (owner !== undefined && this.loadSubsystemSpec(owner) !== null) {
-        return `"subsystem" is where the ${kind} lives, not a field a delta edits — no tool moves a ${kind} to another subsystem with its references and published entries yet (owed), and a delta would move the file and leave them behind.`;
+      // A stray (an owner the tree does not have) is repaired, not moved. A
+      // system-level type adopting a subsystem IS a move: its file, its
+      // references and its exports follow its owner.
+      if ((owner !== undefined && this.loadSubsystemSpec(owner) !== null) || (kind === 'type' && owner === undefined)) {
+        return `"subsystem" is where the ${kind} lives, not a field a delta edits — a delta would rewrite the field and leave the file, its references and its published entries behind; move it with sdd_move_spec (kind ${kind}), which moves ${kind === 'component' ? 'the component with the members it owns, its contracts and implementations, and re-homes its export entries and lifecycle entrypoints' : 'the type\'s file, its export entries and every reference qualified by its subsystem'}.`;
       }
     }
     if (kind === 'interface' && changes('component')) {
@@ -5793,6 +5854,52 @@ export class SpecWorkspace {
     if (kind === 'implementation' && changes('contract')) {
       return '"contract" is the contract this implementation realizes, not a field a delta edits — move methods between components with sdd_move_methods, which carries their implementation entries with them.';
     }
+    return undefined;
+  }
+
+  /**
+   * core_orchestrator.crossProjectWriteRefusal — the sentence refusing a write
+   * any of whose targets lives in another project, or undefined when every one
+   * is the bound project's own. A target lives elsewhere when its key carries a
+   * member project's prefix (a stored spec read through this tree, or an
+   * `alias::name` the bound alias table binds to a member), or when its first
+   * segment is an external's alias. A legacy L1 mount keeps its old cross-tree
+   * writes. Reads only.
+   */
+  crossProjectWriteRefusal(targets: ReadonlyArray<{ kind: string; id: string }>, tool: string): string | undefined {
+    const verb = tool.replace(/^sdd_/, '').split('_')[0] || 'write';
+    for (const target of targets) {
+      // Steps 1-2: the L0 and a bare id are the bound project's own.
+      if (target.kind === 'system' || typeof target.id !== 'string' || !target.id.includes('::')) continue;
+      // Step 3: the key it lives under, and the member covering it.
+      const writable = ['subsystem', 'component', 'interface', 'implementation', 'type'].includes(target.kind);
+      const stored = writable ? (this.load(target.kind as WritableSpecKind, target.id) as { id?: string } | null)?.id : undefined;
+      const key = stored ?? this.bindReference('', target.id);
+      const alias = target.id.slice(0, target.id.indexOf('::'));
+      const aliased = this.cachedRawRoots[0]?.record.aliases.get(alias);
+      const member = this.getSubprojectPrefix(key) ?? this.getSubprojectPrefix(target.id)
+        ?? (aliased !== undefined && this.rootCovering(aliased) !== null ? aliased : null);
+      // Step 4: a member project — a legacy mount keeps its cross-tree writes.
+      if (member !== null) {
+        const root = this.rootCovering(member);
+        if (root?.legacyMount) continue;
+        const qualified = stored ?? target.id;
+        const local = qualified.includes('::') ? qualified.slice(qualified.lastIndexOf('::') + 2) : qualified;
+        const dir = this.resolveSubprojectForNamespace(member);
+        const folder = dir ? path.relative(this.rootDir, dir).split(path.sep).join('/') || '.' : undefined;
+        // Step 5.
+        return `chained-spec: "${qualified}" lives in another project; ${verb} it from that project's own root. It belongs to the member project "${member}"${folder ? ` at ${folder}` : ''}: `
+          + `open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) `
+          + `and call ${tool} ${target.kind} ${local} there. Nothing was written.`;
+      }
+      // An external's alias names a project this one only reads through its pin.
+      const externals = this.cachedRawRoots[0]?.record.config?.externals ?? {};
+      if (Object.prototype.hasOwnProperty.call(externals, alias)) {
+        const producer = (externals as Record<string, { project?: string }>)[alias]?.project ?? alias;
+        return `chained-spec: "${target.id}" names a spec of "${producer}", a project this one declares as the external "${alias}": a project's specs are written from its own root, and this project only reads them through its pin. Open a session in that project's folder and call ${tool} there. Nothing was written.`;
+      }
+    }
+    // Step 6.
     return undefined;
   }
 
@@ -5818,18 +5925,10 @@ export class SpecWorkspace {
     // every other write tool refuses it: from here the write would change a
     // design the member approves on its own, unnoticed until its lock-check.
     if (kind !== 'system') {
-      const stored = String((result as { id?: string }).id ?? id);
-      const member = this.getSubprojectPrefix(stored) ?? this.getSubprojectPrefix(id);
       // A member declared in `members` is its own project; a legacy L1 mount
       // (deprecated, `doctor --fix` rewrites it) keeps its old cross-tree writes.
-      if (member !== null && this.rootCovering(member)?.legacyMount === null) {
-        const local = stored.startsWith(`${member}::`) ? stored.slice(member.length + 2) : stored;
-        const dir = this.resolveSubprojectForNamespace(member);
-        const folder = dir ? path.relative(this.rootDir, dir).split(path.sep).join('/') || '.' : undefined;
-        throw new Error(
-          `chained-spec: "${stored}" lives in another project; update it from that project's own root. It belongs to the member project "${member}"${folder ? ` at ${folder}` : ''}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call sdd_update_spec ${kind} ${local} there. Nothing was written.`,
-        );
-      }
+      const refusal = this.crossProjectWriteRefusal([{ kind, id: String((result as { id?: string }).id ?? id) }], 'sdd_update_spec');
+      if (refusal !== undefined) throw new Error(refusal);
     }
 
     // The L0 is a singleton and its load ignores the id — reject a mismatched
@@ -6842,6 +6941,7 @@ export class SpecWorkspace {
       { ...qualifiedDelta, ...(unsetFields.length ? { unset: unsetFields } : {}) },
       canonicalMerged,
       canonicalStored,
+      respellings,
     );
 
     // A write that changes nothing writes NOTHING and says so. Re-stamping
@@ -8483,6 +8583,17 @@ export function rewriteReferences(kind: WritableSpecKind, id: string, edits: Ref
  * it may not change named. `projectRung` adds a write of project configuration
  * (the debt register). Outside a hosted request nothing is judged.
  */
+/**
+ * core_orchestrator.crossProjectWriteRefusal — the project boundary of every
+ * authored write: the sentence refusing a write any of whose targets lives in
+ * another project (a member's spec, or one named through an external's alias),
+ * naming that project's folder and the call to make in a session there; or
+ * undefined when every target is the bound project's own. Reads only.
+ */
+export function crossProjectWriteRefusal(targets: { kind: string; id: string }[], tool: string): string | undefined {
+  return current().crossProjectWriteRefusal(targets, tool);
+}
+
 export function assertSpecsInReach(targets: { kind: string; id: string }[], what: string, projectRung = false): void {
   if (!getWriteReach()) return;
   const ws = current();

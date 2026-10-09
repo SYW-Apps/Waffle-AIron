@@ -52,7 +52,20 @@ fields:
       stored. Aliases are accepted, never refused, and this list is how an author learns the
       canonical form. Empty when every position was already canonical.
     optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when the caller asked what the write would do: every judgement ran and nothing was
+      written.
+    optional: true
+  - name: cascaded
+    type: list<string>
+    description: >-
+      Each implementation method entry a contract restatement removed with a contract method it
+      dropped, as `<implementation>.<method>` (on a dry run, would remove). Absent when the
+      restatement dropped no contract method.
+    optional: true
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-10-04T23:37:58.341Z'
+updatedAt: '2026-10-09T00:25:03.411Z'

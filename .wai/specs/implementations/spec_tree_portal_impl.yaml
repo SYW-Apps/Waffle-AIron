@@ -299,6 +299,20 @@ methods:
         type: call
         targetComponent: external_producers
         targetMethod: approvedRevision
+  - name: crossProjectWriteRefusal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: crossProjectWriteRefusal
+  - name: publishedUsesOf
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: publishedUsesOf
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-07T10:54:00.174Z'
+updatedAt: '2026-10-09T00:26:57.244Z'

@@ -96,6 +96,27 @@ methods:
       - name: id
         type: string
         description: The spec id (namespaced if needed)
+  - name: moveSpec
+    description: >-
+      Forward to core_orchestrator.moveSpec: move a component or a type to another subsystem with
+      everything that follows it
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-25T17:33:00.554Z'
-updatedAt: '2026-10-04T23:37:49.691Z'
+updatedAt: '2026-10-09T00:26:37.983Z'

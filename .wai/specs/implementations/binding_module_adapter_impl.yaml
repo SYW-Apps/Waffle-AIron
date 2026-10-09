@@ -36,12 +36,18 @@ methods:
       - stepNumber: 5
         description: >-
           Blank the comments (keeping each doc comment's `alias::name` or `alias::name.method` for
-          the declaration it precedes), skip string and template literals, and find each ES module
-          `export` of a function, interface, class, type alias or enum (an `export declare` too),
-          and each CommonJS export — `exports.X =` / `module.exports.X =` and the properties of
-          `module.exports = { … }` — recording its name and starting line; an export form whose
-          value cannot be seen into (`module.exports = require(…)`, a bare identifier) is recorded
-          as an unread form
+          the declaration it precedes, and each JSDoc `@typedef` with its `@property` lines as an
+          object type), skip string and template literals, and find each ES module `export` of a
+          function, interface, class, type alias or enum (an `export declare` too), each TypeScript
+          `export =`, and each CommonJS export — `exports.X =` / `module.exports.X =`, the
+          properties of `module.exports = { … }` (shorthand ones included; a property untagged takes
+          the whole object's tag), and a whole-module `module.exports = class X …` / `function X …`
+          / `X` — recording its name and starting line; a value that is a bare identifier is read
+          through the module's own declaration of that name (a class, function, interface, or a
+          const/let/var holding a class, function or object literal), taking that declaration's tag
+          when the export has none; an export form whose value cannot be seen into (`module.exports
+          = require(…)`, an identifier the module does not declare, a call) is recorded as an unread
+          form
         type: local
       - stepNumber: 6
         description: >-
@@ -51,7 +57,8 @@ methods:
           object literal: each member at depth zero — a call signature or method (a `name: function
           (…)` or arrow value too) with its parameter names, a function-typed field as a method, any
           other as a data field with the type text it is declared with, a constructor and index
-          signatures skipped; for an enum, its member names as fields
+          signatures skipped, and in a class or object literal a private member (`private`, `#name`,
+          or a name starting with `_`) skipped; for an enum, its member names as fields
         type: local
       - stepNumber: 7
         description: >-
@@ -61,4 +68,4 @@ methods:
         outcome: read
 status: complete
 createdAt: '2026-10-08T08:21:54.979Z'
-updatedAt: '2026-10-08T18:48:49.915Z'
+updatedAt: '2026-10-09T00:21:49.303Z'

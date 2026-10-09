@@ -965,7 +965,7 @@ memberCmd
 
 memberCmd
   .command('adopt <alias>')
-  .description("Make this project's external found by a path inside it a member again (detach's inverse)")
+  .description("Make this project's external found by path — inside it, or a `../` sibling — a member again (detach's inverse)")
   .option('--report', 'print the plan and write nothing')
   .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (alias: string, opts) => {

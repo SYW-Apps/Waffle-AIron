@@ -255,7 +255,8 @@ describe('OpenAPI import (authored 3rd-party surfaces)', () => {
     const m = snapshot.interfaces[0].methods.find(mm => mm.name === 'createInvoice')!;
     expect(m.returns).toBe('Invoice');
     expect(m.params.map(p => `${p.name}:${p.type}`).sort()).toEqual(['amount:float', 'customer:Customer']);
-    expect(m.endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/invoices' });
+    // The partner's create answers 200 where wairon's convention would say 201: kept as the endpoint's stated status.
+    expect(m.endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/invoices', status: 200 });
     expect(snapshot.types.map(t => t.id).sort()).toEqual(['Customer', 'Invoice']);
 
     expect(listSnapshots().map(s => s.projectName)).toContain('partner-billing');

@@ -417,6 +417,14 @@ export function fieldRenamesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot
   return { renames, renameOnly: memberDigest(back, publicName, member) === pinnedDigest };
 }
 
+/** A method's wire endpoint as a changelog shows it: an HTTP verb and path (with its stated status), another transport's address fields, or none. */
+function shownEndpoint(endpoint: MethodSignature['endpoint']): string {
+  if (!endpoint) return 'none';
+  if (endpoint.transport === 'HTTP') return `${endpoint.method} ${endpoint.path}${endpoint.status !== undefined ? ` (answers ${endpoint.status})` : ''}`;
+  const { transport, ...address } = endpoint as Record<string, unknown>;
+  return `${String(transport)} ${Object.entries(address).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}=${String(v)}`).join(' ')}`;
+}
+
 /** A carried fact as a changelog shows it: its value, or none. */
 function shownFact(value: unknown): string {
   return value === undefined || value === null || value === '' ? 'none' : typeof value === 'string' ? value : canonicalize(value);
@@ -637,6 +645,9 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     }
     const oldMethods = new Map(before.methods.map((m) => [m.name, m] as const));
     const usedOld = new Set<string>();
+    // The methods whose signatures moved only through the same renames of
+    // types the surface exports under no name: one row per set of renames.
+    const embeddedBy = new Map<string, string[]>();
     entry.methods.forEach((method, methodIndex) => {
       let was = oldMethods.get(method.name);
       if (!was) {
@@ -665,7 +676,10 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
         // another project's type expanded into it).
         const exported = new Set((newer.exportedTypes ?? []).map((t) => t.type));
         const embedded = renamesIn(closureIds(newer, method).filter((id) => !exported.has(id)), notes);
-        if (embedded.length > 0) out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `signature reads the same, but it names renamed types: ${embedded.join('; ')}` });
+        if (embedded.length > 0) {
+          const key = embedded.join('; ');
+          embeddedBy.set(key, [...(embeddedBy.get(key) ?? []), method.name]);
+        }
       }
       for (const r of paramRenames(was, method)) {
         out.push({ kind: 'renamed', name: entry.id, member: method.name, from: r.from, detail: `parameter "${r.from}" renamed to "${r.to}"` });
@@ -673,7 +687,17 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       if (factValue(was.effect) !== factValue(method.effect)) {
         out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `effect ${shownEffect(was.effect)} → ${shownEffect(method.effect)}` });
       }
+      // The wire endpoint is part of a Portal's published surface: a moved path,
+      // verb or stated status is the change every HTTP client breaks on.
+      if (factValue(was.endpoint) !== factValue(method.endpoint)) {
+        out.push({ kind: 'changed', name: entry.id, member: method.name, detail: `endpoint ${shownEndpoint(was.endpoint)} → ${shownEndpoint(method.endpoint)}` });
+      }
     });
+    for (const [renames, methods] of embeddedBy) {
+      out.push(methods.length === 1
+        ? { kind: 'changed', name: entry.id, member: methods[0], detail: `signature reads the same, but it names renamed types: ${renames}` }
+        : { kind: 'changed', name: entry.id, detail: `${methods.length} methods (${methods.join(', ')}): signatures read the same, but they name renamed types: ${renames}` });
+    }
     for (const m of before.methods) {
       if (!usedOld.has(m.name)) out.push({ kind: 'removed', name: entry.id, member: m.name, detail: `method removed: ${shownSignature(m)}` });
     }
@@ -729,5 +753,13 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
   for (const t of older.exportedTypes ?? []) {
     if (!(newer.exportedTypes ?? []).some((x) => x.id === t.id) && !consumed.has(t.id)) out.push({ kind: 'removed', name: t.id, detail: 'type removed' });
   }
-  return out.sort((x, y) => (x.name === y.name ? ((x.member ?? '') < (y.member ?? '') ? -1 : (x.member ?? '') > (y.member ?? '') ? 1 : 0) : x.name < y.name ? -1 : 1));
+  // No row twice: the same change reached along two paths is one change.
+  const seen = new Set<string>();
+  const unique = out.filter((c) => {
+    const key = JSON.stringify([c.kind, c.name, c.member ?? '', c.from ?? '', c.detail]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return unique.sort((x, y) => (x.name === y.name ? ((x.member ?? '') < (y.member ?? '') ? -1 : (x.member ?? '') > (y.member ?? '') ? 1 : 0) : x.name < y.name ? -1 : 1));
 }

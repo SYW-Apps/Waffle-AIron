@@ -85,11 +85,12 @@ methods:
           did not) and how its parent's lock pinned it (pinned | pin moved | not pinned), and close
           the report with the root's own state as a sentence (`Approval: this project is approved |
           drifted since its approval | never approved`, with the release line when its entry carries
-          one) — a lone project never approved says so too, so the report never leaves the question
-          open. A never-approved tree holding the L0 and nothing below it (no subsystem, no member
-          project) says instead that there is nothing to approve yet — add a subsystem, then `wairon
-          lock` — as `wairon lock` and `lock-check` say of it. States are read, never recomputed
-          here, so the report from a parent and from the member agree by construction
+          one, and a notice for gate parts that are ignored or a release stamp this wairon cannot
+          stand behind) — a lone project never approved says so too, so the report never leaves the
+          question open. A never-approved tree holding the L0 and nothing below it (no subsystem, no
+          member project) says instead that there is nothing to approve yet — add a subsystem, then
+          `wairon lock` — as `wairon lock` and `lock-check` say of it. States are read, never
+          recomputed here, so the report from a parent and from the member agree by construction
           (status-agrees). Without approvals the report shows no states
         type: local
       - stepNumber: 10
@@ -102,4 +103,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-08T08:40:57.211Z'
+updatedAt: '2026-10-09T00:18:32.580Z'

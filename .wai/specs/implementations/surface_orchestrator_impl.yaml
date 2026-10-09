@@ -158,10 +158,11 @@ methods:
       - stepNumber: 5
         label: externals
         description: >-
-          Resolve the bound project's declared externals and its referenced project members (a
-          `../`, git or hosted source) through the core: each bound to its producer (family,
-          source.path, git at its ref's head or a member's pinned commit, hosted), with the
-          consumer's references into each by public name
+          Resolve the bound project's declared externals and its referenced project members (a git
+          or hosted source; a `../` sibling member is composed live like a contained one and never
+          pinned) through the core: each bound to its producer (family, source.path, git at its
+          ref's head or a member's pinned commit, hosted), with the consumer's references into each
+          by public name
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
@@ -174,7 +175,10 @@ methods:
         condition: a named alias is not among the declared externals
         onFalseStep: 9
       - stepNumber: 8
-        description: Refuse before anything is written, naming the alias and the declared ones
+        description: >-
+          Refuse before anything is written: a named alias that is a member composed live
+          (contained, or a `../` sibling checkout) is said to be a member that is never pinned; any
+          other is named with the declared ones
         type: throw
         error: UnknownExternalAliasError
       - stepNumber: 9
@@ -460,8 +464,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Read the bound project's declared externals from its configuration through the core — the
-          aliases and producer ids only; no producer is bound and nothing is climbed
+          Read the bound project's declared externals and its referenced git or hosted members from
+          its configuration through the core — the aliases and producer ids only; no producer is
+          bound and nothing is climbed. A `../` sibling member is composed live (round 8): never
+          listed as pinned
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
@@ -711,6 +717,19 @@ methods:
         targetComponent: surfaces_core_adapter
         targetMethod: listExternalConsumers
       - stepNumber: 2
+        description: >-
+          Project the bound project's own surface at audience project (the whole table), for the
+          contract each public name holds now
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 3
+        description: >-
+          Add to each consumer's broken names every method it calls (`<name>.<method>`) on a public
+          name whose contract no longer holds that method — a verb removed or renamed away under it
+          — so a call that broke is marked as no longer exported like a public name that broke
+        type: local
+      - stepNumber: 4
         description: 'Answer them as read: read-only, nothing written'
         type: return
         outcome: ExternalConsumer[]
@@ -722,9 +741,13 @@ methods:
           every HTTP Portal of the bound project's own besides (its service API, exported to other
           wairon projects or not), and every type its published shapes name from another project
           expanded into the closure under its `alias::name`: a pinned external's from the pin the
-          tree holds, a contained member project's from what its L0 export table exports now — so a
-          re-pin (or a member's edit) that reshapes a type the project's own API answers with is a
-          change of the project's own surface
+          tree holds, a contained member project's from what its L0 export table exports now, every
+          type the producer's closure names — a qualified closure id (`contracts::money`, a type the
+          producer itself takes from another project) as well as a bare one — respelled under the
+          same alias, so the producer's own spelling never leaks into the comparison and a later
+          move of the same type to another alias reads as the alias respelling it is — so a re-pin
+          (or a member's edit) that reshapes a type the project's own API answers with is a change
+          of the project's own surface
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
@@ -823,4 +846,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-08T19:07:54.583Z'
+updatedAt: '2026-10-09T01:01:03.640Z'

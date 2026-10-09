@@ -31,10 +31,11 @@ import { effectiveProjectId, projectIdentity } from '../models/project.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { AI_PATHS } from '../config/paths.js';
-import { WaironError } from '../utils/errors.js';
+import { LockRecordUnreadableError, WaironError } from '../utils/errors.js';
 import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
 import {
-  approvalStamp, approvalSubject, describeApprover, describeGateParts, designOnly, gatePartsProblem, movedGateParts, memberPinOf, usableGateParts,
+  approvalStamp, approvalSubject, describeApprover, describeGateParts, designOnly, gatePartsProblem, missingTreeSentence, movedGateParts, memberPinOf,
+  releaseStampProblem, stampRecordsGateParts, usableGateParts, GATE_PARTS_SINCE,
   type CodeAnalysis, type ProjectApproval, type ReleaseVerdict,
 } from '../models/lock.js';
 import { ownGet } from '../utils/own.js';
@@ -151,7 +152,20 @@ export function treeVerdict(strict: boolean): ApprovalCheck | null {
         + 'Fix: restore it from version control (`git checkout -- .wai/specs/.index.yaml`).',
     };
   }
-  // Step 6.
+  // Steps 6-8: no L0 and no spec file — but an approval on record that
+  // approved spec files means the project opted in, and its tree is a deleted
+  // design: refused at every strictness, never "no tree". An unreadable record
+  // is refused by name (LockRecordUnreadableError) like everywhere else.
+  let record: LockRecord | null = null;
+  try {
+    record = readLockRecord();
+  } catch (e) {
+    if (e instanceof LockRecordUnreadableError) throw e;
+    record = null; // no project bound at all: nothing on record
+  }
+  const missing = record ? missingTreeSentence(record) : null;
+  if (missing) return { state: 'unlocked', approved: false, message: missing };
+  // Step 9.
   return {
     state: 'no-tree',
     approved: !strict,
@@ -189,11 +203,18 @@ export function checkApproval(strict: boolean): ApprovalCheck {
       : lock.state === 'stale'
         ? 'This project\'s own approval is stale too — run `wairon lock` here afterwards.'
         : 'This project itself has no approval on record.';
+    // Said in each member's own terms: "spec changes nobody approved" only
+    // when a member's specs may have moved — an approval that merely predates
+    // recorded inputs is no unreviewed change, and a reviewer must not go
+    // looking for one.
+    const specChanges = drifted.some(memberSpecsMayHaveMoved);
     return {
       state: lock.state === 'unlocked' ? 'unlocked' : 'stale',
       approved: false,
-      message: `Member project(s) carry spec changes nobody approved: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `
-        + 'Nothing says a human has seen what is about to merge in them. '
+      message: (specChanges
+        ? `Member project(s) carry spec changes nobody approved: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `
+          + 'Nothing says a human has seen what is about to merge in them. '
+        : `Member project(s) are not covered by their own approval: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `)
         + `Fix: run \`wairon lock\` in each member's own folder and commit its .wai/lock.json. ${own}`,
     };
   }
@@ -245,6 +266,9 @@ export function checkApproval(strict: boolean): ApprovalCheck {
           + `approved ${approvalStamp(record!)}.${release?.carried ? ` ${carriedLine(release)}` : ''}${family}${carry}`
           + (ownEntry?.partsIgnored !== undefined
             ? ` Notice: the record's gate parts are ignored — ${ownEntry.partsIgnored}; the identity alone decided this, and \`wairon lock\` rewrites them.`
+            : '')
+          + (ownEntry?.stampProblem !== undefined
+            ? ` Notice: ${ownEntry.stampProblem} — the identity alone decided this, and \`wairon lock\` replaces the stamp with this release.`
             : ''),
       };
     }
@@ -337,6 +361,26 @@ export function holdsNoDesign(): boolean {
  * design (its release verdict, not carried). Null when nothing is owed.
  */
 export function coverageVerdict(record: LockRecord, own: ProjectApproval | undefined): ApprovalCheck | null {
+  // Steps 1-3: the configuration the approval was taken under is gone. Its
+  // inputs (rule tuning, projectType, packs, network, composition, the id)
+  // read as absent, so naming them as edited would send the reader after a
+  // change nobody made: name the missing file instead.
+  let config: ReturnType<typeof loadProjectConfig> = null;
+  try {
+    config = loadProjectConfig();
+  } catch {
+    config = null; // one that does not parse is validate's to name; only an absent file is decided here
+  }
+  if (!config && !pathExists(AI_PATHS.projectConfig())) {
+    return {
+      state: 'stale',
+      approved: false,
+      message: `The project configuration (.wai/project.yaml) is missing: the approval on record (${approvalStamp(record)}) was taken under the inputs it declares `
+        + '(the rule tuning, projectType, packs, network, `composition` and the project id), so the approval cannot be judged. '
+        + 'Fix: restore it from version control (`git checkout -- .wai/project.yaml`).',
+    };
+  }
+
   // Steps 10-13: the project id against the one the approval recorded. The
   // gate identity does not cover the id, so it is judged by the very
   // resolution the project-identity rule reports PROJECT_ID_CHANGED and
@@ -348,12 +392,19 @@ export function coverageVerdict(record: LockRecord, own: ProjectApproval | undef
   // what its pin records. `wairon lock` refuses both, so passing here would
   // approve what the lock will not; it is the same entry status prints.
   if (own?.owed !== undefined) {
+    const pins = /never pinned|beyond its pin/.test(own.owed);
+    const packs = /extension pack\(s\) selected/.test(own.owed);
     return {
       state: 'stale',
       approved: false,
       message: `The approval on record (${approvalStamp(record)}) does not cover what this design is judged against: ${own.owed}. `
-        + 'Nothing records what a producer that broke these uses would be judged against, and `wairon lock` refuses until it does. '
-        + 'Fix: pin first (`wairon externals pin`), then run `wairon lock`, and commit .wai/lock.json with the pin.',
+        + (pins ? 'Nothing records what a producer that broke these uses would be judged against, and `wairon lock` refuses until it does. ' : '')
+        + (packs ? 'The doctrine the approval was judged under cannot be read, so nothing says the design still passes it. ' : '')
+        + (pins
+          ? 'Fix: pin first (`wairon externals pin`), then run `wairon lock`, and commit .wai/lock.json with the pin.'
+          : packs
+            ? 'Fix: make the pack load (install or vendor it, or drop the selection), then run `wairon lock` and commit .wai/lock.json.'
+            : 'Fix: clear it, then run `wairon lock`, and commit .wai/lock.json.'),
     };
   }
 
@@ -445,10 +496,52 @@ function memberFolders(): Map<string, string> {
 function describeMemberAt(member: ProjectApproval, folders: Map<string, string>): string {
   const dir = folders.get(member.key);
   const shown = dir ? (path.relative(process.cwd(), dir) || '.') : undefined;
-  const state = member.state === 'drifted'
-    ? (member.owed !== undefined ? member.owed : member.upgraded ? 'approved under an earlier gate identity — re-lock it once' : 'changed since its own approval')
-    : 'never approved';
+  const state = member.state === 'drifted' ? memberDriftWords(member) : 'never approved';
   return `${member.alias ?? member.key} (${state}${shown ? `, in ${shown}` : ''})`;
+}
+
+/**
+ * Why a drifted member's own approval does not cover it, in the member's own
+ * terms — the very state its own lock-check and status report: what it owes,
+ * an approval that predates recorded inputs, a release change not carried,
+ * the inputs that moved, an earlier gate identity, else a design change.
+ */
+function memberDriftWords(member: ProjectApproval): string {
+  if (member.owed !== undefined) return member.owed;
+  const release = member.release;
+  if (release && !release.carried) {
+    if (release.reason !== undefined) {
+      return predatesRecordedInputs(release.from)
+        ? `its approval predates recorded inputs (approved under wairon ${release.from}) — re-lock it once at its own root`
+        : `its approval is not carried over to this release — ${release.reason.replace(/\s+$/, '')}`;
+    }
+    return `approved under wairon ${release.from}, and this release finds ${release.count ?? 0} issue(s) in its approved design`;
+  }
+  if (member.inputsMoved && member.inputsMoved.length > 0) {
+    const inputs = member.inputsMoved.filter((p) => p !== 'design');
+    return member.inputsMoved.includes('design')
+      ? 'changed since its own approval'
+      : `what its approval was taken under moved: ${describeGateParts(inputs)}`;
+  }
+  if (member.upgraded) return 'approved under an earlier gate identity — re-lock it once';
+  return 'changed since its own approval';
+}
+
+/** Whether a release stamp is a valid version older than the first release that records gate parts. */
+function predatesRecordedInputs(stamp: string): boolean {
+  return releaseStampProblem({ validatorVersion: stamp }, WAIRON_VERSION) === null && !stampRecordsGateParts(stamp) && stamp !== GATE_PARTS_SINCE;
+}
+
+/**
+ * Whether a drifted member's own specs may have moved: false only when its
+ * entry says what moved instead — an owed pin, a release change, inputs
+ * other than the design, an earlier gate identity.
+ */
+function memberSpecsMayHaveMoved(member: ProjectApproval): boolean {
+  if (member.owed !== undefined || member.upgraded) return false;
+  if (member.release && !member.release.carried) return false;
+  if (member.inputsMoved && member.inputsMoved.length > 0) return member.inputsMoved.includes('design');
+  return true;
 }
 
 /**
@@ -709,10 +802,10 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
         logger.info(`Nothing has changed since the last approval (${approvalStamp(previous)}), but you (${describeApprover(me)}) are not its approver: this records YOUR approval of the unchanged design, with a new lockedAt, and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).`);
       } else {
         const refreshed = previous ? evidenceRefresh(previous, gate, captured) : null;
-        logger.info('Nothing has changed since the last approval — the approval on record stays as it is: its lockedAt, release stamp and any restamp trace are kept, and '
+        logger.info('Nothing has changed since the last approval — the approval on record stays as it is: its lockedAt and any restamp trace are kept, and '
           + (refreshed
             ? `only the evidence recorded beside it is refreshed (${refreshed.what.join('; ')}) — no re-approval. `
-            : '.wai/lock.json is left untouched. ')
+            : 'nothing beside it needs refreshing, so .wai/lock.json is left untouched by this run (a difference from the committed record, if any, was written by an earlier run). ')
           + 'This refreshes the generated outputs of this project (guides, skills, and agent files when materialized).');
       }
     }
@@ -726,6 +819,10 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
     ].some(Boolean);
     if (cut) logger.info('  (`wairon lock --all` lists every one; `wairon status --all` names them too)');
   }
+  // The project's own inputs, when this lock records them for the first time
+  // or they moved: the tuning a human approves is shown, never only digested.
+  const inputs = ownInputLines(readLockRecord(), captured);
+  if (inputs.length > 0) logger.info(`The project's own inputs this approval records: ${inputs.join('; ')}.`);
   // A storage move is no design change: named apart, never as + and -.
   if (diff && diff.moved.length > 0) {
     logger.info(`${diff.moved.length} spec file(s) moved storage with their content unchanged (no design change):`);
@@ -750,6 +847,49 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
     const pin = m.pinned === 'moved' ? ' — its pin moved since the last approval' : '';
     logger.info(`  member ${m.alias ?? m.key}: ${m.state}${m.upgraded ? ' (approved under an earlier gate identity, re-lock once)' : ''}${pin}`);
   }
+  // The order is bottom-up: a member drifted at its own root is recorded here
+  // as drifted, lock-check here fails until it is re-locked, and this project
+  // then locks again to pin it — so say it before the human confirms.
+  const drifted = members.filter((m) => m.as !== 'part' && m.state === 'drifted');
+  if (drifted.length > 0) {
+    const where = memberFolders();
+    logger.warn(`Member project(s) not covered by their own approval: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `
+      + 'The order is bottom-up: lock each member at its own root first, then here. Locking here now records them as drifted, '
+      + '`wairon lock-check` here fails until each is re-locked at its own root, and this project must then lock again to pin their new approval.');
+  }
+}
+
+/**
+ * The project's own inputs this lock records, as they stand — printed when it
+ * records them for the first time (a first approval, a record without usable
+ * gate parts) or when the rule tuning or the packs moved, so the human sees
+ * the tuning they approve. Empty lines when the project declares none.
+ */
+function ownInputLines(previous: LockRecord | null, captured: StateId): string[] {
+  const usable = previous ? usableGateParts(previous, captured) : undefined;
+  const moved = usable ? movedGateParts({ gateParts: usable }, captured.parts) ?? [] : [];
+  const firstTime = !previous || !usable;
+  if (!firstTime && !moved.includes('rules') && !moved.includes('packs')) return [];
+  let config;
+  try {
+    config = loadProjectConfig();
+  } catch {
+    return [];
+  }
+  if (!config) return [];
+  const lines: string[] = [];
+  if (config.projectType) lines.push(`projectType: ${config.projectType}`);
+  const overrides = Object.entries(config.rules?.sddRuleSeverity ?? {});
+  if (overrides.length > 0) {
+    lines.push(`rule tuning: ${overrides.length} severity override(s) (${overrides.map(([code, severity]) => `${code} → ${String(severity)}`).join(', ')})`);
+  }
+  const otherTuning = Object.keys(config.rules ?? {}).filter((k) => k !== 'sddRuleSeverity' && k !== 'conformance');
+  if (otherTuning.length > 0) lines.push(`other rule settings: ${otherTuning.join(', ')}`);
+  const packs = (config.extensions?.packs ?? []).map((p) => (typeof p === 'string' ? p : p.name));
+  if (packs.length > 0) lines.push(`packs: ${packs.join(', ')}`);
+  if (config.network) lines.push('network: declared');
+  if (config.composition && Object.keys(config.composition).length > 0) lines.push(`composition: ${canonicalize(config.composition)}`);
+  return lines;
 }
 
 /**
@@ -997,6 +1137,14 @@ function evidenceRefresh(onFile: LockRecord, gate: ValidationResult, captured: S
     record = { ...record, gateParts: captured.parts };
     what.push(`its gate parts, rewritten from its identity (${repair})`);
   }
+  // A release stamp this wairon cannot stand behind (none, no version, newer
+  // than this release) is replaced with this release, which just verified the
+  // unchanged approval — never kept in silence.
+  const stamp = releaseStampProblem(onFile, WAIRON_VERSION);
+  if (stamp !== null) {
+    record = { ...record, validatorVersion: WAIRON_VERSION };
+    what.push(`its release stamp (${stamp}), replaced with ${WAIRON_VERSION}`);
+  }
   return what.length > 0 ? { record, what } : null;
 }
 
@@ -1027,6 +1175,19 @@ function gatePartsRepair(record: LockRecord, captured: StateId): string | null {
 function assertScopeApprovable(options: LockOptions, captured: StateId): void {
   if (!options.subsystem) return;
   const scope = options.subsystem;
+  // A member PROJECT's subsystem is approved at the member's own root: a
+  // parent never writes below itself, and its record pins the member's
+  // approval, so a scope inside a member could only ever report a no-op.
+  const owner = memberProjectOf(scope);
+  if (owner) {
+    const dir = memberFolders().get(owner.key);
+    const shown = dir ? (path.relative(process.cwd(), dir) || '.') : undefined;
+    const local = scope.slice(scope.indexOf('::') + 2);
+    throw new LockRefusedError(
+      `\`wairon lock --subsystem ${scope}\` names a subsystem of the member project ${owner.alias ?? owner.key}: a member's subsystem is approved at the member's own root, `
+        + `never by a parent, which never writes below itself. Run \`wairon lock --subsystem ${local}\` ${shown ? `in ${shown}` : 'at its own root'}, then \`wairon lock\` here to pin its new approval. Nothing was written.`,
+    );
+  }
   const root = getProjectRoot();
   // Keyed as the approval keys them: a part's file under members/<alias>/… (stage 8).
   const scanned = projectFamily().nodes.find((n) => n.namespace === '')?.parts ?? [];
@@ -1067,6 +1228,14 @@ function assertScopeApprovable(options: LockOptions, captured: StateId): void {
     );
   }
   logger.info(`--subsystem ${scope}: ${inScope.size} spec file(s) in scope; nothing outside it moved since the approval, so the rest stays approved as it was.`);
+}
+
+/** The direct member PROJECT a `<alias>::<subsystem>` scope names, or null (a local scope, or a part's). */
+function memberProjectOf(scope: string): ProjectApproval | null {
+  const at = scope.indexOf('::');
+  if (at <= 0) return null;
+  const alias = scope.slice(0, at);
+  return familyApprovals(1).find((a) => a.parent === '' && a.as !== 'part' && (a.alias ?? a.key) === alias) ?? null;
 }
 
 /**

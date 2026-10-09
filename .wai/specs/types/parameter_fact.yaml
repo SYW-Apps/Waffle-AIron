@@ -40,7 +40,31 @@ fields:
       an unresolvable name, a union of kinds). What tells a substitution from a rename where the
       annotation's own spelling cannot
     optional: true
+  - name: fields
+    type: list<string>
+    description: >-
+      The property names the type checker says an OBJECT-kind parameter's type has, nullability set
+      aside; absent for any other kind, where no checker read the file, and for a type with no
+      property it can name. What a declared record type is compared with structurally: an object
+      sharing none of the record's fields is a different argument, whatever either side calls it
+    optional: true
+  - name: transport
+    type: bool
+    description: >-
+      True when the annotation names a platform transport class — a request, a response, a socket, a
+      URL or its headers (node:http's IncomingMessage, a fetch Request…) — resolved or not: a handle
+      whatever serves the method hands it, never a domain record
+    optional: true
+  - name: reads
+    type: list<string>
+    description: >-
+      The member names and literal keys the body reads off the parameter, at any depth of a chain
+      (`req.params.code` reads params and code; `req.query['limit']` reads query and limit), and the
+      property names a destructuring of such a read binds. Absent when the parameter is unnamed or
+      nothing is read off it. What says a contract parameter an injected request handle carries is
+      realized through it
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-23T20:35:12.500Z'
-updatedAt: '2026-10-08T18:51:30.384Z'
+updatedAt: '2026-10-09T00:42:21.273Z'
