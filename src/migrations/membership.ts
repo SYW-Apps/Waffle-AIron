@@ -117,6 +117,25 @@ function nodeAt(family: ProjectFamily, dir: string): ProjectNode | undefined {
   return family.nodes.find((n) => path.resolve(n.directory) === path.resolve(dir));
 }
 
+/**
+ * Where a member location lands, read as `member add` reads one: inside the
+ * project under the containment guard (through links), or — a leading `../`,
+ * the explicit way out — a sibling checkout, resolved lexically, which must not
+ * be a directory holding the project itself. Any other escape is refused, the
+ * reason naming the project as `{bound}`.
+ */
+function memberLocation(boundDir: string, written: string): { dir: string } | { refused: string } {
+  const location = parseMemberSource(written);
+  if (location.storage === 'path' && location.problem === undefined) {
+    const sibling = path.resolve(boundDir, written);
+    if (path.relative(sibling, boundDir).startsWith('..')) return { dir: sibling };
+    return { refused: `the path "${written}" names a directory holding {bound} itself (${boundDir}), never a member of it` };
+  }
+  const dir = files.resolve(boundDir, written);
+  if (dir !== null) return { dir };
+  return { refused: `the path "${written}" does not resolve strictly within {bound} (${boundDir}), and is not a sibling written with a leading \`../\`${location.problem ? ` (${location.problem})` : ''}` };
+}
+
 // ── attach ──────────────────────────────────────────────────────────────────
 
 /** imembership_migration.planAttach — plan making an existing project a member. Writes nothing. */
@@ -127,17 +146,9 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   // Step 1: the path, read as a member location is (`member add`): inside the
   // project under the containment guard, or — a leading `../`, the explicit way
   // out — a sibling, resolved lexically. Any other escape is not-contained.
-  const location = parseMemberSource(request.path ?? '');
-  const sibling = location.storage === 'path' && location.problem === undefined
-    ? path.resolve(node.directory, request.path ?? '')
-    : null;
-  const holdsBound = sibling !== null && !path.relative(sibling, node.directory).startsWith('..');
-  const dir = sibling !== null && !holdsBound ? sibling : files.resolve(node.directory, request.path ?? '');
-  if (dir === null) {
-    refuse(plan, 'not-contained', bound, holdsBound
-      ? `the path "${request.path ?? ''}" names a directory holding ${label(bound)} itself (${node.directory}), never a member of it`
-      : `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)} (${node.directory}), and is not a sibling written with a leading \`../\`${location.problem ? ` (${location.problem})` : ''}`);
-  }
+  const located = memberLocation(node.directory, request.path ?? '');
+  const dir = 'dir' in located ? located.dir : null;
+  if ('refused' in located) refuse(plan, 'not-contained', bound, located.refused.replace('{bound}', label(bound)));
   // Step 2: the alias against the bound project's alias table.
   const config = configAt(node.directory) ?? ({} as ProjectConfig);
   // A completed attach plans nothing: the alias already declares this directory.
@@ -371,10 +382,15 @@ export function planAdopt(family: ProjectFamily, bound: string, request: Migrati
   if (!external) refuse(plan, 'not-an-external', bound, `${label(bound)} declares no external "${alias}"`);
   else if (request.relocation) return planRelocatedAdopt(plan, family, bound, alias, external, request.relocation);
   else {
-    // Step 2: where its source path lands, under the containment guard.
-    dir = files.resolve(boundDir, externalSourceOf(external)?.path ?? '');
-    if (dir === null) refuse(plan, 'not-contained', bound, `the external "${alias}" ${externalSourceOf(external)?.path ? `is found at "${externalSourceOf(external)?.path}", which is not strictly within ${label(bound)}` : 'names no source.path'}`);
-    else if (nodeAt(family, dir)) refuse(plan, 'already-member', nodeAt(family, dir)!.namespace, `${dir} is already the family project ${label(nodeAt(family, dir)!.namespace)}`);
+    // Step 2: where its source path lands, read exactly as attach and `member
+    // add` read a member location: inside, under the containment guard, or a
+    // sibling written with a leading `../` — never a directory holding the bound project.
+    const written = externalSourceOf(external)?.path;
+    const located = written !== undefined ? memberLocation(boundDir, written) : null;
+    dir = located !== null && 'dir' in located ? located.dir : null;
+    if (located === null) refuse(plan, 'not-contained', bound, `the external "${alias}" names no source.path`);
+    else if ('refused' in located) refuse(plan, 'not-contained', bound, `the external "${alias}" is found at "${written}": ${located.refused.replace('{bound}', label(bound))}`);
+    else if (nodeAt(family, located.dir)) refuse(plan, 'already-member', nodeAt(family, located.dir)!.namespace, `${located.dir} is already the family project ${label(nodeAt(family, located.dir)!.namespace)}`);
   }
   // Steps 3-4.
   if (plan.refusals.length > 0) return plan;

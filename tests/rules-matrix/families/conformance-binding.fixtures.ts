@@ -307,6 +307,139 @@ export const round7 = {
   }),
 };
 
+// ---------------------------------------------------------------------------
+// Round 8: CommonJS in the shapes a module actually writes (a class exported
+// by shorthand, `module.exports = class`, a TypeScript `export =`), a private
+// `_helper` member, a CommonJS object tagged as a whole, a type tagged by its
+// RETIRED id whose display name the rename kept, and a member's closure type
+// owned by another member.
+// ---------------------------------------------------------------------------
+
+/** GeoKit's pin after renaming `tile_coord` to `tile_key` while keeping the display name `TileCoord`. */
+const GEOKIT_PIN_V4 = (() => {
+  const pin = yaml.load(GEOKIT_PIN) as { types: Record<string, unknown>[] };
+  pin.types[0] = { ...pin.types[0], name: 'TileCoord', formerly: ['tile_coord'] };
+  return yaml.dump(pin, { noRefs: true, lineWidth: 200 });
+})();
+
+/** A plain-JavaScript client class, exported the way `shape` writes it, its verb named `verb`. */
+function commonJsClient(verb: string, shape: 'shorthand' | 'class' | 'tsExportEquals'): string {
+  const body = `  ${verb}(lat, lon, zoom) { return this._call(lat, lon, zoom); }\n  _call(lat, lon, zoom) { return addon.tile(lat, lon, zoom); }\n`;
+  if (shape === 'class') return `/** geokit::tiles */\nmodule.exports = class TileLibrary {\n${body}};\n`;
+  if (shape === 'tsExportEquals') return `/** geokit::tiles */\nclass TileLibrary {\n${body}}\nexport = TileLibrary;\n`;
+  return `'use strict';\n/** geokit::tiles */\nclass TileLibrary {\n${body}}\nmodule.exports = { TileLibrary };\n`;
+}
+
+/**
+ * GeoKit and a contracts library, both members of TileStudio: GeoKit's verb
+ * answers the contracts' tile key, which GeoKit reaches through its own
+ * external `contracts`; contracts renamed the key's `zoom` field to `z`.
+ */
+function tileStudioWithTwoMembers(bindingSource: string): FixtureTree {
+  const tree = tileStudioWithMember(bindingSource);
+  const files: Record<string, string> = { ...tree.files! };
+  files['.wai/project.yaml'] = files['.wai/project.yaml'].replace('geokit: packages/geokit', 'geokit: packages/geokit\n  shared: packages/contracts');
+  for (const key of Object.keys(files)) if (key.startsWith('packages/geokit/.wai/specs/types/')) delete files[key];
+  files['packages/geokit/.wai/project.yaml'] = memberDump({ id: 'geokit', name: 'GeoKit', targets: [], extensions: { packs: [], useGlobalPacks: false }, externals: { contracts: { source: { path: '../contracts' } } } });
+  files['packages/geokit/.wai/specs/.index.yaml'] = memberDump({
+    name: 'GeoKit', vision: 'Tile arithmetic for map applications.', targetLanguage: 'typescript',
+    publicInterfaces: [{ from: 'tiles', component: 'tile-library', as: 'tiles', audience: 'project' }],
+  });
+  files['packages/geokit/.wai/specs/subsystems/tiles.yaml'] = memberDump({ id: 'tiles', name: 'Tiles', description: 'Tile arithmetic.', parentSystem: 'GeoKit', publicInterfaces: [{ component: 'tile-library', details: 'Pure tile arithmetic.' }] });
+  files['packages/geokit/.wai/specs/interfaces/itile-library.yaml'] = memberDump({
+    id: 'itile-library', name: 'Tile Library Interface', description: 'Tile arithmetic.', component: 'tile-library',
+    methods: [{ name: 'tileAt', description: 'The tile covering a coordinate at a zoom level.', returns: 'contracts::tile_key', effect: 'none', params: [{ name: 'lat', type: 'float' }, { name: 'lon', type: 'float' }, { name: 'zoom', type: 'int' }] }],
+  });
+  const base = 'packages/contracts/.wai';
+  files[`${base}/project.yaml`] = memberDump({ id: 'contracts', name: 'Contracts', targets: [], extensions: { packs: [], useGlobalPacks: false } });
+  files[`${base}/specs/.index.yaml`] = memberDump({ name: 'Contracts', vision: 'The value types the map tools share.', targetLanguage: 'typescript', publicInterfaces: [{ from: 'keys', typeDef: 'tile_key', audience: 'project' }] });
+  files[`${base}/specs/subsystems/keys.yaml`] = memberDump({ id: 'keys', name: 'Keys', description: 'Shared keys.', parentSystem: 'Contracts', publicInterfaces: [{ typeDef: 'tile_key' }] });
+  files[`${base}/specs/types/tile_key.yaml`] = memberDump({
+    id: 'tile_key', name: 'TileKey', kind: 'value-object', subsystem: 'keys', description: 'One tile.', methods: [],
+    fields: [{ name: 'x', type: 'int' }, { name: 'y', type: 'int' }, { name: 'z', type: 'int', previousNames: ['zoom'] }],
+  });
+  return { ...tree, files };
+}
+
+export const round8 = {
+  commonJsShorthand: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio\'s plain-JavaScript client declares a class and exports it the usual CommonJS way, `module.exports = { TileLibrary }`, still naming the verb GeoKit renamed.',
+    tree: tileStudioAt('src/editor/geokit-client.cjs', commonJsClient('tileFor', 'shorthand')),
+  }),
+  commonJsShorthandControl: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    expectFire: false,
+    reason: 'The client follows the rename, and its `_call` helper is private by convention — never "not exported by" the pin.',
+    scenario: 'TileStudio\'s CommonJS client, exported as `module.exports = { TileLibrary }`, calls GeoKit\'s current verb through a private helper.',
+    tree: tileStudioAt('src/editor/geokit-client.cjs', commonJsClient('tileAt', 'shorthand')),
+  }),
+  commonJsShorthandRead: defineRuleFixture({
+    code: 'BINDING_UNREAD',
+    expectFire: false,
+    reason: 'A class exported by shorthand is a declaration the reader compares, so the module is not reported unread.',
+    scenario: 'TileStudio\'s CommonJS client exports its class with `module.exports = { TileLibrary }`.',
+    tree: tileStudioAt('src/editor/geokit-client.cjs', commonJsClient('tileAt', 'shorthand')),
+  }),
+  wholeModuleClass: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio\'s client module IS the class, `module.exports = class TileLibrary { … }`, and still names the verb GeoKit renamed.',
+    tree: tileStudioAt('src/editor/geokit-client.js', commonJsClient('tileFor', 'class')),
+  }),
+  tsExportEquals: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio\'s TypeScript client ends in `export = TileLibrary` for its CommonJS consumers, and still names the verb GeoKit renamed.',
+    tree: tileStudioAt('src/editor/geokit-client.ts', commonJsClient('tileFor', 'tsExportEquals')),
+  }),
+  wholeObjectTag: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio\'s CommonJS binding tags its whole `module.exports = { … }` as GeoKit\'s tile library and keeps a `tileLegacy` verb GeoKit never exported.',
+    tree: tileStudioAt('src/editor/geokit-binding.js', '/** geokit::tiles */\nmodule.exports = {\n  tileAt(lat, lon, zoom) { return addon.tileAt(lat, lon, zoom); },\n  tileLegacy(code) { return addon.legacy(code); },\n};\n'),
+  }),
+  wholeObjectTagControl: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    expectFire: false,
+    reason: 'Every member of the tagged object is a verb GeoKit exports, with its parameters.',
+    scenario: 'TileStudio\'s whole-object-tagged CommonJS binding holds only GeoKit\'s current verb.',
+    tree: tileStudioAt('src/editor/geokit-binding.js', '/** geokit::tiles */\nmodule.exports = {\n  tileAt(lat, lon, zoom) { return addon.tileAt(lat, lon, zoom); },\n};\n'),
+  }),
+  retiredTag: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'GeoKit renamed its tile type `tile_coord` → `tile_key` and kept the display name TileCoord; TileStudio\'s binding still tags its declaration with the retired id, `/** geokit::tile_coord */`.',
+    tree: tileStudioAt('src/editor/geokit-types.ts', '/** geokit::tile_coord */\nexport interface TileCoord { x: number; y: number; z: number }\n', GEOKIT_PIN_V4),
+  }),
+  retiredTagControl: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    expectFire: false,
+    reason: 'The tag names the type\'s current id, so the declaration mirrors the renamed type as it is now.',
+    scenario: 'TileStudio\'s binding tags its tile declaration with GeoKit\'s current id, `/** geokit::tile_key */`.',
+    tree: tileStudioAt('src/editor/geokit-types.ts', '/** geokit::tile_key */\nexport interface TileCoord { x: number; y: number; z: number }\n', GEOKIT_PIN_V4),
+  }),
+  ownerAlias: defineRuleFixture({
+    code: 'BINDING_DRIFT',
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    expectFire: true,
+    scenario: 'TileStudio reaches the contracts library\'s tile key only through GeoKit\'s verb; contracts renamed the key\'s `zoom` field to `z`, and the binding still spells `zoom`.',
+    tree: tileStudioWithTwoMembers(memberBinding('zoom')),
+  }),
+};
+
 export default [
   defineRuleFixture({
     code: 'BINDING_DRIFT',
@@ -354,4 +487,5 @@ export default [
     tree: tileStudioWithMember(memberBinding('z')),
   }),
   ...Object.values(round7),
+  ...Object.values(round8),
 ];

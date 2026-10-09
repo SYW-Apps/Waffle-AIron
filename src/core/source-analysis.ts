@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createRequire } from 'module';
 import {
   implementationSourceFiles,
+  routerLinkage,
   typeSourceFiles,
   pathKey,
   type CallSiteFact,
@@ -414,6 +415,12 @@ type LiteralOf = (node: TsExpression) => string | undefined;
 
 const HTTP_VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 const METHOD_KEYS = new Set(['method', 'verb', 'httpMethod']);
+/**
+ * Text a router's body cannot be without: a request's `method` or a table's
+ * `verb` compared, or an HTTP verb written out (an object keyed `VERB /path`).
+ * A body that holds none is no router, and is not read as one.
+ */
+const ROUTER_TEXT = /[Mm][Ee][Tt][Hh][Oo][Dd]|[Vv][Ee][Rr][Bb]|\b(?:GET|POST|PUT|PATCH|DELETE)\b/;
 const PATH_KEYS = new Set(['path', 'pattern', 'route', 'url', 'template']);
 /** How deep a constant is followed through other constants: far past any honest table, and a stop for a cycle. */
 const SETTLE_DEPTH = 8;
@@ -649,7 +656,7 @@ function tableEntry(
   }
   const verb = keyedVerb ?? (verbs.length === 1 ? verbs[0] : undefined);
   const route = keyedPath ?? (paths.length === 1 ? paths[0] : undefined);
-  return verb && route ? { verb, segments: route.segments, exactLength: route.exactLength, fullPath: true } : undefined;
+  return verb && route ? { verb, segments: route.segments, exactLength: route.exactLength, fullPath: true, table: true } : undefined;
 }
 
 /**
@@ -673,15 +680,57 @@ function tableRoutes(ts: TsModule, value: TsExpression, initializerOf: Initializ
   }
   if (ts.isObjectLiteralExpression(at)) {
     for (const property of at.properties) {
-      const key = property.name ? propertyKeyText(ts, property.name) : undefined;
+      // A key written as a template literal or a concatenation over the
+      // file's constants (`[\`POST ${PREFIX}/orders\`]`) settles like any
+      // other compared value.
+      const key = !property.name ? undefined
+        : ts.isComputedPropertyName(property.name) ? settleString(ts, property.name.expression, initializerOf, literalOf)
+          : propertyKeyText(ts, property.name);
       const match = key ? /^([A-Za-z]+)\s+(\/\S*)$/.exec(key) : null;
       if (!match || !HTTP_VERBS.has(match[1].toUpperCase())) return [];
       const segments = templateSegments(match[2]);
       if (!segments) return [];
-      out.push({ verb: match[1].toUpperCase(), segments, exactLength: true, fullPath: true });
+      out.push({ verb: match[1].toUpperCase(), segments, exactLength: true, fullPath: true, table: true });
     }
   }
   return out;
+}
+
+/**
+ * The ONE prefix a function strips off a path anywhere in its body —
+ * `path.slice(BASE.length)`, `.substring(…)`, `.substr(…)`, `.replace(BASE,
+ * '')` — as the text it settles on, starting with `/`. Undefined where it
+ * strips none, or several, or one that does not settle. What a route table
+ * read beside it, written under the prefix, is read below.
+ */
+function strippedAnywhere(
+  ts: TsModule,
+  body: TsNode,
+  initializerOf: InitializerOf,
+  literalOf: LiteralOf | undefined,
+): string | undefined {
+  const UNSETTLED = '\u0000';
+  const prefixes = new Set<string>();
+  const strip = (node: TsNode): void => {
+    if (namedFunctionNameOf(ts, node) !== undefined && node !== body) return;
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const name = node.expression.name.text;
+      const [first, second] = node.arguments;
+      if ((name === 'slice' || name === 'substring' || name === 'substr') && node.arguments.length === 1
+        && first && ts.isPropertyAccessExpression(first) && first.name.text === 'length') {
+        prefixes.add(settleString(ts, first.expression, initializerOf, literalOf) ?? UNSETTLED);
+      } else if (name === 'replace' && first && second && !ts.isRegularExpressionLiteral(first)
+        && settleString(ts, second, initializerOf, literalOf) === '') {
+        prefixes.add(settleString(ts, first, initializerOf, literalOf) ?? UNSETTLED);
+      }
+    }
+    ts.forEachChild(node, strip);
+  };
+  strip(body);
+  if (prefixes.size !== 1) return undefined;
+  const [prefix] = [...prefixes];
+  if (!prefix.startsWith('/') || prefix.length < 2) return undefined;
+  return prefix.split('/').filter(Boolean).every(segment => LITERAL_SEGMENT.test(segment)) ? prefix : undefined;
 }
 
 /**
@@ -838,6 +887,18 @@ function readRoutes(
     ts.forEachChild(node, names);
   };
   names(fn.body);
+  // And the tables it states in place, bound to no name: a returned array or
+  // object literal (`return [ … ]`), or an arrow's expression body.
+  const inPlace = (value: TsExpression): void => {
+    for (const route of tableRoutes(ts, value, initializerOf, literalOf)) routes.set(routeKey(route), route);
+  };
+  if (!ts.isBlock(fn.body)) inPlace(fn.body as TsExpression);
+  const returns = (node: TsNode): void => {
+    if (namedFunctionNameOf(ts, node) !== undefined) return;
+    if (ts.isReturnStatement(node) && node.expression) inPlace(node.expression);
+    ts.forEachChild(node, returns);
+  };
+  returns(fn.body);
   return routes;
 }
 
@@ -949,6 +1010,8 @@ interface ExactFacts {
    * empty entry is never written.
    */
   functionRoutes: Map<string, Map<string, RouteFact>>;
+  /** The one prefix each named function strips off a path, by name (see SourceFileFacts.routePrefixes). */
+  routePrefixes: Map<string, string>;
   /**
    * One entry per BODY that completes later — declared `async`, or annotated
    * to return a Promise — under its function's name, in the order the bodies
@@ -1436,6 +1499,48 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // of `arguments`. Every occurrence counts as a use but a member name read off
   // a value, so a shadowing local keeps the parameter judged — the only safe
   // way for this reading to be wrong.
+  /**
+   * The member names and literal keys a body reads off one name, through
+   * every link of a chain, and the property names a destructuring of such a
+   * read binds — `req.params.code`, `req.query['limit']`, `const { code } =
+   * req.params`. Bounded, sorted, deduplicated.
+   */
+  const readsOff = (body: import('typescript').Node, name: string): string[] => {
+    const out = new Set<string>();
+    const visit = (node: import('typescript').Node): void => {
+      if (out.size >= 64) return;
+      if (ts.isIdentifier(node) && node.text === name) {
+        const parent = node.parent;
+        const memberName = !!parent && ((ts.isPropertyAccessExpression(parent) && parent.name === node)
+          || (ts.isPropertyAssignment(parent) && parent.name === node));
+        if (!memberName) {
+          let at: import('typescript').Node = node;
+          for (;;) {
+            const up = at.parent;
+            if (!up) break;
+            if (ts.isParenthesizedExpression(up) || ts.isNonNullExpression(up) || ts.isAsExpression(up)) { at = up; continue; }
+            if (ts.isPropertyAccessExpression(up) && up.expression === at) { out.add(up.name.text); at = up; continue; }
+            if (ts.isElementAccessExpression(up) && up.expression === at && ts.isStringLiteralLike(up.argumentExpression)) {
+              out.add(up.argumentExpression.text);
+              at = up;
+              continue;
+            }
+            if (ts.isVariableDeclaration(up) && up.initializer === at && ts.isObjectBindingPattern(up.name)) {
+              for (const element of up.name.elements) {
+                const key = element.propertyName ?? element.name;
+                if (ts.isIdentifier(key) || ts.isStringLiteral(key)) out.add(key.text);
+              }
+            }
+            break;
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(body);
+    return [...out].sort();
+  };
+
   const declaredParameters = (fn: import('typescript').Node): ParameterFact[] => {
     const parameters = (fn as import('typescript').SignatureDeclarationBase).parameters ?? [];
     const used = new Set<string>();
@@ -1459,6 +1564,16 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       if (ts.isIdentifier(parameter.name)) {
         fact.name = parameter.name.text;
         if (!used.has(fact.name) && !used.has('arguments')) fact.unused = true;
+        else if (body) {
+          const read = readsOff(body, fact.name);
+          if (read.length > 0) fact.reads = read;
+        }
+      }
+      // A platform transport class named outright — resolved or not — is a
+      // handle whatever serves the method hands it, never a domain record.
+      if (parameter.type && ts.isTypeReferenceNode(parameter.type)) {
+        const named = ts.isIdentifier(parameter.type.typeName) ? parameter.type.typeName.text : parameter.type.typeName.right.text;
+        if (TRANSPORT_TYPES.has(named)) fact.transport = true;
       }
       // The annotation as WRITTEN, whitespace-normalized so a signature broken
       // over lines reads as the one type it is. An unannotated parameter
@@ -1886,13 +2001,25 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // at least one route gets an entry: "no entry" is how a reader tells a
   // router it could not read from one it read, so an empty map is never
   // written.
-  const fileValues = fileInitializer(ts, topLevelConstants(ts, sf));
+  const constants = topLevelConstants(ts, sf);
+  const fileValues = fileInitializer(ts, constants);
+  const routePrefixes = new Map<string, string>();
   for (const { name, node } of routeBodies) {
+    const body = (node as { body?: import('typescript').Node }).body;
+    const prefix = body ? strippedAnywhere(ts, body, fileValues, undefined) : undefined;
+    if (prefix !== undefined) routePrefixes.set(name, prefix);
     const routes = readRoutes(ts, node as import('typescript').Node & { body?: import('typescript').Node }, fileValues);
     if (routes.size === 0) continue;
     const known = functionRoutes.get(name) ?? new Map<string, RouteFact>();
     for (const [key, route] of routes) known.set(key, route);
     functionRoutes.set(name, known);
+  }
+  // A route table bound to a top-level const, read in its own right: what a
+  // router linkage naming the table rather than a function reads.
+  for (const [name, initializer] of constants) {
+    if (functionRoutes.has(name)) continue;
+    const table = tableRoutes(ts, initializer, fileValues, undefined);
+    if (table.length > 0) functionRoutes.set(name, new Map(table.map(route => [routeKey(route), route])));
   }
 
   // The members a schema expression composes, read off this file alone: the
@@ -1994,7 +2121,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -2539,7 +2666,7 @@ function resolveCalls(
   projectRoot: string,
 ): CheckerReading {
   const out = new Map<string, ResolvedCallFact[]>();
-  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), crossProjectImports: new Map() };
+  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
   const options = checkerOptions(ts, projectRoot);
   const settings = JSON.stringify(options);
   const host = ts.createCompilerHost(options, true);
@@ -2559,7 +2686,7 @@ function resolveCalls(
   try {
     program = ts.createProgram({ rootNames: [...files.keys()], options, host });
   } catch {
-    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), crossProjectImports: new Map() };
+    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
   }
   const checker = program.getTypeChecker();
   const assignable = (checker as unknown as {
@@ -3083,6 +3210,38 @@ function resolveCalls(
     return fact;
   };
 
+  /**
+   * A member read by NAME in a value position — taken, not invoked on the
+   * spot — off a receiver the code made opaque (any or unknown at any link of
+   * its chain, a cast to either, an untyped parameter, a function result typed
+   * any), where the checker names no declaration for it: `const f = (store as
+   * any).save; f(x)`. Recorded unresolved under the member's name, with the
+   * classes the receiver was before any cast where the checker recorded them,
+   * so a rule fails it closed against a write of that name however the value
+   * is invoked later. A plain property of an identifier (`x.y` with x a
+   * module or a namespace) never lands here: the receiver must be opaque.
+   */
+  const opaqueReferenceOf = (node: import('typescript').Node): ResolvedCallFact | undefined => {
+    if (!ts.isPropertyAccessExpression(node) || !isValuePosition(node)) return undefined;
+    const symbol = symbolOf(node.name);
+    if (symbol?.declarations?.length) return undefined;
+    const receiver = node.expression;
+    if (!(isOpaque(checker.getTypeAtLocation(receiver)) || rootOpaque(receiver))) return undefined;
+    const fact: ResolvedCallFact = {
+      name: node.name.text,
+      written: node.getText().replace(/\s+/g, ' ').slice(0, 80),
+      targets: [],
+      reference: true,
+      unresolved: true,
+    };
+    const receivers = receiversOf(receiver, node.name.text);
+    if (receivers.length > 0) fact.receivers = receivers;
+    const where = enclosingOf(node);
+    if (where.name !== undefined) fact.enclosing = where.name;
+    if (where.container !== undefined) fact.enclosingContainer = where.container;
+    return fact;
+  };
+
   const resolveFile = (sf: import('typescript').SourceFile): ResolvedCallFact[] => {
     const calls: ResolvedCallFact[] = [];
     const visit = (node: import('typescript').Node): void => {
@@ -3091,7 +3250,8 @@ function resolveCalls(
           const fact = resolveOne(node);
           if (fact) calls.push(fact);
         } else if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isIdentifier(node)) {
-          const fact = referenceOf(node) ?? (ts.isElementAccessExpression(node) ? computedAccessOf(node) : undefined);
+          const fact = referenceOf(node)
+            ?? (ts.isElementAccessExpression(node) ? computedAccessOf(node) : opaqueReferenceOf(node));
           if (fact) calls.push(fact);
         }
       } catch {
@@ -3171,8 +3331,9 @@ function resolveCalls(
   }
 
   // ---- what the checker settles beyond the calls, for each root file ----
-  const kinds = new Map<string, Array<Array<ParameterKind | undefined>>>();
+  const kinds = new Map<string, Array<Array<ParameterReading>>>();
   const routes = new Map<string, Map<string, RouteFact[]>>();
+  const prefixes = new Map<string, Map<string, string>>();
   const crossProjectImports = new Map<string, CrossProjectImportFact[]>();
   const literalOf: LiteralOf = (node) => {
     const type = checker.getTypeAtLocation(node);
@@ -3203,31 +3364,54 @@ function resolveCalls(
   for (const [absolute, key] of files) {
     const sf = program.getSourceFile(absolute);
     if (!sf) continue;
-    const fileKinds: Array<Array<ParameterKind | undefined>> = [];
+    const fileKinds: Array<Array<ParameterReading>> = [];
     const fileRoutes = new Map<string, Map<string, RouteFact>>();
+    const filePrefixes = new Map<string, string>();
     const visit = (node: import('typescript').Node): void => {
       const name = namedFunctionNameOf(ts, node);
       const body = (node as { body?: import('typescript').Node }).body;
       if (name !== undefined && body) {
         fileKinds.push(((node as import('typescript').SignatureDeclarationBase).parameters ?? []).map((parameter) => {
           try {
-            return kindOf(checker.getTypeAtLocation(parameter)) ?? platformKind(parameter.type);
+            const type = checker.getTypeAtLocation(parameter);
+            const kind = kindOf(type) ?? platformKind(parameter.type);
+            const reading: ParameterReading = {};
+            if (kind) reading.kind = kind;
+            if (kind === 'object') {
+              const props = checker.getPropertiesOfType(checker.getNonNullableType(type)).map(p => p.getName());
+              if (props.length > 0) reading.fields = props.slice(0, 200);
+            }
+            return reading;
           } catch {
-            return undefined;
+            return {};
           }
         }));
         // Both idioms compare a request's method — a guard `<request>.method`,
         // a table entry's `method` / `verb` key matched against it — so a
         // function that never says so is no router, and is not re-read.
-        if (/method|verb/i.test(body.getText(sf))) try {
+        if (ROUTER_TEXT.test(body.getText(sf))) try {
           const read = readRoutes(ts, node as import('typescript').Node & { body?: import('typescript').Node }, initializerOf, literalOf);
           if (read.size > 0) {
             const known = fileRoutes.get(name) ?? new Map<string, RouteFact>();
             for (const [routeKeyText, route] of read) known.set(routeKeyText, route);
             fileRoutes.set(name, known);
           }
+          const prefix = strippedAnywhere(ts, body, initializerOf, literalOf);
+          if (prefix !== undefined) filePrefixes.set(name, prefix);
         } catch {
           // a router the checker cannot settle keeps the syntactic reading
+        }
+      }
+      // A route table bound to a top-level const, read in its own right: what
+      // a router linkage naming the table rather than a function reads.
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+        && node.parent && ts.isVariableDeclarationList(node.parent) && node.parent.parent && ts.isVariableStatement(node.parent.parent)
+        && node.parent.parent.parent === sf) {
+        try {
+          const table = tableRoutes(ts, node.initializer, initializerOf, literalOf);
+          if (table.length > 0) fileRoutes.set(node.name.text, new Map(table.map(route => [routeKey(route), route])));
+        } catch {
+          // a table the checker cannot settle keeps the syntactic reading
         }
       }
       ts.forEachChild(node, visit);
@@ -3235,6 +3419,7 @@ function resolveCalls(
     visit(sf);
     kinds.set(key, fileKinds);
     routes.set(key, new Map([...fileRoutes].map(([name, read]) => [name, [...read.values()]])));
+    if (filePrefixes.size > 0) prefixes.set(key, filePrefixes);
 
     // An import from ANOTHER project's source that resolves to nothing.
     const broken: CrossProjectImportFact[] = [];
@@ -3268,19 +3453,32 @@ function resolveCalls(
           return false;
         }
       };
-      if (clause?.name && unresolvedName(clause.name)) {
-        broken.push({ specifier, name: 'default', project, line, typeOnly: clause.isTypeOnly });
+      // What the import DOES reach, too: the module of the other project it
+      // lands in, relative to that project's root, under each name it binds.
+      // Whether that is the other project's published surface or its
+      // internals is the rule's question, which knows what it exports.
+      const module = pathKey(path.relative(home, path.resolve(resolved)));
+      const reached = (name: string | undefined, typeOnly: boolean): void => {
+        broken.push({ specifier, ...(name !== undefined ? { name } : {}), project, line, typeOnly, resolved: true, module });
+      };
+      if (clause?.name) {
+        if (unresolvedName(clause.name)) broken.push({ specifier, name: 'default', project, line, typeOnly: clause.isTypeOnly });
+        else reached(clause.name.text, clause.isTypeOnly);
       }
       if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
         for (const element of clause.namedBindings.elements) {
-          if (!unresolvedName(element.name)) continue;
-          broken.push({ specifier, name: (element.propertyName ?? element.name).text, project, line, typeOnly: clause.isTypeOnly || element.isTypeOnly });
+          const name = (element.propertyName ?? element.name).text;
+          if (unresolvedName(element.name)) broken.push({ specifier, name, project, line, typeOnly: clause.isTypeOnly || element.isTypeOnly });
+          else reached(name, clause.isTypeOnly || element.isTypeOnly);
         }
+      } else if (clause?.namedBindings) {
+        reached('*', clause.isTypeOnly);
       }
+      if (!clause) reached(undefined, false);
     }
     if (broken.length > 0) crossProjectImports.set(key, broken);
   }
-  return { calls: out, imports, kinds, routes, crossProjectImports };
+  return { calls: out, imports, kinds, routes, prefixes, crossProjectImports };
 
   /**
    * The kind of a parameter annotated with a platform class the run's fixed
@@ -3332,14 +3530,32 @@ const PLATFORM_OBJECT_TYPES = new Set([
   'AbortSignal', 'IncomingMessage', 'ServerResponse', 'Http2ServerRequest', 'Http2ServerResponse', 'Socket', 'Buffer',
 ]);
 
+/**
+ * The transport classes a handler is handed — a request, a response, a
+ * socket, a URL and its parts — by the names the platform and the common
+ * HTTP frameworks give them: a handle, never a domain record.
+ */
+const TRANSPORT_TYPES = new Set([
+  'URL', 'URLSearchParams', 'Request', 'Response', 'Headers', 'IncomingMessage', 'ServerResponse',
+  'Http2ServerRequest', 'Http2ServerResponse', 'Socket', 'FastifyRequest', 'FastifyReply', 'NextRequest', 'NextResponse',
+]);
+
+/** What a type checker settles about one parameter: the kind of value it takes, and an object's property names. */
+interface ParameterReading {
+  kind?: ParameterKind;
+  fields?: string[];
+}
+
 /** What the type checker settles over the run's files beyond their calls. */
 interface CheckerReading {
   calls: Map<string, ResolvedCallFact[]>;
   imports: Map<string, ModuleImports>;
   /** Per root file, the parameter kinds of each named function-like with a body, in the order the walk meets them. */
-  kinds: Map<string, Array<Array<ParameterKind | undefined>>>;
+  kinds: Map<string, Array<Array<ParameterReading>>>;
   /** Per root file, the routes each named function-like serves, read with the checker settling every value. */
   routes: Map<string, Map<string, RouteFact[]>>;
+  /** Per root file, the one prefix each named function strips off a path, settled by the checker. */
+  prefixes: Map<string, Map<string, string>>;
   /** Per root file, its imports from another project's source that resolve to nothing. */
   crossProjectImports: Map<string, CrossProjectImportFact[]>;
 }
@@ -3389,6 +3605,10 @@ export function buildCodeModel(
   for (const impl of implementations) {
     declaredPaths.push(...implementationSourceFiles(impl));
     if (impl.simPath) declaredPaths.push(impl.simPath);
+    // A router linkage naming a module of its own (a central routes.ts) is a
+    // file route coverage reads, whatever spec otherwise names it.
+    const routerFile = impl.router ? routerLinkage(impl.router).file : undefined;
+    if (routerFile) declaredPaths.push(routerFile);
   }
   for (const type of types) declaredPaths.push(...typeSourceFiles(type));
   declaredPaths.push(...rootFiles);
@@ -3468,6 +3688,7 @@ export function buildCodeModel(
             typeShapes: Object.fromEntries(facts.typeShapes),
             functionParams: Object.fromEntries(facts.functionParams),
             functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),
+            ...(facts.routePrefixes.size > 0 ? { routePrefixes: Object.fromEntries(facts.routePrefixes) } : {}),
             asyncFunctions: [...facts.asyncFunctions],
             enumValues: Object.fromEntries(facts.enumValues),
             aliasTypes: Object.fromEntries(facts.aliasTypes),
@@ -3523,12 +3744,18 @@ export function buildCodeModel(
       if (sites && settled && sites.length === settled.length) {
         sites.forEach((site, index) => {
           if (settled[index].length !== site.params.length) return;
-          site.params.forEach((param, at) => { const kind = settled[index][at]; if (kind) param.kind = kind; });
+          site.params.forEach((param, at) => {
+            const reading = settled[index][at];
+            if (reading.kind) param.kind = reading.kind;
+            if (reading.fields) param.fields = reading.fields;
+          });
         });
       }
       // The routes re-read with the checker settling every compared value.
       const read = reading.routes.get(facts.path);
       if (read && read.size > 0) facts.functionRoutes = { ...(facts.functionRoutes ?? {}), ...Object.fromEntries(read) };
+      const stripped = reading.prefixes.get(facts.path);
+      if (stripped && stripped.size > 0) facts.routePrefixes = { ...(facts.routePrefixes ?? {}), ...Object.fromEntries(stripped) };
       const broken = reading.crossProjectImports.get(facts.path);
       if (broken) facts.crossProjectImports = broken;
     }

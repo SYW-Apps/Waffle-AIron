@@ -451,7 +451,10 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
     members.forEach((member, j) => {
       const isLast = ownSubs.length + j === total - 1;
       const form = member.mountForm === 'mount' ? mark.draft(' [mount form]') : '';
-      const label = `[Project] ${member.mountAlias ?? member.namespace} (${member.id ?? 'no id'})`;
+      // A member in a `../` sibling checkout is composed like a contained one; its label says where it is stored.
+      const top = family.nodes.find((n) => n.namespace === '')?.directory;
+      const sibling = top !== undefined && path.relative(top, member.directory).startsWith('..') ? ` · ${storageOf('path', member.directory, undefined)}` : '';
+      const label = `[Project] ${member.mountAlias ?? member.namespace} (${member.id ?? 'no id'})${sibling}`;
       // Step 9: the member's approval state and pin — read, never recomputed.
       const approval = approvalTag(options.approvals?.find((a) => a.key === member.namespace));
       output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${form}${approval}\n`;
@@ -494,7 +497,8 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
           : ` (approved under wairon ${own.release.from}; the new release finds ${own.release.count ?? 0} issue(s) in the approved design)`)
       : '';
     const ignored = own.partsIgnored !== undefined ? ` (notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them)` : '';
-    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}${ignored}\n`;
+    const stamp = own.stampProblem !== undefined ? ` (notice: ${own.stampProblem}; \`wairon lock\` replaces the stamp)` : '';
+    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}${ignored}${stamp}\n`;
   }
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

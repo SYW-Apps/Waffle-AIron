@@ -115,6 +115,24 @@ methods:
       reference from one target to another is not listed: it leaves with both.
     sourcePath: src/models/specs.ts
     symbol: specIndexReferencesTo
+  - name: methodReferencesTo
+    signature: 'methodReferencesTo(component: string, methods: list<string>): list<SpecReference>'
+    params:
+      - name: component
+        type: string
+        description: The component whose contract methods are removed
+      - name: methods
+        type: list<string>
+        description: The method names removed from its contracts
+    returns: list<SpecReference>
+    description: >-
+      Every reference a spec holds to one of the named contract methods of the component, each with
+      its position: a call, register or dispatch narrative step naming component and method, a
+      declared call `<component>.<method>`, a dispatch-table binding, a subsystem lifecycle
+      entrypoint, and a contract method taking its signature from it (signatureFrom). Each target is
+      the component's contract that declares the method. Pure.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexMethodReferences
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-08T19:06:18.980Z'
+updatedAt: '2026-10-09T00:25:15.832Z'

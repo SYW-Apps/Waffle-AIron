@@ -209,6 +209,33 @@ methods:
       they can name no input and carry no approval over. Pure.
     sourcePath: src/models/lock.ts
     symbol: gatePartsProblem
+  - name: stampProblem
+    signature: 'stampProblem(running: string): string?'
+    params:
+      - name: running
+        type: string
+        description: The running wairon release
+    returns: string?
+    description: >-
+      The clause every surface reports for a release stamp this wairon cannot stand behind, or null
+      when the stamp is a valid wairon version no newer than the running release: no stamp at all, a
+      stamp that is no wairon version ("banana"), or one newer than the running release ("9.9.9").
+      Reported whether or not the identity still matches — the identity decides the approval, the
+      stamp only says which release last verified it, so a stamp nobody can stand behind is named,
+      never kept silently — and `wairon lock` replaces it with the running release. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: releaseStampProblem
+  - name: missingTreeSentence
+    signature: 'missingTreeSentence(): string?'
+    returns: string?
+    description: >-
+      The sentence for a record that approved spec files while the tree it approved is gone — no
+      `.wai/specs` L0 and no spec file below it: how many spec files the approval records, that a
+      project with an approval on record has opted in, so an absent tree is a deleted design and
+      never "no tree", and the fix (restore it from version control; to retire the design, delete
+      .wai/lock.json in the same change). Null when the record records no spec file. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: missingTreeSentence
 componentClass: lock_store
 invariants:
   - id: single-record-per-project
@@ -218,4 +245,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-08T18:51:28.588Z'
+updatedAt: '2026-10-09T00:16:43.452Z'

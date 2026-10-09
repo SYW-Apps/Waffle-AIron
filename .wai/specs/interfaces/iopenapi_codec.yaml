@@ -11,15 +11,17 @@ methods:
       with uniqueItems set, additionalProperties map, a null-admitting schema `T?`, a oneOf of $refs
       a union, string formats date, date-time and duration their primitives, a contentEncoding
       base64 string bytes). An operation's returns are read from its success response — the first
-      2xx in code order, one with no JSON body (a 204) reading void — and, when it also declares a
-      `default`, 4XX or 5XX response with a JSON body, as `result<T, E>` with E that body's type, so
-      the error response a wairon document renders round-trips. A component carrying
-      `x-wairon-signature` decodes back into a signature type with its params and returns, a named
-      component of type string carrying `enum` into an enum type, a named component whose schema is
-      one primitive's (no properties) into a named scalar holding it, so a wairon-rendered document
-      round-trips; an inline anonymous enum on a parameter has no name to become a type and is read
-      as string with a description listing its values; any other component is a data type. An http
-      security scheme `custom` reads back as a custom auth.
+      2xx (else 3xx) in code order, one with no JSON body (a 204, a redirect) reading void — and,
+      when it also declares a `default`, 4XX or 5XX response with a JSON body, as `result<T, E>`
+      with E that body's type, so the error response a wairon document renders round-trips; a
+      success code other than the convention the export would pick is kept as the endpoint's
+      `status`. A component carrying `x-wairon-signature` decodes back into a signature type with
+      its params and returns, a named component of type string carrying `enum` into an enum type, a
+      named component whose schema is one primitive's (no properties) into a named scalar holding
+      it, so a wairon-rendered document round-trips; an inline anonymous enum on a parameter has no
+      name to become a type and is read as string with a description listing its values; any other
+      component is a data type, each property's description kept on its field. An http security
+      scheme `custom` reads back as a custom auth.
     signature: 'fromOpenApi(document: string, projectName: string): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
@@ -46,24 +48,33 @@ methods:
       path placeholder, `in: path`, required; else `in: query` for a verb without a body, and for
       POST, PUT and PATCH the JSON body: the one object-typed param left IS the body (named under
       x-wairon-body-param), as a client sends it, and several params are the properties of a body
-      object. Each operation answers the verb's conventional success code — 204 with no content when
-      the method returns nothing (void, async void, a result whose success type is void), else 201
-      Created for a POST that creates — a method whose effect is `lifecycle`, or one whose effect is
-      undeclared, `write` or `io` and whose name says it creates (createOrder, placeOrder, signUp);
-      never a method whose effect is `none` or `read` — and 200 otherwise (a POST that acts on an
-      existing resource, a cancel or an archive, answers 200) — and a method returning `result<T,
-      E>` also answers a `default` error response whose body is E's schema. A `custom` auth scheme
-      becomes an apiKey scheme only where the design names its header or parameter (auth.name, with
-      auth.in, default header); naming none, it is an http scheme `custom` carrying the design's
-      description, and no header name is invented. The type closure becomes JSON-Schema components,
-      every type read as its parsed canonical expression, never by pattern (primitives and formats,
-      list, set, map, `T?` admitting null, a union oneOf its $refs, `async T` as T, a named type a
-      $ref, an enum a string component with its values, a named scalar the schema of what it holds;
-      a non-canonical position unconstrained with a description naming it). A type named
-      `alias::name` resolves from that external's pinned snapshot (or that member project's surface
-      as it exports it now) in the context and is rendered as `<alias>.<id>`, with the types it
-      names inside its own producer's closure; without a pin it reads `Unresolved type`, never an
-      invented shape. A signature type is a function type with no JSON form: no `type` constraint, a
+      object. A param or field is required unless it is optional or its type is `T?` (T or no value:
+      it may be left out, and admits null). Each operation answers the success code its endpoint
+      states (`status`: 202 Accepted, a 3xx redirect with a Location header and no body, a 201 for a
+      workflow verb that files something) — the design's own word — else the verb's conventional
+      one: 204 with no content when the method returns nothing (void, async void, a result whose
+      success type is void), else 201 Created for a POST that creates — a method whose effect is
+      `lifecycle`, or one whose effect is undeclared, `write` or `io` and whose name says it creates
+      (createOrder, placeOrder, signUp); never a method whose effect is `none` or `read` — and 200
+      otherwise (a POST that acts on an existing resource, a cancel or an archive, answers 200) —
+      and a method returning `result<T, E>` also answers a `default` error response whose body is
+      E's schema (a method that declares no failure type answers no error response: the design
+      states none). A `custom` auth scheme becomes an apiKey scheme only where the design names its
+      header or parameter (auth.name, with auth.in, default header); naming none, it is an http
+      scheme `custom` carrying the design's description, and no header name is invented. The types
+      the document's operations reach, transitively, become JSON-Schema components — exactly one per
+      type and none it never references — every type read as its parsed canonical expression, never
+      by pattern (primitives and formats, list, set, map, `T?` admitting null, a union oneOf its
+      $refs, `async T` as T, a named type a $ref, an enum a string component with its values, a
+      named scalar the schema of what it holds, a field's description carried on its property; a
+      non-canonical position unconstrained with a description naming it). A type named `alias::name`
+      resolves from that external's pinned snapshot (or that member project's surface as it exports
+      it now) in the context; a type is identified by the project that owns it and its id there, so
+      one reached under two aliases, under a member's project id, or through another producer's
+      closure is ONE component, keyed `<alias>.<id>` by the first alias the context holds it under;
+      every key matches `^[a-zA-Z0-9._-]+$` (a qualified id's `::` written as `.`), and every $ref
+      names a key the document holds. Without a pin it reads `Unresolved type`, never an invented
+      shape. A signature type is a function type with no JSON form: no `type` constraint, a
       description saying so, and x-wairon-signature holding its params and returns. info.version is
       the context's declared version, else the snapshot's, else 0.0.0.
     signature: >-
@@ -118,4 +129,4 @@ methods:
         type: PortalAuth?
 status: complete
 createdAt: '2026-07-10T23:13:57.188Z'
-updatedAt: '2026-10-08T19:07:14.627Z'
+updatedAt: '2026-10-09T00:18:43.154Z'

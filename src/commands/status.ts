@@ -150,7 +150,8 @@ export async function runStatus(options: StatusOptions = {}, listAll = false): P
   // fact beside the sentence.
   if (lock.text.trim()) {
     logger.blank();
-    // With --all, every moved spec instead of the first few and a count.
+    // With --all, every moved spec instead of the first forty and a count
+    // (the verdict names the command when it cuts the list).
     const lines = lock.text.trim().split('\n');
     const text = listAll && lock.moved && lock.moved.length > 0
       ? [lines[0], ...lock.moved.map((p) => `  ${p}`), ...lines.slice(1).filter((l) => !l.startsWith('  '))].join('\n')
@@ -158,7 +159,6 @@ export async function runStatus(options: StatusOptions = {}, listAll = false): P
     // On stdout like the report above it, so the two never interleave.
     if (lock.drifted) console.log(chalk.yellow(`⚠  ${text}`));
     else logger.info(text);
-    if (!listAll && lock.moved && lock.moved.length > 5) logger.info(chalk.gray('`wairon status --all` lists every spec that moved.'));
   }
   // Steps 10-11: the externals compared with their live producers, offline and
   // advisory — the same pass plain `validate` appends. An Externals section

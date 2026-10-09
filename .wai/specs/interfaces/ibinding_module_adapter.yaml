@@ -14,13 +14,25 @@ methods:
       source order — ES module exports: exported functions (and `declare function`s) with their
       parameter names; exported interfaces, classes, object type aliases and enums with their
       members (methods with their parameter names, data fields by name with the type they are
-      declared with; a function-typed field counts as a method); and CommonJS exports: `exports.X =
-      …` / `module.exports.X = …` and each property of `module.exports = { … }`, a function or arrow
-      function read as a function and an object literal as an object of methods and fields — each
-      with the line it starts on and the `alias::name` (or `alias::name.method`) its leading doc
-      comment names. An export form it meets but cannot see into (`module.exports = require(…)`, an
-      export of a bare identifier) is listed in the module's unreadForms. Never throws for a file: a
-      file it cannot read is answered with its status.
+      declared with; a function-typed field counts as a method); a TypeScript `export = X` / `export
+      = { X, … }` (a `.d.ts` one too) read as the CommonJS forms below; and CommonJS exports in
+      every shape a module writes them: `exports.X = …` / `module.exports.X = …`, each property of
+      `module.exports = { … }` (a shorthand `{ X }` and a `Y: X` included), and the whole module
+      `module.exports = class X { … }` / `= function X(…)` / `= X` — a function or arrow function
+      read as a function, an object literal as an object of methods and fields, a class as a class,
+      and a value that is a bare identifier read through the declaration of that name in the module
+      itself (a class, function, interface, or a const/let/var holding a class, function or object
+      literal), under the name it is exported by; and each JSDoc `@typedef` with its `@property`
+      lines, read as an object type with those fields. In a class or an object literal a member
+      whose name starts with `_` is private by convention and not part of the surface, like a
+      `private` or `#` member. Each declaration carries the line it starts on and the `alias::name`
+      (or `alias::name.method`) its leading doc comment names — a property of `module.exports = { …
+      }` with no tag of its own takes the tag of the `module.exports` assignment, so an object
+      tagged as a whole is compared member by member against what its tag names; an export of a name
+      declared in the module takes the tag of that declaration when it has none of its own. An
+      export form it meets but cannot see into (`module.exports = require(…)`, an identifier the
+      module does not declare, a call) is listed in the module's unreadForms. Never throws for a
+      file: a file it cannot read is answered with its status.
     signature: 'readBindingModules(paths: list<string>, projectRoot: string): list<BindingModule>'
     returns: list<BindingModule>
     params:
@@ -33,4 +45,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-10-08T08:21:44.643Z'
-updatedAt: '2026-10-08T18:48:36.003Z'
+updatedAt: '2026-10-09T00:21:42.115Z'

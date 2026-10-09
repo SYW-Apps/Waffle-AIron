@@ -447,7 +447,9 @@ function printFiles(planned: MigrationPlan): void {
 async function confirmMigration(verb: string, options: MigrationCommandOptions): Promise<boolean> {
   if (options.yes) return true;
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    logger.warn(`No terminal to confirm the ${verb} migration — re-run with --yes to apply it. Nothing was written.`);
+    logger.error(`No terminal to confirm the ${verb} migration — re-run with --yes to apply it. Nothing was written.`);
+    // Not applied, and nobody declined it: a script reading the exit code must not read success.
+    process.exitCode = 1;
     return false;
   }
   const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([

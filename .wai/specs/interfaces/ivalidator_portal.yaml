@@ -260,14 +260,12 @@ methods:
       the verdict holds an error.
     signature: >-
       introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
-      CandidateOptions): CandidateVerdict
+      CandidateOptions, others?: list<ComponentSpec>): CandidateVerdict
     returns: CandidateVerdict
     params:
       - name: kind
         type: WritableSpecKind
-        description: >-
-          The kind of spec written; a kind other than component or interface answers an empty
-          verdict
+        description: The kind of spec written
       - name: candidate
         type: ComponentSpec | InterfaceSpec
         description: The spec about to be written, merged and carried
@@ -275,6 +273,10 @@ methods:
         type: CandidateOptions
         description: Rules config, project type and loaded packs
         optional: true
+      - name: others
+        type: list<ComponentSpec>
+        description: The other components the same write changes
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T18:56:34.442Z'
+updatedAt: '2026-10-09T00:30:21.137Z'

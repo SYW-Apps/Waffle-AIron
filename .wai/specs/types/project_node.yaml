@@ -73,7 +73,8 @@ fields:
     type: list<ResolvedExternal>
     description: >-
       The project's declared externals, each bound to its producer, followed by its referenced
-      project members (a `../`, git or hosted source; role member) — a referenced project is judged
+      project members (a git or hosted source; role member (a `../` sibling member is a node of the
+      family, composed live like a contained one — round 8)) — a referenced project is judged
       against its pin exactly as an external is, so it is bound the same way. Empty when there are
       none.
     optional: false
@@ -108,4 +109,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-10-06T18:01:37.702Z'
+updatedAt: '2026-10-09T01:02:45.848Z'

@@ -7,6 +7,7 @@ import { registerBuiltinRules, registerPackRules, knownIssueCodes, specScopedRul
 import { entrypointDepsRule } from './doctrine/entrypoint-dependencies.js';
 import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
 import { portalsRule } from './doctrine/portal-endpoints.js';
+import { subsystemBoundaryDepsRule } from './doctrine/subsystem-boundary-dependencies.js';
 import { scanAllSpecs } from '../adapters/validator-core.js';
 
 // ---------------------------------------------------------------------------
@@ -158,16 +159,31 @@ const INTRODUCED_CODES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * spec_validator.introducedFindings — the doctrine edges and route
- * collisions writing `candidate` (a component or a contract) would introduce
- * into the bound tree, split by severity: an error refuses the write, a code
- * the project tuned down rides along as a notice. Any other kind answers an
+ * The boundary codes judged on an edge that leaves its subsystem. Fixed when
+ * the edge's target is not a Portal — no trustedLink and no export makes a
+ * Store or an Orchestrator another subsystem's front door — and curable when it
+ * is one (a client Adapter, a trustedLink on the source, the target's export).
+ */
+const BOUNDARY_CODES: ReadonlySet<string> = new Set([
+  'CROSS_SUBSYSTEM_NON_ADAPTER',
+  'CROSS_SUBSYSTEM_PRIVATE_ACCESS',
+  'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
+]);
+
+/**
+ * spec_validator.introducedFindings — the doctrine edges, the cross-subsystem
+ * edges into a non-Portal and the route collisions writing `candidate` (a
+ * component or a contract), together with the `others` the same write changes,
+ * would introduce into the bound tree, split by severity: an error refuses the
+ * write, a code the project tuned down — and a curable boundary finding on an
+ * edge into a Portal — rides along as a warning. Any other kind answers an
  * empty verdict.
  */
 export function introducedFindings(
   kind: string,
   candidate: ComponentSpec | InterfaceSpec,
   opts: CandidateOptions = {},
+  others: ComponentSpec[] = [],
 ): CandidateVerdict {
   if (kind !== 'component' && kind !== 'interface') return { errors: [], warnings: [], notices: [] };
   // Step 1: the bound tree, its stored version of the candidate included.
@@ -179,7 +195,7 @@ export function introducedFindings(
     const at = list.findIndex((s) => s.id === spec.id);
     return at < 0 ? [...list, spec] : list.map((s, i) => (i === at ? spec : s));
   };
-  // Steps 4-8: both contexts, the edge and route rules over each.
+  // Steps 4-9: both contexts, the edge, boundary and route rules over each.
   const run = (components: ComponentSpec[], interfaces: InterfaceSpec[]): ValidationIssue[] => {
     const issues: ValidationIssue[] = [];
     const ctx = buildRuleContext({
@@ -198,21 +214,33 @@ export function introducedFindings(
     });
     entrypointDepsRule.check(ctx);
     dataBlockDepsRule.check(ctx);
+    subsystemBoundaryDepsRule.check(ctx);
     portalsRule.check(ctx);
-    return issues.filter((i) => INTRODUCED_CODES.has(i.code));
+    return issues.filter((i) => INTRODUCED_CODES.has(i.code) || BOUNDARY_CODES.has(i.code));
   };
+  const changed = kind === 'component' ? [candidate as ComponentSpec, ...others] : others;
+  const afterComponents = changed.reduce((list, spec) => swapped(list, spec), index.components);
   const before = run(index.components, index.interfaces);
   const after = kind === 'component'
-    ? run(swapped(index.components, candidate as ComponentSpec), index.interfaces)
-    : run(index.components, swapped(index.interfaces, candidate as InterfaceSpec));
-  // Step 9: only what the candidate adds.
+    ? run(afterComponents, index.interfaces)
+    : run(afterComponents, swapped(index.interfaces, candidate as InterfaceSpec));
+  // Step 10: only what the write adds — a boundary finding refuses only on an
+  // edge into a non-Portal of another subsystem, which no later write cures.
   const key = (i: ValidationIssue): string => `${i.code}|${i.specId ?? ''}|${i.message}`;
   const held = new Set(before.map(key));
   const added = after.filter((i) => !held.has(key(i)));
-  // Step 10.
+  const fixedEdges = afterComponents.flatMap((comp) => (comp.dependsOn ?? []).flatMap((ref) => {
+    const target = afterComponents.find((c) => c.id === ref);
+    return target && target.subsystem !== comp.subsystem && target.componentType !== 'Portal' ? [{ from: comp.id, to: target.id }] : [];
+  }));
+  const fixed = (i: ValidationIssue): boolean => !BOUNDARY_CODES.has(i.code)
+    || fixedEdges.some((e) => e.from === i.specId && i.message.includes(`"${e.to}"`));
+  const curable = added.filter((i) => !fixed(i));
+  const decided = added.filter(fixed);
+  // Step 11.
   return {
-    errors: added.filter((i) => i.severity === 'error'),
-    warnings: added.filter((i) => i.severity === 'warning'),
-    notices: added.filter((i) => i.severity === 'notice'),
+    errors: decided.filter((i) => i.severity === 'error'),
+    warnings: [...decided.filter((i) => i.severity === 'warning'), ...curable.filter((i) => i.severity !== 'notice')],
+    notices: [...decided, ...curable].filter((i) => i.severity === 'notice'),
   };
 }

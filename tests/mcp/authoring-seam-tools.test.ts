@@ -382,18 +382,20 @@ describe('sdd_delete_spec — the deletion as data', () => {
       kind: 'interface', id: 'ishop_portal', deleted: true, dryRun: false,
       removed: [{ kind: 'interface', id: 'ishop_portal' }], references: [],
       testsToRevisit: [{ method: 'pay', symbol: 'pay', imported: ['tests/pay.test.ts'], mentioned: [], indiscriminate: false }],
+      published: [],
     });
     expect(textOf(result)).toBe(
       'Successfully deleted interface spec "ishop_portal".\n\nTESTS TO REVISIT:\n- pay (searched as "pay")\n  imports it: tests/pay.test.ts',
     );
   });
 
-  it('keeps the sentence it always gave for a spec that was not there', async () => {
+  it('refuses a spec that was not there with what it might have meant, never "file may not exist" (r8)', async () => {
     const { call } = await bound();
     await seed(call);
     const result = await call('sdd_delete_spec', { kind: 'component', id: 'nowhere' });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toBe('Error: Spec of kind "component" with ID "nowhere" could not be deleted (file may not exist).');
+    expect(textOf(result)).toMatch(/^Error: spec-missing: no component has the id "nowhere" — nothing was deleted\. Its components: /);
+    expect(textOf(result)).not.toMatch(/may not exist/);
   });
 });
 

@@ -229,6 +229,8 @@ function readMembers(body: string, mode: 'type' | 'class' | 'object'): BindingMe
     if (seg.startsWith('[') || seg.startsWith('(') || seg.startsWith('<') || seg.startsWith('...') || /^new\b/.test(seg)) continue;
     const name = IDENT.exec(seg)?.[0];
     if (name === undefined || name === 'constructor') continue;
+    // A leading underscore is the JavaScript convention for a private member: not the class's or object's surface.
+    if (mode !== 'type' && name.startsWith('_')) continue;
     let i = name.length;
     while (seg[i] === '?' || seg[i] === '!') i++;
     if (accessor) {
@@ -307,10 +309,12 @@ function lineAt(clean: string, index: number): number {
 /**
  * One CommonJS export's value read as a declaration: a function or arrow
  * function is a function, an object literal an object of methods and fields,
- * a class expression a class; null for a value it cannot see into (a
- * require, an identifier, a call).
+ * a class expression a class, and a bare identifier the module's own
+ * declaration of that name (`module.exports = { LegacyClient }` names the
+ * class declared above it); null for a value it cannot see into (a require,
+ * an identifier the module does not declare, a call).
  */
-function commonJsDeclaration(value: string, base: { name: string; line: number; tag?: string }): BindingDeclaration | null {
+function commonJsDeclaration(value: string, base: { name: string; line: number; tag?: string }, clean = '', docs: Scanned['docs'] = []): BindingDeclaration | null {
   const t = value.trim();
   if (t.startsWith('{')) return { ...base, kind: 'object', members: readMembers(t.slice(1, closeOf(t, 0) - 1), 'object') };
   const params = functionValueParams(t);
@@ -320,31 +324,86 @@ function commonJsDeclaration(value: string, base: { name: string; line: number; 
     const open = cls[0].length - 1;
     return { ...base, kind: 'class', members: readMembers(t.slice(open + 1, closeOf(t, open) - 1), 'class') };
   }
+  const ident = /^([A-Za-z_$][\w$]*)\s*$/.exec(t);
+  if (ident && clean) {
+    const local = localDeclaration(clean, docs, ident[1]);
+    const tag = base.tag ?? local?.tag;
+    if (local) return { ...local, name: base.name, ...(tag ? { tag } : {}) };
+  }
   return null;
 }
 
-/** `exports.X =` / `module.exports.X =`, and `module.exports =`. */
+/**
+ * The module's own declaration of a name — `class X`, `function X`,
+ * `interface X`, or a `const`/`let`/`var X =` holding a class, function or
+ * object literal — read as a declaration with its doc comment's tag; null when
+ * the module declares no such name.
+ */
+function localDeclaration(clean: string, docs: Scanned['docs'], name: string): BindingDeclaration | null {
+  const escaped = name.replace(/\$/g, '\\$');
+  const re = new RegExp(`(?<![\\w$.])(?:declare\\s+)?(?:(?:abstract\\s+)?(class)|(?:async\\s+)?(function)\\s*\\*?|(interface)|(?:const|let|var))\\s+${escaped}(?![\\w$])`, 'g');
+  for (const match of clean.matchAll(re)) {
+    const start = match.index ?? 0;
+    const tag = tagBefore(clean, docs, start);
+    const base = { name, line: lineAt(clean, start), ...(tag ? { tag } : {}) };
+    let i = start + match[0].length;
+    if (match[1] || match[3]) {
+      const open = clean.indexOf('{', i);
+      if (open < 0) continue;
+      return { ...base, kind: match[1] ? 'class' : 'interface', members: readMembers(clean.slice(open + 1, closeOf(clean, open) - 1), match[1] ? 'class' : 'type') };
+    }
+    if (match[2]) {
+      i = skipTypeParams(clean, i);
+      i = skipSpace(clean, i);
+      return { ...base, kind: 'function', params: clean[i] === '(' ? paramNames(clean.slice(i + 1, closeOf(clean, i) - 1)) : [], members: [] };
+    }
+    // const / let / var: the value after `=`, past a type annotation.
+    const eq = clean.indexOf('=', i);
+    if (eq < 0) continue;
+    const decl = commonJsDeclaration(valueAt(clean, eq + 1), base);
+    if (decl) return decl;
+  }
+  return null;
+}
+
+/** `exports.X =` / `module.exports.X =`, and `module.exports =` or a TypeScript `export =`. */
 const CJS_NAMED_RE = /(?<![\w$.])(?:module\.)?exports\.([A-Za-z_$][\w$]*)\s*=(?!=)/g;
-const CJS_WHOLE_RE = /(?<![\w$.])module\.exports\s*=(?!=)/g;
+const CJS_WHOLE_RE = /(?<![\w$.])(?:module\.exports|export)\s*=(?![=>])/g;
 
 /** The value text after an assignment at `from`, up to the statement's end at depth zero. */
 function valueAt(clean: string, from: number): string {
   return splitTop(clean.slice(from), ';')[0] ?? '';
 }
 
-/** Every CommonJS export of a JavaScript binding module, read as declarations. */
+/** The name a whole-module export stands for: a named class or function expression, or a bare identifier; undefined for anything else. */
+function wholeExportName(value: string): string | undefined {
+  const named = /^(?:class|(?:async\s+)?function\s*\*?)\s+([A-Za-z_$][\w$]*)/.exec(value)?.[1] ?? /^([A-Za-z_$][\w$]*)\s*$/.exec(value)?.[1];
+  return named === 'require' ? undefined : named;
+}
+
+/** Every CommonJS export of a JavaScript binding module (and a TypeScript `export =`), read as declarations. */
 function readCommonJs(clean: string, docs: Scanned['docs']): BindingDeclaration[] {
   const out: BindingDeclaration[] = [];
   for (const match of clean.matchAll(CJS_NAMED_RE)) {
     const start = match.index ?? 0;
     const tag = tagBefore(clean, docs, start);
-    const decl = commonJsDeclaration(valueAt(clean, start + match[0].length), { name: match[1], line: lineAt(clean, start), ...(tag ? { tag } : {}) });
+    const decl = commonJsDeclaration(valueAt(clean, start + match[0].length), { name: match[1], line: lineAt(clean, start), ...(tag ? { tag } : {}) }, clean, docs);
     if (decl) out.push(decl);
   }
   for (const match of clean.matchAll(CJS_WHOLE_RE)) {
     const start = match.index ?? 0;
     const open = skipSpace(clean, start + match[0].length);
-    if (clean[open] !== '{') continue;
+    // The whole object's tag stands for each property that names none of its own.
+    const wholeTag = tagBefore(clean, docs, start);
+    if (clean[open] !== '{') {
+      // The module IS one class, function or declared name: `module.exports = class X {…}`, `= X`.
+      const value = valueAt(clean, open).trim();
+      const named = wholeExportName(value);
+      if (named === undefined) continue;
+      const decl = commonJsDeclaration(value, { name: named, line: lineAt(clean, start), ...(wholeTag ? { tag: wholeTag } : {}) }, clean, docs);
+      if (decl) out.push(decl);
+      continue;
+    }
     // `module.exports = { … }`: each property is an export of its own.
     const body = clean.slice(open + 1, closeOf(clean, open) - 1);
     let offset = open + 1;
@@ -354,15 +413,22 @@ function readCommonJs(clean: string, docs: Scanned['docs']): BindingDeclaration[
       if (found >= 0) offset = found + raw.length;
       const seg = raw.replace(/^async\s+/, '');
       const name = IDENT.exec(seg)?.[0];
-      if (name === undefined) continue;
-      const tag = tagBefore(clean, docs, at);
+      // A leading underscore is the convention for a private member: not the module's surface.
+      if (name === undefined || name.startsWith('_')) continue;
+      const own = tagBefore(clean, docs, at);
+      const tag = own ?? wholeTag;
       const base = { name, line: lineAt(clean, at), ...(tag ? { tag } : {}) };
       const rest = seg.slice(name.length).trimStart();
       if (rest.startsWith('(')) {
         out.push({ ...base, kind: 'function', params: paramNames(rest.slice(1, closeOf(rest, 0) - 1)), members: [] });
       } else if (rest.startsWith(':')) {
-        const decl = commonJsDeclaration(rest.slice(1), base);
+        const decl = commonJsDeclaration(rest.slice(1), base, clean, docs);
         if (decl) out.push(decl);
+      } else if (rest === '') {
+        // A shorthand property `{ X }`: the module's own declaration of X.
+        const local = localDeclaration(clean, docs, name);
+        const localTag = own ?? local?.tag ?? wholeTag;
+        if (local) out.push({ ...local, ...(localTag ? { tag: localTag } : {}) });
       }
     }
   }
@@ -370,21 +436,54 @@ function readCommonJs(clean: string, docs: Scanned['docs']): BindingDeclaration[
 }
 
 /**
+ * Each JSDoc `@typedef` of a module, with the `@property` lines of its comment,
+ * as an object type declaration (`@typedef {Object} CodeStats` + `@property
+ * {number} hits`): the shapes a plain-JavaScript binding declares in comments.
+ * A typedef with no properties is an alias. Read from the raw text, since the
+ * scan blanks comments.
+ */
+function readTypedefs(text: string, clean: string): BindingDeclaration[] {
+  const out: BindingDeclaration[] = [];
+  for (const comment of text.matchAll(/\/\*\*[\s\S]*?\*\//g)) {
+    const body = comment[0];
+    const typedef = /@typedef\s+(?:\{[^}]*\}\s*)?([A-Za-z_$][\w$]*)/.exec(body);
+    if (!typedef) continue;
+    const members: BindingMember[] = [];
+    for (const prop of body.matchAll(/@prop(?:erty)?\s+(?:\{([^}]*)\}\s*)?\[?([A-Za-z_$][\w$]*)/g)) {
+      members.push(prop[1] ? { name: prop[2], type: prop[1].trim() } : { name: prop[2] });
+    }
+    const tag = TAG_RE.exec(body);
+    out.push({
+      name: typedef[1],
+      kind: members.length > 0 ? 'type' : 'alias',
+      members,
+      line: lineAt(clean, (comment.index ?? 0) + body.indexOf('@typedef')),
+      ...(tag ? { tag: `${tag[1]}::${tag[2]}` } : {}),
+    });
+  }
+  return out;
+}
+
+/**
  * The export forms a module uses that the reader cannot see into, as written:
- * `module.exports = require(…)`, or an export bound to a bare identifier or a
- * call — what a module that declares nothing comparable is reported for.
+ * `module.exports = require(…)`, or an export bound to an identifier the
+ * module does not declare or a call — what a module that declares nothing
+ * comparable is reported for.
  */
 export function readUnreadForms(text: string): string[] {
-  const { clean } = scan(text);
+  const { clean, docs } = scan(text);
   const forms = new Set<string>();
   const shown = (value: string): string => (/^require\s*\(/.test(value) ? 'require(…)' : `${IDENT.exec(value)?.[0] ?? '…'}${/^[A-Za-z_$][\w$.]*\s*\(/.test(value) ? '(…)' : ''}`);
   for (const match of clean.matchAll(CJS_WHOLE_RE)) {
     const value = valueAt(clean, (match.index ?? 0) + match[0].length).trim();
-    if (!value.startsWith('{')) forms.add(`module.exports = ${shown(value)}`);
+    if (value.startsWith('{')) continue;
+    const named = wholeExportName(value);
+    if (named !== undefined && commonJsDeclaration(value, { name: named, line: 0 }, clean, docs) !== null) continue;
+    forms.add(`${match[0].startsWith('export') ? 'export' : 'module.exports'} = ${shown(value)}`);
   }
   for (const match of clean.matchAll(CJS_NAMED_RE)) {
     const value = valueAt(clean, (match.index ?? 0) + match[0].length).trim();
-    if (commonJsDeclaration(value, { name: match[1], line: 0 }) === null) forms.add(`exports.${match[1]} = ${shown(value)}`);
+    if (commonJsDeclaration(value, { name: match[1], line: 0 }, clean, docs) === null) forms.add(`exports.${match[1]} = ${shown(value)}`);
   }
   return [...forms];
 }
@@ -428,9 +527,9 @@ export function readDeclarations(text: string): BindingDeclaration[] {
       out.push({ ...base, kind: 'enum', members });
     }
   }
-  // CommonJS exports: `exports.X = …`, `module.exports.X = …`, `module.exports = { … }`.
+  // CommonJS exports (`exports.X = …`, `module.exports.X = …`, `module.exports = …`, a TypeScript `export =`) and JSDoc typedefs.
   const seen = new Set(out.map((d) => d.name));
-  for (const decl of readCommonJs(clean, docs)) {
+  for (const decl of [...readCommonJs(clean, docs), ...readTypedefs(text, clean)]) {
     if (!seen.has(decl.name)) out.push(decl);
     seen.add(decl.name);
   }

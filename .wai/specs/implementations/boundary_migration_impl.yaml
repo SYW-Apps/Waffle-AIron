@@ -61,7 +61,11 @@ methods:
           its `member::name` references respelled to that alias at their positions (from the graph's
           authoredReferences), the member alias's `use` merged into it, and the member external and
           pin removed; any other gets its external repointed at the bound project's id (a source
-          path re-expressed) and re-pinned, with a note that the pin will read drifted. Plan the
+          path re-expressed) and re-pinned, with a note that the pin will read drifted — and, when
+          the bound project (or the member it takes in) uses that consumer, a note that the two now
+          depend on each other in a loop (PROJECT_DEPENDENCY_CYCLE), with the uses that close it and
+          the exits (move what the consumer uses into it, or demote it first). A project member in a
+          `../` sibling checkout is demoted in place and moved in as the part it became. Plan the
           core's internalize with the completed destination, and the carried externals pinned in the
           bound project
         type: local
@@ -132,9 +136,11 @@ methods:
         targetMethod: getExternalsStatus
       - stepNumber: 10
         description: >-
-          Plan the core's externalize, the new member's external for the bound project pinned in the
-          member, and the re-pin of each family consumer read intact. The references the move
-          respells are listed when the plan is rehearsed, from what the core answers
+          Plan the core's externalize, the new member's externals pinned in the member — its
+          external for the bound project, and one for every other project its moved specs name
+          through the bound project's members or externals, which the core declares — and the re-pin
+          of each family consumer read intact. The references the move respells and the externals it
+          declares are listed when the plan is rehearsed, from what the core answers
         type: local
       - stepNumber: 11
         description: Answer the plan
@@ -160,7 +166,8 @@ methods:
       - stepNumber: 4
         description: >-
           Bind the bound project's rehearsal root and fold the member in with the completed
-          destination; a core refusal propagates
+          destination; a core refusal propagates, and each signature text it re-derived is recorded
+          as one of the plan's edits and each piece it could not carry as a plan note
         type: call
         targetComponent: migration_core_adapter
         targetMethod: internalizeMember
@@ -263,8 +270,8 @@ methods:
         description: >-
           Bind the bound project's rehearsal root and demote the member in place with the plan's
           destination; a core refusal propagates, and each consumers list the demote widened and
-          each signature text it re-derived is recorded as one of the plan's edits, so the plan
-          lists what its rehearsal wrote
+          each signature text it re-derived is recorded as one of the plan's edits, and each piece
+          it could not carry as a plan note, so the plan lists what its rehearsal wrote
         type: call
         targetComponent: migration_core_adapter
         targetMethod: demoteMember
@@ -321,12 +328,13 @@ methods:
         targetMethod: getExternalsStatus
       - stepNumber: 7
         description: >-
-          Plan the core's promote with the id, then the pins: the new project's external for the
-          bound project, the bound project's pin of the new member when it is stored outside, and
+          Plan the core's promote with the id, then the pins: the new project's externals (for the
+          bound project, and for every other project its specs name, which the core declares), and
           the re-pin of each family consumer read intact; for a part in a sibling checkout, note
-          that files are all-or-nothing and commits one per repository; the bound project to re-lock
-          and the new project to lock for the first time. The references the promote respells are
-          listed when the plan is rehearsed, from what the core answers
+          that files are all-or-nothing and commits one per repository — the new project is then a
+          sibling member composed live like a contained one, never pinned (round 8); the bound
+          project to re-lock and the new project to lock for the first time. The references the
+          promote respells are listed when the plan is rehearsed, from what the core answers
         type: local
       - stepNumber: 8
         description: Answer the plan
@@ -337,8 +345,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Find the project member under the alias in the bound node (none is not-a-member; a part is
-          already one); refuse a member whose storage is git (read-only)
+          Find the project member under the alias in the bound node — contained or in a `../`
+          sibling checkout (a node of the family), else a referenced git or hosted member (none is
+          not-a-member; a part is already one); refuse a member whose storage is git or hosted
+          (read-only)
         type: local
       - stepNumber: 2
         description: >-
@@ -368,9 +378,9 @@ methods:
           L0 export entry of the bound project the demote removes (audience project, naming a target
           only the member used — read from the member's references back into the bound project and
           the bound project's export table — hand-written ones included); plan the removal of the
-          bound project's pin of the member; for a member in a sibling checkout, note that files are
-          all-or-nothing and commits one per repository; the bound project to re-lock, the member's
-          lock listed as ended
+          bound project's pin of the member (one an earlier release took of a sibling); for a member
+          in a sibling checkout, note that files are all-or-nothing and commits one per repository;
+          the bound project to re-lock, the member's lock listed as ended
         type: local
       - stepNumber: 7
         description: Answer the plan
@@ -436,4 +446,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-07T06:25:36.048Z'
+updatedAt: '2026-10-09T01:01:00.073Z'

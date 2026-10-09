@@ -296,7 +296,15 @@ methods:
           the port will be before the code realizing it exists, and the finding names a data
           component whose code is not written yet (code.holdsAny over its implementations' files is
           false) as planned. Once its code is written, the port lands on it and the call is judged
-          as any other
+          as any other. The same port CAST away — `(this.sink as any).update(x)`, `const s: any =
+          this.sink` — is unresolved rather than a port: its original type lands only on the
+          Portal's own file, which names no component to judge it by, so candidatesOf reads it by
+          name against the design's write set, which a planned data component has as much as a
+          written one. A receiver typed any is opaque however it came to be — an untyped or
+          any-typed parameter of a closure, a local typed any, a function result typed any — and a
+          member read by NAME off one and taken as a value (`const f = (this.store as any).save;
+          f(x)`) is such a call too. Each is reported once per site and per function it is written
+          in, so one shortcut never hides another of the same name
         type: local
       - stepNumber: 21
         description: >-
@@ -335,13 +343,26 @@ methods:
         label: crossProjectImports
         description: >-
           For every file of the code model, report each of its source_file_facts.crossProjectImports
-          as CROSS_PROJECT_IMPORT_UNRESOLVED (warning; spec the first of
+          that resolves to nothing as CROSS_PROJECT_IMPORT_UNRESOLVED (warning; spec the first of
           realization.implementationsAt(file); site `<file> -> <specifier>#<name>`, or the specifier
           alone when the module itself is gone): an import, runtime or type-only, from ANOTHER
           project's source that the checker resolves to nothing, naming the line, the other project,
           and — for a type-only import — that it is erased at run time so no test notices. Follow
           the producer's rename, or reach its code through a binding module the implementation
-          declares, which is compared with the pin
+          declares, which is compared with the pin. Each one that DOES resolve
+          (cross_project_import_fact.resolved) is judged like any other edge, unless the file is a
+          binding module an implementation declares — the sanctioned place for that reach, compared
+          by binding conformance: the other project's published names are its L0 export table as a
+          member exports it now (ctx.exportTables, the member found by its directory in
+          ctx.projectFamily: each exported type by its public name, id and code name, each exported
+          component by its contract methods and their code symbols), else the pinned snapshot of the
+          external it is (its types, exported types and interfaces with their methods), else none;
+          every name the import binds that is not among them — compared with case and separators set
+          aside, a namespace or side-effect import never being one — is reported once per file and
+          specifier as CROSS_PROJECT_SOURCE_IMPORT (warning; site `<file> -> <specifier>`; units the
+          names): code reaching into that project's internals past its surface, naming the data
+          component of that project the module realizes when it realizes one, since a write through
+          it is the shortcut past the other project's surface into its held state
         type: local
     symbol: check
     exportedVia: dependencyConformanceRule
@@ -1012,8 +1033,9 @@ methods:
       - stepNumber: 4
         description: >-
           claimed = every file the specs name, as canonical keys: each implementation's
-          sourceFiles(), its simPath and the binding modules it declares in bindings (code linkage:
-          the files through which it reaches another project's code), then each type's sourceFiles()
+          sourceFiles(), its simPath, the binding modules it declares in bindings (code linkage: the
+          files through which it reaches another project's code) and the module a Portal's router
+          linkage names (`<module>#<name>`, or the module alone), then each type's sourceFiles()
         type: local
       - stepNumber: 5
         description: >-
@@ -1247,19 +1269,21 @@ methods:
       - stepNumber: 4
         description: >-
           tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
-          facts = code.factsAt(the entry's sourceFile) when it names one
+          off = tier is off, which skips the FORWARD direction alone — whether the claims are found
+          in the code — never the converse, so the dial is no way past an unnarrated write or a call
+          the analysis cannot follow; facts = code.factsAt(the entry's sourceFile) when it names one
         type: local
       - stepNumber: 5
         description: >-
-          The conformance dial off skips, only exact analysis grade fires (weaker grades never
-          guess), and a method that CLAIMS no call is this rule's subject in neither direction —
-          nothing to prove forward, and nothing it could have failed to declare, so what it leaves
-          unsaid is UNUSED_*'s subject and not a charge of hiding a colocated call. The stance stays
-          written here, where the accusation is read: otherwise continue with the next method
+          Only exact analysis grade fires (weaker grades never guess), and a method that CLAIMS no
+          call is this rule's subject in neither direction — nothing to prove forward, and nothing
+          it could have failed to declare, so what it leaves unsaid is UNUSED_*'s subject and not a
+          charge of hiding a colocated call. The stance stays written here, where the accusation is
+          read: otherwise continue with the next method
         type: branch
         condition: >-
-          tier is not off, implMethod.narrative or implMethod.calls is non-empty, the entry names a
-          sourceFile, and facts exist with status analyzed at analysisGrade exact
+          implMethod.narrative or implMethod.calls is non-empty, the entry names a sourceFile, and
+          facts exist with status analyzed at analysisGrade exact
         onFalseStep: 3
       - stepNumber: 6
         description: >-
@@ -1297,21 +1321,27 @@ methods:
         label: stepLoop
         description: Check each call the method claims
         type: loop
-        over: claims
+        over: claims, none when off
         endStep: 14
       - stepNumber: 9
         description: >-
           A target this tree does not contain is cross-tree-references' finding, and
-          surface-reference-backing's once it resolves; and an Adapter's claim on a verb of a Portal
+          surface-reference-backing's once it resolves; an Adapter's claim on a verb of a Portal
           that declares an out-of-process transport (any transport but InProcess — HTTP, gRPC, a
           database, a bus, a CLI) is the LINK the design models, never a call into the remote
           Portal's source file: what realizes it is the transport client the Adapter drives, so it
           is never resolved to that file and never reported (the caller's call to the Adapter stays
-          checked as any call): continue with the next claim
+          checked as any call); and a claim whose target's code is in ANOTHER language than the
+          caller's TypeScript or JavaScript file — every file resolveCallTarget names is in a
+          language this call graph does not read, or, naming none, the member or project the
+          component belongs to (its `ns::` qualifier in ctx.projectFamily) declares such a target
+          language — is noted on its language boundary (the project and the language, the claim as
+          `impl.method → component.method`) and skipped: a call graph of one language never resolves
+          into another's file. Continue with the next claim
         type: branch
         condition: >-
-          ctx.componentMap has claim.component, and it is not an Adapter's claim on a Portal whose
-          transport is out of process
+          ctx.componentMap has claim.component, it is not an Adapter's claim on a Portal whose
+          transport is out of process, and the target's code is in the caller's language
         onFalseStep: 8
       - stepNumber: 10
         description: >-
@@ -1499,12 +1529,16 @@ methods:
           the design says this method never touches. Narrate the call, declare it in `calls`, or
           remove it. When unresolvedWrites is non-empty, report CALL_ORIGIN_UNRESOLVED (warning;
           same spec and draft context), one finding per method naming each candidate write and the
-          call as written: the call goes through a receiver the analysis cannot follow, so it is
-          neither proven an unnarrated write nor cleared, and fails closed until the receiver
-          carries its declared type. Each carried like its siblings, one unit per component.method.
-          A workflow verb in undecided is named in the same finding as an unnarrated call to it
-          whose effect is undeclared, never as a change of state: declare the verb's effect (read or
-          none when it changes nothing), or narrate the call
+          call as written (a reference quoted as taken as a value): the call goes through a receiver
+          the analysis cannot follow, so it is neither proven an unnarrated write nor cleared, and
+          fails closed until the receiver carries its declared type. Each carried like its siblings,
+          one unit per component.method. A workflow verb in undecided is named in the same finding
+          as an unnarrated call to it whose effect is undeclared, never as a change of state:
+          declare the verb's effect (read or none when it changes nothing), or narrate the call.
+          Once every method is read, report each language boundary the claims crossed once as
+          CALL_ACROSS_LANGUAGE (notice; spec the first implementation crossing it; site the project;
+          units the claims), naming the two languages and the binding as what crosses it — never as
+          an unrealized call no code could clear
         type: local
     symbol: check
     exportedVia: callConformanceRule
@@ -1648,17 +1682,19 @@ methods:
           Add the declared publication handles: each method's `exportedVia`, the export a consumer
           imports to REACH the method, which `symbol` cannot name because `symbol` names the
           function inside it; and each Portal implementation's `router`, the entry whatever serves
-          the Portal calls to hand it its requests, which belongs to the Portal's own files. Read a
-          handle only where its file was analysed at exact grade; below that nothing separates an
-          export from a mention, so no verdict on it could be backed, and a handle whose file the
-          run never read at all is skipped rather than guessed at. A portal may be realized across
-          several files, and its router entry may live in any of them: it is reported missing only
-          when EVERY one of those files was read at exact grade and none exports it, since a file
-          read below that, or not at all, may be the one holding it. A handle the file does export
-          becomes promised surface. One that is missing is reported against the spec that declares
-          it, naming the handle and the file, and does not count as allowed: a route nobody can
-          import cannot be the reason a name is promised, and without that the field would be a
-          free-text way to silence the rule
+          the Portal calls to hand it its requests, which belongs to the Portal's own files — or,
+          written `<module>#<name>` (or as a module alone), to the module it names, which must
+          export that name (a module named alone must be on disk), and is reported against the
+          implementation when it does not. Read a handle only where its file was analysed at exact
+          grade; below that nothing separates an export from a mention, so no verdict on it could be
+          backed, and a handle whose file the run never read at all is skipped rather than guessed
+          at. A portal may be realized across several files, and its router entry may live in any of
+          them: it is reported missing only when EVERY one of those files was read at exact grade
+          and none exports it, since a file read below that, or not at all, may be the one holding
+          it. A handle the file does export becomes promised surface. One that is missing is
+          reported against the spec that declares it, naming the handle and the file, and does not
+          count as allowed: a route nobody can import cannot be the reason a name is promised, and
+          without that the field would be a free-text way to silence the rule
         type: local
       - stepNumber: 3
         description: >-
@@ -1859,32 +1895,43 @@ methods:
       - stepNumber: 1
         label: gather
         description: >-
-          For each implementation method whose contract declares parameters, ask the analyzer for
-          the parameter lists of every function realizing it in its own file, under its `symbol`
-          when it declares one. A file may hold two bodies under one name — a class member and the
-          module-level facade that forwards to it — and which one the contract means is not
-          something this reader can decide, so every candidate is kept. A contract method declaring
-          no parameters makes no claim a signature could contradict
+          For each implementation method whose conformance dial is not off (its own, else its
+          implementation's, else the component's default), ask the analyzer for the parameter lists
+          of every function realizing it in its own file, under its `symbol` when it declares one. A
+          file may hold two bodies under one name — a class member and the module-level facade that
+          forwards to it — and which one the contract means is not something this reader can decide,
+          so every candidate is kept. Every name each candidate takes is noted for its
+          implementation, read without its leading underscores, before anything is judged: once
+          every method has been read, each injected name (implementation_spec.injectedParams) none
+          of an implementation's read functions takes is reported as UNUSED_INJECTED_PARAM (warning;
+          site injectedParams; units the stale names) — stale linkage that would wave through the
+          next parameter of that name unread, said only where at least one of its functions was
+          read. A contract method declaring no parameters makes no claim a signature could
+          contradict
         type: local
       - stepNumber: 2
         description: Decide whether a signature is there to read
         type: branch
-        condition: the file was read at exact grade and at least one function of that name has a body
+        condition: >-
+          the method's conformance dial is not off, the file was read at exact grade and at least
+          one function of that name has a body
         onTrueStep: 3
         onFalseStep: 9
       - stepNumber: 3
         label: align
         description: >-
-          Drop the leading parameters the implementation declares as injected — the config, data
-          root or transport handles whatever wires the component up supplies. Only a LEADING run is
-          dropped, and only names the implementation actually declared: an injected name appearing
-          after the contract's own parameters is not wiring, it is an argument in the middle of the
-          caller's list. Then set aside every parameter whose name starts with an underscore that
-          the analyzer proves UNUSED (parameter_fact.unused: no identifier of its name in the body
-          or another parameter's default value, no read of `arguments`), unless its bare name is the
-          contract's own: a leading underscore means unused, and it is believed only where it is
-          true — a used `_secret` is a credential like any other, and is judged like any other
-          parameter
+          Drop the runs of parameters the implementation declares as injected — the config, data
+          root or transport handles whatever wires the component up supplies — at either end of the
+          list: a LEADING run, and a TRAILING run of names the contract does not itself declare,
+          which is where a framework puts a response or a next handler. Only names the
+          implementation actually declared, each matching with or without its leading underscore, so
+          a handle that becomes used keeps its declaration; an injected name in the middle of the
+          caller's list is an argument, not wiring. Then set aside every parameter whose name starts
+          with an underscore that the analyzer proves UNUSED (parameter_fact.unused: no identifier
+          of its name in the body or another parameter's default value, no read of `arguments`),
+          unless its bare name is the contract's own: a leading underscore means unused, and it is
+          believed only where it is true — a used `_secret` is a credential like any other, and is
+          judged like any other parameter
         type: local
       - stepNumber: 4
         description: >-
@@ -1913,32 +1960,46 @@ methods:
         label: count
         description: >-
           Report the surplus on whichever side has it: a declared parameter with no pair is one the
-          code would never receive, and a realized parameter with no pair is an argument a caller
-          must supply that the design never mentions — the shape that hid a credential in a
-          signature nobody had read against its contract. Where parameters left over (or
-          substituted) stand ahead of every kept pair under a name transports give their handles
-          (req, request, res, response, reply, url, ctx, context, next, event, socket), the finding
-          names the one green path for them: the handles in the implementation's injectedParams, the
-          contract's own parameters after them in order — spelled out as the method's signature —
-          the router unpacking the path, query and body into them
+          code would never receive — unless the code reads it off an injected request handle (req,
+          request, ctx, context, event) by its own name (parameter_fact.reads: `req.params.code`,
+          `req.query['limit']`, a destructuring of such a read), which realizes it through that
+          handle, the green path for a framework that hands its handlers the request alone — and a
+          realized parameter with no pair is an argument a caller must supply that the design never
+          mentions, the shape that hid a credential in a signature nobody had read against its
+          contract. Where parameters left over (or substituted) stand ahead of every kept pair under
+          a name transports give their handles (req, request, res, response, reply, url, ctx,
+          context, next, event, socket), the finding names the one green path for them: the handles
+          in the implementation's injectedParams, the contract's own parameters after them in order
+          — spelled out as the method's signature — the router unpacking the path, query and body
+          into them, or the contract's parameters read off the injected request by their own names
         type: local
       - stepNumber: 7
         label: compare
         description: >-
-          For each pair whose names differ: where both kinds of value are settled (the code's
-          annotated) and differ, and the dialect does not say the types agree, the code holds a
-          DIFFERENT argument in the declared one's place — a substitution: report the declared
-          parameter as unrealized and the code's as undeclared, saying which kind each is
-          (`getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` is never a
-          silent pairing). Otherwise report a rename where the declared type agrees: through the
+          For each pair: where the dialect does not say the types agree, the code holds a DIFFERENT
+          argument in the declared one's place — a substitution, reported as the declared parameter
+          unrealized and the code's undeclared, saying what each is — when, the names differing,
+          both kinds of value are settled and differ (`getRoute(params: Record<string, string>)`
+          realizing `getRoute(id: string)`); when the code's parameter is a platform transport class
+          (parameter_fact.transport) where the contract declares a record; when the contract's type
+          is a record whose fields the code's object (parameter_fact.fields) shares NONE of,
+          whatever either side calls it (`planRoute(session: { user: string })` for
+          `planRoute(request: plan_request)`); or, the code settling no kind (unannotated
+          JavaScript, a parameter typed any), when the code's name is a transport handle's (req,
+          res, ctx, request, response, next, reply) where the contract declares an argument of its
+          own (`cancelOrder(req, res)` for `cancelOrder(orderId, customerId)`). Otherwise, for a
+          pair whose names differ, report a rename where the declared type agrees: through the
           file's dialect (source_file_facts.dialect, then type_dialect.agrees on the code's
           annotation and the contract's canonical type, a named type matching through its code-level
-          name), or as the same primitive kind of value (string, number, boolean) of an annotated
-          parameter. An EXTERNAL type (alias::name) answers to the name its pinned snapshot gives it
-          under that public name (ctx.pinnedExternals), else to its public name's last segment in
-          the code's type casing. With no dialect, no annotation and no settled kind, say nothing
-          about the name — without it a rename cannot be told from a substitution, and a guess about
-          somebody's signature is worse than silence
+          name), as the same primitive kind of value (string, number, boolean) of an annotated
+          parameter or one of the kinds a date, a datetime, a duration or bytes is written as, or as
+          an object holding every field of the declared record — naming the contract's former name
+          (its previousNames) when the code still uses it. An EXTERNAL type (alias::name) answers to
+          the name its pinned snapshot gives it under that public name (ctx.pinnedExternals), else
+          to its public name's last segment in the code's type casing. With no dialect, no
+          annotation, no settled kind and no handle name, say nothing about the name — without it a
+          rename cannot be told from a substitution, and a guess about somebody's signature is worse
+          than silence
         type: local
       - stepNumber: 8
         description: >-
@@ -1963,11 +2024,17 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          For each Portal implementation that names a router entry, find the routes the analyzer
-          read (source_file_facts.functionRoutes) from that function and from the functions of its
-          own file it calls by name, in the Portal's files: a router delegating its matching to a
-          helper that reads a route table is one router. A Portal with no router entry is served
-          method by method, and has no router of its own to read
+          For each Portal implementation that names a router, read the linkage's three spellings: a
+          bare name is an entry the Portal's own files hold; `<module>#<name>` an entry or a route
+          table another module holds (a central routes.ts); a module alone, every route-bearing
+          export of it. Find the routes the analyzer read (source_file_facts.functionRoutes — a
+          function's, or a route table const's under its name) from that entry and from the
+          functions of its file it calls by name: a router delegating its matching to a helper that
+          reads a route table is one router. Note the ONE prefix those functions strip off the path
+          before matching (source_file_facts.routePrefixes), where exactly one settles. Routers
+          naming the same module and entry are one router, read once against every Portal naming it.
+          A Portal with no router entry is served method by method, and has no router of its own to
+          read
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
@@ -1992,21 +2059,26 @@ methods:
       - stepNumber: 5
         label: compare
         description: >-
-          Read each route against the Portal's own endpoints: a route whose leading segments are the
-          Portal's basePath is read beneath it, where the contract writes its endpoint paths; a
-          route that does not state the whole path (route_fact.fullPath unset) and leaves its
-          leading segment unconstrained has it completed with each first segment of the Portal's
-          HTTP endpoint paths — the one whatever serves the Portal routes on. Match routes against
-          the Portal's HTTP endpoints by verb and path. A template parameter in an endpoint matches
-          a segment the router leaves unconstrained, and only that: a literal the router compares
-          against is a distinct handler, and a template endpoint beside it does not declare it, or
-          the one route this check exists to find would hide behind its neighbour. A route that pins
-          no segment count also covers a longer path with the same leading segments
+          Fold the stripped prefix in front of every TABLE route (route_fact.table) that does not
+          already state it: a table is written under the prefix its router strips, so a prefix that
+          is not the Portal's basePath reads as the different URL it is. Then read each route
+          against each Portal's own endpoints: a route whose leading segments are the Portal's
+          basePath is read beneath it, where the contract writes its endpoint paths; a route that
+          does not state the whole path (route_fact.fullPath unset) and leaves its leading segment
+          unconstrained has it completed with each first segment of the Portal's HTTP endpoint paths
+          — the one whatever serves the Portal routes on. Match routes against the Portal's HTTP
+          endpoints by verb and path. A template parameter in an endpoint matches a segment the
+          router leaves unconstrained, and only that: a literal the router compares against is a
+          distinct handler, and a template endpoint beside it does not declare it, or the one route
+          this check exists to find would hide behind its neighbour. A route that pins no segment
+          count also covers a longer path with the same leading segments
         type: local
       - stepNumber: 6
         description: >-
-          Report each route no endpoint matches — a surface the code serves and no contract declares
-          — and each endpoint no route answers, which the contract promises and no request reaches.
+          Report each route no endpoint of any Portal reading the router matches — a surface the
+          code serves and no contract declares — once, against the first; and each endpoint no route
+          answers, per Portal, which the contract promises and no request reaches. Where the router
+          strips a prefix that is not the Portal's basePath, both findings say so, naming the two.
           The first shape is the one that let a write run with no contract, so both are carryable
           measured drift rather than refusals
         type: return
@@ -2121,9 +2193,12 @@ methods:
           own file under its `symbol` when it declares one, as param-conformance does
         type: local
       - stepNumber: 2
-        description: Decide whether a body is there to read
+        description: Decide whether a body is there to read, and whether the method is to be judged at all
         type: branch
-        condition: the file was read at exact grade and at least one function of that name has a body
+        condition: >-
+          the method's conformance dial (its own, else its implementation's, else the component's
+          default) is not off, the file was read at exact grade and at least one function of that
+          name has a body
         onFalseStep: 6
       - stepNumber: 3
         description: >-
@@ -2231,4 +2306,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-08T19:37:12.284Z'
+updatedAt: '2026-10-09T00:54:06.217Z'

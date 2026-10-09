@@ -134,16 +134,17 @@ methods:
           has one (a record from before gate parts, a newer or invalid stamp, parts that do not
           break down the identity), else `the new release finds N issue(s) in the approved design`
           with the first few named, never the generic candidate list. When the entry carries
-          partsIgnored, one notice says the record's gate parts are ignored. Else note when it is
-          upgraded — the lock was taken under an earlier gate identity. For a format-2 lock that is
-          stale under its own algorithm, say that it predates code linkage leaving the approval and
-          something it covered moved since — the design, or only code linkage, which can no longer
-          be told apart — so it takes one re-lock, after which linkage never drifts it again; for an
-          earlier identity, say the identity gained inputs — rather than implying the design moved.
-          Then take the direct members (parent = the root) whose pin moved, and those drifted or
-          never approved. A moved pin is a change this project must re-approve even when none of its
-          OWN specs shifted; a drifted or never-approved member is the member's to lock, named so
-          the parent knows before it locks
+          partsIgnored, one notice says the record's gate parts are ignored; when it carries
+          stampProblem, one notice names the stamp and that `wairon lock` replaces it. Else note
+          when it is upgraded — the lock was taken under an earlier gate identity. For a format-2
+          lock that is stale under its own algorithm, say that it predates code linkage leaving the
+          approval and something it covered moved since — the design, or only code linkage, which
+          can no longer be told apart — so it takes one re-lock, after which linkage never drifts it
+          again; for an earlier identity, say the identity gained inputs — rather than implying the
+          design moved. Then take the direct members (parent = the root) whose pin moved, and those
+          drifted or never approved. A moved pin is a change this project must re-approve even when
+          none of its OWN specs shifted; a drifted or never-approved member is the member's to lock,
+          named so the parent knows before it locks
         type: local
       - stepNumber: 6
         description: Compare the tree against what was approved
@@ -167,13 +168,15 @@ methods:
         description: >-
           Answer the verdict, naming the specs that actually moved rather than a count — a number
           tells somebody that something changed, a list tells them what to look at: the text names
-          the first few and counts the rest, and `moved` carries every one (`~` changed, `+` added,
-          `-` removed) for a caller that wants the whole account — with the member, release and
-          upgrade notes appended, and report drift when the specs moved, a member's pin moved, the
-          identity was upgraded, or the root's own entry is drifted. When no own spec moved but the
-          root's own entry is drifted, "no spec has changed since" never stands alone: it goes on to
-          say what the approval owes — the entry's `owed` sentence when it carries one (a moved
-          project id, an external never pinned or used beyond its pin) with the remedy; else the
+          every one up to forty, and past forty the first forty, the count of the rest and the
+          command that lists them all (`wairon status --all`) — never a cut list that reads as the
+          whole account — and `moved` carries every one (`~` changed, `+` added, `-` removed) for a
+          caller that wants it as data — with the member, release and upgrade notes appended, and
+          report drift when the specs moved, a member's pin moved, the identity was upgraded, or the
+          root's own entry is drifted. When no own spec moved but the root's own entry is drifted,
+          "no spec has changed since" never stands alone: it goes on to say what the approval owes —
+          the entry's `owed` sentence when it carries one (a moved project id, an external never
+          pinned or used beyond its pin, a selected pack that cannot load) with the remedy; else the
           release verdict's findings; else the inputs that moved, named from the entry's inputsMoved
           (the network declaration, the rule tuning, the packs, a consumed contract's pin,
           `composition`, a member's approval), and only for a record from before gate parts the
@@ -292,4 +295,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-08T18:57:07.652Z'
+updatedAt: '2026-10-09T00:18:31.394Z'

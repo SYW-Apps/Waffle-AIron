@@ -20,6 +20,7 @@ export {
   moveMember,
   listDirectChainedSubprojects,
   renameComponent,
+  renameSpecId,
   renameMethod,
   renameType,
   renameField,

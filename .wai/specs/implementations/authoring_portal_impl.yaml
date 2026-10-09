@@ -45,6 +45,13 @@ methods:
         type: call
         targetComponent: authoring_orchestrator
         targetMethod: deleteSpec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Route the move to the gated workflow
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: moveSpec
 status: complete
 createdAt: '2026-09-18T21:43:28.738Z'
-updatedAt: '2026-10-08T18:52:17.040Z'
+updatedAt: '2026-10-09T00:31:04.683Z'

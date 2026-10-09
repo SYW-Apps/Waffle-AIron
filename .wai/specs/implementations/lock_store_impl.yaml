@@ -9,12 +9,14 @@ methods:
     intent: >-
       Reads .wai/lock.json for the bound project and returns the parsed LockRecord, or null ONLY
       when the file is absent. A record that exists but cannot be read as one — empty (an editor's
-      BOM alone included), not JSON, JSON that is not a lock record object, no gate identity
-      (stateId {algorithm, digest}), a specs field that is no digest map, or a format newer than
-      this release reads — fails closed with LockRecordUnreadableError naming the file, what is
-      wrong and the two ways out (restore it from version control, or delete it and lock afresh): an
-      approval that cannot be read is never read as no approval. A BOM before a valid record is
-      tolerated.
+      BOM alone included), not JSON, JSON that names one key twice in one object (what a careless
+      conflict resolution leaves: which of the two a reader keeps is the parser's accident, never
+      the approver's decision), JSON that is not a lock record object, no gate identity (stateId
+      {algorithm, digest}), a specs field that is no digest map, or a format newer than this release
+      reads — fails closed with LockRecordUnreadableError naming the file, what is wrong (a
+      duplicated key by its path) and the two ways out (restore it from version control, or delete
+      it and lock afresh): an approval that cannot be read is never read as no approval. A BOM
+      before a valid record is tolerated.
     symbol: readLockRecord
   - name: write
     narrative:
@@ -42,4 +44,4 @@ methods:
     symbol: readLockRecordAt
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-10-07T21:48:58.062Z'
+updatedAt: '2026-10-09T00:18:29.104Z'

@@ -204,6 +204,12 @@ function parseLockRecord(text: string, file: string): LockRecord {
   } catch (e) {
     throw new LockRecordUnreadableError(file, `it is not valid JSON (${(e as Error).message})`);
   }
+  // JSON.parse keeps the LAST of two equal keys: which one a reader keeps is
+  // the parser's accident, never the approver's decision — refused by path.
+  const duplicate = firstDuplicateKey(body);
+  if (duplicate !== null) {
+    throw new LockRecordUnreadableError(file, `it names the key "${duplicate}" twice (a conflict resolved by hand leaves this), so which of the two is the record cannot be told`);
+  }
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     const what = raw === null ? 'null' : Array.isArray(raw) ? 'an array' : `a ${typeof raw}`;
     throw new LockRecordUnreadableError(file, `it holds ${what}, not a lock record object`);
@@ -224,6 +230,44 @@ function parseLockRecord(text: string, file: string): LockRecord {
     throw new LockRecordUnreadableError(file, 'its "specs" is not a map of spec path to digest');
   }
   return normalizeRecord(record);
+}
+
+/**
+ * The path (`gateParts.release`) of the first key a JSON text names twice in
+ * one object, or null when none is. The text is valid JSON already (parsed
+ * before this runs), so a scan of strings and brackets is enough.
+ */
+export function firstDuplicateKey(text: string): string | null {
+  type Frame = { keys: Set<string> | null; expectKey: boolean; path: string; lastKey?: string };
+  const stack: Frame[] = [];
+  const pathOf = (frame: Frame | undefined, key: string): string => (frame && frame.path ? `${frame.path}.${key}` : key);
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (top && top.keys && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) return pathOf(top, key);
+        top.keys.add(key);
+        top.lastKey = key;
+        top.expectKey = false;
+      }
+      i = j;
+    } else if (c === '{' || c === '[') {
+      const top = stack[stack.length - 1];
+      const segment = top ? (top.keys ? top.lastKey ?? '' : '[]') : '';
+      const path = top && segment ? pathOf(top, segment) : top?.path ?? '';
+      stack.push({ keys: c === '{' ? new Set<string>() : null, expectKey: c === '{', path });
+    } else if (c === '}' || c === ']') {
+      stack.pop();
+    } else if (c === ',') {
+      const top = stack[stack.length - 1];
+      if (top && top.keys) top.expectKey = true;
+    }
+  }
+  return null;
 }
 
 /** The file as a reader names it: relative to the working directory when inside it, POSIX separators. */

@@ -1269,10 +1269,11 @@ function directMemberSubjects(): Record<string, string> {
     const record = approvalRecord(node.directory);
     subjects[node.mountAlias] = record ? approvalSubject(record) : NEVER_SUBJECT;
   }
-  // Stage 8: each referenced project member (a `../` or git source), at the
-  // root the scan located — its sibling checkout or the fetch cache at its
-  // pinned commit. A hosted one is located by the hosting server alone, so it
-  // does not enter an identity that must read the same everywhere.
+  // Stage 8: each referenced project member (a git source), at the root the
+  // scan located — the fetch cache at its pinned commit. A `../` sibling is a
+  // node above (round 8), under the same alias. A hosted one is located by the
+  // hosting server alone, so it does not enter an identity that must read the
+  // same everywhere.
   for (const external of family.nodes.find((n) => n.namespace === '')?.externals ?? []) {
     if (external.role !== 'member' || external.sourceKind === 'hosted') continue;
     const record = external.directory ? approvalRecord(external.directory) : null;

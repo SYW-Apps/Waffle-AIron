@@ -4,6 +4,7 @@ import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectR
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
+import { WaironError } from '../utils/errors.js';
 import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
@@ -577,15 +578,16 @@ export function removeSnapshot(projectName: string): boolean {
  */
 export function listPinnedExternals(): PinnedExternal[] {
   // Step 1: the declared aliases and producer ids only — nothing is bound. A
-  // referenced project member (stage 8: a `../`, git or hosted source) is
-  // judged against its pin exactly as an external; a part among them is
-  // dropped by the gate, which knows what the scan found it to be.
+  // referenced project member (stage 8: a git or hosted source) is judged
+  // against its pin exactly as an external; a part among them is dropped by
+  // the gate, which knows what the scan found it to be. A `../` sibling member
+  // is composed live like a contained one (round 8): never pinned.
   let declared: { alias: string; project: string }[] = [];
   try {
     const config = loadProjectConfig();
     declared = config ? [
       ...declaredExternals(config),
-      ...declaredMembers(config).filter((m) => !m.problem && m.storage !== 'contained').map((m) => ({ alias: m.alias, project: m.alias })),
+      ...declaredMembers(config).filter((m) => !m.problem && m.storage !== 'contained' && m.storage !== 'path').map((m) => ({ alias: m.alias, project: m.alias })),
     ] : [];
   } catch {
     // A configuration that fails its schema is reported by the paths that load it.
@@ -794,7 +796,8 @@ export function foreignSurfaces(): Map<string, SurfaceSnapshot> {
   }
   const root = getProjectRoot();
   for (const m of members) {
-    if (m.problem || m.storage !== 'contained' || m.path === undefined || out.has(m.alias)) continue;
+    // A contained member and a `../` sibling are read live, where they are stored (round 8).
+    if (m.problem || (m.storage !== 'contained' && m.storage !== 'path') || m.path === undefined || out.has(m.alias)) continue;
     try {
       const surface = runWithProjectRoot(path.resolve(root, m.path), () => projectOwnSurface('project'));
       out.set(m.alias, surface);
@@ -819,8 +822,10 @@ export function withForeignTypes(snapshot: SurfaceSnapshot, foreign: ReadonlyMap
   const types = [...snapshot.types];
   const have = new Set(types.map((t) => t.id));
   const queue: string[] = [];
+  // A reference is read whole, every `::` segment of it: `a::b::c` is alias `a`
+  // naming `b::c` inside it, never `a::b` and a stray `c`.
   const scan = (text: string | undefined): void => {
-    for (const token of (text ?? '').match(/[A-Za-z0-9_-]+::[A-Za-z0-9_-]+/g) ?? []) queue.push(token);
+    for (const token of (text ?? '').match(/[A-Za-z0-9_-]+(?:::[A-Za-z0-9_-]+)+/g) ?? []) queue.push(token);
   };
   for (const e of snapshot.interfaces) for (const m of e.methods) { for (const p of m.params ?? []) scan(p.type); scan(m.returns); }
   for (const t of types) { for (const f of t.fields) scan(f.type); for (const p of t.params ?? []) scan(p.type); scan(t.returns); }
@@ -832,13 +837,24 @@ export function withForeignTypes(snapshot: SurfaceSnapshot, foreign: ReadonlyMap
     const name = ref.slice(cut + 2);
     const pin = foreign.get(alias);
     if (!pin) continue;
-    // A public name of the producer, or one of its closure ids.
-    const defId = (pin.exportedTypes ?? []).find((t) => t.id === name)?.type ?? name;
+    // Each closure type under the alias: by its public name, else by its local
+    // segment when no other closure type shares it (a producer-qualified
+    // `contracts::currency_code` reads `alias::currency_code`), else by its id.
+    const segment = (id: string): string => (id.includes('::') ? id.slice(id.lastIndexOf('::') + 2) : id);
+    const shared = (id: string): boolean => pin.types.filter((d) => segment(d.id) === segment(id)).length > 1;
+    const local = new Map<string, string>(pin.types.map((d) => [d.id, `${alias}::${(pin.exportedTypes ?? []).find((t) => t.type === d.id)?.id ?? (shared(d.id) ? d.id : segment(d.id))}`]));
+    // A public name of the producer, one of its closure ids, or the spelling a closure type was given under the alias.
+    const defId = (pin.exportedTypes ?? []).find((t) => t.id === name)?.type
+      ?? (pin.types.some((d) => d.id === name) ? name : [...local].find(([, spelled]) => spelled === ref)?.[0]);
     const def = pin.types.find((d) => d.id === defId);
     if (!def) continue;
-    const local = new Map<string, string>(pin.types.map((d) => [d.id, `${alias}::${(pin.exportedTypes ?? []).find((t) => t.type === d.id)?.id ?? d.id}`]));
     local.set(def.id, ref);
-    const respell = (text: string | undefined): string | undefined => text?.replace(/[A-Za-z0-9_][A-Za-z0-9_-]*/g, (token) => local.get(token) ?? token);
+    // Each identifier read whole: a closure id the producer qualified
+    // (`contracts::money`, one of its own member's types) is respelled under the
+    // alias like a bare one — never left in the producer's own spelling, which
+    // would name a project this one may not know and read as a change of every
+    // verb once the same type arrives under another alias.
+    const respell = (text: string | undefined): string | undefined => text?.replace(/[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)*/g, (token) => local.get(token) ?? token);
     const expanded: SurfaceTypeDef = {
       ...def,
       id: ref,
@@ -1249,6 +1265,11 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
   const declared = bindings.map((b) => b.external.alias);
   const named = aliases && aliases.length > 0 ? aliases : undefined;
   const unknown = (named ?? []).filter((a) => !declared.includes(a));
+  // A member composed live (contained, or a `../` sibling) is never pinned: said so, not called unknown.
+  const live = unknown.filter((a) => declaredMembers(loadProjectConfig() ?? {}).some((m) => m.alias === a && !m.problem && (m.storage === 'contained' || m.storage === 'path')));
+  if (live.length > 0 && live.length === unknown.length) {
+    throw new WaironError(`${live.map((a) => `"${a}"`).join(', ')} ${live.length === 1 ? 'is a member' : 'are members'} of this project, read live where ${live.length === 1 ? 'it is' : 'they are'} stored (inside it, or a \`../\` sibling checkout) and composed in the family run like any contained member — a member is never pinned. Pin only an external (\`externals add\`), or a git or hosted member. Nothing was written.`);
+  }
   if (unknown.length) throw new UnknownExternalAliasError(unknown, declared);
   const kept = named ? bindings.filter((b) => named.includes(b.external.alias)) : bindings;
   // Step 9: the current lock (none yet reads as empty).
@@ -1700,8 +1721,27 @@ export function listExternals(): ExternalListing[] {
  * under and the public names its specs use, read through the core. Read-only.
  */
 export function listConsumers(search?: string[]): ExternalConsumer[] {
-  // Steps 1-2: the family in reach, and every project root in the searched folders.
-  return listExternalConsumers(search);
+  // Step 1: the family in reach, and every project root in the searched folders.
+  const consumers = listExternalConsumers(search);
+  if (consumers.length === 0) return consumers;
+  // Step 2: the contract each public name holds now.
+  let own: SurfaceSnapshot;
+  try {
+    own = projectOwnSurface('project');
+  } catch {
+    // No surface to read (no L0): the names a consumer writes are all that can be said.
+    return consumers;
+  }
+  const held = new Map(own.interfaces.map((e) => [e.id, new Set(e.methods.map((m) => m.name))] as const));
+  // Step 3: a method a consumer calls on a kept name whose contract no longer holds it broke as a name does.
+  return consumers.map((c) => {
+    const gone = (c.uses ?? []).flatMap((u) => {
+      const methods = held.get(u.publicName);
+      return methods ? u.members.filter((m) => m !== 'type' && !m.startsWith('capability:') && !methods.has(m)).map((m) => `${u.publicName}.${m}`) : [];
+    });
+    if (gone.length === 0) return c;
+    return { ...c, broken: [...new Set([...(c.broken ?? []), ...gone])].sort() };
+  });
 }
 
 /** What `wairon surface diff` and sdd_surface_diff answer: the baseline compared against, and every change since. */

@@ -38,7 +38,16 @@ fields:
       True when this report is a dry run: what the rename would rewrite, keep and rekey, with
       nothing written.
     optional: true
+  - name: publishedIn
+    type: list<ExportUse>
+    description: >-
+      Every public name a consumer reaches the type through: an exported type that is, or embeds,
+      the renamed type (member `type`), and an exported contract whose methods name one in their
+      signature closure (those methods) — each with its former public names and former method names,
+      so the caller can name the consumers whose code still spells the type's old name. Empty when
+      nothing published carries it
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-04T13:52:12.770Z'
-updatedAt: '2026-10-08T08:24:03.709Z'
+updatedAt: '2026-10-09T00:23:15.464Z'

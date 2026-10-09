@@ -16,6 +16,9 @@ export {
   saveSpec,
   deleteSpec,
   scanAllSpecs,
+  crossProjectWriteRefusal,
+  publishedUsesOf,
+  moveSpec,
 } from '../index.js';
 
 /**

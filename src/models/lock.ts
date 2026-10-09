@@ -170,6 +170,13 @@ export interface ProjectApproval {
    * and carry no approval over — and every surface says so as a notice.
    */
   partsIgnored?: string;
+  /**
+   * Set when the record's release stamp is missing, no wairon version or
+   * newer than the running release (lock_record.stampProblem) and no release
+   * verdict already names it: every surface reports it as a notice, and
+   * `wairon lock` replaces the stamp. Never decides the state on its own.
+   */
+  stampProblem?: string;
 }
 
 /**
@@ -256,6 +263,38 @@ export function releaseStampAgainst(record: { validatorVersion?: unknown }, runn
   if (stamp === running) return 'same';
   if (isNewerVersion(running, stamp)) return 'newer';
   return isNewerVersion(stamp, running) ? 'older' : 'same';
+}
+
+/**
+ * lock_record.stampProblem — the clause every surface reports for a release
+ * stamp this wairon cannot stand behind (none, no wairon version, or newer
+ * than `running`), or null when it is a valid stamp no newer than the running
+ * release. The identity decides the approval; the stamp only says which
+ * release last verified it, so it is named rather than kept in silence, and
+ * `wairon lock` replaces it. Pure.
+ */
+export function releaseStampProblem(record: { validatorVersion?: unknown }, running: string): string | null {
+  const reading = releaseStampAgainst(record, running);
+  if (reading === 'older' || reading === 'same') return null;
+  const stamp = record.validatorVersion;
+  if (reading === 'newer') return `its release stamp says wairon ${String(stamp)} took it, a newer release than this one (${running})`;
+  return typeof stamp === 'string' && stamp !== ''
+    ? `its release stamp "${stamp}" is no wairon version`
+    : 'it carries no release stamp';
+}
+
+/**
+ * lock_record.missingTreeSentence — the sentence for a record that approved
+ * spec files while the tree it approved is gone (no L0, no spec file below
+ * it), or null when it records none. A project with an approval on record has
+ * opted in: its absent tree is a deleted design, never "no tree". Pure.
+ */
+export function missingTreeSentence(record: { specs?: Record<string, string>; lockedAt?: unknown; lockedBy?: ApproverIdentity }): string | null {
+  const count = Object.keys(record.specs ?? {}).length;
+  if (count === 0) return null;
+  return `The approval on record (${approvalStamp(record)}) approved ${count} spec file(s), but this project has no spec tree (.wai/specs holds no L0 and no spec file): `
+    + 'the design it approved is gone, not absent — a project with an approval on record has opted in, so this is never "no tree", and nothing can be judged. '
+    + 'Fix: restore it from version control (`git checkout -- .wai/specs`); to retire the design on purpose, delete .wai/lock.json in the same change.';
 }
 
 /** Whether a valid stamp is at or after the first release that records gate parts. */

@@ -39,7 +39,7 @@ import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import {
-  approvalSubject, ciBlockingIssues, describeGateParts, designOnly, gatePartsProblem, movedGateParts, releaseStampAgainst, stampRecordsGateParts,
+  approvalSubject, ciBlockingIssues, describeGateParts, designOnly, gatePartsProblem, movedGateParts, releaseStampAgainst, releaseStampProblem, stampRecordsGateParts,
   usableGateParts, GATE_PARTS_SINCE, type PinState, type ProjectApproval, type ReleaseVerdict,
 } from '../models/lock.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
@@ -592,6 +592,26 @@ function specsUsing(family: ProjectFamily, alias: string, publicName: string | u
   return [...new Set(specs)].sort();
 }
 
+/**
+ * The binding modules the bound project's implementations of the given specs
+ * declare (implementation_spec.bindings) — an implementation named itself, by
+ * its contract, or by its contract's component — sorted. A binding is compared
+ * with the pin, never live: the advisory names it so the code that follows the
+ * move is found before the re-pin, not after.
+ */
+function bindingModulesOf(specs: readonly string[]): string[] {
+  if (specs.length === 0) return [];
+  const named = new Set(specs);
+  const componentOf = new Map(loadInterfaceSpecs().map((i) => [i.id, i.component] as const));
+  const out = new Set<string>();
+  for (const impl of loadImplementationSpecs()) {
+    if (impl.id.includes('::') || !(impl.bindings?.length)) continue;
+    if (!named.has(impl.id) && !named.has(impl.contract) && !named.has(componentOf.get(impl.contract) ?? '')) continue;
+    for (const b of impl.bindings) out.add(b.replace(/\\/g, '/'));
+  }
+  return [...out].sort();
+}
+
 /** One moved use, as the advisory finding names it. */
 function movedUse(use: ExternalStatus['uses'][number]): string {
   return `${useName(use)} ${howMoved(use).replace(/^was renamed/, 'renamed').replace(/^is gone/, 'gone')}`;
@@ -621,9 +641,13 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
       const broken = status.uses.filter(isBroken);
       const users = [...new Set(broken.flatMap((u) => specsUsing(family, status.alias, u.publicName)))].sort();
       const renamed = broken.some((u) => u.state === 'renamed' || u.detail?.includes('follow the rename'));
+      const bindings = bindingModulesOf(users);
       return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
         `${who} moved in its live producer since it was pinned: ${broken.map(movedUse).join('; ')}. `
         + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
+        + (bindings.length
+          ? `Binding module(s) declared there: ${bindings.map((b) => `"${b}"`).join(', ')} — compared with the pin, not the live producer, so ${bindings.length === 1 ? 'it draws' : 'they draw'} BINDING_DRIFT once the re-pin lands; follow the move there too. `
+          : '')
         + `Adapt the uses${renamed ? ' (follow the rename)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
     }
     case 'drifted':
@@ -906,11 +930,21 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
     const matches = same(current) || same(current.asRecorded);
     // Step 7: the inputs that moved, named, when the record carries gate parts
     // that break down its identity; parts that do not are ignored, said once.
-    const partsIgnored = gatePartsProblem(record, current) ?? undefined;
+    // A record whose identity still matches but that carries no parts at all
+    // is said too: every record from GATE_PARTS_SINCE on carries them.
+    const partsIgnored = gatePartsProblem(record, current)
+      ?? (matches && record.gateParts === undefined && current.parts
+        ? `the record carries none, though every record wairon ${GATE_PARTS_SINCE} and later writes carries them`
+        : undefined);
     const parts = usableGateParts(record, current);
     const moved = matches || !parts ? null : movedGateParts({ gateParts: parts }, current.parts);
     // Step 8: a change of the release alone is judged by re-validation.
     const release = matches ? undefined : releaseVerdict(record, current);
+    // Step 7: a stamp this wairon cannot stand behind is named whatever the
+    // identity decided — unless the release verdict already names it.
+    const stampClause = releaseStampProblem(record, WAIRON_VERSION);
+    const stampNamed = release?.reason !== undefined && release.reason.includes(String(record.validatorVersion ?? 'no release stamp'));
+    const stampProblem = stampClause !== null && !stampNamed ? stampClause : undefined;
     // Steps 9-12: what the approval still owes although its identity may
     // match — a moved id, an external never pinned or used beyond its pin.
     const owed = owedBy(record);
@@ -924,6 +958,7 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
       ...(moved && moved.length > 0 && !release ? { inputsMoved: moved } : {}),
       ...(owed !== undefined ? { owed } : {}),
       ...(partsIgnored !== undefined ? { partsIgnored } : {}),
+      ...(stampProblem !== undefined ? { stampProblem } : {}),
     };
   });
 }
@@ -1058,7 +1093,26 @@ function owedBy(record: LockRecord): string | undefined {
   for (const [alias, uses] of Object.entries(unrecorded())) {
     reasons.push(`external "${alias}" is used beyond its pin: ${uses.join(', ')} (used now, but not in the lock)`);
   }
+  // Step 12: a selected pack that cannot load leaves the doctrine the approval
+  // was judged under unreadable, and the identity digests only what loaded.
+  const unloadable = unloadablePacks();
+  if (unloadable.length > 0) reasons.push(`extension pack(s) selected in .wai/project.yaml cannot load — ${unloadable.join('; ')}`);
   return reasons.length > 0 ? reasons.join('; ') : undefined;
+}
+
+/** Each selected extension pack that cannot load, as the loader says why: a load error or a selection that does not resolve (an error, not a warning). */
+function unloadablePacks(): string[] {
+  let loaded: LoadedExtensions;
+  try {
+    loaded = loadProjectExtensions();
+  } catch {
+    return [];
+  }
+  return [
+    ...loaded.errors,
+    // A selection that resolved with a warning (unpinned, unfetchable origin) still loaded.
+    ...(loaded.selectionFailures ?? []).filter((f) => f.severity === 'error').map((f) => f.message),
+  ];
 }
 
 /**

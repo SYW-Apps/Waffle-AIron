@@ -495,13 +495,13 @@ describe('deleteSpec — the delete names the tests of the methods it took away'
     expect(loadInterfaceSpec('icheckout')).toBeNull();
   });
 
-  it('answers deleted false, with nothing to revisit, when no spec held the id', () => {
+  it('refuses an id no spec holds, saying what it might have meant (r8: never "may not exist")', () => {
     project({ testRoots: ['tests'] });
-    expect(deleteSpec('interface', 'inowhere')).toEqual({ kind: 'interface', id: 'inowhere', deleted: false, dryRun: false, removed: [], references: [], testsToRevisit: [] });
+    expect(() => deleteSpec('interface', 'inowhere')).toThrow(/spec-missing: no interface has the id "inowhere" — nothing was deleted\./);
   });
 
   it('reports nothing for a spec without methods', () => {
     project({ testRoots: ['tests'] });
-    expect(deleteSpec('component', 'checkout')).toEqual({ kind: 'component', id: 'checkout', deleted: true, dryRun: false, removed: [{ kind: 'component', id: 'checkout' }], references: [], testsToRevisit: [] });
+    expect(deleteSpec('component', 'checkout')).toEqual({ kind: 'component', id: 'checkout', deleted: true, dryRun: false, removed: [{ kind: 'component', id: 'checkout' }], references: [], testsToRevisit: [], published: [] });
   });
 });

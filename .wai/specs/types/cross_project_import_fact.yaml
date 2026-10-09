@@ -2,12 +2,12 @@ kind: value-object
 id: cross_project_import_fact
 name: CrossProjectImportFact
 description: >-
-  One import a file makes from ANOTHER project's source that resolves to nothing — the module the
-  specifier names is gone, or it does not export the name imported from it. Another project is a
-  folder holding its own `.wai/project.yaml` that is not the analyzed project's root (a member
-  project inside it, or a sibling outside it): its code moves on its own release, and a type-only
-  import of it is erased at run time, so nothing but a compiler would notice — and the gate reads
-  the file with one.
+  One import a file makes from ANOTHER project's source — a folder holding its own .wai/project.yaml
+  that is not the analyzed project's root: one that resolves to nothing (the module is gone, or it
+  does not export the name imported — a type-only import of another project is erased at run time,
+  so nothing but a compiler notices, and the gate reads the file with one), or one that resolves,
+  under each name it binds (`resolved`), which reaches into that project's code and is held to what
+  that project exports
 subsystem: sdd_validator
 fields:
   - name: specifier
@@ -34,7 +34,20 @@ fields:
       Whether the import binds the name as a type only — erased at run time, so no test run notices
       it either
     optional: false
+  - name: resolved
+    type: bool
+    description: >-
+      True when the import RESOLVES — the module is there and binds the name (`*` for a namespace
+      import, absent for a side-effect import): code reaching into the other project's source, which
+      the gate holds to what that project exports. Absent for an import that resolves to nothing
+    optional: true
+  - name: module
+    type: string
+    description: >-
+      For a resolved import: the module it lands in, relative to the other project's root — what
+      tells a reach into a file realizing one of its data components
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-08T18:51:43.992Z'
-updatedAt: '2026-10-08T18:51:44.762Z'
+updatedAt: '2026-10-09T00:42:23.530Z'

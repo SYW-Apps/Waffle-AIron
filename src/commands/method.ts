@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import { projectConfigExists, renameMethod, renameParam } from './adapters/core.js';
 import { listConsumers } from './adapters/surfaces.js';
-import { consumerReaches, narrowedToUses, type ExternalConsumer } from '../models/index.js';
+import { narrowedToUses, type ExternalConsumer } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // `wairon method …` — edits to one contract method of the bound project's spec
@@ -39,7 +39,9 @@ export async function runMethodRename(componentId: string, methodName: string, n
   // Step 3: the rename, or what it would do.
   const result = renameMethod(componentId, methodName, newName, options.pinSymbol, options.dryRun);
   // Step 4: the consumers it breaks.
-  const breaks = result.publishedIn.length > 0 ? consumers.filter((c) => consumerReaches(c, result.publishedIn, methodName)) : [];
+  // A contract a consumer depends on as a whole counts too (external_consumer.narrowedToUses).
+  const published = result.publishedIn.map((publicName) => ({ publicName, kind: 'component' as const, members: [methodName] }));
+  const breaks = consumers.map((c) => narrowedToUses(c, published)).filter((c): c is ExternalConsumer => c !== null);
   // Step 5: what moved, and who breaks.
   const would = result.dryRun ? 'would move' : 'moved';
   logger.success(`${result.dryRun ? 'Dry run: renaming' : 'Renamed'} "${result.component}.${result.from}" to "${result.to}" — ${would} in ${result.renamed.join(', ')}; "${result.from}" joins its rename trace (previousNames; \`formerly\` in the design export).`);

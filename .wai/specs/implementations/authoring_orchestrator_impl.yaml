@@ -24,45 +24,93 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
+          Ask the core adapter whether the spec lives in another project: a member's spec read
+          through this tree, or one named through an external's alias
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: crossProjectWriteRefusal
+      - stepNumber: 3
+        description: Decide on the project boundary
+        type: branch
+        condition: the spec lives in another project
+        onFalseStep: 5
+      - stepNumber: 4
+        label: chained-spec
+        description: >-
+          Refuse before anything is judged or written, with the core's sentence: the member, its
+          folder, the session to open there and the call to make there
+        type: throw
+        error: 'chained-spec: the spec lives in another project'
+      - stepNumber: 5
+        description: >-
           Read the spec as it stands before the delta: the owning subsystem the judgement compares
-          against, and — when the project declares test roots — a method the delta deletes, placed
-          in its file and named by its stored code-level symbol, which only the version that still
-          held it can answer
+          against, the contract methods a delta may remove, and — when the project declares test
+          roots — a method the delta deletes, placed in its file and named by its stored code-level
+          symbol, which only the version that still held it can answer
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
-      - stepNumber: 3
+      - stepNumber: 6
         description: >-
-          Build the judgement as a write hook over those same settings. It judges the MERGED spec,
-          because a delta on its own cannot tell you the resulting componentType, and it is the
-          resulting componentType that decides whether a field belongs. The merge is over the spec
-          as STORED, so a method that takes its signature from a source carries only the source, not
-          the params the loader resolved into it; the hook refuses a merged interface method that
-          names a signatureFrom and also states params or returns (SIGNATURE_SOURCE_RESTATED), so
-          adopting a source on a method that restated it means unsetting its params and returns in
-          the same delta. For an interface or a type it reads the merged spec's type positions under
-          the grammar (interface_spec.canonicalTypes, type_spec.canonicalTypes): every alias is
-          respelled and recorded for the change report, and a position the delta itself WROTE that
-          is not canonical is refused (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
-          TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL, naming the replacement — `number` asks "int or
-          float?"); a stored position the delta leaves alone is not judged, so a spec holding one
-          from before the grammar can still be edited and repaired. For an interface or a type it
-          refuses, the same way writeSpec does, a method, parameter or field name the delta
-          introduces that breaks identifier.problemAs, is reserved in the target language
-          (identifier.reservedIn), repeats one in its place, or — a new contract method on a
-          contract that implements nothing — breaks the method casing (invalid-name); a name the
-          stored spec already held is not judged. For a component or a type it also refuses an
-          owning subsystem the delta sets to one the tree does not have, read through the core
-          adapter's loadSpec — the store permits a delta to set the owner only as the repair of a
-          spec whose stored owner the tree does not have, so the repair must land somewhere real.
-          For a component it judges the merged spec against the spec-scoped rules
-          (validateComponentCandidate), and for a component or an interface it asks which design
-          findings the merged spec introduces in the bound tree (introducedFindings): an error
-          refuses the write with the formatted refusal, a warning or notice joins the report's
-          notices — the same judgement writeSpec runs, so a create and a delta accept the same
-          designs
+          Decide whether the delta removes contract methods: a method element with a delete marker
+          on a contract, or the contract's method list emptied
+        type: branch
+        condition: the spec is a contract and the delta removes at least one method it holds
+        onFalseStep: 12
+      - stepNumber: 7
+        description: Read the bound tree's spec index, this project's own specs
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 8
+        description: >-
+          Ask the index which specs reference a removed method (spec_index.methodReferencesTo) —
+          leaving out the removed methods' own implementation entries, which go with them — and
+          which implementation entries realize one: the entries the write removes with them
+          (cascaded)
         type: local
-      - stepNumber: 4
+      - stepNumber: 9
+        description: Decide whether a removal would leave references dangling
+        type: branch
+        condition: a spec that stays references a removed method
+        onFalseStep: 11
+      - stepNumber: 10
+        label: method-referenced
+        description: >-
+          Refuse before anything is written, naming each reference with the spec holding it and its
+          position: they are the invalid method references the removal would introduce. Edit those
+          specs first
+        type: throw
+        error: 'method-referenced: specs that stay still reference a removed method'
+      - stepNumber: 11
+        description: >-
+          Read, before the write, every public name a consumer reaches a removed method through —
+          the entries publishing it and every published verb forwarding it — for the report's
+          published list
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: publishedUsesOf
+      - stepNumber: 12
+        description: >-
+          Build the judgement as a write hook over the settings read in step 1. It judges the MERGED
+          spec, because a delta on its own cannot tell you the resulting componentType, and it is
+          the resulting componentType that decides whether a field belongs. The merge is over the
+          spec as STORED, so a method that takes its signature from a source carries only the
+          source; the hook refuses a merged interface method that names a signatureFrom and also
+          states params or returns (SIGNATURE_SOURCE_RESTATED). For an interface or a type it reads
+          the merged spec's type positions under the grammar: every alias is respelled and recorded,
+          and a position the delta itself WROTE that is not canonical is refused, naming the
+          replacement; a stored one the delta leaves alone is not judged. It refuses a method,
+          parameter or field name the delta introduces that breaks the identifier grammar, is
+          reserved in the target language, repeats one in its place, or breaks the method casing
+          (invalid-name). For a component or a type it refuses an owning subsystem the delta sets to
+          one the tree does not have. For a component it judges the merged spec against the
+          spec-scoped rules (validateComponentCandidate), and for a component or an interface it
+          asks which design findings the merged spec introduces in the bound tree
+          (introducedFindings): an error refuses the write, a warning or notice joins the report's
+          notices
+        type: local
+      - stepNumber: 13
         description: >-
           Apply the delta through the core client adapter's update with that hook injected, so the
           judgement runs on the merged spec at the last point before anything reaches disk,
@@ -71,34 +119,42 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: updateSpec
-      - stepNumber: 5
+      - stepNumber: 14
+        description: Decide whether removed methods take implementation entries with them
+        type: branch
+        condition: the write removed contract methods that implementation entries realize
+        onFalseStep: 16
+      - stepNumber: 15
         description: >-
-          When the write changes a Portal's transport — a dry run included, before anything is
-          written — name its impact on the callers: read the components (and, through
-          loadImplementationSpecs, their implementations' call, register and dispatch steps) and add
-          one notice per Adapter that states another transport and calls this Portal: the
-          ADAPTER_TRANSPORT_MISMATCH the change raises there, with the way out (state the new
-          transport, or none to follow the Portal)
+          For each implementation holding such an entry, remove the entries through the core
+          adapter's update in the same dry-run mode, and record each `<implementation>.<method>` as
+          cascaded, with a notice naming it
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: updateSpec
+      - stepNumber: 16
+        description: >-
+          When the write changes a Portal's transport — a dry run included — name its impact on the
+          callers: read the components (and their implementations' call, register and dispatch
+          steps) and add one notice per Adapter that states another transport and calls this Portal:
+          the ADAPTER_TRANSPORT_MISMATCH the change raises there, with the way out
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadComponentSpecs
-      - stepNumber: 6
+      - stepNumber: 17
         description: >-
-          When the delta writes a contract's `implements` — a dry run included, before anything is
-          written — ask what validate will say of it: an undeclared alias, a name the producer does
-          not export, or one exported for calling rather than as an extension point (role
-          implement); a problem is added to the report as a notice that names the finding that will
-          follow
+          When the delta writes a contract's `implements` — a dry run included — ask what validate
+          will say of it, and add a problem to the report as a notice that names the finding that
+          will follow
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: implementsProblem
-      - stepNumber: 7
+      - stepNumber: 18
         description: Decide whether this write invalidated any test
         type: branch
         condition: the change report names a changed or deleted method and the project declares test roots
-        onTrueStep: 8
-        onFalseStep: 10
-      - stepNumber: 8
+        onFalseStep: 21
+      - stepNumber: 19
         description: >-
           Place each changed method in the file realizing it: for a contract, every implementation
           realizing it with its symbol and file; for an implementation or a type, the method's entry
@@ -106,43 +162,54 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 9
+      - stepNumber: 20
         description: >-
           Find the tests that encode those methods, so the write that creates the collision is the
-          one that reports it — a spec pass that changes a contract and says nothing is how a brief
-          comes to promise green tests it has already broken. The method names come from the change
-          report's own paths, which covers a rewrite and a removal alike, and a `symbol` is taken
-          from the delta when it carries one: a method whose symbol was set by an earlier write and
-          not restated is searched by its contract name, because the report does not carry the
-          merged spec to read it back from
+          one that reports it; the method names come from the change report's own paths, which
+          covers a rewrite and a removal alike
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 10
+      - stepNumber: 21
         description: >-
           Return the change report: what changed, which of the delta's paths changed nothing, or
-          that nothing did and nothing was written — carrying the respellings the write applied
-          (each type position the canonical spelling replaced) and the tests to revisit when this
-          write invalidated any
+          that nothing did and nothing was written — the respellings applied, the implementation
+          entries cascaded, the public names a removed method was published under, and the tests to
+          revisit
         type: return
         outcome: reported
   - name: moveMethods
     narrative:
       - stepNumber: 1
+        description: Ask the core adapter whether either component lives in another project
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: crossProjectWriteRefusal
+      - stepNumber: 2
+        description: Decide on the project boundary
+        type: branch
+        condition: the source or the target lives in another project
+        onFalseStep: 4
+      - stepNumber: 3
+        label: chained-spec
+        description: Refuse before anything is judged or written, with the core's sentence
+        type: throw
+        error: 'chained-spec: the component lives in another project'
+      - stepNumber: 4
         description: >-
           Read the bound project's configuration for the rule severities, project type and
           dependency ceiling to judge with; a project that has none is judged on the defaults
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 2
+      - stepNumber: 5
         description: >-
           Build the judgement as a write hook over those settings, with both halves: `gate` to
           refuse the resulting components at the write boundary, and `assess` to answer the same
           question about a candidate home without throwing, so the store can rank alternatives
           without driving a search on caught exceptions
         type: local
-      - stepNumber: 3
+      - stepNumber: 6
         description: >-
           Hand the move to the core client adapter with that hook injected, so the judgement runs on
           the resulting components at the last point before anything reaches disk, and the store —
@@ -150,12 +217,90 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: moveMethods
-      - stepNumber: 4
+      - stepNumber: 7
         description: >-
           Return the move's report unchanged: what moved and how many references followed it, or
           which rule refused it and where these methods could live instead
         type: return
         outcome: reported
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the core adapter whether the spec, or the subsystem it moves to, lives in another
+          project
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: crossProjectWriteRefusal
+      - stepNumber: 2
+        description: Decide on the project boundary
+        type: branch
+        condition: the spec or the target lives in another project
+        onFalseStep: 4
+      - stepNumber: 3
+        label: chained-spec
+        description: Refuse before anything is judged or written, with the core's sentence
+        type: throw
+        error: 'chained-spec: the spec lives in another project'
+      - stepNumber: 4
+        description: >-
+          Decide whether a component moves: a type carries no edges, so it is moved without
+          judgement
+        type: branch
+        condition: the kind is component
+        onFalseStep: 12
+      - stepNumber: 5
+        description: >-
+          Read the bound project's configuration: the rule severities and project type the move is
+          judged with
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 6
+        description: >-
+          Ask the core adapter for the move's plan as a dry run: what moves — the component and
+          every member it owns — refused exactly as the move would be
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: moveSpec
+      - stepNumber: 7
+        description: Read each moved component as stored, and set its new subsystem
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadSpec
+      - stepNumber: 8
+        description: >-
+          Ask which design findings the moved components introduce in the bound tree together —
+          every edge into or out of them read with their new subsystem
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: introducedFindings
+      - stepNumber: 9
+        description: Decide on the verdict
+        type: branch
+        condition: the verdict holds an error
+        onFalseStep: 11
+      - stepNumber: 10
+        label: refused
+        description: >-
+          Refuse the move with the rule's own words — a forbidden doctrine edge, or a
+          cross-subsystem edge into a non-Portal the move would create — before anything is written
+        type: throw
+        error: the move would introduce an error validate reports
+      - stepNumber: 11
+        description: >-
+          Keep the verdict's warnings and notices — a curable boundary finding the move introduces —
+          for the report
+        type: local
+      - stepNumber: 12
+        description: Move the spec through the core client adapter, forwarding the caller's dry run
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: moveSpec
+      - stepNumber: 13
+        description: Return the move's report with the gate's notices
+        type: return
+        outcome: SpecMove
   - name: writeSpec
     narrative:
       - stepNumber: 1
@@ -169,156 +314,158 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
-          Ask the restatement which spec it cannot be written without (spec_restatement.parent), and
-          decide whether there is a parent to read
-        type: branch
-        condition: the restatement names a parent
-        onTrueStep: 3
-        onFalseStep: 4
+          Ask the core adapter whether the spec, or the parent it is written under
+          (spec_restatement.parent), lives in another project, answering for the create tool of its
+          kind
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: crossProjectWriteRefusal
       - stepNumber: 3
+        description: Decide on the project boundary
+        type: branch
+        condition: the spec or its parent lives in another project
+        onFalseStep: 5
+      - stepNumber: 4
+        label: chained-spec
         description: >-
-          Read the parent through the core client adapter; an absent parent is the restatement's to
-          refuse, below
+          Refuse before anything is judged or written, with the core's sentence: the member, its
+          folder, the session to open there and the call to make there
+        type: throw
+        error: 'chained-spec: the spec lives in another project'
+      - stepNumber: 5
+        description: >-
+          Read the parent the restatement names (spec_restatement.parent) through the core client
+          adapter, when it names one; an absent parent is the restatement's to refuse, below
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
-      - stepNumber: 4
+      - stepNumber: 6
         label: existing
         description: Read the spec this restatement re-authors, if one already holds the id
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
-      - stepNumber: 5
-        description: Decide whether this write gives an id to a new spec of a kind that keeps a rename trace
-        type: branch
-        condition: no spec already holds the id and the kind is component, interface, implementation or type
-        onTrueStep: 6
-        onFalseStep: 9
-      - stepNumber: 6
-        description: Read the bound tree's spec index, for the rename traces
+      - stepNumber: 7
+        description: >-
+          When the write gives an id to a new spec of a kind that keeps a rename trace (component,
+          interface, implementation, type), read the bound tree's spec index for the rename traces
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: scanAllSpecs
-      - stepNumber: 7
+      - stepNumber: 8
         description: Ask which spec of this kind retired the id (spec_index.retiredBy; a type within its owner)
         type: branch
-        condition: a spec of this kind lists the id in its rename trace (previousIds)
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
+        condition: the id is new and a spec of this kind lists it in its rename trace (previousIds)
+        onFalseStep: 10
+      - stepNumber: 9
         label: id-retired
         description: >-
           Refuse before anything reaches disk (id-retired), naming the holder and the way out:
-          unsetting the holder's previousIds releases the id, at the cost that a consumer holding
-          the old key reads a delete and an add — left alone, it would read the new spec as the
-          renamed one
+          unsetting the holder's previousIds releases the id
         type: throw
         error: id-retired
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Apply the restatement to the stored spec (spec_restatement.applyTo): the status, the
           candidate with every unexpressed field carried, the parent-derived fields, the narrative
           labels resolved, the notices, and the methods it changes or removes — or the refusal that
-          stops it
+          stops it — and read every method, parameter and field name an interface or a type
+          candidate introduces, reading the L0 and the owning subsystem through the core client
+          adapter's loadSpec for the effective targetLanguage: a name the stored spec does not
+          already hold that breaks the identifier grammar, is reserved in the target language,
+          repeats one in its place, or — a contract method on a contract that implements no other
+          project's extension point — breaks the tree's method casing
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Decide whether the restatement may be written at all
         type: branch
-        condition: the application carries a refusal
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
+        condition: >-
+          the application carries a refusal, it introduces a name the tree cannot hold, or the
+          candidate is a subsystem naming a projectPath (the legacy mount form)
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
-          Refuse with the application's own sentence — a missing parent, a status the write would
-          lower, a label that does not resolve, an interface method that names a signature source
-          and also states params or returns (SIGNATURE_SOURCE_RESTATED), or a type position that is
-          not canonical (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID, TYPE_FORM_UNSUPPORTED or
-          TYPE_NOT_NEUTRAL, naming the replacement) — before anything reaches disk
+          Refuse before anything reaches disk with the sentence that applies: the application's own
+          (a missing parent, a status the write would lower, a label that does not resolve, a
+          restated signature source, a type position that is not canonical), invalid-name naming
+          every such name, or the mount form — a member is declared in project.yaml `members`
+          (sdd_add_member), and wairon never writes the L1 mount form
         type: throw
         error: restatement refused
-      - stepNumber: 12
-        label: name-check
-        description: >-
-          Decide whether an interface or a type candidate introduces a name the tree cannot hold,
-          reading the L0 and the owning subsystem it names (an interface through its component)
-          through the core client adapter's loadSpec for the effective targetLanguage: a method,
-          parameter or field name the stored spec does not already hold — so a spec carrying an
-          older name can still be edited — that breaks the identifier grammar (identifier.problemAs:
-          empty, over 64 characters, a leading digit, __proto__), is a word the target language
-          reserves for that kind (identifier.reservedIn), is a second member of the same name in one
-          place, or — a contract method on a contract that implements no other project's extension
-          point — is outside the tree's method casing (naming_rule_config.methodCasingFor): exactly
-          what sdd_rename_method refuses, so define and rename accept the same names
-        type: branch
-        condition: >-
-          the candidate is an interface or a type, and an introduced method, parameter or field name
-          breaks the grammar, is reserved, repeats one in its place, or breaks the method casing
-        onFalseStep: 14
       - stepNumber: 13
-        label: invalid-name
         description: >-
-          Refuse before anything reaches disk (invalid-name), naming every such name and why — the
-          language and an alternative for a reserved word
-        type: throw
-        error: invalid-name
-      - stepNumber: 14
-        label: judge
-        description: >-
-          Decide whether the candidate is a component, the one kind the intrinsic rules judge at the
-          write boundary
-        type: branch
-        condition: the restatement's kind is component
-        onTrueStep: 15
-        onFalseStep: 16
-      - stepNumber: 15
-        description: >-
-          Judge the candidate — the spec that will actually be written, carried fields included, so
-          retyping a Portal carries its auth into the judgement instead of letting it vanish unseen
-          — against the spec-scoped rules with the project's own settings
+          For a component candidate — the spec that will actually be written, carried fields
+          included — judge it against the spec-scoped rules with the project's own settings
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: validateComponentCandidate
-      - stepNumber: 16
+      - stepNumber: 14
         label: in-tree
         description: >-
           Ask which design findings the candidate introduces in the bound tree: an edge between two
-          existing blocks whose stereotypes forbid it, or a route two bound methods share — only
-          those the stored tree did not already hold and no later write in the authoring order can
-          cure; a kind those rules do not judge answers an empty verdict
+          existing blocks whose stereotypes forbid it, a cross-subsystem edge into a non-Portal, or
+          a route two bound methods share — only those the stored tree did not already hold and no
+          later write in the authoring order can cure; a kind those rules do not judge answers an
+          empty verdict
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: introducedFindings
-      - stepNumber: 17
+      - stepNumber: 15
+        label: dropped
+        description: >-
+          When a re-authored contract drops methods it held, read the bound tree's spec index and
+          ask it which specs reference a dropped method (spec_index.methodReferencesTo), the dropped
+          methods' own implementation entries left out, and which implementation entries realize one
+          — the entries that go with them
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 16
         description: Decide on the verdicts
         type: branch
-        condition: the intrinsic or the in-tree verdict holds at least one error
-        onTrueStep: 18
-        onFalseStep: 19
+        condition: >-
+          the intrinsic or the in-tree verdict holds an error, or a spec that stays references a
+          dropped method
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Refuse the write before anything reaches disk: with the formatted refusal naming every
+          rule code the candidate broke or would introduce — the same codes and messages validate
+          gives — or naming each reference to a dropped method (method-referenced: edit those specs
+          first, or restate the method); a warning or notice rides along as one of the receipt's
+          notices instead
+        type: throw
+        error: rule violation or method-referenced
       - stepNumber: 18
+        label: tests
         description: >-
-          Refuse the write with the formatted refusal, naming every rule code the candidate broke or
-          would introduce — the same codes and messages validate gives — before anything reaches
-          disk, so the remedy is to fix the arguments and call again; a warning or notice (a code
-          the project tuned down) rides along as one of the receipt's notices instead
-        type: throw
-        error: rule violation
+          When the application names a changed or removed method and the project declares test
+          roots, place each in the file realizing it (the private searchedMethods): for a contract,
+          every implementation realizing it with its symbol and file; for an implementation or a
+          type, the method's own entry in the stored spec before the restated one
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: loadImplementationSpecs
       - stepNumber: 19
-        label: persist
         description: >-
-          Refuse the legacy mount form: a subsystem that names a projectPath is a member
-          declaration, not a subsystem
-        type: branch
-        condition: the candidate is a subsystem that names a projectPath
-        onTrueStep: 20
-        onFalseStep: 21
+          Find the tests that encode those methods, each searched by its stored symbol when it has
+          one
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: findTestsReferencing
       - stepNumber: 20
-        description: >-
-          Refuse before anything reaches disk, naming the subsystem and the replacement: a member is
-          declared in project.yaml `members` (sdd_add_member / `wairon member add`), which scaffolds
-          its project; wairon never writes the L1 mount form
-        type: throw
-        error: mount form refused
+        label: dry-run
+        description: Decide whether the caller asked only what the write would do
+        type: branch
+        condition: the restatement is a dry run
+        onFalseStep: 22
       - stepNumber: 21
+        description: >-
+          Answer the receipt the write would give, marked dryRun — the implementation entries it
+          would cascade among it — with nothing written
+        type: return
+        outcome: dry run
+      - stepNumber: 22
         label: save
         description: >-
           Persist the candidate through the core client adapter, collecting the store's placement
@@ -326,176 +473,178 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: saveSpec
-      - stepNumber: 22
-        label: tests
-        description: Decide whether this write invalidated any test
-        type: branch
-        condition: the application names a changed or removed method and the project declares test roots
-        onTrueStep: 23
-        onFalseStep: 25
       - stepNumber: 23
         description: >-
-          Place each changed method in the file realizing it (the private searchedMethods): for a
-          contract, read every implementation realizing it and take each one's symbol and file for
-          the method, since a contract method's tests import its realization; for an implementation
-          or a type, the method's own entry in the stored spec before the restated one, its symbol,
-          and its own sourcePath else the spec's. A method no spec places in a file is searched by
-          name alone
+          Remove the dropped methods' implementation entries through the core adapter's update, each
+          recorded as cascaded with a notice naming it
         type: call
         targetComponent: authoring_core_adapter
-        targetMethod: loadImplementationSpecs
+        targetMethod: updateSpec
       - stepNumber: 24
-        description: >-
-          Find the tests that encode those methods, so the restatement that drops or rewrites a
-          method reports the collision exactly as a delta that does the same does, each method
-          searched by its stored symbol when it has one
-        type: call
-        targetComponent: authoring_validator_adapter
-        targetMethod: findTestsReferencing
-      - stepNumber: 25
         label: receipt
         description: >-
           Return the write receipt: the kind, id and name written, whether a spec already held the
           id, the status written, the notices — the gate's warnings, the application's re-authoring
-          notices and the store's placement notices — the respellings the application applied (each
-          type position the input wrote as an alias, with the canonical spelling stored), and the
-          tests to revisit
+          notices and the store's placement notices — the respellings applied, the entries cascaded,
+          and the tests to revisit
         type: return
         outcome: written
   - name: deleteSpec
     narrative:
       - stepNumber: 1
-        label: member-key
         description: >-
-          Decide whether the id names the L0 or a spec of a member project read through this tree
-          (its key carries the member's prefix): neither has a subtree this project may plan
-        type: branch
-        condition: the kind is system, or the id is a member project's key
-        onTrueStep: 2
-        onFalseStep: 4
+          Ask the core adapter whether the spec lives in another project — a member's, by its key or
+          an `alias::name`, or one named through an external's alias — answering for sdd_delete_spec
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: crossProjectWriteRefusal
       - stepNumber: 2
+        description: 'Decide on the project boundary and the L0: a dry run is refused exactly as the deletion'
+        type: branch
+        condition: the spec lives in another project, or the kind is system
+        onFalseStep: 4
+      - stepNumber: 3
+        label: chained-spec
         description: >-
-          Delete that one document through the core client adapter, as the store always has — the
-          store refuses the L0, the root every other spec hangs from; a dry run only reads whether
-          it is there
+          Refuse before anything is planned or removed: with the core's sentence (the member, its
+          folder, the session to open there and the call to make there), or — for the L0, the root
+          every other spec hangs from — that it is never deleted
+        type: throw
+        error: chained-spec, or the L0 is never deleted
+      - stepNumber: 4
+        description: >-
+          Decide whether the id names a spec of a legacy L1 mount read through this tree (its key
+          carries the mount's prefix): it has no subtree this project may plan
+        type: branch
+        condition: the id is a legacy mount's key
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Delete that one document through the core client adapter, as the store always has; a dry
+          run only reads whether it is there
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: deleteSpec
-      - stepNumber: 3
+      - stepNumber: 6
         label: single-document
         description: 'Answer with that single document: removed, or not there'
         type: return
         outcome: single document
-      - stepNumber: 4
+      - stepNumber: 7
         description: >-
           Read the bound project's configuration for the test roots the report searches; a project
           that has none searches nothing
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 5
-        description: >-
-          Read the bound tree's spec index, this project's own specs only — a member's specs are
-          deleted from its own root
+      - stepNumber: 8
+        description: Read the bound tree's spec index, this project's own specs only
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: scanAllSpecs
-      - stepNumber: 6
+      - stepNumber: 9
         description: Read the L0, whose export table may name what the deletion removes
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
-      - stepNumber: 7
+      - stepNumber: 10
         description: >-
           Ask the index what deleting the spec takes with it (spec_index.subtreeOf): the spec itself
           and everything it contains, innermost first
         type: local
-      - stepNumber: 8
+      - stepNumber: 11
         description: Decide whether there is anything to delete
         type: branch
         condition: no spec of the kind holds the id
-        onFalseStep: 10
-      - stepNumber: 9
-        label: not-found
+        onFalseStep: 13
+      - stepNumber: 12
+        label: spec-missing
         description: >-
-          Answer that nothing was deleted: a spec that was not there is not a failure, but it is not
-          a deletion either
-        type: return
-        outcome: nothing deleted
-      - stepNumber: 10
+          Refuse, nothing deleted, with what the id might have meant: the kind of spec that does
+          hold it, a type addressed by its bare id or as subsystem::id, and the ids the kind does
+          hold
+        type: throw
+        error: 'spec-missing: no spec of the kind holds the id'
+      - stepNumber: 13
         description: >-
           Ask the index which references specs outside that set still hold to it
           (spec_index.referencesTo), each with the spec holding it and its position
         type: local
-      - stepNumber: 11
+      - stepNumber: 14
+        description: >-
+          Read, before anything goes, every public name a consumer reaches what goes through: the
+          deletion's published list, from which the door names the consumers it breaks
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: publishedUsesOf
+      - stepNumber: 15
         description: Decide whether the deletion takes away any method
         type: branch
         condition: >-
           a removed contract, implementation or type held methods and the project declares test
           roots
-        onFalseStep: 14
-      - stepNumber: 12
+        onFalseStep: 18
+      - stepNumber: 16
         description: >-
-          Place each removed method in the file realizing it — for a removed contract, the
-          implementations realizing it; for an implementation or a type, the method's own sourcePath
-          else the spec's — read now, while those implementations still exist
+          Place each removed method in the file realizing it, read now, while those implementations
+          still exist
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 13
+      - stepNumber: 17
         description: >-
           Find the tests that encode the removed methods, each searched by its symbol when it
           declared one
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 14
+      - stepNumber: 18
         label: plan
         description: Decide whether the caller asked only for the plan
         type: branch
         condition: the caller asked for a dry run
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 20
+      - stepNumber: 19
         label: dry-run
         description: >-
-          Answer with the plan: every spec that would go, every reference that would be left, and
-          the tests to revisit — nothing removed
+          Answer with the plan: every spec that would go, every reference that would be left, every
+          public name it publishes, and the tests to revisit — nothing removed
         type: return
         outcome: dry run
-      - stepNumber: 16
+      - stepNumber: 20
         description: Decide whether the deletion would leave references dangling
         type: branch
         condition: a spec outside the set still references it and the caller did not force the deletion
-        onFalseStep: 18
-      - stepNumber: 17
+        onFalseStep: 22
+      - stepNumber: 21
         label: referenced
         description: >-
           Refuse before anything is removed, naming each reference with the spec that holds it and
           its position, and the two ways on: edit those specs first, or force the deletion and leave
-          them for validate to report — they are the invalid references the deletion itself would
-          introduce
+          them for validate to report
         type: throw
         error: 'referenced: other specs still reference what the deletion removes'
-      - stepNumber: 18
+      - stepNumber: 22
         label: remove
         description: For each spec of the set, innermost first, so a container goes after its content
         type: loop
         loopKind: forEach
         over: the specs the deletion takes
-        endStep: 19
-      - stepNumber: 19
+        endStep: 23
+      - stepNumber: 23
         description: >-
           Delete the spec document through the core client adapter, which prunes the folders it
           leaves empty
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: deleteSpec
-      - stepNumber: 20
+      - stepNumber: 24
         description: >-
           Return the deletion: the kind and id, that it was removed, every spec it took, the
-          references a forced deletion left dangling, and the tests to revisit
+          references a forced deletion left dangling, the public names it published, and the tests
+          to revisit
         type: return
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-08T19:06:17.751Z'
+updatedAt: '2026-10-09T00:57:43.785Z'

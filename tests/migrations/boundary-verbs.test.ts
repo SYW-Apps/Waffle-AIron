@@ -194,7 +194,8 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
     const cases: [string, (f: MetaFamily) => void, Record<string, unknown>, RegExp][] = [
       ['conformance debt', (f) => write(f.svc,'.wai/project.yaml', fs.readFileSync(path.join(f.svc, '.wai', 'project.yaml'), 'utf8').replace('rules:\n', "rules:\n  conformance:\n    carried:\n      - kind: drift\n        why: owed\n        findings:\n          - code: X\n            spec: pay\n            at: ''\n")), { home: 'pay', packs: 'adopt' }, /conformance debt/],
       ['severity override', (f) => write(f.svc, '.wai/project.yaml', fs.readFileSync(path.join(f.svc, '.wai', 'project.yaml'), 'utf8').replace('rules:\n', 'rules:\n  sddRuleSeverity:\n    UNUSED_COMPONENT: off\n')), { home: 'pay', packs: 'adopt' }, /overrides UNUSED_COMPONENT to off/],
-      ['unknown .wai file', (f) => write(f.svc, '.wai/phased_design.md', '# notes\n'), { home: 'pay', packs: 'adopt' }, /\.wai holds "phased_design\.md"/],
+      // phased_design.md is `wairon init`'s own workbook (round 8: recognised); a file wairon never writes is not.
+      ['unknown .wai file', (f) => write(f.svc, '.wai/notes.md', '# notes\n'), { home: 'pay', packs: 'adopt' }, /\.wai holds "notes\.md"/],
       ['pack with no answer', () => undefined, { home: 'pay' }, /selects the pack acme-rules@1\.0\.0/],
       ['no home', () => undefined, { home: '', packs: 'adopt' }, /needs a home subsystem \(--into\)/],
       ['a spec landing on one', (f) => write(f.top, '.wai/specs/settle/.index.yaml', { id: 'settle', name: 'settle', description: 'Ours.', parentSystem: 'Hub', publicInterfaces: [], trustedLinks: [] }), { home: 'pay', packs: 'adopt' }, /would land on this project's settle\/\.index\.yaml/],

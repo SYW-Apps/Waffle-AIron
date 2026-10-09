@@ -1,0 +1,56 @@
+kind: value-object
+id: spec_move
+name: SpecMove
+description: >-
+  What moving a component or a type to another subsystem changed. A component takes the members it
+  owns, its contracts and their implementations with it, and keeps every id, so references by id
+  stay as they are; what names the old subsystem follows instead — its export entries for the moved
+  specs, lifecycle entrypoints, an L0 re-export `from` the old subsystem narrowed to them, and every
+  subsystem-qualified type reference.
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: component or type
+    optional: false
+  - name: id
+    type: string
+    description: The moved spec's id
+    optional: false
+  - name: from
+    type: string
+    description: The subsystem it lived in; empty for a system-level type
+    optional: false
+  - name: to
+    type: string
+    description: The subsystem it lives in now; empty for a type made system-level
+    optional: false
+  - name: moved
+    type: list<SpecRef>
+    description: >-
+      Every spec the move relocated: the addressed spec, the members it owns, their contracts and
+      implementations
+    optional: false
+  - name: rewritten
+    type: list<string>
+    description: >-
+      Ids of the other specs whose references were rewritten to follow the move — subsystems whose
+      export entries or lifecycle moved, the L0 re-export, specs naming a moved type qualified by
+      its old subsystem
+    optional: false
+  - name: notices
+    type: list<string>
+    description: >-
+      What the authoring gate said of the moved specs: a curable boundary finding the move
+      introduces (a direct cross-subsystem edge a trustedLink or an Adapter would license, a target
+      not yet published), as validate will report it
+    optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when this report is a dry run: what the move would relocate and rewrite, refused exactly
+      as the move would be, with nothing written
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-10-09T00:25:06.826Z'
+updatedAt: '2026-10-09T00:25:07.510Z'

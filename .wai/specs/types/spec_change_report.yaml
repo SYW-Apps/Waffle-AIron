@@ -71,7 +71,29 @@ fields:
       delta or the stored file wrote against the canonical spelling stored. Empty when every
       position was already canonical.
     optional: false
+  - name: cascaded
+    type: list<string>
+    description: >-
+      Each implementation method entry the write removed with a contract method it removed, as
+      `<implementation>.<method>` (or, on a dry run, would remove): a narrative realizes its
+      contract method and means nothing without it, so it goes with it in the same write. Absent
+      when the write removed no contract method.
+    optional: true
+  - name: published
+    type: list<ExportUse>
+    description: >-
+      Every public name of the bound project's export tables a consumer reaches a contract method
+      this write removed through (the entries publishing it, and every published verb forwarding it
+      by signatureFrom), read before the write. Absent when the write removed no published method.
+    optional: true
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers in reach whose specs call a removed method on one of the published names — the
+      projects the removal breaks. Filled by the door that read the consumers; absent when none
+      breaks.
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-10-04T23:37:53.379Z'
+updatedAt: '2026-10-09T00:25:01.966Z'

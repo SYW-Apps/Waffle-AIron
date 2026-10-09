@@ -21,7 +21,7 @@ fields:
       One line per piece of metadata and where it went, e.g. "L0 vision → billing description",
       "globalRequirements (2) → parent L0", "targetLanguage rust → billing, ledger", "member
       payments → parent members as payments (services/billing/payments)", "pack acme/rules@1.2.0
-      adopted".
+      adopted", ".wai/variants/relay.yaml → this project's .wai/variants/relay.yaml".
     optional: false
   - name: externals
     type: list<string>
@@ -34,15 +34,18 @@ fields:
     description: >-
       Every file of the member's .wai deleted with no home, grouped: its project.yaml, its lock (its
       approval ends with the project), its pins and snapshots, its derived outputs (agents, context,
-      guides), its legacy surfaces.
+      docs, generated, rules, templates, topology, mcp), its legacy surfaces, its design workbook
+      (phased_design.md), its host and producer bindings (git.json, remote.json, producers.json),
+      and the files placed in this project (variants, vendored packs).
     optional: false
   - name: notCarried
     type: list<string>
     description: >-
       One line per piece of the member's metadata deliberately not carried, with the reason — e.g.
       "projectType fullstack not stamped on billing, ledger: not a subsystem profile (a project
-      kind, or no built-in or loaded pack registers it)" — so a value the moved subsystems cannot
-      hold is listed rather than raising UNKNOWN_PROFILE.
+      kind, or no built-in or loaded pack registers it)", or the member's design workbook when it
+      differs from this project's — so a value the moved subsystems cannot hold is listed rather
+      than raising UNKNOWN_PROFILE, and the plan names it before anything is applied.
     optional: false
   - name: consumersRestored
     type: list<string>
@@ -56,11 +59,12 @@ fields:
   - name: signaturesRederived
     type: list<string>
     description: >-
-      Demote only: one line per contract or type method whose stored signature text the respelling
-      back left stale and was re-derived from its params, e.g. "ihit_client.reportHit:
-      reportHit(hit: analytics::hit): async void → reportHit(hit: analytics.hit): async void".
+      Internalize and demote: one line per contract or type method whose stored signature text the
+      respelling across the old boundary left stale and was re-derived from its params, e.g.
+      "ihit_client.reportHit: reportHit(hit: analytics::hit): async void → reportHit(hit:
+      analytics.hit): async void".
     optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-30T20:21:50.730Z'
-updatedAt: '2026-10-07T06:25:32.793Z'
+updatedAt: '2026-10-09T00:59:03.200Z'

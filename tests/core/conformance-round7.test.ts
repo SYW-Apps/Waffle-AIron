@@ -95,11 +95,13 @@ describe('1. parameter conformance: `_` means unused, pairing is tail-first and 
     expect(byCode(issues, 'UNREALIZED_PARAM')).toEqual([]);
   });
 
-  it('`planRoute(apiKey, req)` for `planRoute(request)` names the inserted apiKey, never req', () => {
+  it('`planRoute(apiKey, req)` for `planRoute(request)` names the inserted apiKey, and req only as the transport handle it is (round 8)', () => {
     const issues = routes({ planRoute: 'apiKey: string, req: IncomingMessage' });
     const undeclared = messages(issues, 'UNDECLARED_PARAM');
     expect(undeclared, said(issues)).toContain('"apiKey"');
-    expect(undeclared).not.toContain('"req"');
+    // Round 8: a transport object where a domain record is declared is a
+    // substitution, never a silent pairing — req is named as that.
+    expect(undeclared).toContain('"req" (a transport handle in the place of the contract\'s "request"');
   });
 
   it('a same-position parameter of a different kind (`params: Record` for `id: string`) → UNREALIZED_PARAM id + UNDECLARED_PARAM params', () => {

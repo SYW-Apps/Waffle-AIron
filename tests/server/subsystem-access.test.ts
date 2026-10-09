@@ -162,7 +162,10 @@ async function seedTree(): Promise<string> {
     expect(added.isError, added.text).toBe(false);
   }
   for (const [id, sub, deps] of [['cat_store', 'catalog', []], ['pay_gate', 'payments', ['cat_store']], ['order_flow', 'orders', ['cat_store']]] as const) {
-    const added = await call(token, 'sdd_add_component', comp(id, sub, [...deps]));
+    // catalog's front door is a Portal: since round 8 the write gate refuses a
+    // cross-subsystem edge into a non-Portal, which no later write can cure.
+    const spec = id === 'cat_store' ? { ...comp(id, sub), componentType: 'Portal', transport: 'InProcess' } : comp(id, sub, [...deps]);
+    const added = await call(token, 'sdd_add_component', spec);
     expect(added.isError, added.text).toBe(false);
   }
   return token;

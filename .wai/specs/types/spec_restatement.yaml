@@ -38,6 +38,12 @@ fields:
       The lifecycle status the caller stated. Absent keeps the stored status, and draft for a new
       spec
     optional: true
+  - name: dryRun
+    type: bool
+    description: >-
+      Answer what the write would do — refused exactly as the write would be, the gate included —
+      and write nothing; the receipt says dryRun.
+    optional: true
 methods:
   - name: parent
     signature: 'parent(): SpecParent | null'
@@ -90,4 +96,4 @@ methods:
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-10-07T06:30:47.162Z'
+updatedAt: '2026-10-09T00:25:02.685Z'

@@ -527,10 +527,13 @@ methods:
       its owner; an implementation whose new path is the file it already occupies has that file
       cleared first, because the loader refuses to write a spec over a file holding another id),
       then remove the file it left behind, prune the folders that leaves empty, and drop the cached
-      spec index. The reload is the point: the rewrite already edited the moved specs' own files, so
-      writing the copies loaded before it would undo their references; a spec the reload cannot find
-      falls back to the copy the rename planned from. The rename decides WHAT moves — this writes
-      the move.
+      spec index. Every OTHER contract of the component and every implementation of its contracts
+      keeps its id but follows the component's folder: each is re-saved where the loader now places
+      it and the file it left is removed — an implementation left in a folder named after a
+      component that no longer exists is the debris a rename must never leave. The reload is the
+      point: the rewrite already edited the moved specs' own files, so writing the copies loaded
+      before it would undo their references; a spec the reload cannot find falls back to the copy
+      the rename planned from. The rename decides WHAT moves — this writes the move.
     signature: >-
       moveRenamedSpecs(componentId: string, newId: string, component: ComponentSpec,
       movingInterface?: InterfaceSpec, movingImplementation?: ImplementationSpec): void
@@ -1224,12 +1227,15 @@ methods:
       `as: <the old public name>` first, so the published name stays. Rename traces are never
       rewritten. Findings keyed on the type follow it: lint allows naming it, and debt-register
       entries anchored on it, rewritten in place with every comment and all other formatting kept
-      and each edit reported. Refuses a type that does not exist, one inside a chained subproject, a
-      new id outside the id grammar, a new id another type of the same owner holds or retired
-      (id-taken, id-retired naming the holder), and a register that cannot be rewritten that
-      precisely; every refusal happens before the first write. Display names are the author's to
-      change, and a lock goes stale as with any edit. Inside a hosted request every spec it would
-      write is judged against the request's write reach before the first write
+      and each edit reported. The report names publishedIn — every public name a consumer reaches
+      the type through: an exported type that is or embeds it, and an exported contract whose
+      methods name one in their signature closure (those methods) — so a caller can name the
+      consumers whose code still spells the old name. Refuses a type that does not exist, one inside
+      a chained subproject, a new id outside the id grammar, a new id another type of the same owner
+      holds or retired (id-taken, id-retired naming the holder), and a register that cannot be
+      rewritten that precisely; every refusal happens before the first write. Display names are the
+      author's to change, and a lock goes stale as with any edit. Inside a hosted request every spec
+      it would write is judged against the request's write reach before the first write
       (SubsystemWriteDenied), and nothing is written on a refusal.
     signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
     returns: TypeRename
@@ -1360,6 +1366,112 @@ methods:
     returns: list<string>
     params: []
     effect: read
+  - name: crossProjectWriteRefusal
+    description: >-
+      The project boundary of every authored write: the sentence refusing a write any of whose
+      targets lives in another project — a spec of a member project read through this tree (its key
+      carries the member's prefix, or an `alias::name` the bound project's alias table binds to a
+      member), or one named through an external's alias — or undefined when every target is the
+      bound project's own. A member's specs are written by a session opened in that member's folder,
+      so the sentence names the member, its folder, the session to open there and the same tool call
+      to make there. A legacy L1 mount keeps its old cross-tree writes and is never refused here. A
+      read: writes nothing.
+    signature: 'crossProjectWriteRefusal(targets: list<SpecRef>, tool: string): string?'
+    returns: string?
+    params:
+      - name: targets
+        type: list<SpecRef>
+        description: >-
+          Every spec the write would write, create under or delete, each by kind and id as the
+          caller wrote it
+      - name: tool
+        type: string
+        description: >-
+          The tool the caller is answering for (sdd_delete_spec, sdd_define_interface, ...): the
+          call the sentence tells the caller to make at the member's root
+  - name: publishedUsesOf
+    description: >-
+      Every public name of the bound project's L1 and L0 export tables a consumer reaches something
+      a removal takes away through, each with the members carrying it: an export of a removed
+      component or contract (its methods), of a removed type or any type embedding it (member
+      `type`) and every exported contract whose methods name one (those methods), and, for each
+      removed contract method, the entries publishing it and every published verb forwarding it by
+      signatureFrom. Former names ride along so a consumer still writing one is found. What a delete
+      and a method removal report as `published`, read before anything is removed. A read: writes
+      nothing.
+    signature: 'publishedUsesOf(removed: list<SpecRef>, methods: list<string>): list<ExportUse>'
+    returns: list<ExportUse>
+    params:
+      - name: removed
+        type: list<SpecRef>
+        description: The specs a deletion removes
+      - name: methods
+        type: list<string>
+        description: The contract methods a write removes, each as `<interface>.<method>`
+  - name: renameSpecId
+    description: >-
+      Rename one contract or one implementation on its own — the id a component rename keeps when it
+      is not derived from the component's — and every reference to it. The spec moves to the new id
+      and file beside its owner, its old id appended to its rename trace (previousIds). A contract's
+      references are rewritten: every implementation's contract, and the interface of every L1 and
+      L0 export entry naming it, an entry that derived its public name from the old id (no `as`)
+      getting `as: <that name>` first so the published surface and every consumer's pin stay.
+      Findings keyed on the spec follow it: lint allows anchored on it and the debt register's
+      entries, rewritten in place with every comment kept. Refuses, before the first write: a kind
+      other than interface or implementation, a spec that does not exist (spec-missing), one in
+      another project (chained-spec — rename it from that project's own root), a new id outside the
+      id grammar (an interface id begins with i), and a new id a spec of its kind holds (id-taken)
+      or retired (id-retired). A dry run answers what the rename would move, rewrite and keep,
+      refused exactly as the rename would be, and writes nothing.
+    signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: moveSpec
+    description: >-
+      Move a component or a type to another subsystem of the bound project with everything that
+      follows it. A component takes the members it owns, its contracts and their implementations:
+      each is re-saved under its new owner, so its file lands in the new subsystem's folder and the
+      one it left is removed. Ids do not change, so references by id stay; what names the OLD
+      subsystem follows: the old subsystem's export entries for a moved component move to the new
+      subsystem's publicInterfaces, its lifecycle entrypoints naming one move too, and an L0
+      re-export from the old subsystem that names a moved component or type is re-pointed at the new
+      one. A type takes its file, its L1 export entries and every type reference qualified by its
+      old subsystem (`old::type` becomes `new::type`); a type moves to system level (no subsystem)
+      or from it. Refuses, before the first write: a kind other than component or type, a spec that
+      does not exist, one in another project, a target subsystem the bound tree does not have or the
+      one it already lives in, a component another pattern owns (move its owner), and a type id the
+      target already holds. A dry run answers the plan and writes nothing. The caller's gate judges
+      the moved components before this runs.
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to; omitted for a type made system-level
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T19:00:52.794Z'
+updatedAt: '2026-10-09T00:26:32.991Z'

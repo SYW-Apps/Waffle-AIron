@@ -24,21 +24,21 @@ fields:
     type: list<any>
     description: >-
       Each subsystem's id, name and description — and, for a project with members, each PROJECT
-      member as a project node (stage 3), a referenced one (a `../`, git or hosted source; stage 8)
-      drawn from outside with its storage; and each external the bound project declares that is NOT
-      a project of its family (a `../` path outside it, git or hosted) as an EXTERNAL project node
-      (`project` and `external` set, its id the alias, its storage badge saying where it lives,
-      drawn dashed), so a family of peers that only consume each other still shows its relations; on
-      a hosted instance a member node — or an external node whose hosted record it names — carries
-      the hosted record id (recordId) only when the caller may read that record, and the engine
-      makes exactly those nodes open that project's own page through the host's open-project hook —
-      a node without one is drawn without a link. A contained project member opens by drilling into
-      it, as a subsystem does (its specs are in the model); a referenced or external one has no
-      specs in the model, so locally it opens its details panel: its storage, and the relations that
-      land on it. A part's subsystems are the project's own subsystems, each carrying the part's
-      storage badge (`storage`: `part <alias> · contained`, `… · ../admin`, `… · git <short
-      commit>`) and opening as any subsystem does — composition decides what is drawn, storage only
-      how it is labelled.
+      member as a project node (stage 3), one in a `../` sibling checkout drawn the same way with
+      its storage badge (round 8), a referenced one (a git or hosted source; stage 8) drawn from
+      outside with its storage; and each external the bound project declares that is NOT a project
+      of its family (a `../` path outside it, git or hosted) as an EXTERNAL project node (`project`
+      and `external` set, its id the alias, its storage badge saying where it lives, drawn dashed),
+      so a family of peers that only consume each other still shows its relations; on a hosted
+      instance a member node — or an external node whose hosted record it names — carries the hosted
+      record id (recordId) only when the caller may read that record, and the engine makes exactly
+      those nodes open that project's own page through the host's open-project hook — a node without
+      one is drawn without a link. A contained project member opens by drilling into it, as a
+      subsystem does (its specs are in the model); a referenced or external one has no specs in the
+      model, so locally it opens its details panel: its storage, and the relations that land on it.
+      A part's subsystems are the project's own subsystems, each carrying the part's storage badge
+      (`storage`: `part <alias> · contained`, `… · ../admin`, `… · git <short commit>`) and opening
+      as any subsystem does — composition decides what is drawn, storage only how it is labelled.
     optional: false
   - name: components
     type: list<any>
@@ -93,4 +93,4 @@ fields:
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-04T10:19:54.839Z'
+updatedAt: '2026-10-09T01:02:47.766Z'

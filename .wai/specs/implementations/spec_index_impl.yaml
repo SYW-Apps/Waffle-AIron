@@ -298,12 +298,14 @@ methods:
           L0 or carrying a lock (.wai/lock.json) makes it a project; anything else is a part. A
           hosted source is a project. An asserted `as` the content contradicts is a kind-mismatch
           problem, and the content still decides. Nothing is inferred and nothing needs writing: an
-          existing member is project-shaped, so it reads as the project it always was. A referenced
-          PROJECT member (a `../` or git source) is recorded with the root it was located at and its
-          commit (ScannedProjectRoot.referenced) and nothing of it is read into this root. On a
-          hosted instance (a request bound with a hosted record lookup) a `../` or git source is
-          never read: it is unavailable, since a hosted project reaches another root only by a
-          `hosted:` source
+          existing member is project-shaped, so it reads as the project it always was. A git PROJECT
+          member is referenced: recorded with the root it was located at and its commit
+          (ScannedProjectRoot.referenced) and nothing of it is read into this root. A `../` sibling
+          PROJECT member is followed below like a contained one (round 8: a folder of the same
+          family on disk, composed live, never through a pin). On a hosted instance (a request bound
+          with a hosted record lookup) a `../` or git source is never read: it is unavailable, since
+          a hosted project reaches another root only by a `hosted:` source — a project there is
+          recorded referenced and unavailable
         type: local
       - stepNumber: 7
         label: parts
@@ -373,28 +375,32 @@ methods:
       - stepNumber: 13
         label: members
         description: >-
-          Follow each followable CONTAINED PROJECT member the root declares (a referenced project
-          member — a `../`, git or hosted source — is not followed: its alias stays in the root's
-          alias table bound to nothing the scan read, so its references bind as outside and the
-          declaring project's own gate judges them against its pin, as an external's; the family run
-          opens its root explicitly, at the root step 6 recorded)
+          Follow each followable PROJECT member the root declares that is stored in reach —
+          contained, or a `../` sibling checkout, which composes exactly as a contained one (round
+          8). A git or hosted project member is referenced and not followed: its alias stays in the
+          root's alias table bound to nothing the scan read, so its references bind as outside and
+          the declaring project's own gate judges them against its pin, as an external's; the family
+          run opens its root explicitly, at the root step 6 recorded
         type: loop
         loopKind: forEach
-        over: the root's contained project members without a problem, in declaration order
+        over: >-
+          the root's contained and `../` sibling project members without a problem, in declaration
+          order
         endStep: 14
       - stepNumber: 14
         label: follow
         description: >-
-          Resolve the member's path against THIS root and under the containment guard against this
-          root, lexically and through links (the declaring project decides containment, so a member
-          is accepted or refused identically whichever root loads it): an escaping path is
-          PROJECTPATH_ESCAPE and a directory already on the walk CIRCULAR_SUBPROJECT_REFERENCE, each
-          a loader issue carrying the member's key; a missing one records a member-absent problem in
-          the graph and no loader issue — the family run reports it as MEMBER_NOT_FOUND (stage 4
-          retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its references
-          into the member as unavailable. A project member whose configuration declares PartOf is a
-          kind-mismatch problem. Each is skipped. Otherwise, below the depth bound, walk the member
-          the same way from step 2, as a member of this root declared under its alias
+          Resolve the member's path against THIS root — a contained one under the containment guard
+          against this root, lexically and through links (the declaring project decides containment,
+          so a member is accepted or refused identically whichever root loads it); a `../` sibling
+          leaves the root by its declaration and is resolved lexically: an escaping contained path
+          is PROJECTPATH_ESCAPE and a directory already on the walk CIRCULAR_SUBPROJECT_REFERENCE,
+          each a loader issue carrying the member's key; a missing one records a member-absent
+          problem in the graph and no loader issue — the family run reports it as MEMBER_NOT_FOUND
+          (stage 4 retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its
+          references into the member as unavailable. A project member whose configuration declares
+          PartOf is a kind-mismatch problem. Each is skipped. Otherwise, below the depth bound, walk
+          the member the same way from step 2, as a member of this root declared under its alias
         type: local
       - stepNumber: 15
         label: tables
@@ -602,4 +608,4 @@ methods:
     symbol: getTypePath
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-08T08:43:49.971Z'
+updatedAt: '2026-10-09T01:00:50.528Z'

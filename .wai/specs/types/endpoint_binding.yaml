@@ -81,6 +81,15 @@ fields:
     type: string
     description: 'JSONRPC: the JSON-RPC method name.'
     optional: true
+  - name: status
+    type: int
+    description: >-
+      HTTP: the success status the operation answers with, when it is not the verb's convention —
+      202 Accepted for work accepted and done later, a 3xx redirect, 201 Created for a workflow verb
+      that files something. A 2xx or 3xx code (200–399); stored on the HTTP endpoint and used by the
+      OpenAPI export as the operation's success response. Omitted, the export picks the convention
+      (204 for a method returning nothing, 201 for a POST that creates, else 200).
+    optional: true
 methods: []
 lint:
   allow:
@@ -90,4 +99,4 @@ lint:
         sdd_set_endpoints registration in src/mcp/server.ts, so there is no symbol a sourcePath
         could bind.
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-07T06:30:11.460Z'
+updatedAt: '2026-10-09T00:18:23.689Z'

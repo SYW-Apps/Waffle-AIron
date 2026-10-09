@@ -246,8 +246,9 @@ methods:
   - name: renameComponent
     description: >-
       Tool: rename a component and rewrite every reference to it; the interfaces and implementations
-      named after it move too. Reports the specs moved and the specs rewritten. With dryRun it
-      answers what the rename would do and writes nothing.
+      named after it move to the new ids, and every other contract and implementation of the
+      component keeps its id and follows the component's folder. Reports the specs moved and the
+      specs rewritten. With dryRun it answers what the rename would do and writes nothing.
     signature: 'renameComponent(id: string, newId: string, dryRun?: bool): ComponentRename'
     returns: ComponentRename
     params:
@@ -328,8 +329,8 @@ methods:
       carries the change report as structured content beside the rendered sentence, from the one
       report, so the prose can never disagree with the data.
     signature: >-
-      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
-      SpecChangeReport
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool, search?:
+      list<string>): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -347,6 +348,12 @@ methods:
           Ask what the delta would do instead of doing it: the whole write runs, the candidate gate
           included, and not one byte of the stored file moves
         optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, read when the delta removes
+          contract methods
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_update_spec
@@ -357,9 +364,14 @@ methods:
       Tool: bind concrete wire endpoints to existing L3 contract methods, for a Portal whose
       transport requires them (every transport but InProcess and Custom), run after
       sdd_define_interface. The caller picks the Portal's own transport and fills that transport's
-      address fields; the binding is checked against the endpoint schema before the contract is
-      saved. A binding for an InProcess Portal is refused: its verbs are its contract methods.
-    signature: 'setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>): SpecChangeReport'
+      address fields — for HTTP the verb, the path and, optionally, the success `status` (a 2xx or
+      3xx code: 202 Accepted, a redirect, a 201 for a workflow verb) the operation answers with,
+      which the OpenAPI export uses in place of its convention; the binding is checked against the
+      endpoint schema before the contract is saved. A binding for an InProcess Portal is refused:
+      its verbs are its contract methods.
+    signature: >-
+      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool):
+      SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: interfaceId
@@ -370,6 +382,10 @@ methods:
         description: >-
           One binding per method: the method NAME (not the HTTP verb), the transport, and that
           transport's address fields
+      - name: dryRun
+        type: bool
+        description: Answer the change report the binding would give and write nothing
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_set_endpoints
@@ -455,7 +471,7 @@ methods:
       CLAIM code: a sourcePath names the file holding its declaration and a symbol binds the
       code-level name, and the file must then resolve with the declaration anchored in it. The
       answer carries the write receipt as structured content beside the sentence.
-    signature: 'addType(spec: TypeSpec): SpecWriteReceipt'
+    signature: 'addType(spec: TypeSpec, dryRun?: bool): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
       - name: spec
@@ -463,6 +479,10 @@ methods:
         description: >-
           The type to define: its kind, id, name, owning subsystem, fields, pure methods,
           invariants, database bindings and code claim
+      - name: dryRun
+        type: bool
+        description: Answer the receipt the write would give — every judgement run — and write nothing
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_add_type
@@ -506,9 +526,15 @@ methods:
       pruning the folders the deletion leaves empty. Refused, naming every reference, while a spec
       outside that set still references what would go: those are the invalid references the deletion
       itself would introduce, and `force` deletes anyway, leaving them for validate to report.
-      `dryRun` answers the same plan and removes nothing. A spec that was not there is reported as
-      such rather than as a failure.
-    signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
+      Refused outright, the dry run included: a spec of another project (a member's, deleted from
+      that member's own root, whose folder the refusal names), an id no spec of the kind holds (the
+      refusal names what it might have meant) and the L0. Like a rename it reports `published` —
+      every public name a consumer reaches what goes through — and `breaks`, the consumers in reach
+      (and in the `search` folders) whose specs reach one. `dryRun` answers the same plan and
+      removes nothing.
+    signature: >-
+      deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool, search?:
+      list<string>): SpecDeletion
     returns: SpecDeletion
     params:
       - name: kind
@@ -526,6 +552,12 @@ methods:
         description: >-
           Delete even though other specs still reference what goes, leaving those references for
           validate to report
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling
+          checkouts)
         optional: true
     endpoint:
       transport: JSONRPC
@@ -892,9 +924,14 @@ methods:
       Tool: rename a type and rewrite every type position, signatureFrom and export entry naming it;
       the old id joins the type's rename trace (previousIds), and an export entry that derived its
       public name from the old id keeps it through `as`. Refuses an id another type of the same
-      owner holds or retired. Reports the specs rewritten, the public names kept and the
-      debt-register edits. With dryRun it answers what the rename would do and writes nothing.
-    signature: 'renameType(id: string, newId: string, dryRun?: bool): TypeRename'
+      owner holds or retired. Reports the specs rewritten, the public names kept, the debt-register
+      edits, `publishedIn` (every public name a consumer reaches the type through: an exported type
+      that is or embeds it, an exported contract whose methods name one in their signature closure)
+      and `breaks`: the consumers in reach (family members included, and checkouts in the `search`
+      folders) whose specs reach one of those — a contract they depend on as a whole included —
+      narrowed to what carries the type, as sdd_rename_field and sdd_rename_param name theirs. With
+      dryRun it answers what the rename would do and writes nothing.
+    signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
     returns: TypeRename
     params:
       - name: id
@@ -906,6 +943,12 @@ methods:
       - name: dryRun
         type: bool
         description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
         optional: true
     endpoint:
       transport: JSONRPC
@@ -1189,6 +1232,66 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_surface_diff
+  - name: renameSpec
+    description: >-
+      Tool: rename one contract (interface) or one implementation on its own — the ids a component
+      rename keeps when they are not derived from the component's (i<id>, <id>_impl) — and rewrite
+      every reference to it: an implementation's contract, an export entry's interface (a public
+      name derived from the old id is kept with `as`), lint allows and debt-register entries keyed
+      on it. The spec moves to its new id and file, its old id in its rename trace. Refuses, writing
+      nothing: another kind, a spec that does not exist or lives in another project, a new id
+      outside the grammar (an interface id begins with i), taken or retired. With dryRun it answers
+      what it would do and writes nothing.
+    signature: 'renameSpec(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_spec
+  - name: moveSpec
+    description: >-
+      Tool: move a component or a type to another subsystem with everything that follows it. A
+      component takes the members it owns, its contracts and their implementations (their files move
+      to the new subsystem's folder); ids do not change, so references by id stay, and what names
+      the old subsystem follows — its export entries and lifecycle entrypoints for the moved
+      components, an L0 re-export from it. A type takes its file, its L1 export entries and every
+      reference qualified by the old subsystem; omit subsystem to make a type system-level. Gated: a
+      move that would create a forbidden doctrine edge or a cross-subsystem edge into a non-Portal
+      is refused with the rule's words, and a curable boundary finding is named as a notice. With
+      dryRun it answers the plan and writes nothing.
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to; omitted for a type made system-level
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T18:55:18.215Z'
+updatedAt: '2026-10-09T01:10:19.906Z'

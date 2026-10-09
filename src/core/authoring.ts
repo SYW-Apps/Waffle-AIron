@@ -24,6 +24,7 @@ import {
   specIndexRetiredBy,
   specIndexReferencesTo,
   specIndexSubtreeOf,
+  specIndexMethodReferences,
   type SpecRef,
   type SpecReference,
 } from '../models/specs.js';
@@ -37,18 +38,24 @@ import {
 import { fitsMethodCasing, methodCasingFor, type RulesConfig } from '../models/project.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
 import type { MethodMoveReport, SpecChangeReport, SpecIndex, SpecWriteHooks, WritableSpecKind } from './specs.js';
+import type { SpecMove } from './provision.js';
+import type { ExportUse } from '../models/exports.js';
+import type { ExternalConsumer } from '../models/project-family.js';
 import { qualifiedTypeId } from '../models/type-references.js';
 // authoring_core_adapter and authoring_validator_adapter — every hop out of the
 // seam lands on the adapter's own module, which re-exports the provider's
 // portal by identity. The seam is a peer of sdd_core and sdd_validator, and a
 // peer reaches another subsystem through what that subsystem publishes.
 import {
+  crossProjectWriteRefusal,
   deleteSpec as coreDeleteSpec,
   loadComponentSpecs,
   loadImplementationSpecs,
   loadProjectConfig,
   loadSpec,
   moveMethods as coreMoveMethods,
+  moveSpec as coreMoveSpec,
+  publishedUsesOf,
   saveSpec,
   scanAllSpecs,
   updateSpec,
@@ -113,6 +120,8 @@ export interface SpecRestatement {
   memberFields?: string[];
   /** The lifecycle status the caller stated; absent keeps the stored one, draft for a new spec. */
   status?: SpecStatus;
+  /** Answer what the write would do — refused exactly as the write would be — and write nothing. */
+  dryRun?: boolean;
 }
 
 /** sdd_authoring::SpecParent — the spec a restatement cannot be written without. */
@@ -155,6 +164,14 @@ export interface SpecDeletion {
   references: SpecReference[];
   /** The tests that encode a method this deletion removed. */
   testsToRevisit: TestsToRevisit[];
+  /**
+   * Every public name of the bound project's export tables a consumer reaches
+   * what the deletion removes through, read before anything goes. Empty when
+   * nothing removed is published.
+   */
+  published: ExportUse[];
+  /** The consumers whose specs reach a published name on a member it carries. Filled by the door that read them. */
+  breaks?: ExternalConsumer[];
 }
 
 /**
@@ -183,6 +200,10 @@ export interface SpecWriteReceipt {
   respellings: TypeRespelling[];
   /** The tests that encode a method this write changed or removed. */
   testsToRevisit: TestsToRevisit[];
+  /** True when the caller asked what the write would do: every judgement ran and nothing was written. */
+  dryRun?: boolean;
+  /** Each implementation method entry a contract restatement removed with a method it dropped, as `<implementation>.<method>`. */
+  cascaded?: string[];
 }
 
 /**
@@ -942,13 +963,19 @@ function canonical(value: unknown): string {
 export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   // Step 1: the settings a component is judged with, and the test roots.
   const bound = candidateOptions();
-  // Steps 2-4: the parent the restatement cannot be written without.
-  const parentRef = restatementParent(restatement);
-  const parent = parentRef ? loadSpec(parentRef.kind, parentRef.id) : null;
-  // Step 5: the spec this restatement re-authors, if one holds the id.
   const id = restatement.kind === 'system' ? 'system' : (restatement.spec as { id: string }).id;
+  const parentRef = restatementParent(restatement);
+  // Steps 2-4: a spec, or a parent, of another project is that project's to write.
+  const foreign = crossProjectWriteRefusal(
+    [{ kind: restatement.kind, id }, ...(parentRef && typeof parentRef.id === 'string' ? [{ kind: parentRef.kind, id: parentRef.id }] : [])],
+    CREATE_TOOL[restatement.kind],
+  );
+  if (foreign !== undefined) throw new Error(foreign);
+  // Step 5: the parent the restatement cannot be written without.
+  const parent = parentRef ? loadSpec(parentRef.kind, parentRef.id) : null;
+  // Step 6: the spec this restatement re-authors, if one holds the id.
   const existing = loadSpec(restatement.kind, id);
-  // Steps 6-9: an id given to a NEW spec must not be one a renamed spec of
+  // Steps 7-9: an id given to a NEW spec must not be one a renamed spec of
   // its kind retired (spec_index.retiredBy; a type within its owner).
   if (!existing && TRACED_KINDS.has(restatement.kind)) {
     const spec = restatement.spec as { id: string; subsystem?: string };
@@ -964,30 +991,120 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   }
   // Step 10: what the restatement becomes over it.
   const application = applyRestatement(restatement, existing, parent as SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | null);
-  // Steps 7-8: a refusal stops the write before anything reaches disk.
+  // Steps 11-12: a refusal stops the write before anything reaches disk.
   if (application.refusal !== undefined) throw new Error(application.refusal);
-  // Steps 13-16: the method, parameter and field names the candidate introduces.
+  // Steps 10-12: the method, parameter and field names the candidate introduces.
   const names = introducedNameProblems(restatement.kind, application.spec, existing);
   if (names.length) throw new Error(nameRefusal(restatement.kind, id, names));
-  // Steps 9-12: the intrinsic judgement, for the one kind judged at the boundary.
+  // ...and the legacy mount form, before anything is judged or written.
+  refuseMountForm(restatement.kind, application.spec);
+  // Steps 13-14: the intrinsic judgement, for the one kind judged at the boundary.
   const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
-  // Steps 16-18: the doctrine edges and route collisions it introduces in its tree.
+  // Step 14: the doctrine edges, boundary edges and route collisions it introduces in its tree.
   gateNotices.push(...judgeInTree(restatement.kind, application.spec as ComponentSpec | InterfaceSpec, bound));
-  // Steps 13-15: to disk — the legacy mount form refused before anything is written.
-  const persisted = persistCandidate(restatement.kind, application.spec);
-  // Steps 16-18: the tests this write invalidated, each placed in its file.
+  // Steps 15-17: a re-authored contract dropping methods takes their
+  // implementation entries with it, and is refused while others name one.
+  let cascade: MethodCascade[] = [];
+  if (restatement.kind === 'interface' && existing) {
+    const dropped = removedByName((existing as InterfaceSpec).methods, (application.spec as InterfaceSpec).methods);
+    if (dropped.length > 0) {
+      const removal = methodRemoval(scanAllSpecs({ memberDepth: 0 }), id, (application.spec as InterfaceSpec).component, dropped);
+      if (removal.references.length > 0) throw new Error(methodReferencedRefusal(id, removal.referenced, removal.references));
+      cascade = removal.cascade;
+    }
+  }
+  // Steps 18-19: the tests this write invalidates, each placed in its file.
   const testsToRevisit = testsInvalidatedBy(restatement.kind, id, application.changedMethods, [existing, application.spec], bound);
-  // Step 19: the receipt.
+  const cascaded = cascade.map((c) => `${c.implementation}.${c.method}`);
+  const name = (application.spec as { name: string }).name;
+  const status = application.status ? { status: application.status } : {};
+  // Steps 20-21: a dry run answers the receipt the write would give.
+  if (restatement.dryRun) {
+    return {
+      kind: restatement.kind, id, name, replacedExisting: application.replacedExisting, ...status,
+      notices: [...gateNotices, ...application.notices, ...cascadeNotices(cascade, true)],
+      respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), dryRun: true,
+    };
+  }
+  // Step 22: to disk.
+  const persisted = persistCandidate(restatement.kind, application.spec);
+  // Step 23: the dropped methods' implementation entries go with them.
+  for (const [implementation, methods] of groupCascade(cascade)) {
+    updateSpec('implementation', implementation, { methods: methods.map((m) => ({ name: m, action: 'delete' })) });
+  }
+  // Step 24: the receipt.
   return {
-    kind: restatement.kind,
-    id,
-    name: (application.spec as { name: string }).name,
-    replacedExisting: application.replacedExisting,
-    ...(application.status ? { status: application.status } : {}),
-    notices: [...gateNotices, ...persisted.notices, ...application.notices],
-    respellings: application.respellings,
-    testsToRevisit,
+    kind: restatement.kind, id, name, replacedExisting: application.replacedExisting, ...status,
+    notices: [...gateNotices, ...persisted.notices, ...application.notices, ...cascadeNotices(cascade, false)],
+    respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}),
   };
+}
+
+/** The create tool each kind is written by: the call a project-boundary refusal names. */
+const CREATE_TOOL: Record<WritableSpecKind, string> = {
+  system: 'sdd_initialize_system',
+  subsystem: 'sdd_add_subsystem',
+  component: 'sdd_add_component',
+  interface: 'sdd_define_interface',
+  implementation: 'sdd_write_narrative',
+  type: 'sdd_add_type',
+};
+
+/** One implementation method entry a contract method's removal takes with it. */
+interface MethodCascade {
+  implementation: string;
+  method: string;
+}
+
+/** What removing contract methods takes with it, and what still names them. */
+interface MethodRemoval {
+  /** The removed methods no other contract of the component still declares: what references and exports lose. */
+  referenced: string[];
+  /** Every reference a spec that stays holds to one of them (spec_index.methodReferencesTo). */
+  references: SpecReference[];
+  /** The implementation entries realizing a removed method on this contract: they go with it. */
+  cascade: MethodCascade[];
+}
+
+/**
+ * The removal of `removed` from contract `contract` of `component`, read in
+ * the index: the implementation entries realizing them go with them (a
+ * narrative means nothing without its contract method), so a reference from
+ * inside one of those entries is no reference left behind; a method another
+ * contract of the component still declares is no removal to its callers.
+ */
+function methodRemoval(index: SpecIndex, contract: string, component: string, removed: string[]): MethodRemoval {
+  const realizing = index.implementations.filter((impl) => impl.contract === contract);
+  const stillDeclared = (m: string): boolean => index.interfaces.some((i) => i.component === component && i.id !== contract && i.methods.some((x) => x.name === m));
+  const referenced = removed.filter((m) => !stillDeclared(m));
+  const inside = (r: SpecReference): boolean => r.kind === 'implementation' && realizing.some((impl) => impl.id === r.id)
+    && removed.some((m) => r.position === `methods.${m}` || r.position.startsWith(`methods.${m}.`));
+  const references = referenced.length === 0 ? [] : specIndexMethodReferences(index, component, referenced).filter((r) => !inside(r));
+  const cascade = realizing.flatMap((impl) => removed
+    .filter((m) => impl.methods.some((x) => x.name === m))
+    .map((m) => ({ implementation: impl.id, method: m })));
+  return { referenced, references, cascade };
+}
+
+/** The refusal of a method removal that would leave references dangling: every one, and the way on. */
+function methodReferencedRefusal(contract: string, removed: string[], references: SpecReference[]): string {
+  return `Refusing to remove ${removed.length === 1 ? 'method' : 'methods'} ${removed.map((m) => `"${m}"`).join(', ')} from contract "${contract}": `
+    + `specs that stay still hold ${references.length === 1 ? 'a reference' : `${references.length} references`} to ${removed.length === 1 ? 'it' : 'them'} — the invalid method references validate would report:\n`
+    + `${references.map((r) => `- ${r.kind} "${r.id}" (${r.position}) -> ${r.target.kind} "${r.target.id}"`).join('\n')}\n`
+    + 'Edit those specs first — retarget or remove each call. Nothing was written.';
+}
+
+/** The cascade grouped by implementation, in the order it was planned. */
+function groupCascade(cascade: MethodCascade[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const c of cascade) out.set(c.implementation, [...(out.get(c.implementation) ?? []), c.method]);
+  return out;
+}
+
+/** One notice naming what a contract method's removal took (or, on a dry run, would take) with it. */
+function cascadeNotices(cascade: MethodCascade[], dryRun: boolean): string[] {
+  if (cascade.length === 0) return [];
+  return [`Cascaded: ${dryRun ? 'would remove' : 'removed'} the implementation ${cascade.length === 1 ? 'entry' : 'entries'} ${cascade.map((c) => `"${c.implementation}.${c.method}"`).join(', ')} with ${cascade.length === 1 ? 'its' : 'their'} contract method — a narrative realizes its contract method and means nothing without it.`];
 }
 
 /**
@@ -1028,6 +1145,13 @@ function judgeInTree(kind: WritableSpecKind, candidate: ComponentSpec | Interfac
  * and a member is declared in project.yaml `members` instead.
  */
 function persistCandidate(kind: WritableSpecKind, spec: Spec): { notices: string[] } {
+  refuseMountForm(kind, spec);
+  // Step 15: the store's write, collecting its placement notices.
+  return { notices: saveSpec(kind, spec) };
+}
+
+/** Refuse, before anything reaches disk, a subsystem that names a projectPath: the legacy mount form. */
+function refuseMountForm(kind: WritableSpecKind, spec: Spec): void {
   // Step 13: a subsystem naming a projectPath is a member declaration, not a subsystem.
   const projectPath = kind === 'subsystem' ? (spec as SubsystemSpec).projectPath : undefined;
   if (projectPath !== undefined && projectPath.trim() !== '') {
@@ -1039,8 +1163,6 @@ function persistCandidate(kind: WritableSpecKind, spec: Spec): { notices: string
       + `(or \`wairon member add ${id} ${projectPath}\`), which scaffolds the member project and declares it.`,
     );
   }
-  // Step 15: the store's write, collecting its placement notices.
-  return { notices: saveSpec(kind, spec) };
 }
 
 /**
@@ -1129,23 +1251,34 @@ function searchedMethods(
  * still exist. The L0 cannot be deleted.
  */
 export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean, force?: boolean): SpecDeletion {
-  // A spec of a member project read through this tree keeps the single-document
-  // delete it always had: its subtree is that project's to plan, from its root.
-  if (kind === 'system' || (kind !== 'type' && id.includes('::'))) {
-    const deleted = dryRun ? loadSpec(kind, id) !== null : coreDeleteSpec(kind, id);
-    return { kind, id, deleted: deleted && !dryRun, dryRun: dryRun === true, removed: deleted ? [{ kind, id }] : [], references: [], testsToRevisit: [] };
+  // Steps 1-3: a spec of another project is deleted from that project's own
+  // root — refused for a dry run exactly as for the deletion.
+  const foreign = crossProjectWriteRefusal([{ kind, id }], 'sdd_delete_spec');
+  if (foreign !== undefined) throw new Error(foreign);
+  // Steps 2-3: the L0 is the root every other spec hangs from.
+  if (kind === 'system') {
+    throw new Error('Refusing to delete the L0 System spec: it is the root every other spec hangs from, and is never deleted. Nothing was deleted.');
   }
-  // Step 1: the test roots the report searches.
+  // Steps 4-6: a spec of a legacy L1 mount read through this tree keeps the
+  // single-document delete it always had: its subtree is not this project's to plan.
+  if (kind !== 'type' && id.includes('::')) {
+    const deleted = dryRun ? loadSpec(kind, id) !== null : coreDeleteSpec(kind, id);
+    if (!deleted && loadSpec(kind, id) === null) throw new Error(`spec-missing: no ${kind} has the id "${id}" — nothing was deleted.`);
+    return { kind, id, deleted: deleted && !dryRun, dryRun: dryRun === true, removed: [{ kind, id }], references: [], testsToRevisit: [], published: [] };
+  }
+  // Step 7: the test roots the report searches.
   const bound = candidateOptions();
-  // Step 2: the bound tree's own specs, and the L0 whose export table may name them.
+  // Steps 8-9: the bound tree's own specs, and the L0 whose export table may name them.
   const index = scanAllSpecs({ memberDepth: 0 });
   const system = loadSpec('system', 'system') as SystemSpec | null;
-  // Steps 3-5: what the deletion takes; nothing held the id, nothing to delete.
+  // Steps 10-12: what the deletion takes; an id nothing holds is refused with what it might have meant.
   const removed = specIndexSubtreeOf(index, kind, id);
-  if (removed.length === 0) return { kind, id, deleted: false, dryRun: dryRun === true, removed: [], references: [], testsToRevisit: [] };
-  // Step 6: what stays behind still naming it.
+  if (removed.length === 0) throw new Error(missingRefusal(kind, id, index));
+  // Step 13: what stays behind still naming it.
   const references = specIndexReferencesTo(index, removed, system);
-  // Steps 7-9: the tests the removed methods encode, found while their realizations still exist.
+  // Step 14: every public name a consumer reaches what goes through, read before anything goes.
+  const published = publishedUsesOf(removed, []);
+  // Steps 15-17: the tests the removed methods encode, found while their realizations still exist.
   const testsToRevisit = removed.flatMap((ref) => {
     const spec = specOf(index, ref);
     const methods = ((spec as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name);
@@ -1153,14 +1286,37 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
       ? testsInvalidatedBy(ref.kind, ref.id, methods, [spec as Spec | null], bound)
       : [];
   });
-  // Steps 10-11: the plan alone.
-  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit };
-  // Steps 12-13: references a deletion would leave dangling refuse it, unless forced.
+  // Steps 18-19: the plan alone.
+  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit, published };
+  // Steps 20-21: references a deletion would leave dangling refuse it, unless forced.
   if (references.length > 0 && !force) throw new Error(referencedRefusal(kind, id, references));
-  // Steps 14-15: innermost first, so a container goes after its content.
+  // Steps 22-23: innermost first, so a container goes after its content.
   for (const ref of removed) coreDeleteSpec(ref.kind as WritableSpecKind, ref.id);
-  // Step 16.
-  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit };
+  // Step 24.
+  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit, published };
+}
+
+/**
+ * The refusal of a deletion whose id no spec of the kind holds, with what the
+ * id might have meant: the kind of spec that does hold it, the subsystem::id
+ * form of a type written with a dot, and the ids the kind does hold.
+ */
+function missingRefusal(kind: WritableSpecKind, id: string, index: SpecIndex): string {
+  const pools: Record<string, ReadonlyArray<{ id: string; subsystem?: string }>> = {
+    subsystem: index.subsystems, component: index.components, interface: index.interfaces,
+    implementation: index.implementations, type: index.types,
+  };
+  const hints: string[] = [];
+  const elsewhere = Object.keys(pools).filter((k) => k !== kind && pools[k].some((s) => s.id === id));
+  if (elsewhere.length > 0) hints.push(`"${id}" is ${elsewhere.map((k) => `a ${k}`).join(' and ')} — pass kind "${elsewhere[0]}"`);
+  const dot = id.lastIndexOf('.');
+  if (kind === 'type' && dot > 0 && index.types.some((t) => t.id === id.slice(dot + 1))) {
+    hints.push(`a type is addressed by its bare id, or as <subsystem>::<id> — "${id.slice(dot + 1)}" or "${id.slice(0, dot)}::${id.slice(dot + 1)}"`);
+  }
+  const known = pools[kind].map((s) => (kind === 'type' ? qualifiedTypeId(s as TypeSpec) : s.id)).sort();
+  const listed = known.length === 0 ? `This project has no ${kind} at all.`
+    : `Its ${kind}s: ${known.slice(0, 12).join(', ')}${known.length > 12 ? `, … (${known.length} in all)` : ''}.`;
+  return `spec-missing: no ${kind} has the id "${id}" — nothing was deleted.${hints.length > 0 ? ` ${hints.join('; ')}.` : ''} ${listed}`;
 }
 
 /** The stored spec a SpecRef names in the index; null when none does. */
@@ -1210,45 +1366,87 @@ export function updateSpecGated(
   // type the judgement uses, and the test roots the report searches. A project
   // that has none is judged on the defaults and searches nothing.
   const bound = candidateOptions();
-  // Step 2: the spec as it stands — the owner the judgement compares against,
-  // and, when a test search may follow, a method the delta deletes placed in
-  // its file and named by its code name, which only the version that still
-  // held it can answer.
+  // Steps 2-4: a spec of another project is updated from that project's own root.
+  const foreign = crossProjectWriteRefusal([{ kind, id }], 'sdd_update_spec');
+  if (foreign !== undefined) throw new Error(foreign);
+  // Step 5: the spec as it stands — the owner the judgement compares against,
+  // the contract methods a delta may remove, and, when a test search may
+  // follow, a method the delta deletes placed in its file and named by its
+  // code name, which only the version that still held it can answer.
   const testRoots = bound.rules?.conformance?.testRoots ?? [];
   const stored = loadSpec(kind, id);
-  // Step 3: the judgement as a write hook over those same settings.
+  // Steps 6-11: a delta removing contract methods takes their implementation
+  // entries with it, and is refused while other specs still name one.
+  const removedMethods = kind === 'interface' ? methodsDeltaRemoves(stored as InterfaceSpec | null, delta) : [];
+  let cascade: MethodCascade[] = [];
+  let published: ExportUse[] = [];
+  if (removedMethods.length > 0) {
+    const removal = methodRemoval(scanAllSpecs({ memberDepth: 0 }), id, (stored as InterfaceSpec).component, removedMethods);
+    if (removal.references.length > 0) throw new Error(methodReferencedRefusal(id, removal.referenced, removal.references));
+    cascade = removal.cascade;
+    published = publishedUsesOf([], removal.referenced.map((m) => `${id}.${m}`));
+  }
+  // Step 12: the judgement as a write hook over those same settings.
   const gate = componentCandidateGate(bound, (stored as { subsystem?: string } | null)?.subsystem, stored as Spec | null);
-  // Step 4: apply the delta with the hook injected, so the judgement runs on
+  // Step 13: apply the delta with the hook injected, so the judgement runs on
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);
 
-  // Step 5: a Portal's transport change names its impact on the Adapters that
+  // Steps 14-15: the removed methods' implementation entries go in the same
+  // write — a dry run says which would.
+  if (cascade.length > 0 && report.changes.length > 0) {
+    for (const [implementation, methods] of groupCascade(cascade)) {
+      updateSpec('implementation', implementation, { methods: methods.map((m) => ({ name: m, action: 'delete' })) }, undefined, dryRun);
+    }
+    report.cascaded = cascade.map((c) => `${c.implementation}.${c.method}`);
+    report.notices.push(...cascadeNotices(cascade, dryRun === true));
+  }
+  if (published.length > 0 && report.changes.length > 0) report.published = published;
+
+  // Step 16: a Portal's transport change names its impact on the Adapters that
   // call it — in a dry run too, before anything is written.
   if (kind === 'component' && typeof delta?.transport === 'string' && report.changes.some((c) => c.path === 'transport')) {
     report.notices.push(...adapterTransportImpact(id, delta.transport));
   }
 
-  // Step 6: a contract's `implements` the delta writes — a dry run included,
+  // Step 17: a contract's `implements` the delta writes — a dry run included,
   // before anything is written — says what validate will say of it.
   if (kind === 'interface' && typeof delta?.implements === 'string') {
     const problem = implementsProblem(delta.implements);
     if (problem) report.notices.push(`${problem} (validate reports it once this is written)`);
   }
 
-  // Step 7: did this write invalidate any test?
+  // Step 18: did this write invalidate any test?
   const changed = changedMethods(report);
   if (changed.length > 0 && testRoots.length > 0) {
-    // Steps 6-7: search them by the code name and the file realizing each.
+    // Steps 19-20: search them by the code name and the file realizing each.
     const written: Record<string, any>[] = Array.isArray(delta?.methods) ? delta.methods : [];
     report.testsToRevisit = testsInvalidatedBy(kind, id, changed, [stored], bound, written);
   }
 
-  // Step 8.
+  // Step 21.
   return report;
 }
 
 /**
- * Step 5 of updateSpecGated: each Adapter that states a transport other than
+ * The contract methods a delta removes from the stored contract: an element
+ * naming one with a delete marker, or the method list emptied (`[]`, or an
+ * unset of `methods`). A marker naming a method the contract does not hold
+ * removes nothing — the store refuses it, naming the methods it does.
+ */
+function methodsDeltaRemoves(stored: InterfaceSpec | null, delta: Record<string, any>): string[] {
+  const held = (stored?.methods ?? []).map((m) => m.name);
+  if (held.length === 0 || !delta || typeof delta !== 'object') return [];
+  const methods = delta.methods;
+  if ((Array.isArray(methods) && methods.length === 0) || (Array.isArray(delta.unset) && delta.unset.includes('methods'))) return held;
+  if (!Array.isArray(methods)) return [];
+  return methods
+    .filter((m: any) => m && typeof m === 'object' && (m.action === 'delete' || m.remove === true) && held.includes(m.name))
+    .map((m: any) => String(m.name));
+}
+
+/**
+ * Step 16 of updateSpecGated: each Adapter that states a transport other than
  * the Portal's new one and calls it (dependsOn, or a call, register or
  * dispatch step of its implementation) — the ADAPTER_TRANSPORT_MISMATCH the
  * change raises there, with the way out.
@@ -1361,5 +1559,60 @@ export function moveMethods(
   methods: string[],
   dryRun?: boolean,
 ): MethodMoveReport {
+  // Steps 1-3: a component of another project is that project's to change.
+  const foreign = crossProjectWriteRefusal([{ kind: 'component', id: from }, { kind: 'component', id: to }], 'sdd_move_methods');
+  if (foreign !== undefined) throw new Error(foreign);
+  // Steps 4-7: the judgement as a hook, the move through the core adapter.
   return coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun);
+}
+
+/**
+ * Move a component or a type to another subsystem as ONE gated write
+ * (authoring_orchestrator.moveSpec; the portal method is this same function).
+ *
+ * A move is a placement change, not a rename: every id stays, so references
+ * by id stay too, while what names the old subsystem follows — the core does
+ * that. What only this seam can do is judge it: a component moved away from
+ * its collaborators turns every edge to them into a cross-subsystem edge, and
+ * one into a non-Portal is an error no later write can cure. So the moved
+ * components are judged in their tree WITH their new subsystem, together, and
+ * the move is refused with the rule's own words before anything is written; a
+ * curable boundary finding rides along as a notice. A type carries no edges
+ * and is moved without judgement.
+ */
+export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean): SpecMove {
+  // Steps 1-3: the spec, and the subsystem it moves to, are the bound project's own.
+  const foreign = crossProjectWriteRefusal(
+    [{ kind, id }, ...(subsystem ? [{ kind: 'subsystem' as const, id: subsystem }] : [])],
+    'sdd_move_spec',
+  );
+  if (foreign !== undefined) throw new Error(foreign);
+  // Step 4: a type carries no edges.
+  if (kind !== 'component') return coreMoveSpec(kind, id, subsystem, dryRun);
+  // Step 5: the settings the move is judged with.
+  const bound = candidateOptions();
+  // Step 6: what moves, refused exactly as the move would be.
+  const plan = coreMoveSpec(kind, id, subsystem, true);
+  // Step 7: each moved component as stored, with its new subsystem.
+  const moving = plan.moved
+    .filter((ref) => ref.kind === 'component')
+    .map((ref) => loadSpec('component', ref.id) as ComponentSpec | null)
+    .filter((spec): spec is ComponentSpec => spec !== null)
+    .map((spec) => ({ ...spec, subsystem: plan.to }));
+  // Steps 8-10: the design findings the move introduces, the moved components together.
+  const [first, ...rest] = moving;
+  const verdict = first ? introducedFindings('component', first, bound, rest) : { errors: [], warnings: [], notices: [] };
+  if (verdict.errors.length > 0) {
+    throw new Error(
+      `Refused: moving component "${id}" to subsystem "${plan.to}" would introduce ${verdict.errors.length === 1 ? 'an error' : `${verdict.errors.length} errors`} validate reports — `
+      + 'a forbidden edge between two blocks, or an edge into another subsystem whose target is not a Portal:\n'
+      + `${verdict.errors.map((e) => `- ${e.code}: ${e.message}`).join('\n')}\n\n`
+      + 'Nothing was written. Route each such dependency through a client Adapter calling the other subsystem\'s Portal, or move its collaborators with it.',
+    );
+  }
+  // Step 11: a curable boundary finding rides along.
+  const notices = noticesFrom(verdict);
+  // Steps 12-13: the move itself (or, on a dry run, the plan), with the gate's notices.
+  const report = dryRun ? plan : coreMoveSpec(kind, id, subsystem, false);
+  return { ...report, notices: [...report.notices, ...notices] };
 }

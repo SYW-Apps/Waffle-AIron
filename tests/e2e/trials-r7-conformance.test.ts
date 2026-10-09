@@ -45,11 +45,13 @@ describe('r7 (lib-and-app R7-5 / R7-15): `_` means unused, and pairing is tail-f
     expect(r.code, transcript(r)).toBe(1);
     expect(r.all).toMatch(/\[UNDECLARED_PARAM\][^\n]*"_secret"/);
   });
-  it('`planRoute(apiKey, req)` names the inserted apiKey, never the request', async () => {
+  it('`planRoute(apiKey, req)` names the inserted apiKey, and the request only as the transport handle it is (round 8)', async () => {
     const r = await sb.run(['validate', '--ci'], routes({ planRoute: 'apiKey: string, req: IncomingMessage' }));
     expect(r.code, transcript(r)).toBe(1);
     expect(r.all).toMatch(/\[UNDECLARED_PARAM\][^\n]*"apiKey"/);
-    expect(r.all).not.toMatch(/\[UNDECLARED_PARAM\][^\n]*"req"/);
+    // Round 8: a transport object where a domain record is declared is a
+    // substitution, never a silent pairing.
+    expect(r.all).toMatch(/\[UNDECLARED_PARAM\][^\n]*"req" \(a transport handle in the place of the contract's "request"/);
   });
   it('`getRoute(_req, _url, params: Record)` for `getRoute(id: string)` → the substitution is named, --ci exits 1', async () => {
     const r = await sb.run(['validate', '--ci'], routes({ getRoute: '_req: IncomingMessage, _url: RequestUrl, params: Record<string, string>' }));
@@ -179,9 +181,9 @@ describe('r7 (platform): an import from another project\'s source that resolves 
     expect(r.code, transcript(r)).toBe(1);
     expect(r.all).toMatch(/\[CROSS_PROJECT_IMPORT_UNRESOLVED\][^\n]*"CustomerId" from "\.\.\/\.\.\/contracts\/src\/ids\.js"/);
   });
-  it('control — the name the module exports: --ci exits 0', async () => {
+  it('control — the name the module exports: no CROSS_PROJECT_IMPORT_UNRESOLVED (round 8: the reach itself is CROSS_PROJECT_SOURCE_IMPORT, the contracts project publishing nothing)', async () => {
     const r = await sb.run(['validate', '--ci'], platform("import type { CustomerRef } from '../../contracts/src/ids.js';"));
     expect(countCode(r.all, 'CROSS_PROJECT_IMPORT_UNRESOLVED'), transcript(r)).toBe(0);
-    expect(r.code, transcript(r)).toBe(0);
+    expect(r.all).toMatch(/\[CROSS_PROJECT_SOURCE_IMPORT\][^\n]*"CustomerRef"/);
   });
 });

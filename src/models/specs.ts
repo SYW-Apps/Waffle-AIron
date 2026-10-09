@@ -930,7 +930,10 @@ export type HttpMethod = z.infer<typeof HttpMethodSchema>;
 // through the same slot (set via the `sdd_set_endpoints` MCP tool). Each transport keeps
 // its own precise address fields, so the gate validates exact shape, not just presence.
 export const EndpointSchema = z.discriminatedUnion('transport', [
-  z.object({ transport: z.literal('HTTP'), method: HttpMethodSchema, path: z.string() }),
+  // `status`: the success code the operation answers with when it is not the
+  // verb's convention (202 Accepted, a 3xx redirect, a 201 for a workflow verb
+  // that files something) — the design's own word, which the OpenAPI export uses.
+  z.object({ transport: z.literal('HTTP'), method: HttpMethodSchema, path: z.string(), status: z.number().int().min(200).max(399).optional() }),
   z.object({ transport: z.literal('gRPC'), service: z.string(), method: z.string() }),
   z.object({ transport: z.literal('GraphQL'), operation: z.enum(['query', 'mutation', 'subscription']), field: z.string() }),
   z.object({ transport: z.literal('MessageBus'), topic: z.string(), event: z.string(), queue: z.string().optional(), direction: z.enum(['subscribe', 'publish']).default('subscribe') }),
@@ -3091,6 +3094,61 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
     for (const field of type.fields ?? []) types(note, `fields.${field.name}`, fieldTypeRefs(type, field.type));
     types(note, 'signature', signatureTypeRefs(type));
     for (const method of type.methods ?? []) types(note, `methods.${method.name}`, methodTypeRefs(method));
+  }
+  return out;
+}
+
+/**
+ * spec_index.methodReferencesTo — every reference a spec holds to one of the
+ * named contract methods of `component`, each with its position: a call,
+ * register or dispatch narrative step naming component and method, a declared
+ * call `<component>.<method>`, a dispatch-table binding, a subsystem lifecycle
+ * entrypoint, and a contract method taking its signature from it
+ * (signatureFrom). Each target is the component's contract declaring the
+ * method (the component itself when no contract of the index declares it).
+ * What a removal of those methods would leave dangling. Pure.
+ */
+export function specIndexMethodReferences(index: SpecTreeIndex, component: string, methods: ReadonlyArray<string>): SpecReference[] {
+  const named = new Set(methods);
+  const contracts = index.interfaces.filter((i) => i.component === component);
+  const target = (method: string): SpecRef => {
+    const holder = contracts.find((i) => i.methods.some((m) => m.name === method));
+    return holder ? { kind: 'interface', id: holder.id } : { kind: 'component', id: component };
+  };
+  const hits = (comp: string | undefined, method: string | undefined): method is string =>
+    comp === component && method !== undefined && named.has(method);
+  const out: SpecReference[] = [];
+  for (const sub of index.subsystems) {
+    for (const entry of sub.lifecycle ?? []) {
+      if (hits(entry.component, entry.method)) out.push({ kind: 'subsystem', id: sub.id, position: 'lifecycle', target: target(entry.method) });
+    }
+  }
+  for (const comp of index.components) {
+    for (const binding of comp.dispatch ?? []) {
+      if (hits(binding.component, binding.method)) out.push({ kind: 'component', id: comp.id, position: 'dispatch', target: target(binding.method) });
+    }
+  }
+  for (const intf of index.interfaces) {
+    for (const method of intf.methods) {
+      const source = method.signatureFrom;
+      const cut = source?.lastIndexOf('.') ?? -1;
+      if (source === undefined || cut <= 0) continue;
+      const name = source.slice(cut + 1);
+      if (hits(source.slice(0, cut), name)) out.push({ kind: 'interface', id: intf.id, position: `methods.${method.name}.signatureFrom`, target: target(name) });
+    }
+  }
+  for (const impl of index.implementations) {
+    for (const method of impl.methods) {
+      for (const step of method.narrative ?? []) {
+        if (hits(step.targetComponent, step.targetMethod)) {
+          out.push({ kind: 'implementation', id: impl.id, position: `methods.${method.name}.narrative.step ${step.stepNumber}`, target: target(step.targetMethod!) });
+        }
+      }
+      for (const entry of method.calls ?? []) {
+        const call = parseDeclaredCall(entry);
+        if (call && hits(call.compId, call.methodName)) out.push({ kind: 'implementation', id: impl.id, position: `methods.${method.name}.calls`, target: target(call.methodName) });
+      }
+    }
   }
   return out;
 }

@@ -65,6 +65,13 @@ Point the subagent at that skill and spend the brief on what only you know:
   it: a paraphrase drifts, and the subagent cannot tell which copy is current.
 * **The premise you are asking them to act on**, stated *as* a premise, so it can
   be contradicted.
+* **For a Portal, its handler shape** — the contract's own parameters per verb,
+  the handles its framework hands each function (to be named in the
+  implementation's `injectedParams`), and its `router` linkage (an entry of its
+  own file, `<module>#<name>`, or a central module) — quoted from the
+  implementation spec, with a pointer to `sdd-implement`'s **Handler shape** and
+  **Routers** rules. A subagent left to guess writes `(req, res)` handlers, and
+  the gate reads those as substitutions.
 
 One design decision never goes into a brief as an instruction: **an entry**. A
 subagent that meets an unreached Portal verb (`UNUSED_COMPONENT` /

@@ -9,6 +9,7 @@ dependsOn:
   - project_config_portal
   - agent_context_portal
   - spec_maintenance_portal
+  - approval_portal
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-09-25T21:10:04.024Z'
+updatedAt: '2026-10-09T00:18:35.330Z'

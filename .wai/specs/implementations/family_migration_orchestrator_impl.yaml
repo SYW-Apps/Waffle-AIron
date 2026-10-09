@@ -180,18 +180,19 @@ methods:
       - stepNumber: 4
         label: copy
         description: >-
-          Copy every family project's .wai tree, each project's parts and referenced project members
-          stored in a sibling checkout on the family root's volume or inside the family root (stage
-          8: the family transaction lays them out beside the family under their common ancestor, so
-          a promote, demote, internalize or move writes them all-or-nothing; each repository still
-          gets its own commit afterwards), the project the verb brings in (attach, adopt), and every
-          project a family project names as an external by a path inside the family root, into a
-          private rehearsal — so a pin taken on the copy reads the same producer the live pin would.
-          A request carrying a relocation (hosted detach and adopt) is rehearsed with the
-          relocation's coordinator (the host data directory) as the coordinator and an owner
-          contributing its store files as areas, and with the project's old directory and its new
-          root named whole (a family project inside them is copied once, by them); its writers run
-          with the hosted record lookup answering the relocated project at its new place in the copy
+          Copy every family project's .wai tree — a project member in a `../` sibling checkout is a
+          node like any other — each project's parts stored in a sibling checkout on the family
+          root's volume or inside the family root (stage 8: the family transaction lays them out
+          beside the family under their common ancestor, so a promote, demote, internalize or move
+          writes them all-or-nothing; each repository still gets its own commit afterwards), the
+          project the verb brings in (attach, adopt), and every project a family project names as an
+          external by a path inside the family root, into a private rehearsal — so a pin taken on
+          the copy reads the same producer the live pin would. A request carrying a relocation
+          (hosted detach and adopt) is rehearsed with the relocation's coordinator (the host data
+          directory) as the coordinator and an owner contributing its store files as areas, and with
+          the project's old directory and its new root named whole (a family project inside them is
+          copied once, by them); its writers run with the hosted record lookup answering the
+          relocated project at its new place in the copy
         type: call
         targetComponent: family_transaction
         targetMethod: rehearse
@@ -303,8 +304,13 @@ methods:
           does not), judge each project the plan changes by its own gate (the family run at
           memberDepth 0) on the rehearsal copy (as the plan leaves them) and — only when that run
           reports an error or a warning — on an unwritten copy of the same .wai trees (the projects
-          as they stand). Both sides are copies, so neither reads code and the live sources are
-          never analysed for it
+          as they stand). On each side a changed folder is judged only where it is a project root of
+          that side's family graph (read at the copy's family root): one the plan turns into a part,
+          or empties, is judged through the project that holds it, exactly as the applied result is
+          — never as a project without its L0. Each side's family graph also gives its dependency
+          loops (project_family.dependencyCycles), each one the PROJECT_DEPENDENCY_CYCLE warning the
+          family run reports, which no project's own gate sees. Both sides are copies, so neither
+          reads code and the live sources are never analysed for it
         type: call
         targetComponent: migration_validator_adapter
         targetMethod: validateFamily
@@ -312,12 +318,13 @@ methods:
         description: >-
           Read the rule set, and keep each run's design half: drop every finding whose code a
           code-judging rule declares, and keep error and warning severity. Name each finding the
-          result has that the project does not report now — counted by project, code and spec, so a
-          path that differs between two copies never reads as new — as one plan note per severity:
-          `after <verb>: N new error(s) the projects it changes do not report now: CODE [spec]
-          message; …` (the first few, then a count). The plan then announces what its result will
-          report — an approved project that would turn red is never a surprise after apply. A run
-          that throws names nothing and refuses nothing
+          result has that the project does not report now — counted by project, code and spec (a
+          loop by the folders it joins), so a path that differs between two copies never reads as
+          new — as one plan note per severity: `after <verb>: N new error(s) the projects it changes
+          do not report now: CODE [spec] message; …` (the first few, then a count). The plan then
+          announces what its result will report — an approved project that would turn red, or a loop
+          the plan closes, is never a surprise after apply. A run that throws names nothing and
+          refuses nothing
         type: call
         targetComponent: migration_validator_adapter
         targetMethod: listRules
@@ -441,4 +448,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-08T20:19:45.568Z'
+updatedAt: '2026-10-09T01:00:52.928Z'

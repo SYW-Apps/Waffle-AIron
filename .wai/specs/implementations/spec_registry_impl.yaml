@@ -232,7 +232,11 @@ methods:
       naming the position and the text, when a bound reference carries a deprecated form (leading
       `::`, `super::`, member path) and bound outside or unresolved, since no canonical text exists
       for it. Compares the serialized document with the stored one and writes through the file store
-      only when they differ, answering whether it wrote; the lock is never touched.
+      only when they differ, answering whether it wrote; the lock is never touched. The prepared
+      forms on both sides derive every method's text from its params, so an interface or type is
+      also compared with its FILE: a stored method text its params derive differently — a raw
+      rewrite of the params (a family migration's respelling) left it behind — is re-saved, writing
+      the derived text, as any save writes it.
     calls:
       - spec_file_store.read
       - spec_file_store.write
@@ -249,9 +253,11 @@ methods:
       beside a param or return is rewritten token for token with it. An edit whose `to` already
       stands at its position (and `from` no longer does) was applied before and is a no-op, which is
       what makes the write idempotent. When any other edit's `from` is absent from its position,
-      refuses before writing, naming the spec, the position and both texts. Otherwise replaces each,
-      serializes, and writes through the file store only when the text changed, answering whether it
-      wrote.
+      refuses before writing, naming the spec, the position and both texts. Otherwise replaces each
+      and — for an interface or a type — re-derives each params-bearing method's text from its
+      params (method_signature.derivedSignature; a sourced method is left as it is), so a respelled
+      param or returns type moves the text with it; serializes, and writes through the file store
+      only when the text changed, answering whether it wrote.
     calls:
       - spec_file_store.read
       - spec_file_store.write
@@ -266,4 +272,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-07T18:37:11.557Z'
+updatedAt: '2026-10-09T01:00:49.010Z'

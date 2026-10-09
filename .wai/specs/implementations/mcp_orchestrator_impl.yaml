@@ -232,14 +232,22 @@ methods:
           Shape the tool response from the report: the specs the method moved in (or would), the
           specs whose references were retargeted, the specs whose prose still names it, the pinned
           symbol when one was set, and `breaks` — every consumer read above whose specs reach the
-          old method on a public name the report says publishes it (external_consumer.reaches), each
-          narrowed to what breaks (external_consumer.narrowedTo: those public names, with that one
-          method), as the CLI dry run names it
+          old method on a public name the report says publishes it, a contract they depend on as a
+          whole included, each narrowed to what breaks (external_consumer.narrowedToUses: those
+          public names, with that one method), as the CLI dry run names it
         type: return
         outcome: MethodRename
   - name: updateSpec
     narrative:
       - stepNumber: 1
+        description: >-
+          When the delta removes contract methods, read the projects that consume the bound project
+          before anything moves — the family in reach and the searched folders — each with what its
+          specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 2
         description: >-
           Patch the stored spec through the authoring client adapter, so the same gate that judges a
           create judges the merged candidate — an update can introduce a misplaced field as easily
@@ -247,7 +255,13 @@ methods:
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: updateSpecGated
-      - stepNumber: 2
+      - stepNumber: 3
+        description: >-
+          When the write removed published methods, name the consumers it breaks: each consumer read
+          above narrowed to the published names and members it reaches
+          (external_consumer.narrowedToUses)
+        type: local
+      - stepNumber: 4
         description: >-
           Render the change report as the text answer and carry that same report as the structured
           twin, so the sentence and the data are two renderings of one object and can never disagree
@@ -282,7 +296,8 @@ methods:
       - stepNumber: 4
         description: >-
           Bind them through the authoring client adapter as one delta naming each method with its
-          endpoint, so the write is judged and reported like any other
+          endpoint, forwarding the caller's dry run, so the write is judged and reported like any
+          other
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: updateSpecGated
@@ -475,7 +490,8 @@ methods:
       - stepNumber: 1
         description: >-
           State the restatement: the type as the tool's arguments give it, each field's optional
-          flag defaulted to false, and the fields this tool's input can express
+          flag defaulted to false, the fields this tool's input can express, and the caller's dry
+          run
         type: local
       - stepNumber: 2
         description: >-
@@ -511,24 +527,6 @@ methods:
         targetComponent: mcp_authoring_adapter
         targetMethod: moveMethods
     symbol: sdd_move_methods
-  - name: deleteSpec
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Delete the spec with its subtree through the authoring client adapter, carrying the
-          caller's dry-run and force requests; it refuses a referenced deletion unless forced and
-          reports the tests a removed method invalidated
-        type: call
-        targetComponent: mcp_authoring_adapter
-        targetMethod: deleteSpec
-      - stepNumber: 2
-        description: >-
-          Answer with the deletion: every spec removed (or, on a dry run, that would be), the
-          references left, and the tests to revisit; false says the spec was not there, which is not
-          a failure but is not a deletion either
-        type: return
-        outcome: answered
-    symbol: sdd_delete_spec
   - name: getProjectConfig
     narrative:
       - stepNumber: 1
@@ -722,15 +720,25 @@ methods:
         targetMethod: loadTypeSpec
       - stepNumber: 2
         description: >-
+          Read the projects that consume the bound project — the family in reach, members included,
+          and the consumer checkouts in the searched folders — before anything moves, each with the
+          names and members its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
           Rename the type and rewrite every reference to it via the core client adapter — or, with
           dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameType
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Shape the tool response from the report: from and to, the specs rewritten, the public
-          names kept, the register edits
+          names kept, the register edits, publishedIn, and `breaks` — every consumer read above
+          whose specs reach a public name carrying the type, narrowed to those names and members
+          (external_consumer.narrowedToUses)
         type: return
         outcome: TypeRename
   - name: renameField
@@ -802,7 +810,70 @@ methods:
           method name and a broken former public name included (external_consumer.narrowedToUses)
         type: return
         outcome: ParamRename
+  - name: renameSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Rename the contract or implementation through the core client adapter — or, with dryRun,
+          ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameSpecId
+      - stepNumber: 2
+        description: >-
+          Answer with the report: the spec renamed, the specs rewritten, the public names kept and
+          the register edits
+        type: return
+        outcome: SpecIdRename
+    symbol: sdd_rename_spec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Move the spec through the authoring client adapter, which judges a moved component in its
+          tree before anything is written — or, with dryRun, answers the plan
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: moveSpec
+      - stepNumber: 2
+        description: 'Answer with the report: what moved, what was rewritten, and the gate''s notices'
+        type: return
+        outcome: SpecMove
+    symbol: sdd_move_spec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the projects that consume the bound project — the family in reach, and the consumer
+          checkouts in the searched folders — before anything goes, each with the names and members
+          its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 2
+        description: >-
+          Delete the spec with its subtree through the authoring client adapter, carrying the
+          caller's dry-run and force requests; it refuses a spec of another project, an id nothing
+          holds, and a referenced deletion unless forced, and reports what it published and the
+          tests a removed method invalidated
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: deleteSpec
+      - stepNumber: 3
+        description: >-
+          Name the consumers the deletion breaks: each consumer read above narrowed to the published
+          names and members it reaches (external_consumer.narrowedToUses); none when nothing it
+          removes is published
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer with the deletion and its breaks: every spec removed (or, on a dry run, that would
+          be), the references left, the published names, the consumers it breaks, and the tests to
+          revisit
+        type: return
+        outcome: answered
+    symbol: sdd_delete_spec
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-08T19:00:49.158Z'
+updatedAt: '2026-10-09T00:34:08.106Z'

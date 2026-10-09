@@ -9,17 +9,26 @@ methods:
   - name: updateSpecGated
     description: >-
       Patch an existing spec of any level through the same judgement, by injecting it into the
-      store's delta update as a write hook. The hook judges the MERGED spec, because a delta on its
+      store's delta update as a write hook. A spec of another project (a member's, or one named
+      through an external's alias) is refused first, naming that project's folder and the session to
+      open there (crossProjectWriteRefusal). The hook judges the MERGED spec, because a delta on its
       own cannot tell you the resulting componentType, and it is the resulting componentType that
       decides whether a field belongs; for a component or a contract it also judges the merged spec
-      IN its tree (introducedFindings) and refuses an error-level doctrine edge or route collision
-      the write itself introduces, exactly as it refuses an intrinsic error. A type position the
-      delta writes as an alias is stored canonical and reported back; one the delta writes that is
-      not canonical at all is refused, naming the replacement, while a stored one it leaves alone is
-      not judged. Answers with the change report: exactly what changed, which of the delta's paths
-      changed nothing, or that nothing did and nothing was written — the respellings applied, and
-      every key the stored file carries that the schema will drop (strippedKeys), so no write loses
-      data unannounced. A dry run takes the same path and is refused exactly as the write would be.
+      IN its tree (introducedFindings) and refuses an error-level doctrine edge, a cross-subsystem
+      edge into a non-Portal, or a route collision the write itself introduces, exactly as it
+      refuses an intrinsic error. A delta that removes contract methods is refused while other specs
+      still reference one (a call, register or dispatch step, a declared call, a dispatch binding, a
+      lifecycle entrypoint, a signatureFrom), naming each; otherwise each removed method's
+      implementation entries go with it in the same write (cascaded) — a narrative realizes its
+      contract method and means nothing without it — and the export entries publishing a removed
+      method are reported (published) so the door can name the consumers it breaks. A type position
+      the delta writes as an alias is stored canonical and reported back; one the delta writes that
+      is not canonical at all is refused, naming the replacement, while a stored one it leaves alone
+      is not judged. Answers with the change report: exactly what changed, which of the delta's
+      paths changed nothing, or that nothing did and nothing was written — the respellings applied,
+      and every key the stored file carries that the schema will drop (strippedKeys), so no write
+      loses data unannounced. A dry run takes the same path and is refused exactly as the write
+      would be.
     signature: >-
       updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
       SpecChangeReport
@@ -42,12 +51,13 @@ methods:
     description: >-
       Move methods from one component to another as one gated write: lift each method's contract and
       its implementation (narrative, calls, sourcePath, technologies) onto the target, re-point
-      every reference that named the old home, and judge the RESULT before anything reaches disk.
-      The judgement is the point — a rename changes identity and can stay mechanical, but a move
-      changes which component owns behaviour, which is exactly what the stereotype and dependency
-      rules judge. On a refusal nothing is written and the report names the rule plus where the
-      methods could live instead, because a refusal that only names the rule leaves the caller to
-      search for a legal home by hand.
+      every reference that named the old home, and judge the RESULT before anything reaches disk. A
+      component of another project is refused first (crossProjectWriteRefusal). The judgement is the
+      point — a rename changes identity and can stay mechanical, but a move changes which component
+      owns behaviour, which is exactly what the stereotype and dependency rules judge. On a refusal
+      nothing is written and the report names the rule plus where the methods could live instead,
+      because a refusal that only names the rule leaves the caller to search for a legal home by
+      hand.
     signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
@@ -68,21 +78,25 @@ methods:
         optional: true
   - name: writeSpec
     description: >-
-      Write a whole spec as a create tool states it, at any level: require its parent, apply the
-      restatement to the stored spec (status, carry, clear, removal), resolve narrative labels, read
-      an interface's or a type's type positions under the grammar, judge a component candidate
-      against the intrinsic rules, judge a component or contract candidate in its tree for the
-      doctrine edges and route collisions it introduces, and persist. A subsystem naming a
-      projectPath is refused: that is the legacy mount form, and a member is declared in
+      Write a whole spec as a create tool states it, at any level: refuse a spec, or a parent, of
+      another project (crossProjectWriteRefusal), require its parent, apply the restatement to the
+      stored spec (status, carry, clear, removal), resolve narrative labels, read an interface's or
+      a type's type positions under the grammar, judge a component candidate against the intrinsic
+      rules, judge a component or contract candidate in its tree for the doctrine edges,
+      cross-subsystem edges into a non-Portal and route collisions it introduces, and persist. A
+      contract re-authored without some of its methods is refused while other specs still reference
+      one of them; otherwise their implementation entries go with them (cascaded). A subsystem
+      naming a projectPath is refused: that is the legacy mount form, and a member is declared in
       project.yaml `members` instead. An interface method naming a signatureFrom and also stating
       params or returns is refused (SIGNATURE_SOURCE_RESTATED): the source supplies them. A type
       position written as an alias is accepted and stored canonical, and reported back; one that is
       not canonical at all is refused (TYPE_EXPRESSION_INVALID, TYPE_POSITION_INVALID,
       TYPE_FORM_UNSUPPORTED, TYPE_NOT_NEUTRAL), naming the replacement. A refused status, a missing
       parent, an unresolved label, the mount form, a restated source, a non-canonical type, an
-      intrinsic error or an introduced design error throws before anything touches disk. Answers
-      with the write receipt, carrying the respellings applied and the tests a changed or removed
-      method invalidated.
+      intrinsic error or an introduced design error throws before anything touches disk. A dry run
+      (the restatement's dryRun) runs every judgement and writes nothing. Answers with the write
+      receipt, carrying the respellings applied, what was cascaded and the tests a changed or
+      removed method invalidated.
     signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
     returns: SpecWriteReceipt
     params:
@@ -92,16 +106,22 @@ methods:
   - name: deleteSpec
     description: >-
       Delete one spec of the named kind together with everything it contains, and report what went.
-      A container's content means nothing without it, so the deletion takes its subtree
-      (spec_index.subtreeOf): a contract its implementations, a component its contracts and the
-      members it owns, a subsystem its components and types. When another spec still references what
-      would go (spec_index.referencesTo), the deletion is refused, naming each reference, because
-      those are the error findings (invalid references) the write itself would introduce — the same
-      stance the gate takes on every other write; `force` deletes anyway and answers the references
-      it left dangling, for a staged teardown. `dryRun` answers the same plan — what would be
-      removed, what references it, the tests to revisit — and removes nothing. The tests that encode
-      a removed method are found before anything goes, while the implementations that place them
-      still exist. The L0 cannot be deleted.
+      A spec of another project — a member's, by its key or an `alias::name`, or one named through
+      an external's alias — is refused first, naming that project's folder and the session to open
+      there, the dry run included (crossProjectWriteRefusal); an id no spec of the kind holds is
+      refused with what it might have meant (the kind that does hold it, the ids of the kind, the
+      bare form of a type id); the L0 is never deleted. A container's content means nothing without
+      it, so the deletion takes its subtree (spec_index.subtreeOf): a contract its implementations,
+      a component its contracts and the members it owns, a subsystem its components and types. When
+      another spec still references what would go (spec_index.referencesTo), the deletion is
+      refused, naming each reference, because those are the error findings (invalid references) the
+      write itself would introduce — the same stance the gate takes on every other write; `force`
+      deletes anyway and answers the references it left dangling, for a staged teardown. Every
+      public name a consumer reaches what goes through is read before anything goes (published), so
+      the door can name the consumers the deletion breaks, exactly as a rename does. `dryRun`
+      answers the same plan — what would be removed, what references it, what it publishes, the
+      tests to revisit — and removes nothing. The tests that encode a removed method are found
+      before anything goes, while the implementations that place them still exist.
     signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
     returns: SpecDeletion
     params:
@@ -121,6 +141,35 @@ methods:
           Delete even though other specs still reference what goes, leaving those references
           dangling
         optional: true
+  - name: moveSpec
+    description: >-
+      Move a component or a type to another subsystem of the bound project, gated: a spec or target
+      of another project is refused first (crossProjectWriteRefusal); for a component the move's
+      plan is read (what moves: the component, the members it owns, their contracts and
+      implementations), each moved component is judged in its tree WITH its new subsystem
+      (introducedFindings, the others moving beside it) — an edge the move turns into a
+      cross-subsystem edge into a non-Portal, or a forbidden doctrine edge, refuses the move with
+      the rule's own words, and a curable boundary finding (a direct cross-subsystem edge into a
+      Portal) rides along as a notice — then the move is written through the core adapter. A type is
+      moved without judgement: it carries no edges. A dry run answers the plan and the notices and
+      writes nothing.
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to; omitted for a type made system-level
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-08T18:52:14.135Z'
+updatedAt: '2026-10-09T00:30:59.454Z'

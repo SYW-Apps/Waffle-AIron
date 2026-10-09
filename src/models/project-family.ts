@@ -338,6 +338,18 @@ export function narrowedToUses(consumer: ExternalConsumer, published: readonly E
         }
       }
     }
+    // A contract the consumer depends on as a whole (a bare `dependsOn:
+    // alias::name`, a use with no members) reaches every member published under
+    // it: whatever calls it through that dependency — its code, its binding —
+    // may call any of them, so a rename moving one breaks it too.
+    if (use.kind === 'component') {
+      for (const name of names) {
+        for (const u of consumer.uses ?? []) {
+          if (u.publicName !== name || u.members.length > 0) continue;
+          add({ publicName: name, kind: u.kind, members: [...use.members].sort(), ...(u.specs ? { specs: [...u.specs] } : {}) });
+        }
+      }
+    }
     // A former public name the consumer still writes, bound to nothing now (broken): kept as a use of its own.
     for (const former of use.formerNames ?? []) {
       if ((consumer.broken ?? []).includes(former) && !merged.has(former)) add({ publicName: former, kind: use.kind, members: use.kind === 'type' ? ['type'] : [] });

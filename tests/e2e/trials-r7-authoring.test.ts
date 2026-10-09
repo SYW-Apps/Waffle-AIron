@@ -100,11 +100,11 @@ describe('journey: a delta never changes which spec it is or where it lives (tin
     expect(specFiles(dir)).toEqual(before);
   });
 
-  it('a subsystem in the delta is refused, saying no tool moves a component yet', async () => {
+  it('a subsystem in the delta is refused, naming sdd_move_spec (r8: the owed tool exists)', async () => {
     const before = specFiles(dir);
     const r = await callTool(client, 'sdd_update_spec', { kind: 'component', id: 'stats_portal', delta: { subsystem: 'links' } });
     expect(r.ok, r.text).toBe(false);
-    expect(r.text).toMatch(/no tool moves a component to another subsystem.*\(owed\)/s);
+    expect(r.text).toMatch(/"subsystem" is where the component lives.*sdd_move_spec/s);
     expect(specFiles(dir)).toEqual(before);
   });
 });

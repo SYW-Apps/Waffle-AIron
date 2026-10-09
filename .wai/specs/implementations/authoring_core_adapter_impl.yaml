@@ -80,6 +80,31 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
+  - name: crossProjectWriteRefusal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the core subsystem's published tree read whether any target of the write lives in
+          another project
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: crossProjectWriteRefusal
+  - name: publishedUsesOf
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the core subsystem's published tree read which public names a removal takes something
+          away from
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: publishedUsesOf
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Move the spec through the core subsystem's published raw write; the caller judged it first
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: moveSpec
 status: complete
 createdAt: '2026-09-18T21:43:38.007Z'
-updatedAt: '2026-10-07T06:23:17.313Z'
+updatedAt: '2026-10-09T00:27:03.621Z'

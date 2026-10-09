@@ -129,16 +129,21 @@ function bindExternals(node: ProjectNode, root: ScannedProjectRoot, nodes: Proje
 }
 
 /**
- * Stage 8: each referenced project member — a `../`, git or hosted source whose
+ * Stage 8: each referenced project member — a git or hosted source whose
  * content is a project's — bound as a producer outside the family at audience
- * instance: a sibling checkout or a git member at the root the scan located
- * (its pinned commit in the fetch cache), a hosted one left for the hosted
- * record lookup. A part is no producer: its specs are the node's own.
+ * instance: a git member at the root the scan located (its pinned commit in
+ * the fetch cache), a hosted one left for the hosted record lookup. A `../`
+ * sibling checkout is a node of the family like a contained member (round 8),
+ * so it is bound here only when the scan could not open it (a hosted instance,
+ * a missing folder) — reported unavailable, never a pass. A part is no
+ * producer: its specs are the node's own.
  */
 function bindReferencedMembers(node: ProjectNode, root: ScannedProjectRoot): ResolvedExternal[] {
   const out: ResolvedExternal[] = [];
   for (const member of declaredMembers(root.config ?? {})) {
     if (member.problem || member.storage === 'contained' || root.parts.some((p) => p.alias === member.alias)) continue;
+    // A `../` sibling the scan followed is a node of the family, composed live; only one it could not open is referenced.
+    if (member.storage === 'path' && !root.referenced.some((r) => r.alias === member.alias)) continue;
     const base = { alias: member.alias, project: member.alias, audience: 'instance', role: 'member' as const };
     if (member.storage === 'hosted') {
       out.push({ ...base, sourceKind: 'hosted', hosted: member.source.hosted });

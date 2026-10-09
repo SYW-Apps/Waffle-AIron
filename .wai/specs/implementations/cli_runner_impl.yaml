@@ -1146,11 +1146,13 @@ methods:
         targetMethod: runGenerate
       - stepNumber: 18
         description: >-
-          Print the lock record — written, or, when the lock re-recorded nothing (the same approval
-          on file), that .wai/lock.json was left untouched, as the summary promised — each direct
-          member's state, and the code results plainly on their own line — "code: N errors, M
-          warnings recorded beside the claim (analyzer <version>, grade <grade>)" — so an approval
-          taken over failing code is never mistaken for clean code; then return
+          Print the lock record — written, or, when this run re-recorded nothing (the same approval
+          on file, no evidence beside it to refresh), that this run left .wai/lock.json untouched,
+          as the summary promised: a difference from the committed record, if there is one, was
+          written by an earlier run — each direct member's state, and the code results plainly on
+          their own line — "code: N errors, M warnings recorded beside the claim (analyzer
+          <version>, grade <grade>)" — so an approval taken over failing code is never mistaken for
+          clean code; then return
         type: return
         outcome: locked
     symbol: lockCommand
@@ -3428,7 +3430,8 @@ methods:
         label: confirm
         description: >-
           Ask to apply it: --yes answers; a non-interactive shell without --yes is answered no with
-          a message naming --yes
+          a message naming --yes, and the command exits non-zero — not applied and declined by
+          nobody, so a script never reads success
         type: local
       - stepNumber: 7
         description: Confirmed?
@@ -3441,7 +3444,9 @@ methods:
         targetComponent: cli_migration_adapter
         targetMethod: discard
       - stepNumber: 9
-        description: Stop, having written nothing
+        description: >-
+          Stop, having written nothing (non-zero when no terminal could confirm; zero when the
+          person declined)
         type: return
         outcome: declined
       - stepNumber: 10
@@ -4049,7 +4054,8 @@ methods:
       - stepNumber: 4
         description: >-
           Keep the consumers whose specs reach the old method on a public name the report says
-          publishes it (external_consumer.reaches): the projects the rename breaks
+          publishes it, a contract they depend on as a whole included
+          (external_consumer.narrowedToUses): the projects the rename breaks
         type: local
       - stepNumber: 5
         description: >-
@@ -4074,4 +4080,4 @@ lint:
         subcommand adds two steps, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T20:19:42.255Z'
+updatedAt: '2026-10-09T01:01:01.251Z'

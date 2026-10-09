@@ -56,6 +56,7 @@ import {
   moveMember,
   listDirectChainedSubprojects,
   renameComponent,
+  renameSpecId,
   renameMethod,
   renameType,
   renameField,
@@ -70,7 +71,7 @@ import {
   loadProjectVariants,
   resolveVariantGuidance,
 } from './adapters/core.js';
-import { writeSpec, deleteSpec, updateSpecGated, moveMethods } from './adapters/authoring.js';
+import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
@@ -88,7 +89,8 @@ import { validateProject, validateRegistry, validateFamily, measurePackImpact, f
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredMembers } from '../models/project.js';
-import { consumerReaches, narrowedToMember, narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
+import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
+import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
@@ -613,8 +615,29 @@ function renderChangeReport(report: SpecChangeReport): string {
   // is a field nobody reads, and the whole point is that the change which
   // creates the collision is the one that says so.
   lines.push(...renderRespellings(report.respellings));
+  lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun));
   lines.push(...renderTestsToRevisit(report.testsToRevisit));
   return lines.join('\n');
+}
+
+/**
+ * The public names a removal takes something away from, and the consumers it
+ * breaks there — the block a rename's dry run has always carried, for a delete
+ * and a method removal alike.
+ */
+function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray<ExternalConsumer>, dryRun: boolean): string[] {
+  if (published.length === 0) return [];
+  const lines = ['', `PUBLISHED as: ${published.map((u) => `${u.publicName}${u.members.length ? ` (${u.members.join(', ')})` : ''}`).join('; ')} — a consumer of these ${dryRun ? 'would lose' : 'lost'} what goes.`];
+  if (breaks.length === 0) {
+    lines.push('No consumer in reach uses it (the family, and the searched folders when `search` names any).');
+    return lines;
+  }
+  lines.push(`BREAKS ${breaks.length} consumer(s), whose specs still reach it:`);
+  for (const c of breaks) {
+    const uses = (c.uses ?? []).map((u) => `${u.publicName}${u.members.length ? `.${u.members.join('/')}` : ''}${u.specs?.length ? ` in ${u.specs.join(', ')}` : ''}`);
+    lines.push(`- ${c.project} (${c.section}.${c.alias})${c.found === 'search' ? ` [${c.directory}]` : ''}${uses.length ? `: ${uses.join('; ')}` : ''}`);
+  }
+  return lines;
 }
 
 /** A deletion as one answer: what went (or would), what still references it, and the tests to revisit. */
@@ -630,6 +653,7 @@ function renderDeletion(deletion: SpecDeletion): string {
       : 'LEFT DANGLING (forced) — validate reports each:');
     lines.push(...deletion.references.map((r) => `- ${r.kind} "${r.id}" (${r.position}) -> ${r.target.kind} "${r.target.id}"`));
   }
+  lines.push(...renderBreaks(deletion.published, deletion.breaks ?? [], deletion.dryRun));
   lines.push(...renderTestsToRevisit(deletion.testsToRevisit));
   return lines.join('\n');
 }
@@ -713,6 +737,29 @@ function renderRespellings(entries: ReadonlyArray<{ path: string; written: strin
   return ['', 'RESPELLED (stored canonical):', ...entries.map((r) => `- ${r.path}: "${r.written}" → "${r.stored}"`)];
 }
 
+/** One public name a removal takes something away from: a delete's or a method removal's published list. */
+const exportUseOutput = z.object({
+  publicName: z.string(),
+  kind: z.string(),
+  members: z.array(z.string()).describe('The contract methods (or `type`) a consumer reaches on it that the removal takes away.'),
+  specs: z.array(z.string()).optional(),
+  formerNames: z.array(z.string()).optional(),
+  formerMembers: z.record(z.array(z.string())).optional(),
+});
+
+/** One consumer a removal breaks, narrowed to what it uses of what goes. */
+const breakingConsumerOutput = z.object({
+  project: z.string(),
+  key: z.string(),
+  directory: z.string(),
+  alias: z.string(),
+  section: z.enum(['externals', 'members']),
+  names: z.array(z.string()),
+  broken: z.array(z.string()).optional(),
+  found: z.enum(['search']).optional(),
+  uses: z.array(exportUseOutput).optional(),
+});
+
 const specWriteReceiptOutput = {
   kind: z.enum(SPEC_KINDS).describe('The spec kind written.'),
   id: z.string().describe('The id the spec is stored under; "system" for the L0 singleton.'),
@@ -734,6 +781,10 @@ const specWriteReceiptOutput = {
     + 'every position was already canonical.',
   ),
   testsToRevisit: testsToRevisitOutput,
+  dryRun: z.boolean().optional().describe('Present, true, on a dry run: every judgement ran and nothing was written.'),
+  cascaded: z.array(z.string()).optional().describe(
+    'Each implementation method entry a contract restatement removed with a method it dropped, as `<implementation>.<method>`.',
+  ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecWriteReceipt | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -759,6 +810,12 @@ const specDeletionOutput = {
   removed: z.array(z.object({ kind: z.string(), id: z.string() })).describe('Every spec the deletion removes (or would), innermost first and the addressed spec last.'),
   references: z.array(z.object({ kind: z.string(), id: z.string(), position: z.string(), target: z.object({ kind: z.string(), id: z.string() }) })).describe('Every reference a spec outside the removed set holds to it: why a deletion is refused, or what a forced one left dangling.'),
   testsToRevisit: testsToRevisitOutput,
+  published: z.array(exportUseOutput).describe(
+    'Every public name of this project a consumer reaches what the deletion removes through, read before anything goes. Empty when nothing removed is published.',
+  ),
+  breaks: z.array(breakingConsumerOutput).optional().describe(
+    'The consumers in reach (family members included, and checkouts in the searched folders) whose specs reach a published name on a member the deletion takes — the projects it breaks. Absent when none breaks.',
+  ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecDeletion | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -800,6 +857,15 @@ const specChangeReportOutput = {
   strippedKeys: z.array(z.string()).optional().describe(
     "Keys the stored file carries that the level's schema does not know, each as `path: value`, which this write "
     + 'drops (or, on a dry run, would drop). Absent when there are none.',
+  ),
+  cascaded: z.array(z.string()).optional().describe(
+    'Each implementation method entry removed with a contract method the delta removed, as `<implementation>.<method>` (on a dry run, would be).',
+  ),
+  published: z.array(exportUseOutput).optional().describe(
+    'Every public name a consumer reaches a removed contract method through. Absent when no removed method is published.',
+  ),
+  breaks: z.array(breakingConsumerOutput).optional().describe(
+    'The consumers in reach whose specs call a removed method on a published name — the projects the removal breaks.',
   ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
@@ -1323,6 +1389,8 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_rename_type',
   'sdd_rename_field',
   'sdd_rename_param',
+  'sdd_rename_spec',
+  'sdd_move_spec',
   'sdd_add_component',
   'sdd_define_interface',
   'sdd_set_endpoints',
@@ -1338,6 +1406,16 @@ const SPEC_WRITE_TOOLS = new Set([
 // no listChanged and stays correct-on-poll). Keyed per instance because the
 // hosted path creates many servers from this same factory.
 const listChangedEmitters = new WeakMap<McpServer, () => void>();
+
+/**
+ * A tool description with its argument names appended — the required ones
+ * bare, the optional ones with a `?` — read from the input schema itself.
+ */
+function withArgumentNames(description: string, inputSchema: Record<string, z.ZodTypeAny>): string {
+  const names = Object.entries(inputSchema).map(([name, schema]) => (schema.isOptional() ? `${name}?` : name));
+  if (names.length === 0) return description;
+  return `${description.trimEnd()} Arguments: ${names.join(', ')}.`;
+}
 
 function reg<Args extends Record<string, unknown>>(
   server: McpServer,
@@ -1399,8 +1477,12 @@ function reg<Args extends Record<string, unknown>>(
   // shapes below it nest further than any hand-copied schema here should
   // restate; that surface names what it dropped instead (SpecChangeReport's
   // `ineffective`), which is the only honest answer where a schema cannot help.
+  // Every description ends with the tool's own argument names. A caller that
+  // guessed them from the CLI's vocabulary (`id` for externalize's `subsystem`,
+  // `newName` for a component rename's `newId`) learned them only from a
+  // refusal; the names are the schema's, so they can never drift from it.
   const strictConfig = config.inputSchema
-    ? { ...config, inputSchema: z.object(config.inputSchema).strict() }
+    ? { ...config, description: withArgumentNames(config.description, config.inputSchema), inputSchema: z.object(config.inputSchema).strict() }
     : config;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (server as any).registerTool(name, strictConfig as any, guarded as any);
@@ -2168,7 +2250,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ alias: string; path?: string; dryRun?: boolean }>(server,
     'sdd_adopt_member',
     {
-      description: "Make the bound project's external a member — sdd_detach_member's inverse. Locally the external is found by a path inside the bound project and adopted where it is; on a hosted instance it names a project by source.hosted and `path` says where to adopt it (the hosting server relocates it there). All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
+      description: "Make the bound project's external a member — sdd_detach_member's inverse. Locally the external is found by a path inside the bound project or a `../` sibling checkout, and adopted where it is; on a hosted instance it names a project by source.hosted and `path` says where to adopt it (the hosting server relocates it there). All-or-nothing; dryRun answers the plan and writes nothing. Never locks.",
       inputSchema: {
         alias: z.string().describe("The external's alias"),
         path: z.string().optional().describe('Hosted: the member path to adopt a source.hosted external at, relative to the bound project; a source.path external is adopted where it is'),
@@ -2181,7 +2263,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; newId: string; dryRun?: boolean }>(server,
     'sdd_rename_component',
     {
-      description: 'Rename a component and rewrite every reference to it in the bound tree: dependsOn, owns and dispatch entries, lifecycle entrypoints, published interfaces at L1 and L0, narrative call/dispatch/register targets, an interface\'s component, an implementation\'s contract and an entity\'s componentClass. The interface named i<id> and the implementation named <id>_impl move to the new ids and files; interfaces and implementations named otherwise keep their ids. Findings keyed on the component follow it too: every lint allow naming it on an edge site or in a covered unit, and every entry of the debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or naming the component in its site or units — rewritten in place, every comment and all other formatting of the register kept, so unchanged debt never reads as paid and new at once. A register that cannot be rewritten that precisely is refused before the first write. Display names are left as they are. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename it from that project\'s own root), a new id that is not a lowercase identifier without a namespace separator (invalid-id), and a new id — or i<newId> or <newId>_impl — already in use (id-taken). With dryRun it answers what it would move, rewrite, keep and rekey, and writes nothing. Returns the specs moved, each with its old and new id, the ids of the other specs rewritten (lint allows included), and `carried`: each register edit — the entry by code, spec and site as it stood, the key changed (spec, at or covers), from and to.',
+      description: 'Rename a component and rewrite every reference to it in the bound tree: dependsOn, owns and dispatch entries, lifecycle entrypoints, published interfaces at L1 and L0, narrative call/dispatch/register targets, an interface\'s component, an implementation\'s contract and an entity\'s componentClass. The interface named i<id> and the implementation named <id>_impl move to the new ids and files; interfaces and implementations named otherwise keep their ids, and their files follow the component\'s folder (rename one of those on its own with sdd_rename_spec). Findings keyed on the component follow it too: every lint allow naming it on an edge site or in a covered unit, and every entry of the debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or naming the component in its site or units — rewritten in place, every comment and all other formatting of the register kept, so unchanged debt never reads as paid and new at once. A register that cannot be rewritten that precisely is refused before the first write. Display names are left as they are. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename it from that project\'s own root), a new id that is not a lowercase identifier without a namespace separator (invalid-id), and a new id — or i<newId> or <newId>_impl — already in use (id-taken). With dryRun it answers what it would move, rewrite, keep and rekey, and writes nothing. Returns the specs moved, each with its old and new id, the ids of the other specs rewritten (lint allows included), and `carried`: each register edit — the entry by code, spec and site as it stood, the key changed (spec, at or covers), from and to.',
       inputSchema: {
         id: z.string().describe('The component to rename (namespaced if needed)'),
         newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator'),
@@ -2222,9 +2304,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const report = renameMethod(qualifiedComponentId(id), method, newName, pinSymbol, dryRun);
         // Narrowed to the one method, as the CLI's dry run says it: the
         // public names publishing it, each with that member alone.
-        const breaks = report.publishedIn.length > 0
-          ? consumers.filter((c) => consumerReaches(c, report.publishedIn, method)).map((c) => narrowedToMember(c, report.publishedIn, method))
-          : [];
+        // A contract a consumer depends on as a whole counts too (external_consumer.narrowedToUses).
+        const published = report.publishedIn.map((publicName) => ({ publicName, kind: 'component' as const, members: [method] }));
+        const breaks = consumers.map((c) => narrowedToUses(c, published)).filter((c): c is ExternalConsumer => c !== null);
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
         return errText(String(e));
@@ -2232,23 +2314,28 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ id: string; newId: string; dryRun?: boolean }>(server,
+  reg<{ id: string; newId: string; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_type',
     {
-      description: 'Rename a type and rewrite every reference to it in the bound tree: every type position naming it (contract and type-method params and returns, fields, signature-type params and returns), a signatureFrom naming it as a signature type, and an L1 or L0 export entry\'s typeDef. Only the named members of a type expression that name this type are respelled, in the style they were written (`Invoice` → `Bill`, `invoice` → `bill`); the rest of the text stays as written. The type moves to the new id and file under the same owner, and its old id joins its rename trace (previousIds) so a consumer of the design export reads the rename as a rename; an export entry that derived its public name from the old id gets `as: <that name>` first, so the published name and every consumer\'s pin stay. Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming it, and every debt-register entry anchored on it, rewritten in place (a register that cannot be rewritten that precisely is refused before the first write). The display name is left as it is. Refuses, writing nothing: a type that does not exist (type-missing), one in another project (chained-type), a new id that is not a lowercase identifier (invalid-id), and a new id another type of the same owner holds (id-taken) or retired (id-retired — unsetting the holder\'s previousIds releases it). With dryRun it answers what it would rewrite, keep and rekey, and writes nothing. Returns from and to, the specs rewritten, keptPublicNames and `carried`: each register edit.',
+      description: 'Rename a type and rewrite every reference to it in the bound tree: every type position naming it (contract and type-method params and returns, fields, signature-type params and returns), a signatureFrom naming it as a signature type, and an L1 or L0 export entry\'s typeDef. Only the named members of a type expression that name this type are respelled, in the style they were written (`Invoice` → `Bill`, `invoice` → `bill`); the rest of the text stays as written. The type moves to the new id and file under the same owner, and its old id joins its rename trace (previousIds) so a consumer of the design export reads the rename as a rename; an export entry that derived its public name from the old id gets `as: <that name>` first, so the published name and every consumer\'s pin stay. Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming it, and every debt-register entry anchored on it, rewritten in place (a register that cannot be rewritten that precisely is refused before the first write). The display name is left as it is. Refuses, writing nothing: a type that does not exist (type-missing), one in another project (chained-type), a new id that is not a lowercase identifier (invalid-id), and a new id another type of the same owner holds (id-taken) or retired (id-retired — unsetting the holder\'s previousIds releases it). With dryRun it answers what it would rewrite, keep and rekey, and writes nothing. Returns from and to, the specs rewritten, keptPublicNames, `carried`: each register edit, `publishedIn` — every public name a consumer reaches the type through (an exported type that is or embeds it, member `type`; an exported contract whose methods name one in their signature closure, those methods) — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those, a contract they depend on as a whole included, narrowed to what carries the type — as sdd_rename_field and sdd_rename_param name theirs.',
       inputSchema: {
         id: z.string().describe('The type to rename (qualified by its owning subsystem if needed, `subsystem::id`)'),
         newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator'),
         dryRun: z.boolean().optional().describe('Answer what the rename would do — refused exactly as the real rename would be — and write nothing'),
+        search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling checkouts), relative to the bound project root or absolute'),
       },
     },
-    ({ id, newId, dryRun }) => {
+    ({ id, newId, dryRun, search }) => {
       try {
-        // mcp_orchestrator.renameType: resolve the id in the bound tree,
-        // rename through the core adapter, and return the report as the result.
+        // mcp_orchestrator.renameType: resolve the id in the bound tree, read
+        // the consumers before anything moves, rename through the core adapter,
+        // and name the consumers whose specs reach a public name carrying it.
         const bare = id.startsWith('::') ? id.slice(2) : id;
         const resolved = loadTypeSpec(bare) ? bare : id;
-        return json(renameType(resolved, newId, dryRun));
+        const consumers = externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d)));
+        const report = renameType(resolved, newId, dryRun);
+        const breaks = consumers.map((c) => narrowedToUses(c, report.publishedIn)).filter((c): c is ExternalConsumer => c !== null);
+        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
         return errText(String(e));
       }
@@ -2337,6 +2424,48 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Step 3: hand it to the authoring gate, which judges the move as a
         // whole and writes all of it or none of it.
         return json(moveMethods(source, target, methods, dryRun));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ kind: 'interface' | 'implementation'; id: string; newId: string; dryRun?: boolean }>(server,
+    'sdd_rename_spec',
+    {
+      description: 'Rename ONE contract (kind interface) or ONE implementation on its own — the ids sdd_rename_component keeps when they are not derived from the component\'s (i<id>, <id>_impl) — and rewrite every reference to it in the bound tree: every implementation\'s contract and every L1 and L0 export entry\'s interface (an entry whose public name derived from the old id gets `as: <that name>` first, so the published surface and every consumer\'s pin stay), lint allows and debt-register entries keyed on it. The spec moves to its new id and file beside its owner, its old id in its rename trace (previousIds). Refuses, writing nothing: another kind (invalid-kind, naming the tool that renames it), a spec that does not exist (spec-missing) or lives in another project (chained-spec), a new id outside the grammar — a contract id begins with i — (invalid-id), and one taken or retired (id-taken, id-retired). With dryRun it answers what it would move, rewrite and keep, and writes nothing.',
+      inputSchema: {
+        kind: z.enum(['interface', 'implementation']).describe('interface (a contract) or implementation'),
+        id: z.string().describe('The spec to rename'),
+        newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator (a contract\'s begins with i)'),
+        dryRun: z.boolean().optional().describe('Answer what the rename would do — refused exactly as the real rename would be — and write nothing'),
+      },
+    },
+    ({ kind, id, newId, dryRun }) => {
+      try {
+        // mcp_orchestrator.renameSpec: through the core adapter.
+        return json(renameSpecId(kind, id, newId, dryRun));
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
+  reg<{ kind: 'component' | 'type'; id: string; subsystem?: string; dryRun?: boolean }>(server,
+    'sdd_move_spec',
+    {
+      description: 'Move a component or a type to another subsystem of the bound project with everything that follows it. A component takes the members it owns, its contracts and their implementations (their files move to the new subsystem\'s folder in the nested layout); ids never change, so references by id stay, and what names the OLD subsystem follows: its export entries and lifecycle entrypoints for the moved components, and an L0 re-export from it. A type takes its file, its L1 export entries and every reference qualified by the old subsystem (`old::type` becomes `new::type`); omit subsystem to make a type system-level. Gated like every write: a move that would create a forbidden doctrine edge, or a cross-subsystem edge into a non-Portal, is refused with the rule\'s own words, and a curable boundary finding (a direct cross-subsystem edge into a Portal, which a client Adapter or a trustedLink would license) is named among the notices. Refuses, writing nothing: a kind other than component or type, a spec that does not exist or lives in another project, a subsystem the bound tree does not have or the one it already lives in, a component a pattern owns (move its owner), a type id the target already holds. With dryRun it answers the plan and the notices, and writes nothing.',
+      inputSchema: {
+        kind: z.enum(['component', 'type']).describe('component or type'),
+        id: z.string().describe('The spec to move (a type by its bare id, or as <subsystem>::<id>)'),
+        subsystem: z.string().optional().describe('The subsystem it moves to; omitted for a type made system-level'),
+        dryRun: z.boolean().optional().describe('Answer what the move would do — refused exactly as the move would be — and write nothing'),
+      },
+    },
+    ({ kind, id, subsystem, dryRun }) => {
+      try {
+        // mcp_orchestrator.moveSpec: through the authoring seam, which judges a moved component first.
+        return json(moveSpec(kind, id, subsystem, dryRun));
       } catch (e) {
         return errText(String(e));
       }
@@ -2548,10 +2677,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   // concrete `endpoint`. This is what a Portal needs to satisfy the gate's
   // MISSING_ENDPOINT / ENDPOINT_TRANSPORT_MISMATCH rules. Run it after
   // sdd_define_interface (the methods must already exist).
-  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }> }>(server,
+  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; status?: number; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }>; dryRun?: boolean }>(server,
     'sdd_set_endpoints',
     {
-      description: 'Bind concrete wire endpoints to existing L3 interface methods, for a Portal whose transport requires them (every transport but InProcess and Custom). Pick the Portal\'s own `transport` and fill that transport\'s address fields. A binding for an InProcess Portal is refused: its verbs are its contract methods. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
+      description: 'Bind concrete wire endpoints to existing L3 interface methods, for a Portal whose transport requires them (every transport but InProcess and Custom). Pick the Portal\'s own `transport` and fill that transport\'s address fields — for HTTP the verb, the path and, optionally, the success `status` (a 2xx or 3xx code: 202 Accepted, a redirect, a 201 for a workflow verb) the operation answers with, which the OpenAPI export uses in place of its convention. A binding for an InProcess Portal is refused: its verbs are its contract methods. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
@@ -2559,6 +2688,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom']).describe('Wire protocol; must be the Portal\'s own transport. The retired spelling HTTP_API is still read as HTTP for one release; any other transport is refused, naming the Portal\'s'),
           httpMethod: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']).optional().describe('HTTP: verb'),
           path: z.string().optional().describe('HTTP: route path, e.g. "/v1/checkout"'),
+          status: z.number().int().min(200).max(399).optional().describe('HTTP: the success status the operation answers with when it is not the verb\'s convention — 202 Accepted, a 3xx redirect, a 201 for a workflow verb that files something. The OpenAPI export uses it; omitted, the export answers 204 for a method returning nothing, 201 for a POST that creates, else 200'),
           service: z.string().optional().describe('gRPC: service name'),
           rpcMethod: z.string().optional().describe('gRPC: rpc method name'),
           operation: z.enum(['query', 'mutation', 'subscription']).optional().describe('GraphQL: operation kind'),
@@ -2573,10 +2703,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           jsonRpcMethod: z.string().optional().describe('JSONRPC: the JSON-RPC method name'),
           address: z.string().optional().describe('Custom: free-form address'),
         }).strict()).describe('One binding per method'),
+        dryRun: z.boolean().optional().describe('Answer the change report the binding would give — the gate (a route another method binds is refused) and the writer\'s parse included — and write nothing'),
       },
       outputSchema: specChangeReportOutput,
     },
-    ({ interface: interfaceId, endpoints }) => {
+    ({ interface: interfaceId, endpoints, dryRun }) => {
       try {
         // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
         const intf = loadInterfaceSpec(interfaceId);
@@ -2592,7 +2723,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
 
         const buildRaw = (e: typeof endpoints[number], transport: StoredTransport): Record<string, unknown> => {
           switch (transport) {
-            case 'HTTP':       return { transport: 'HTTP', method: e.httpMethod, path: e.path };
+            case 'HTTP':       return { transport: 'HTTP', method: e.httpMethod, path: e.path, ...(e.status !== undefined ? { status: e.status } : {}) };
             case 'gRPC':       return { transport: 'gRPC', service: e.service, method: e.rpcMethod };
             case 'GraphQL':    return { transport: 'GraphQL', operation: e.operation, field: e.field };
             case 'MessageBus': return { transport: 'MessageBus', topic: e.topic, event: e.event, queue: e.queue, direction: e.direction ?? 'subscribe' };
@@ -2630,9 +2761,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         }
         // Step 3: one delta naming each method with its endpoint, through the
         // authoring seam. Step 4: the change report.
-        const report = updateSpecGated('interface', interfaceId, { methods });
+        const report = updateSpecGated('interface', interfaceId, { methods }, dryRun);
         return structured(
-          `Bound ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.\n${renderChangeReport(report)}`,
+          `${dryRun ? 'Would bind' : 'Bound'} ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.\n${renderChangeReport(report)}`,
           report,
         );
       } catch (e) {
@@ -2704,7 +2835,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     bindings: z.array(z.string()).optional().describe('Optional code linkage: the hand-written binding modules (project-relative; N:1 sharing allowed) through which this realization reaches another project\'s code — a typed binding to a native library, a client stub. Outside the approval, like sourcePath. Validate compares each with the pinned snapshots of the externals this component reaches (function and method names, parameter names and arity, type field names) and reports a name the pin renamed or no longer exports (BINDING_DRIFT)'),
     router: z.string().min(1).optional().describe('Portal-only code linkage: the router entry this Portal\'s own file exports, through which whatever process serves the Portal hands it its requests (replaces the retired listener mount\'s `via`). Route coverage reads the routes out of it and export conformance holds the file to it. Outside the approval, like sourcePath'),
     technologies: z.array(z.union([z.string(), z.object({ name: z.string(), matches: z.array(z.string()).min(1).describe('The tokens the leakage and contract checks match INSTEAD of the name — for a technology whose name is also an ordinary word of the tree (the yaml package, the YAML format)') }).strict()])).optional().describe('External technologies this implementation binds to (e.g. ["mysql"], or [{ "name": "yaml", "matches": ["yaml package", "parseDocument"] }] when the bare name would match a common word) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components, and an Observer bound to a messaging technology.'),
-    injectedParams: z.array(z.string()).optional().describe('The parameter names this realization takes BEFORE the ones its contract declares — a config object, a data root, the transport handles a portal is handed. Supplied by whatever wires the component up, never by the caller the contract describes, which is why they belong here and not to the contract: another realization may hold them as fields instead. Declared rather than guessed, because a leading parameter the contract does not name cannot be told from one it named under a different name (`seed(config)` realized as `bootstrapInstance(cfg)`); a leading parameter this list does not name is reported (UNDECLARED_PARAM). Only a LEADING run is dropped — one of these names appearing after the contract\'s own parameters is an argument in the middle of the caller\'s list, not wiring'),
+    injectedParams: z.array(z.string()).optional().describe('The parameter names this realization takes BEFORE the ones its contract declares — a config object, a data root, the transport handles a portal is handed. Supplied by whatever wires the component up, never by the caller the contract describes, which is why they belong here and not to the contract: another realization may hold them as fields instead. Declared rather than guessed, because a leading parameter the contract does not name cannot be told from one it named under a different name (`seed(config)` realized as `bootstrapInstance(cfg)`); a leading parameter this list does not name is reported (UNDECLARED_PARAM). A name matches with or without a leading `_` (`ctx` names `_ctx`). A LEADING run of these names is dropped, and so is a TRAILING run of names the contract does not declare (a handler\'s `res` after the contract\'s own parameters); one appearing in the middle of the contract\'s parameters is an argument of the caller\'s list, not wiring'),
     detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
     conformance: conformanceEnum.optional().describe('Spec-level conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
     methods: z.array(z.object(implMethodShape).strict()).optional().describe('Method implementations containing L5 narratives'),
@@ -2715,7 +2846,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; bindings?: string[]; router?: string; technologies?: Technology[]; injectedParams?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; exportedVia?: string; ext?: Record<string, unknown>; narrative?: NarrativeStepIn[]; calls?: string[] }[]; status?: StatedStatus }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). A method whose narrative shows no steps declares the calls it makes in `calls` (one "<component>.<method>" each): the reachability walk takes exactly those edges and no others, so an intent-level method that reaches a collaborator must name it or that collaborator is reported unused. Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in their source file (omitted = Portal: anchored, else declared). A method whose body lives in its own file names it in the method\'s sourcePath; the implementation\'s sourcePath is the default for every method that names none. Parameters the realization takes BEFORE its contract\'s own — a config object, a data root, a portal\'s transport handles — are wiring, and are declared once for the spec in injectedParams; a leading parameter it does not name is reported against the contract (UNDECLARED_PARAM). Re-authoring an existing id REPLACES the method list: a method left out of the input is REMOVED together with its narrative (and reported); spec-level lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). A method whose narrative shows no steps declares the calls it makes in `calls` (one "<component>.<method>" each): the reachability walk takes exactly those edges and no others, so an intent-level method that reaches a collaborator must name it or that collaborator is reported unused. Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in their source file (omitted = Portal: anchored, else declared). A method whose body lives in its own file names it in the method\'s sourcePath; the implementation\'s sourcePath is the default for every method that names none. Parameters the realization takes BEFORE its contract\'s own — a config object, a data root, a portal\'s transport handles — or after them (a handler\'s response handle), are wiring, and are declared once for the spec in injectedParams (matched with or without a leading `_`); a leading or trailing parameter it does not name is reported against the contract (UNDECLARED_PARAM). Re-authoring an existing id REPLACES the method list: a method left out of the input is REMOVED together with its narrative (and reported); spec-level lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
       inputSchema: implInput,
       outputSchema: specWriteReceiptOutput,
     },
@@ -2809,14 +2940,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   const typeInputFields = Object.keys(typeInput);
 
   type ParamInput = { name: string; type: string; description?: string; optional?: boolean };
-  reg<{ kind: 'entity' | 'value-object' | 'signature' | 'enum'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string; values?: { name: string; description?: string }[]; holds?: string }>(server,
+  reg<{ kind: 'entity' | 'value-object' | 'signature' | 'enum'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string; values?: { name: string; description?: string }[]; holds?: string; dryRun?: boolean }>(server,
     'sdd_add_type',
     {
       description: 'Define a type: an entity or value-object (the data components operate on), a signature — a named function type — or an enum: a closed, ordered set of named `values` ({name, description?}, unique by name ignoring case and separators; the name is also the value as data carries it), with optional pure methods and nothing else (no fields, params or returns). A value-object may instead be a NAMED SCALAR: it `holds` one primitive in place of fields (a newtype or type alias in every language). Every type position (a field\'s type, a method\'s params and returns, a signature\'s params and returns, a named scalar\'s holds) is written in the neutral type grammar; aliases are respelled and listed in the receipt. Entities are owned by a subsystem; shared value objects and signatures omit subsystem (system-level). Fields are data; methods are PURE intrinsic behaviour only — anything needing a collaborator belongs on a component, taking the entity as an argument — and a type method may carry structured params, which then derive its signature text as a contract method\'s do. A signature carries top-level params and returns and nothing else (no fields, methods or invariants — SIGNATURE_TYPE_MEMBERS); a contract method takes it by naming it as its signatureFrom, and a param may be typed by one (a callback). A type may also CLAIM code: sourcePath names the file holding its declaration (and each method may name its own), symbol binds the code-level name when it differs — the file must then resolve and the declaration must be anchored in it. An owning subsystem the tree does not have is refused, writing nothing, exactly as a component under an unknown subsystem is. Re-defining an existing id REPLACES fields/methods/invariants and restates sourcePath/symbol (an omitted list or path is CLEARED, and a dropped member is reported); lint/ext are carried forward. The answer carries a write receipt as structured content beside the sentence — whether a spec already held the id, and the notices a restatement raised, each as its own entry. A type carries no lifecycle status, so the receipt states none.',
-      inputSchema: typeInput,
+      inputSchema: { ...typeInput, dryRun: z.boolean().optional().describe('Answer the receipt the write would give — every judgement run, a refusal exactly as the write would give it — and write nothing') },
       outputSchema: specWriteReceiptOutput,
     },
-    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns, values, holds }) => {
+    ({ kind, id, name, description, subsystem, group, fields, methods, componentClass, invariants, database, table, linkedEntity, sourcePath, symbol, params, returns, values, holds, dryRun }) => {
       try {
         // mcp_orchestrator.addType step 1: the restatement, each field's
         // optional flag defaulted to false.
@@ -2852,9 +2983,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // restatement removed. Step 3: the receipt — `kind` here is the type's
         // OWN kind (entity | value-object); the receipt's kind is the spec
         // level, always a type, which carries no lifecycle status.
-        const receipt = writeSpec({ kind: 'type', spec, fields: typeInputFields });
+        const receipt = writeSpec({ kind: 'type', spec, fields: typeInputFields, ...(dryRun ? { dryRun: true } : {}) });
         return writeReceipt(
-          `Successfully ${receipt.replacedExisting ? 're-authored' : 'defined'} ${kind} type "${name}" (${id}).`,
+          `${dryRun ? 'DRY RUN — nothing was written. Would have ' : 'Successfully '}${receipt.replacedExisting ? 're-authored' : 'defined'} ${kind} type "${name}" (${id}).`,
           receipt,
         );
       } catch (e) {
@@ -3038,33 +3169,39 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     }
   );
 
-  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; dryRun?: boolean; force?: boolean }>(server,
+  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; dryRun?: boolean; force?: boolean; search?: string[] }>(server,
     'sdd_delete_spec',
     {
-      description: 'Delete a spec and everything it contains — a contract with its implementations, a component with its contracts and owned members, a subsystem with its components and types — pruning the folders left empty. Refused, naming every reference, while a spec that stays still references what would go (the invalid references the deletion would introduce); force: true deletes anyway and leaves them for validate to report. dryRun answers the same plan and removes nothing. The structured answer lists every spec removed, every reference, and the tests that encode a removed method (when the project declares test roots).',
+      description: 'Delete a spec and everything it contains — a contract with its implementations, a component with its contracts and owned members, a subsystem with its components and types — pruning the folders left empty. Refused, naming every reference, while a spec that stays still references what would go (the invalid references the deletion would introduce); force: true deletes anyway and leaves them for validate to report. Refused outright, the dry run included: a spec of another project (a member\'s spec read through this tree, `alias::name`, is deleted from that member\'s own root — the refusal names its folder), an id no spec of the kind holds (the refusal names what it might have meant: another kind holding it, the `<subsystem>::<id>` form of a type, the ids the kind holds), and the L0. dryRun answers the same plan and removes nothing. Like a rename, it reports `published` — every public name of this project a consumer reaches what goes through — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those. The structured answer lists every spec removed, every reference, the published names, the consumers it breaks, and the tests that encode a removed method (when the project declares test roots).',
       inputSchema: {
         kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of spec to delete'),
         id: z.string().describe('The ID of the spec to delete'),
         dryRun: z.boolean().optional().describe('Answer with the plan — every spec that would be removed, every reference that would be left — and remove nothing'),
         force: z.boolean().optional().describe('Delete even though specs that stay still reference what goes, leaving those references for validate to report. Without it such a deletion is refused'),
+        search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling checkouts), relative to the bound project root or absolute'),
       },
       outputSchema: specDeletionOutput,
     },
-    ({ kind, id, dryRun, force }) => {
+    ({ kind, id, dryRun, force, search }) => {
       try {
-        // mcp_orchestrator.deleteSpec step 1: through the authoring seam, which
-        // reports the tests a removed method invalidated.
+        // mcp_orchestrator.deleteSpec step 1: the consumers, before anything goes.
+        const consumers = externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d)));
+        // Step 2: through the authoring seam, which refuses another project's
+        // spec and an id nothing holds, and reports what the deletion publishes
+        // and the tests a removed method invalidated.
         const deletion = deleteSpec(kind, id, dryRun, force);
-        // Step 2: "was never there" is not a failure, but it is not a deletion.
-        if (deletion.removed.length === 0) return errText(`Spec of kind "${kind}" with ID "${id}" could not be deleted (file may not exist).`);
-        return structured(renderDeletion(deletion), deletion);
+        // Step 3: the consumers it breaks, narrowed to what they use of what goes.
+        const breaks = consumers.map((c) => narrowedToUses(c, deletion.published)).filter((c): c is ExternalConsumer => c !== null);
+        const answer = breaks.length > 0 ? { ...deletion, breaks } : deletion;
+        // Step 4.
+        return structured(renderDeletion(answer), answer);
       } catch (e) {
         return errText(String(e));
       }
     }
   );
 
-  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any>; dryRun?: boolean }>(server,
+  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any>; dryRun?: boolean; search?: string[] }>(server,
     'sdd_update_spec',
     {
       description: 'Patch an existing spec (system, subsystem, component, interface, implementation or type) with a granular delta, and answer with exactly what changed — and, under NO EFFECT, every path the delta named that the write did not act on. Type positions use the neutral type grammar: an alias (string[], T | null, Promise<T>) is stored canonical and listed under `respellings`; a position with no canonical spelling (number, an inline object, a literal union) is refused, naming the replacement. A delta edits what a spec says, never which spec it is: its id, createdAt, a component\'s or a type\'s subsystem, a contract\'s component and an implementation\'s contract are refused, naming the tool that owns the change. A component or contract write is judged in its tree too: a doctrine edge (a Portal depending on a Store) or a route another method binds is refused, as validate would report it. dryRun takes the same path as the write — the gate and the writer\'s parse included — and is refused exactly when the write would be; it only skips the disk.',
@@ -3073,14 +3210,24 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
         delta: z.record(z.any()).describe('The fields to merge. LISTS UPSERT by identity at every depth: naming one element leaves the others, and a named element merges field by field — a field left out, or null, keeps its stored value (a method named without "narrative" keeps its steps). Identity is name or id by default; dispatch by capability, lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by subsystem, publicInterfaces by component+interface (a re-export by from+item+interface+as), lint.allow by code+at, findings by code, boundaries by name, globalRequirements by description, cases by value, catches by error. Plain-value lists (owns, dependsOn, guarantees, technologies, requirements written as text) append what they lack and keep what they hold. Restating a list with exactly its stored elements in another order REORDERS it. Remove an element with "action": "delete" (or "remove": true) beside its identity, a plain value as {"value": …, "action": "delete"}; [] clears a list; {"unset": ["basePath"]} removes an optional field (null means no change). NARRATIVE steps are addressed by stepNumber, applied in ascending order against the numbering earlier entries of the same delta left: "action": "insert" shifts later steps up, "delete" shifts them down — refused when a jump still targets the step, when a restated label or description does not match it, or for a loop/try/parallel header whose body stands. Stored jumps relocate; a jump the delta writes names the final numbering; "captureJumps": true on an insert lands entry jumps on the new step. Every jump field has a *Label twin (toLabel, onFalseLabel, endLabel, a case or catch "label") resolved after the merge. Retyping a step rebuilds it for its new type and names the fields dropped. lint: {"allow": [{code, at, covers, reason}]} silences a warning or notice on this spec: "at" is the site the finding reports and is required when it reports one, "covers" lists an aggregating finding\'s units; errors never silence. Local ids are qualified as the loader qualifies them. A key that is not a field at its depth is named back under NO EFFECT: read that list.'),
         dryRun: z.boolean().optional().describe('Ask what this delta WOULD do: the whole write runs — the gate and the writer\'s parse included — and answers the report it would produce, marked DRY RUN, with not one byte written.'),
+        search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family, read when the delta removes contract methods: the removal names the consumers it breaks, as a rename does'),
       },
       outputSchema: specChangeReportOutput,
     },
-    ({ kind, id, delta, dryRun }) => {
+    ({ kind, id, delta, dryRun, search }) => {
       try {
-        // The change report was ALREADY a structure; only the rendering was
-        // prose. Both channels now carry it, from the one report.
+        // mcp_orchestrator.updateSpec step 1: a delta removing contract methods
+        // reads the consumers before anything moves.
+        const removes = kind === 'interface' && delta && typeof delta === 'object'
+          && ((Array.isArray(delta.methods) && (delta.methods.length === 0 || delta.methods.some((m: any) => m?.action === 'delete' || m?.remove === true)))
+            || (Array.isArray(delta.unset) && delta.unset.includes('methods')));
+        const consumers = removes ? externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d))) : [];
+        // Step 2: the gated write. The change report was ALREADY a structure;
+        // only the rendering was prose. Both channels carry it, from the one report.
         const report = updateSpecGated(kind, id, delta, dryRun);
+        // Step 3: the consumers a removed published method breaks.
+        const breaks = report.published ? consumers.map((c) => narrowedToUses(c, report.published!)).filter((c): c is ExternalConsumer => c !== null) : [];
+        if (breaks.length > 0) report.breaks = breaks;
         return structured(renderChangeReport(report), report);
       } catch (e) {
         return errText(String(e));

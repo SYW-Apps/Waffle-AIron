@@ -37,6 +37,15 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: deleteSpec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the move to the core orchestrator, which plans every relocation and rewrite before
+          writing any
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveSpec
 status: complete
 createdAt: '2026-09-25T17:33:02.197Z'
-updatedAt: '2026-09-27T10:54:34.694Z'
+updatedAt: '2026-10-09T00:26:59.198Z'

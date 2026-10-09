@@ -106,17 +106,25 @@ describe('family_validator.relations — a referenced project member', () => {
     expect(relation.uses).toEqual([expect.objectContaining({ name: 'ledger-portal.post', state: expect.stringMatching(/changed|removed/) })]);
   });
 
-  it('a `../` sibling: ok at the pin, incompatible after the sibling renames a used method', () => {
+  // Round 8: a `../` sibling member is composed live exactly like a contained
+  // one — no pin, its relation answered from the consumer's own gate.
+  it('a `../` sibling: composed live like a contained member — ok with no pin, incompatible after an unexported use', () => {
     const base = tempDir(cleanups, 'wairon-rh-sib-');
     const ledger = path.join(base, 'ledger');
     writeLedger(ledger);
     const shop = path.join(base, 'shop');
     writeShop(shop, { members: { ledger: '../ledger' } });
     bind(shop);
-    pinExternals();
-    expect(checkoutRelation(canvasAt(shop).model).relation.health).toBe('ok');
-    renameLedgerMethod(ledger, 'record');
-    expect(checkoutRelation(canvasAt(shop).model).relation.health).toBe('incompatible');
+    expect(pinExternals()).toEqual([]);
+    let { edge, relation } = checkoutRelation(canvasAt(shop).model);
+    expect(edge.to).toBe('ledger::ledger-portal');
+    expect(relation).toMatchObject({ producer: 'ledger', health: 'ok' });
+    expect(relation.pinnedDigest).toBeUndefined();
+    component(ledger, 'books', 'ledger-store', 'Store');
+    component(shop, 'sales', 'checkout', 'Adapter', ['ledger::ledger-portal', 'ledger::ledger-store']);
+    ({ relation } = checkoutRelation(canvasAt(shop).model));
+    expect(relation.health).toBe('incompatible');
+    expect(relation.uses).toEqual([expect.objectContaining({ name: 'ledger-store', state: 'removed' })]);
   });
 });
 

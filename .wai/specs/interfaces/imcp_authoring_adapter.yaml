@@ -84,6 +84,27 @@ methods:
           Delete even though other specs still reference what goes, leaving those references for
           validate to report
         optional: true
+  - name: moveSpec
+    description: >-
+      Forward to authoring_portal.moveSpec: move a component or a type to another subsystem through
+      the gate
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-10-08T18:55:06.543Z'
+updatedAt: '2026-10-09T00:33:46.184Z'

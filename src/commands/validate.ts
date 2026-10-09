@@ -5,11 +5,11 @@ import { pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
-import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecFiles, resolveChainingParent, loadSubsystemSpecs } from '../core/index.js';
+import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecFiles, resolveChainingParent, loadSubsystemSpecs, readLockRecord } from '../core/index.js';
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
-import { isCiDraftWaivable as waivable } from '../models/lock.js';
+import { isCiDraftWaivable as waivable, missingTreeSentence } from '../models/lock.js';
 import {
   validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
   adviseExternals as adviseLive,
@@ -402,7 +402,20 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
       hasErrors = true;
       treeChecked = true;
     } else {
-      logger.info(chalk.gray('No spec tree yet (.wai/specs holds no L0): there is no design to check. Start one with the sdd-architect skill.'));
+      // No L0 and no file below it: a project that never approved a design has
+      // none to check yet; one whose approval records spec files had its tree
+      // deleted, which fails closed exactly as lock-check and status do. An
+      // unreadable record is lock-check's and status's to refuse (they name it).
+      let record = null;
+      try { record = readLockRecord(); } catch { record = null; }
+      const missing = record ? missingTreeSentence(record) : null;
+      if (missing) {
+        logger.error(missing);
+        hasErrors = true;
+        treeChecked = true;
+      } else {
+        logger.info(chalk.gray('No spec tree yet (.wai/specs holds no L0): there is no design to check. Start one with the sdd-architect skill.'));
+      }
     }
   }
 
@@ -469,7 +482,11 @@ function approvalReleaseLine(): string | null {
     return null;
   }
   const release = own?.release;
-  if (!release) return null;
+  // A release stamp this wairon cannot stand behind is said here too: every surface names it.
+  const stamp = own?.stampProblem !== undefined
+    ? `Approval notice: ${own.stampProblem} — \`wairon lock\` replaces the stamp with this release.`
+    : null;
+  if (!release) return stamp === null ? null : chalk.blue(stamp);
   return release.carried
     ? chalk.green(`Approval: approved under wairon ${release.from}, re-validated under ${release.to}: still approved. (\`wairon lock\` refreshes the record's release stamp without a re-approval.)`)
     : release.reason

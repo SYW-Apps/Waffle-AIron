@@ -44,6 +44,9 @@ function snapshotOf(params: { name: string; type: string; optional?: boolean }[]
   } as SurfaceSnapshot;
 }
 
+/** Params naming the scalar and enum types, so the document references them: it renders only the types it reaches. */
+const NAMING_EVERY_TYPE = [{ name: 'orderId', type: 'order_id' }, { name: 'issuedOn', type: 'issued_on' }, { name: 'channel', type: 'channel' }];
+
 const bodyProps = (doc: any): Record<string, any> => doc.paths['/op'].post.requestBody.content['application/json'].schema.properties;
 
 /** The canonical text each form comes back as, through a request body. */
@@ -97,13 +100,13 @@ describe('toOpenApiSet — every form from its parsed expression', () => {
   });
 
   it("renders a named scalar as its primitive's schema under the type's name", () => {
-    const doc = JSON.parse(singlePortalDocument(snapshotOf([])));
+    const doc = JSON.parse(singlePortalDocument(snapshotOf(NAMING_EVERY_TYPE)));
     expect(doc.components.schemas.order_id).toEqual({ type: 'string', title: 'OrderId' });
     expect(doc.components.schemas.issued_on).toEqual({ type: 'string', format: 'date', title: 'IssuedOn' });
   });
 
   it('renders an enum as a string component with its values, their descriptions in its description', () => {
-    const doc = JSON.parse(singlePortalDocument(snapshotOf([])));
+    const doc = JSON.parse(singlePortalDocument(snapshotOf(NAMING_EVERY_TYPE)));
     const channel = doc.components.schemas.channel;
     expect(channel).toMatchObject({ type: 'string', title: 'Channel', enum: ['stable', 'beta', 'dev'] });
     expect(channel.description).toContain('`stable`: Releases only.');
@@ -128,13 +131,13 @@ describe('fromOpenApi — every schema read back canonical', () => {
   });
 
   it('decodes a named primitive component into a named scalar holding it', () => {
-    const back = fromOpenApi(singlePortalDocument(snapshotOf([])), 'shop');
+    const back = fromOpenApi(singlePortalDocument(snapshotOf(NAMING_EVERY_TYPE)), 'shop');
     expect(back.types.find((t) => t.id === 'order_id')).toEqual({ id: 'order_id', name: 'OrderId', kind: 'value-object', fields: [], holds: 'string' });
     expect(back.types.find((t) => t.id === 'issued_on')).toEqual({ id: 'issued_on', name: 'IssuedOn', kind: 'value-object', fields: [], holds: 'date' });
   });
 
   it('decodes a named string component carrying enum into an enum type, descriptions kept', () => {
-    const back = fromOpenApi(singlePortalDocument(snapshotOf([])), 'shop');
+    const back = fromOpenApi(singlePortalDocument(snapshotOf(NAMING_EVERY_TYPE)), 'shop');
     expect(back.types.find((t) => t.id === 'channel')).toEqual({
       id: 'channel', name: 'Channel', kind: 'enum', fields: [],
       values: [{ name: 'stable', description: 'Releases only.' }, { name: 'beta' }, { name: 'dev' }],

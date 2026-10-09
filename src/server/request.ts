@@ -313,6 +313,8 @@ const SUBSYSTEM_SCOPED_WRITE_TOOLS = new Set<string>([
   'sdd_rename_method',
   'sdd_rename_type',
   'sdd_rename_field',
+  'sdd_rename_spec',
+  'sdd_move_spec',
   'sdd_move_methods',
 ]);
 

@@ -306,6 +306,26 @@ methods:
         type: bool
         description: Answer what the rename would do, and write nothing
         optional: true
+  - name: renameSpecId
+    description: >-
+      Forward to spec_maintenance_portal.renameSpecId: rename one contract or implementation on its
+      own and every reference to it
+    signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T08:25:31.236Z'
+updatedAt: '2026-10-09T00:33:36.335Z'

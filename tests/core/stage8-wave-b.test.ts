@@ -110,13 +110,37 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     expect(externalCodes(validateFamily({ family: true }).issues)).toContain('EXTERNAL_INCOMPATIBLE');
   });
 
-  for (const shape of ['sibling member', 'path external'] as const) {
+  // Round 8: a `../` sibling MEMBER is composed live like a contained one — no
+  // pin, its specs read where they are — so a rename it makes is the
+  // consumer's own finding at once. A path EXTERNAL stays judged against its pin.
+  it('a sibling member renames a used method: composed live like a contained member — no pin, the consumer\'s own gate names the broken call', () => {
+    const base = tempDir(cleanups, 'wairon-refsib-');
+    const ledger = path.join(base, 'ledger');
+    writeLedger(ledger);
+    const shop = path.join(base, 'shop');
+    writeShop(shop, { members: { ledger: '../ledger' } });
+    bind(shop);
+    expect(pinExternals()).toEqual([]);
+    bind(shop);
+    expect(externalCodes(validateProject({}).issues)).toEqual([]);
+    bind(shop);
+    expect(validateProject({}).issues.map((i) => i.code)).not.toContain('INVALID_TARGET_METHOD_REFERENCE');
+    renameLedgerMethod(ledger, 'record');
+    bind(shop);
+    expect(validateProject({}).issues.map((i) => i.code)).toContain('INVALID_TARGET_METHOD_REFERENCE');
+    bind(shop);
+    const family = validateFamily({ family: true });
+    expect(externalCodes(family.issues)).not.toContain('EXTERNAL_CHECK_UNAVAILABLE');
+    expect((family.projects ?? []).map((p) => p.key)).toContain('ledger');
+  });
+
+  for (const shape of ['path external'] as const) {
     it(`a ${shape} renames a used method: own gate clean, family run EXTERNAL_INCOMPATIBLE`, () => {
       const base = tempDir(cleanups, 'wairon-refpath-');
       const ledger = path.join(base, 'ledger');
       writeLedger(ledger);
       const shop = path.join(base, 'shop');
-      writeShop(shop, shape === 'sibling member' ? { members: { ledger: '../ledger' } } : { externals: { ledger: { source: { path: '../ledger' } } } });
+      writeShop(shop, { externals: { ledger: { source: { path: '../ledger' } } } });
       bind(shop);
       expect(pinExternals()[0]).toMatchObject({ alias: 'ledger', outcome: 'pinned', usedNames: 1 });
       bind(shop);
@@ -371,8 +395,10 @@ describe('stage 8 — overview follows composition: parts are the parent\'s subs
     writeShop(path.join(base, 'shop'), { members: { ledger: '../ledger' } });
     bind(path.join(base, 'shop'));
     const shop = buildCanvasModel();
+    // Round 8: a `../` sibling member is composed live like a contained one —
+    // its badge says where it is stored, and the edge lands on its component.
     expect(shop.subsystems.find((s) => s.id === 'ledger')).toMatchObject({ project: true, storage: '../ledger' });
-    expect(shop.edges).toContainEqual({ from: 'checkout', to: 'ledger', cross: true, consumption: true });
+    expect(shop.edges).toContainEqual({ from: 'checkout', to: 'ledger::ledger-portal', cross: true, consumption: true });
   });
 
   it('status prints a part\'s subsystems under their parent, and at a part\'s root one line naming its parent', () => {

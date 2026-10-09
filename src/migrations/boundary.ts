@@ -5,7 +5,7 @@ import * as surfaces from './adapters/surfaces.js';
 // family_file_adapter: where a path lands and whether a project is there — a planner touches no file itself.
 import * as files from './family-files.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { memberLocationOf, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
+import { memberLocationOf, parseMemberSource, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
 import type { InternalizeResult, PromoteResult } from '../core/index.js';
@@ -97,8 +97,7 @@ export function planInternalize(family: ProjectFamily, bound: string, request: M
   const part = familyNode(family, bound)?.parts.find((p) => p.alias === alias);
   if (part) return planPartInternalize(plan, family, bound, alias, part);
   // Stage 8: a project in a `../` sibling checkout — demoted in place, then moved in as the part it became.
-  const sibling = familyNode(family, bound)?.externals.find((e) => e.role === 'member' && e.sourceKind === 'path' && e.alias === alias);
-  if (sibling) return planSiblingInternalize(plan, family, bound, request);
+  if (storedAsSibling(family, bound, alias)) return planSiblingInternalize(plan, family, bound, request);
   // Step 1.
   const member = memberUnder(family, bound, alias, plan);
   // Steps 2-3.
@@ -152,6 +151,7 @@ function planSiblingInternalize(plan: MigrationPlan, family: ProjectFamily, boun
   for (const e of demoted.edits.filter((x) => x.kind === 'export')) plan.edits.push(e);
   edit(plan, bound, 'move', `internalize ${alias}: demoted in place, then its subsystems moved into ${label(bound)}'s own specs folder`,
     { root: node.directory, call: 'internalizeMember', args: [alias, request.destination ?? { home: '' }] });
+  // A pin an earlier release took of the sibling (it was judged against one then) goes with it.
   edit(plan, bound, 'pin', `pin ${alias} removed`, { root: node.directory, call: 'unpin', args: [alias] });
   plan.edits.push({ project: alias, kind: 'delete', detail: `${alias}'s L0, lock, pins and derived outputs end with its boundary, and its folder's .wai with the move: deleted, each listed` });
   return plan;
@@ -253,11 +253,25 @@ function internalizeEdits(
     { root: boundNode.directory, call: 'internalizeMember', args: [alias, destination] });
   for (const c of repinned) {
     edit(plan, c.node.namespace, 'pin', `pin ${c.alias} taken again against ${boundNode.id ?? 'the top project'}`, { root: c.node.directory, call: 'pinExternals', args: [[c.alias]] });
+    loopClosed(plan, family, bound, member, c);
   }
   if (carried.length > 0) edit(plan, bound, 'pin', `pin ${carried.join(', ')} (externals carried from ${alias})`, { root: boundNode.directory, call: 'pinExternals', args: [carried] });
   plan.edits.push({ project: member.namespace, kind: 'delete', detail: `${alias}'s lock, pins and derived outputs have no home: deleted, each listed` });
   plan.notes.push(`Consumers outside the family that name "${member.id ?? alias}" by path are not found: each must repoint its own external at ${boundNode.id ?? 'this project'}.`);
   if (member.id !== undefined && core.approvalRecord(member.directory)) plan.notes.push(`${label(member.namespace)}'s approval ends with it: its lock is deleted, and ${label(bound)} is re-locked instead.`);
+}
+
+/**
+ * A consumer re-pointed at the bound project that the bound project itself
+ * uses — directly, or through the member it takes in — now consumes a project
+ * that consumes it: a dependency loop (PROJECT_DEPENDENCY_CYCLE) the result
+ * reports. Said in the plan, with the uses that close it and the exits.
+ */
+function loopClosed(plan: MigrationPlan, family: ProjectFamily, bound: string, member: ProjectNode, c: Consumer): void {
+  const uses = family.references.filter((r) => (r.consumer === bound || r.consumer === member.namespace) && r.producer === c.node.namespace);
+  if (uses.length === 0) return;
+  const named = [...new Set(uses.map((r) => `"${r.authored}"`))].slice(0, 3).join(', ');
+  plan.notes.push(`${label(c.node.namespace)} is re-pointed at ${label(bound)}, which uses it (${named}${uses.length > 3 ? ', …' : ''}): the two projects depend on each other in a loop after the internalize — PROJECT_DEPENDENCY_CYCLE. To keep them apart, move what ${label(c.node.namespace)} uses of "${member.mountAlias ?? member.namespace}" into ${label(c.node.namespace)} itself, or demote ${label(c.node.namespace)} into a part of ${label(bound)} first.`);
 }
 
 /** A consumer that already names the bound project: its references respelled to that alias, the member's `use` merged, the member external and pin removed. */
@@ -418,6 +432,13 @@ export function plan(family: ProjectFamily, bound: string, request: MigrationReq
   }
 }
 
+/** Whether a project of the family declares the member under an alias in a `../` sibling checkout (stage 8). */
+function storedAsSibling(family: ProjectFamily, bound: string, alias: string): boolean {
+  const held = ownGet(configAt(familyNode(family, bound)!.directory)?.members, alias);
+  const location = held === undefined ? undefined : memberLocationOf(held);
+  return location !== undefined && parseMemberSource(location).storage === 'path';
+}
+
 /** A directory strictly inside the plan's family root. */
 function insideFamily(plan: MigrationPlan, dir: string): boolean {
   const rel = path.relative(plan.familyRoot, dir);
@@ -502,7 +523,6 @@ export function planPromote(family: ProjectFamily, bound: string, request: Migra
   edit(plan, bound, 'promote', `promote ${alias}: its project content created in place (id ${newId}, an L0 exporting what ${label(bound)} uses of it), references across the new boundary respelled`,
     { root: node.directory, call: 'promoteMember', args: [alias, newId] });
   edit(plan, newId, 'pin', `pin the new project's external for ${node.id ?? 'this project'} (when its specs reference it)`, { root: part.directory!, call: 'pinExternals', args: [[]] });
-  if (part.storage !== 'contained') edit(plan, bound, 'pin', `pin ${alias} (a project stored outside ${label(bound)} is judged against its pin)`, { root: node.directory, call: 'pinExternals', args: [[alias]] });
   repinIntactConsumers(plan, family, bound, [part.directory!]);
   plan.notes.push(`"${newId}" has no lock yet: lock it at its own root (\`wairon lock\`) once it validates.`);
   // Step 7.
@@ -519,6 +539,7 @@ export function planDemote(family: ProjectFamily, bound: string, request: Migrat
   const alias = request.alias ?? '';
   const node = familyNode(family, bound)!;
   // Step 1: the project member — none is not-a-member, a part is one already, git is read-only.
+  // A `../` sibling is a node like a contained member; a git or hosted one is referenced.
   const member = family.nodes.find((n) => n.parent === bound && n.mountAlias === alias);
   const referenced = node.externals.find((e) => e.role === 'member' && e.alias === alias);
   if (node.parts.some((p) => p.alias === alias)) {
@@ -532,7 +553,7 @@ export function planDemote(family: ProjectFamily, bound: string, request: Migrat
   if (referenced?.sourceKind === 'git') refuse(plan, 'read-only', bound, `the member "${alias}" is fetched from git: demote it in a checkout of its repository`);
   if (referenced?.sourceKind === 'hosted') refuse(plan, 'read-only', bound, `the member "${alias}" is a hosted record: a part lives in its parent's tree`);
   const dir = member?.directory ?? referenced?.directory;
-  if (!member && referenced?.sourceKind === 'path' && dir !== undefined) siblingRefused(plan, bound, alias, dir);
+  if (dir !== undefined && (storedAsSibling(family, bound, alias) || referenced?.sourceKind === 'path')) siblingRefused(plan, bound, alias, dir);
   // Step 2: every family project OTHER than the bound one that consumes it — a part has no exports.
   if (member) {
     const users = new Map<string, Set<string>>();
@@ -578,8 +599,8 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
       const [kind, id] = spec.split('\n') as [WritableSpecKind, string];
       runWithProjectRoot(rehearsalRoot(rehearsal, plan.familyRoot), () => core.rewriteReferences(kind, id, edits));
     }
-    // Step 4: the core's internalize — a core refusal propagates.
-    for (const e of planned.filter((x) => x.write.call === 'internalizeMember')) writeOne(rehearsal, e.write);
+    // Step 4: the core's internalize — a core refusal propagates; what it could not carry is named in the plan.
+    for (const e of planned.filter((x) => x.write.call === 'internalizeMember')) recordFolded(plan, e.project, writeOne(rehearsal, e.write));
     // Steps 5-7: each consumer that names the bound project — `use` merged, pin and external removed.
     for (const e of planned.filter((x) => ['importNames', 'unpin', 'removeExternal'].includes(x.write.call))) writeOne(rehearsal, e.write);
     // Step 8: each other consumer repointed.
@@ -611,7 +632,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   for (const e of planned.filter((x) => x.write.call === 'demoteMember')) {
     const demoted = writeOne(rehearsal, e.write) as InternalizeResult | undefined;
     for (const line of demoted?.consumersRestored ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `consumers across the old boundary restored: ${line}` });
-    for (const line of demoted?.signaturesRederived ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `signature text re-derived — ${line}` });
+    recordFolded(plan, e.project, demoted);
   }
   // Step 20: the bound project's pin of the member removed.
   for (const e of planned.filter((x) => x.write.call === 'unpin')) writeOne(rehearsal, e.write);
@@ -673,6 +694,8 @@ function recordCrossing(plan: MigrationPlan, bound: string, member: string, resu
   }
   for (const line of crossed.exported) plan.edits.push({ project: bound, kind: 'export', detail: `export ${line}` });
   for (const line of crossed.imported) plan.edits.push({ project: bound, kind: 'external', detail: `import: ${line}` });
+  // The other projects its moved specs name, declared as the new project's externals (pinned with the rest).
+  for (const line of crossed.externalsDeclared ?? []) plan.edits.push({ project: member, kind: 'external', detail: `externals: ${line} — a project its moved specs name` });
   for (const line of crossed.consumersDropped) plan.edits.push({ project: bound, kind: 'reference', detail: `consumers across the boundary to ${member} dropped: ${line}` });
   // The new project's file paths that escaped its root, re-expressed member-relative (the code is not moved).
   for (const line of crossed.pathsRebased ?? []) plan.edits.push({ project: member, kind: 'reference', detail: `path re-expressed under the new root — ${line}` });
@@ -686,6 +709,18 @@ function recordCrossing(plan: MigrationPlan, bound: string, member: string, resu
     plan.notes.push(`${topics.length} topic(s) now cross the boundary to "${member}"; the family run (\`wairon validate\` at ${label(bound)}) pairs them, while "${member}" validated alone reports them:`);
     for (const line of topics) plan.notes.push(`  ${line}`);
   }
+}
+
+/**
+ * An internalize's or a demote's answer, recorded on the plan: each signature
+ * text the respelling re-derived as an edit, and each piece of the member it
+ * could not carry as a note — so a person reads it before confirming.
+ */
+function recordFolded(plan: MigrationPlan, project: string, result: unknown): void {
+  const folded = result as InternalizeResult | undefined;
+  if (!folded) return;
+  for (const line of folded.signaturesRederived ?? []) plan.edits.push({ project, kind: 'reference', detail: `signature text re-derived — ${line}` });
+  for (const line of folded.notCarried) if (!plan.notes.includes(`not carried: ${line}`)) plan.notes.push(`not carried: ${line}`);
 }
 
 /** One planned write under its owner's rehearsal root; answers what the core answered. */
