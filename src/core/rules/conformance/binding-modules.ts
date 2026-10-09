@@ -29,11 +29,17 @@ import { RuleContext, SddRule } from '../types.js';
 // a binding into a member is compared with what the member's L0 export table
 // exports now, built from the member's specs this scan already loaded. The
 // bound references spell a member by its project id or by the alias the root
-// declares it under; both name it.
+// declares it under; both name it. With no pin there is no earlier pin to say
+// a verb was removed, so the member's surface at the approval it is judged
+// against (ctx.memberApprovedSurfaces) stands in: a method it held that the
+// live entry neither holds nor traces is retired, and a binding still
+// declaring it is told so. A segment naming the bound project's OWN id (a
+// member's signature copied here spells this project's L0 re-exports) reaches
+// the member projects that table re-exports from.
 // ---------------------------------------------------------------------------
 
-/** A reached interface or type, under the alias the consumer declares its project by. */
-interface PinnedEntry { alias: string; entry: SurfaceContractEntry }
+/** A reached interface or type, under the alias the consumer declares its project by; `approved` when its retired names come from a member's approved surface, not a pin. */
+interface PinnedEntry { alias: string; entry: SurfaceContractEntry; approved?: boolean }
 interface PinnedType { alias: string; def: SurfaceTypeDef }
 
 /** A former name as a trace records it: `<interface>.<method>` for a method, the bare name otherwise. */
@@ -86,7 +92,15 @@ function memberSurface(ctx: RuleContext, node: ProjectNode, alias: string): { en
         ...m,
         formerly: (m.previousNames ?? []).map(lastSegment),
       }));
-      entries.push({ alias, entry: { id: e.publicName, name: e.publicName, component: e.component, methods } as unknown as SurfaceContractEntry });
+      // The names the member's approved surface held that the live entry neither holds nor traces: removed since.
+      const approved = ctx.memberApprovedSurfaces?.[alias]?.interfaces.find((x) => x.id === e.publicName);
+      const kept = new Set(methods.flatMap((m) => [m.name, ...(m.formerly ?? [])]).map(nameKey));
+      const retired = (approved?.methods ?? []).map((m) => m.name).filter((n) => !kept.has(nameKey(n)));
+      entries.push({
+        alias,
+        entry: { id: e.publicName, name: e.publicName, component: e.component, methods, ...(retired.length ? { retired } : {}) } as unknown as SurfaceContractEntry,
+        ...(retired.length ? { approved: true } : {}),
+      });
       for (const m of methods) pending.push(...methodTypeRefs(m));
     } else if (e.kind === 'type' && e.typeDef) {
       const type = memberType(e.typeDef);
@@ -212,7 +226,7 @@ function methodDrift(where: string, params: string[], entry: PinnedEntry, report
   if (current) return paramDrift(where, params, current);
   const renamed = entry.entry.methods.find((m) => (m.formerly ?? []).some((f) => nameKey(f) === key));
   if (renamed) return [`"${method ?? where}" was renamed to "${renamed.name}" in ${entry.alias}::${entry.entry.id} — follow the rename`];
-  if (retiredIn(entry, key)) return [`"${method ?? where}" was removed from ${entry.alias}::${entry.entry.id} (an earlier pin held it) — drop it from the binding, and the calls that use it`];
+  if (retiredIn(entry, key)) return [`"${method ?? where}" was removed from ${entry.alias}::${entry.entry.id} (${entry.approved ? 'the member\'s approved design held it' : 'an earlier pin held it'}) — drop it from the binding, and the calls that use it`];
   return reportMissing
     ? [`"${method ?? where}" is not exported by ${entry.alias}::${entry.entry.id} (it holds ${entry.entry.methods.map((m) => `"${m.name}"`).join(', ') || 'no methods'})`]
     : [];
@@ -365,6 +379,18 @@ function reachOf(ctx: RuleContext, segments: Set<string>): Reach {
   const members: Reach['members'] = [];
   const unpinned: string[] = [];
   const externals = new Set((boundRoot(ctx)?.imports ?? []).filter((i) => i.section === 'externals').map((i) => i.alias));
+  // This project's own id: a member's signature copied here spells this
+  // project's L0 re-exports — reach every member that table re-exports from.
+  const ownId = boundRoot(ctx)?.id;
+  if (ownId !== undefined && segments.has(ownId)) {
+    segments = new Set(segments);
+    for (const table of (ctx.exportTables ?? []).filter((x) => x.level === 'project' && !(ctx.projectFamily?.nodes ?? []).some((n) => n.namespace !== '' && n.namespace === x.owner))) {
+      for (const e of table.entries) {
+        const target = e.typeDef ?? e.component ?? '';
+        if (target.includes('::')) segments.add(target.slice(0, target.indexOf('::')));
+      }
+    }
+  }
   for (const segment of segments) {
     if (pins.some((p) => p.alias === segment)) continue;
     const node = memberNode(ctx, segment);

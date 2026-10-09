@@ -423,6 +423,40 @@ methods:
       - name: methods
         type: list<string>
         description: The contract methods removed, as <interface>.<method>
+  - name: lockTree
+    description: >-
+      Forward to spec_loader.lockTree: take the cross-process write lock of the bound project's spec
+      tree and re-read the tree, before a write tool runs
+    signature: 'lockTree(): void'
+    returns: void
+  - name: unlockTree
+    description: >-
+      Forward to spec_loader.unlockTree: release the bound project's spec-tree write lock once a
+      write tool has answered
+    signature: 'unlockTree(): void'
+    returns: void
+  - name: readPinnedSpec
+    description: >-
+      Forward to spec_loader.readPinnedSpec: an external's spec read by `alias::name` from the
+      pinned snapshot this project holds, marked read-only and pinned
+    signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
+    returns: PinnedSpecRead?
+    params:
+      - name: kind
+        type: string
+        description: component, interface or type
+      - name: id
+        type: string
+        description: The `alias::name` asked for
+  - name: memberRevisions
+    description: >-
+      Each live member of the bound project with its root, the bound project's usage of it and its
+      tree at the approval it is judged against (the one the bound project's lock records, else the
+      member's own last), materialized read-only. Dispatched to the external-producers workflow.
+    signature: 'memberRevisions(): list<member_revision>'
+    returns: list<member_revision>
+    params: []
+    effect: io
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:26:35.666Z'
+updatedAt: '2026-10-09T12:16:39.551Z'

@@ -2334,6 +2334,22 @@ function moveMemberSpecs(scan: InternalizeScan, remap: (ref: string) => string):
     });
   }
   const rewritten = rewriteRefFields(parentSpecsDir, remap);
+  // The reference table reads a type position whole; the type move's rewriter
+  // reads every qualified token of it — a generic argument, an optional, a
+  // union, a returns — so no position keeps the alias the internalize retires.
+  for (const file of listFilesRecursive(parentSpecsDir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
+    if (!kind || !respellTypeTokens(raw, remap)) continue;
+    writeYamlFile(file, raw);
+    const id = kind === 'system' ? 'system' : String(raw.id);
+    if (!rewritten.some((s) => s.kind === kind && s.id === id)) rewritten.push({ kind, id });
+  }
   invalidateSpecCache();
   return rewritten;
 }
@@ -3168,6 +3184,9 @@ export interface ComponentRename {
  * (id-taken).
  */
 export function renameComponent(componentId: string, newId: string, dryRun?: boolean): ComponentRename {
+  // Steps 4–5 first: a component of another project, whatever it is spelled as.
+  const foreign = foreignIdRefusal(componentId, 'chained-component', 'rename it', `sdd_rename_component ${componentId.slice(componentId.lastIndexOf('::') + 2)} <new id>`);
+  if (foreign !== null) throw new WaironError(foreign);
   // Steps 1–3: the component must exist…
   const component = loadComponentSpec(componentId);
   if (!component) {
@@ -3530,7 +3549,9 @@ export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, 
     const owner = kind === 'component' ? 'sdd_rename_component' : kind === 'type' ? 'sdd_rename_type' : 'no tool yet';
     throw new WaironError(`invalid-kind: sdd_rename_spec renames a contract (kind interface) or an implementation on its own; a ${kind} is renamed with ${owner}.`);
   }
-  // Step 3: the spec.
+  // Step 3: the spec — another project's refused first, however it is spelled.
+  const foreign = foreignIdRefusal(id, 'chained-spec', 'rename it', `sdd_rename_spec ${kind} ${id.slice(id.lastIndexOf('::') + 2)} <new id>`);
+  if (foreign !== null) throw new WaironError(foreign);
   const spec: InterfaceSpec | ImplementationSpec | null = kind === 'interface' ? loadInterfaceSpec(id) : loadImplementationSpec(id);
   // Steps 4-5: it exists, is the bound project's own, and the new id fits.
   if (!spec) throw new WaironError(`spec-missing: no ${kind} has the id "${id}".`);
@@ -3719,12 +3740,13 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   if (target === undefined && exportsMoving.length + repointed.length > 0) {
     throw new WaironError(`exported: subsystem "${from}" exports type "${bare}" (${exportsMoving.length + repointed.length} entr${exportsMoving.length + repointed.length === 1 ? 'y' : 'ies'}), and a system-level type is published by the L0 alone — move its export entries to the L0 first, or move the type to another subsystem.`);
   }
-  // Step 17: the rewrites — a type position qualified by the old subsystem names the new one.
-  const oldToken = from ? `${from}::${bare}` : undefined;
-  const newToken = target ? `${target}::${bare}` : bare;
+  // Step 17: the rewrites — a type reference naming the type through the old
+  // subsystem names the new one, in whichever spelling it was written.
+  const ownId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
+  const moveToken = movedTypeToken(from, bare, target, ownId);
   const specsDir = aiPathsAt(getProjectRoot()).specsDir();
   const rewriteAll = (write: boolean): RewrittenSpec[] => {
-    if (oldToken === undefined) return [];
+    if (from === '') return [];
     const out: RewrittenSpec[] = [];
     for (const file of listFilesRecursive(specsDir, '.yaml')) {
       let raw: any;
@@ -3734,7 +3756,7 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
         continue;
       }
       const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
-      if (!kind || !respellQualifiedType(raw, oldToken, newToken)) continue;
+      if (!kind || !respellTypeTokens(raw, moveToken)) continue;
       if (write) writeYamlFile(file, raw);
       out.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
     }
@@ -3788,27 +3810,45 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
 /** The type-position keys a qualified type reference is respelled in; prose and rename traces never are. */
 const TYPE_POSITION_KEYS: ReadonlySet<string> = new Set(['type', 'returns', 'signature', 'signatureFrom', 'typeDef', 'references', 'linkedEntity', 'holds']);
 
+/** A qualified name inside a type string (`a::b`, `a.b`, `::a::b`), with the character before it. */
+const QUALIFIED_TYPE_TOKEN = /(^|[^A-Za-z0-9_:.-])((?:::)?[A-Za-z0-9_][A-Za-z0-9_-]*(?:(?:::|\.)[A-Za-z0-9_][A-Za-z0-9_-]*)+)/g;
+
 /**
- * Respell, in place, every whole token `oldToken` (a type qualified by its
- * subsystem) as `newToken` at the type positions of one spec document;
- * answers whether anything changed.
+ * The one type-reference rewriter every type move shares — a type moved to
+ * another subsystem, a member internalized: each QUALIFIED token at a type
+ * position of one spec document passed through `map`, in place, wherever it
+ * stands in the expression — the whole position, a generic argument
+ * (`list<a::x>`), an optional (`a::x?`), a union, a result, a returns, the
+ * derived signature text beside them, an asserted invariant's type. A bare
+ * name is never handed over: it names a type wherever the type lives. Answers
+ * whether anything changed. Prose and rename traces are never read.
  */
-function respellQualifiedType(raw: unknown, oldToken: string, newToken: string): boolean {
+function respellTypeTokens(raw: unknown, map: (token: string) => string): boolean {
   let changed = false;
-  const escaped = oldToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const respell = (value: string): string => value.replace(QUALIFIED_TYPE_TOKEN, (_m, lead: string, token: string) => `${lead}${map(token)}`);
   const walk = (node: unknown): void => {
     if (Array.isArray(node)) {
       node.forEach(walk);
       return;
     }
     if (!node || typeof node !== 'object') return;
-    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    const holder = node as Record<string, unknown>;
+    for (const [key, value] of Object.entries(holder)) {
       if (typeof value === 'string' && TYPE_POSITION_KEYS.has(key)) {
-        const next = value.replace(new RegExp(`(?<![A-Za-z0-9_:-])${escaped}(?![A-Za-z0-9_-])`, 'g'), newToken);
+        const next = respell(value);
         if (next !== value) {
-          (node as Record<string, unknown>)[key] = next;
+          holder[key] = next;
           changed = true;
         }
+      } else if (key === 'assertsInvariants' && Array.isArray(value)) {
+        value.forEach((ref, i) => {
+          if (typeof ref !== 'string') return;
+          const next = respell(ref);
+          if (next !== ref) {
+            value[i] = next;
+            changed = true;
+          }
+        });
       } else if (value && typeof value === 'object' && key !== 'previousIds' && key !== 'previousNames') {
         walk(value);
       }
@@ -3816,6 +3856,34 @@ function respellQualifiedType(raw: unknown, oldToken: string, newToken: string):
   };
   walk(raw);
   return changed;
+}
+
+/**
+ * The token map of a type move: a qualified token naming the type `bare`
+ * through its old subsystem `from` — in either separator the loader resolves
+ * (`from::bare`, `from.bare`), compared as the loader compares
+ * (reference_resolution.nameKey per segment), optionally under the project's
+ * own id (a deprecated prefix) or a leading `::`, with any tail kept (a
+ * foreign key's `.field`, an invariant's id) — names `target` instead, in the
+ * same spelling; at system level the qualifier goes with its separator. Any
+ * other token comes back as it is.
+ */
+function movedTypeToken(from: string, bare: string, target: string | undefined, ownId: string | null): (token: string) => string {
+  return (token) => {
+    const lead = token.startsWith('::') ? '::' : '';
+    const parts = token.slice(lead.length).split(/(::|\.)/);
+    const segment = (i: number): string => parts[2 * i];
+    const count = (parts.length + 1) / 2;
+    for (let i = 0; i + 1 < count && i <= 1; i++) {
+      if (nameKey(segment(i)) !== nameKey(from) || nameKey(segment(i + 1)) !== nameKey(bare)) continue;
+      if (i === 1 && (lead !== '' || ownId === null || nameKey(segment(0)) !== nameKey(ownId))) continue;
+      const next = [...parts];
+      if (target !== undefined) next[2 * i] = target;
+      else next.splice(2 * i, 2);
+      return `${lead}${next.join('')}`;
+    }
+    return token;
+  };
 }
 
 /**
@@ -3975,6 +4043,23 @@ export interface MethodRename {
 }
 
 /**
+ * Whether a renamed method's realization is pinned to its old name
+ * (renameMethod steps 18-19): never when it names a symbol already, never when
+ * the caller declines (false), always when the caller asks (true) — and,
+ * asked nothing, only when its code exists: the file realizing it (its own
+ * sourcePath, else the implementation's) is on disk. With no code written there
+ * is no function to keep binding, and a pin would hold the old name for code
+ * that will be written under the new one.
+ */
+function shouldPinSymbol(implementation: ImplementationSpec, methodName: string, pinSymbol: boolean | undefined): boolean {
+  const realization = implementation.methods.find((m) => m.name === methodName);
+  if (!realization || realization.symbol !== undefined || pinSymbol === false) return false;
+  if (pinSymbol === true) return true;
+  const file = realization.sourcePath ?? implementation.sourcePath;
+  return file !== undefined && file !== '' && fs.existsSync(path.resolve(getProjectRoot(), file));
+}
+
+/**
  * Rename a contract method and every reference to it in the bound tree. The
  * method moves on every interface of the component that declares it — its name,
  * and the name inside its signature — and on the implementations of those
@@ -3988,6 +4073,9 @@ export interface MethodRename {
  * a new name a moving contract already declares (name-taken).
  */
 export function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean, dryRun?: boolean): MethodRename {
+  // Steps 2–3, the boundary first: a component of another project, however it is spelled.
+  const foreign = foreignIdRefusal(componentId, 'chained-component', 'rename its method', `sdd_rename_method ${componentId.slice(componentId.lastIndexOf('::') + 2)} <method> <new name>`);
+  if (foreign !== null) throw new WaironError(foreign);
   // Steps 1–3: the component must exist…
   const component = loadComponentSpec(componentId);
   if (!component) {
@@ -4084,7 +4172,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // as the real one above — and writes nothing.
   if (dryRun) {
     const realizing = implementations.filter((impl) => movingContracts.has(impl.contract) && impl.methods.some((m) => m.name === methodName));
-    const wouldPin = pinSymbol !== false && realizing.some((impl) => impl.methods.find((m) => m.name === methodName)?.symbol === undefined);
+    const wouldPin = realizing.some((impl) => shouldPinSymbol(impl, methodName, pinSymbol));
     const wouldRewrite = [...rewriteRefFields(reachDir, methodRemap, undefined, true), ...rekeyLintAllows(reachDir, rename, true)];
     return {
       component: componentId,
@@ -4132,7 +4220,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     // Steps 18–19: an implementation that named no symbol needs one now — the
     // function it binds to still carries the old name — unless the caller
     // declined the pin.
-    const pin = realization.symbol === undefined && pinSymbol !== false;
+    const pin = shouldPinSymbol(implementation, methodName, pinSymbol);
     if (pin) pinnedSymbol = methodName;
     saveImplementationSpec({
       ...implementation,
@@ -4320,14 +4408,45 @@ function respellLike(written: string, oldId: string, newId: string): string {
  * tree, so a refusal names the member's folder and the call to make there.
  */
 function memberRootWay(qualifiedId: string, call: string): string {
+  return projectRootWay(qualifiedId, call)
+    ?? `It belongs to the member project "${qualifiedId.slice(0, qualifiedId.indexOf('::'))}": open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
+}
+
+/**
+ * The way to change what another project owns, read off the id's first
+ * segment as every write tool reads it: a member project — named by its id,
+ * as crossProjectWriteRefusal names it, whether the id was spelled with its
+ * alias or its key — with its folder and the session to open there; or an
+ * external, which this project only reads through its pin. Null when the
+ * segment names neither.
+ */
+function projectRootWay(qualifiedId: string, call: string): string | null {
   const alias = qualifiedId.slice(0, qualifiedId.indexOf('::'));
-  let folder: string | undefined;
   try {
     const node = graph().nodes.find((n) => n.namespace === alias || (n.parent === '' && n.mountAlias === alias));
-    if (node) folder = path.relative(getProjectRoot(), node.directory).split(path.sep).join('/') || '.';
-  } catch { /* a graph that cannot be read names no folder */ }
-  const where = folder ? `the member project "${alias}" at ${folder}` : `the member project "${alias}"`;
-  return `It belongs to ${where}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
+    if (node) {
+      const folder = path.relative(getProjectRoot(), node.directory).split(path.sep).join('/') || '.';
+      return `It belongs to the member project "${node.id ?? alias}" at ${folder}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
+    }
+  } catch { /* a graph that cannot be read names no member */ }
+  const external = ownGet(projectConfigRepository.load()?.externals, alias);
+  if (external !== undefined) {
+    const producer = (external as { project?: string } | null)?.project ?? alias;
+    return `"${alias}" is the external "${producer}", a project this one only reads through its pin: a project's specs are written from its own root — open a session in that project's folder and call ${call} there.`;
+  }
+  return null;
+}
+
+/**
+ * The refusal for an id another project holds — asked BEFORE whether the id
+ * exists, so a member's or an external's spec named through its alias is
+ * refused with the project boundary's sentence, never reported missing. Null
+ * for an id of the bound project's own.
+ */
+function foreignIdRefusal(id: string, code: string, doing: string, call: string): string | null {
+  if (!id.includes('::')) return null;
+  const way = projectRootWay(id, call);
+  return way === null ? null : `${code}: "${id}" lives in another project; ${doing} from that project's own root. ${way}`;
 }
 
 export function renameType(typeId: string, newId: string, dryRun?: boolean): TypeRename {
@@ -4732,7 +4851,9 @@ export interface ParamRename {
  * and name-retired.
  */
 export function renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?: boolean): ParamRename {
-  // Steps 1-2: the component, in this project.
+  // Steps 1-2: the component, in this project — another project's refused first, however it is spelled.
+  const foreign = foreignIdRefusal(componentId, 'chained-component', 'rename its parameter', `sdd_rename_param ${componentId.slice(componentId.lastIndexOf('::') + 2)} ${methodName} ${param} <new name>`);
+  if (foreign !== null) throw new WaironError(foreign);
   const component = loadComponentSpec(componentId);
   if (!component) throw new WaironError(`component-missing: no component has the id "${componentId}".`);
   if (componentId.includes('::')) {

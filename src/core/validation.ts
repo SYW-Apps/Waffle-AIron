@@ -39,7 +39,7 @@ import {
 } from './adapters/validator-core.js';
 import type { SignatureFacts } from './signature-sources.js';
 import type { TypeSpellingFacts } from '../models/type-grammar.js';
-import { listSnapshots, listPinnedExternals, pinnedParent } from './adapters/validator-surfaces.js';
+import { listSnapshots, listPinnedExternals, memberApprovedSurfaces, pinnedParent } from './adapters/validator-surfaces.js';
 import { readBindingModules } from './binding-modules.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
@@ -569,6 +569,13 @@ function runOwnersGate(
   const bindingModules = reachOnly
     ? []
     : readBindingModules(implementations.filter((impl) => !impl.id.includes('::')).flatMap((impl) => impl.bindings ?? []), getProjectRoot());
+  // A live member is never pinned: what a binding into one is compared with
+  // beside its live export is its surface at the approval it is judged
+  // against, so a name it dropped since is named. Read only when a binding
+  // module was read and the project declares a member.
+  const approvedMemberSurfaces = bindingModules.length > 0 && declaredMembers(boundConfig ?? {}).length > 0
+    ? memberApprovedSurfacesOrNone()
+    : undefined;
   // Source-code model (per-sourcePath declaration/export/import/anchor facts)
   // — what structural conformance checks realization against. The declared
   // source roots widen the walked set with the files no spec names yet, which
@@ -743,6 +750,7 @@ function runOwnersGate(
       typeSpellingFacts: typeSpellings,
       pinnedExternals,
       bindingModules,
+      ...(approvedMemberSurfaces ? { memberApprovedSurfaces: approvedMemberSurfaces } : {}),
       // By-name selections only: a legacy path ref pins nothing to check. A dry
       // run supplies its candidate's; otherwise the stored ones.
       packSelections: packSelections ?? projectPackSelections(),
@@ -1306,6 +1314,15 @@ export function familyApprovals(depth?: number): ProjectApproval[] {
  */
 export function familyRelations(): ProjectRelations[] {
   return familyValidator.familyRelations();
+}
+
+/** The live members' approved surfaces, or none when they cannot be read (no git, an unreadable tree): never a failure of the gate. */
+function memberApprovedSurfacesOrNone(): Record<string, import('../models/specs.js').SurfaceSnapshot> | undefined {
+  try {
+    return memberApprovedSurfaces();
+  } catch {
+    return undefined;
+  }
 }
 
 /**

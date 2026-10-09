@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { parseYaml } from '../utils/yaml.js';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { bindDeclaredExternal, declaredExternals, declaredMembers, effectiveProjectId, FULL_COMMIT_RE, type ExternalBinding, type ExternalConsumer, type ExternalDeclaration, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
+import { bindDeclaredExternal, declaredExternals, declaredMembers, effectiveProjectId, FULL_COMMIT_RE, type ExportUsage, type ExternalBinding, type ExternalConsumer, type ExternalDeclaration, type ProjectConfig, type ProjectFamily, type ProjectNode, type ResolvedExternal } from '../models/index.js';
 // core_orchestrator.resolveChainingParent (the reach-gated detection) and the
 // spec repository's graph, export usage and pinned usage, all on the one core module.
 import { exportUsage, graph, listProjectRoots, pinnedUsage, resolveChainingParent } from './specs.js';
@@ -250,12 +251,71 @@ export function listConsumers(search?: string[]): ExternalConsumer[] {
   const bound = path.resolve(getProjectRoot());
   // Step 2: climb to the highest root in reach.
   const { top } = climb(bound);
-  // Steps 3-10: the graph there, each project that declares the producer.
+  // Steps 3-8: the graph there, each project that declares the producer.
   const family = familyConsumers(bound, top);
-  // Steps 11-14: each project root under the searched folders that declares it.
-  const seen = new Set(family.map((c) => dirKey(c.directory)));
-  const found = searchedConsumers(bound, search ?? []).filter((c) => !seen.has(dirKey(c.directory)));
-  return [...family, ...found];
+  const seen = new Set([bound, top, ...family.map((c) => c.directory)].map(dirKey));
+  // Steps 9-13: a project composing it as a member from a path no climb follows (a `../` sibling).
+  const parents = composingParents(bound, top, seen);
+  for (const c of parents) seen.add(dirKey(c.directory));
+  // Steps 14-20: each project root under the searched folders that declares it.
+  const found = searchedConsumers(bound, search ?? [], seen).filter((c) => !seen.has(dirKey(c.directory)));
+  return [...family, ...parents, ...found];
+}
+
+/** Whether a project configuration declares the bound root as a member by a path source (a `../` sibling, or a contained path). */
+function composesByPath(config: Pick<ProjectConfig, 'members' | 'externals'>, root: string, bound: string): boolean {
+  return declaredMembers(config).some((m) => !m.problem && m.source.path !== undefined && m.source.path.trim() !== ''
+    && dirKey(path.resolve(root, m.source.path)) === dirKey(bound));
+}
+
+/**
+ * Steps 9-13 of listConsumers: the projects that compose the bound one as a
+ * MEMBER from a path the climb never follows — a parent declaring it as a
+ * `../` sibling — found in the folders enclosing the bound root and the top
+ * root reached, each with every project of its graph that declares the
+ * producer. Never on a hosted request, nor when the reach stops at the bound root.
+ */
+function composingParents(bound: string, top: string, seen: ReadonlySet<string>): ExternalConsumer[] {
+  if (getHostedLookup() !== null) return [];
+  const reach = getRequestParentReach();
+  if (reach && !reach.parentReach) return [];
+  const folders = [...new Set([path.dirname(top), path.dirname(bound)].map((d) => path.resolve(d)))];
+  const out: ExternalConsumer[] = [];
+  for (const root of [...new Set(folders.flatMap(enclosedRoots).map((r) => path.resolve(r)))]) {
+    if (seen.has(dirKey(root)) || out.some((c) => dirKey(c.directory) === dirKey(root))) continue;
+    // Read cheaply: only a configuration that declares members is parsed.
+    const config = membersConfigAt(root);
+    if (!config || !composesByPath(config, root, bound)) continue;
+    out.push(...familyConsumers(bound, root).filter((c) => !seen.has(dirKey(c.directory))));
+  }
+  return out;
+}
+
+/** The most folders an enclosing folder may hold to be read without a search: a checkout folder, never a temp or home directory. */
+const ENCLOSING_FOLDER_LIMIT = 256;
+
+/** The project roots directly under an enclosing folder — none when it holds more folders than a checkout folder would. */
+function enclosedRoots(folder: string): string[] {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(folder, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules');
+  } catch {
+    return [];
+  }
+  if (entries.length > ENCLOSING_FOLDER_LIMIT) return [];
+  return entries.map((d) => path.join(folder, d.name)).filter((dir) => fs.existsSync(path.join(dir, '.wai', 'project.yaml')));
+}
+
+/** A root's configuration when it declares members — read straight from its file, never a scan; null otherwise. */
+function membersConfigAt(root: string): Pick<ProjectConfig, 'members' | 'externals'> | null {
+  try {
+    const text = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8');
+    if (!/^members\s*:/m.test(text)) return null;
+    const parsed = parseYaml(text) as Pick<ProjectConfig, 'members' | 'externals'> | null;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Steps 3-10 of listConsumers: the family read at the top root in reach. */
@@ -322,7 +382,7 @@ function projectRootsUnder(folder: string): string[] {
  * names its specs spell through that alias. Read-only; each root is bound in
  * turn and the caller's binding restored.
  */
-function searchedConsumers(bound: string, search: string[]): ExternalConsumer[] {
+function searchedConsumers(bound: string, search: string[], seen: ReadonlySet<string> = new Set()): ExternalConsumer[] {
   if (search.length === 0) return [];
   // A hosted request reads its own project's records, never a folder on the server's disk.
   if (getHostedLookup() !== null) throw new Error('searching folders for consumers is a local read: a hosted request reads no folder outside its project');
@@ -333,6 +393,14 @@ function searchedConsumers(bound: string, search: string[]): ExternalConsumer[] 
   const roots = [...new Set(search.flatMap(projectRootsUnder).map((r) => path.resolve(r)))].filter((r) => dirKey(r) !== dirKey(bound));
   const out: ExternalConsumer[] = [];
   for (const root of roots) {
+    if (seen.has(dirKey(root))) continue;
+    // A root that composes the producer as a member from a path: every project of its graph that declares it.
+    const members = membersConfigAt(root);
+    const composing = members !== null && composesByPath(members, root, bound);
+    if (composing) {
+      out.push(...familyConsumers(bound, root).filter((c) => !seen.has(dirKey(c.directory))).map((c) => ({ ...c, found: 'search' as const })));
+      continue;
+    }
     const answer = runWithProjectRoot(root, (): ExternalConsumer | null => {
       let config: ProjectConfig | null;
       try {
@@ -361,6 +429,76 @@ function searchedConsumers(bound: string, search: string[]): ExternalConsumer[] 
     if (answer) out.push(answer);
   }
   return out.sort((a, b) => (a.directory < b.directory ? -1 : a.directory > b.directory ? 1 : 0));
+}
+
+/**
+ * member_revision — one live member of the bound project: where it lives, the
+ * bound project's usage of it, and its tree at the approval it is judged against.
+ */
+export interface MemberRevision {
+  alias: string;
+  project: string;
+  root: string;
+  usage: ExportUsage;
+  revision?: ApprovedRevision;
+}
+
+/** The composition subjects the bound project's lock records for its members, by alias (`<algorithm>:<digest>`). */
+function recordedMemberSubjects(root: string): Map<string, string> {
+  try {
+    const record = JSON.parse(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8')) as { members?: Record<string, { subject?: unknown }> };
+    return new Map(Object.entries(record.members ?? {}).filter(([, m]) => typeof m?.subject === 'string').map(([alias, m]) => [alias, m.subject as string]));
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * iexternal_producers.memberRevisions — each live member of the bound project
+ * (a contained member or a `../` sibling, read where it is stored and never
+ * pinned) with its root, the bound project's usage of it, and its tree at the
+ * approval it is judged against: the commit that introduced the member
+ * approval the bound project's lock records for it, else the member's own last
+ * committed approval. Never on a hosted request. No network.
+ */
+export function memberRevisions(): MemberRevision[] {
+  // Steps 1-2: a hosted request reads no folder outside its own records.
+  if (getHostedLookup() !== null) return [];
+  const bound = path.resolve(getProjectRoot());
+  // Step 3: the bound project's graph — its direct live members.
+  const family = graph();
+  const own = consumerNode(family, bound);
+  if (!own) return [];
+  // Step 4: the subjects its lock records.
+  const subjects = recordedMemberSubjects(bound);
+  const out: MemberRevision[] = [];
+  // Steps 5-10: each live member.
+  for (const node of family.nodes) {
+    if (node.parent !== own.namespace || node === own || node.mountAlias === undefined) continue;
+    const alias = node.mountAlias;
+    const usage = exportUsage(own.namespace, node.namespace);
+    const entry: MemberRevision = { alias, project: node.id ?? node.namespace, root: node.directory, usage };
+    const repo = gitSource.repositoryRoot(node.directory);
+    if (repo) {
+      const lockPath = path.join('.wai', 'lock.json');
+      const subject = subjects.get(alias);
+      const digest = subject?.slice(subject.lastIndexOf(':') + 1);
+      const recorded = digest ? gitSource.commitIntroducing(node.directory, lockPath, digest) : null;
+      const commit = recorded ?? gitSource.lastCommitOf(node.directory, lockPath);
+      if (commit) {
+        try {
+          const relative = path.relative(repo, node.directory);
+          const directory = gitSource.fetch(repo, commit, relative === '' ? undefined : relative);
+          entry.revision = { directory, commit, label: recorded ? `the approval this project's lock records for it (${commit.slice(0, 12)})` : `its own last committed approval (${commit.slice(0, 12)})` };
+        } catch {
+          // A tree that cannot be materialized leaves the revision out, never fails the read.
+        }
+      }
+    }
+    out.push(entry);
+  }
+  // Step 11.
+  return out;
 }
 
 /** Where the baseline of a surface comparison was read: the tree at one commit, and how a reader names it. */

@@ -81,6 +81,16 @@ export function listPinnedExternals(): PinnedExternal[] {
   return surfaceOrchestrator.listPinnedExternals();
 }
 
+/** isurface_portal.memberApprovedSurfaces — each live member projected at the approval it is judged against, keyed by alias. Pure 1:1 forward. */
+export function memberApprovedSurfaces(): Record<string, SurfaceSnapshot> {
+  return surfaceOrchestrator.memberApprovedSurfaces();
+}
+
+/** isurface_portal.memberStatuses — each live member compared with the approval it is judged against. Pure 1:1 forward. */
+export function memberStatuses(): ExternalStatus[] {
+  return surfaceOrchestrator.memberStatuses();
+}
+
 /** isurface_portal.unrecordedUses — each pinned external's uses its pin does not record, keyed by alias, counted offline. Pure 1:1 forward. */
 export function unrecordedUses(): Record<string, string[]> {
   return surfaceOrchestrator.unrecordedUses();

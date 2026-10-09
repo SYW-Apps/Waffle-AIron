@@ -28,6 +28,8 @@ re-run `wairon init` for an independent project).
 **What to commit.** All of `.wai/` — the specs, `project.yaml`, `lock.json`,
 `externals/` and `externals.lock.yaml`, vendored packs: the gate reads committed
 files only (a migration's scratch folder, `.wai/transactions/`, ignores itself).
+The one exception is `.wai/.spec-write.lock`, the short-lived lock spec writers
+take so two sessions never lose a write: add it to `.gitignore`.
 The generated `CLAUDE.md`/`GEMINI.md`, `.claude/` (or `.gemini/`) skills and
 `.mcp.json` hold no machine path: commit them and every clone's assistant starts
 with them, or ignore them and run `wairon generate` after a clone — either way
@@ -276,38 +278,60 @@ realizes it, in order. A framework handler is green without any design change:
 
 - **Take the contract's own parameters, under its names.** `cancelOrder(req, res)`
   realizing `cancelOrder(orderId, customerId)` is two substitutions
-  (`UNREALIZED_PARAM` + `UNDECLARED_PARAM`), annotated or not: a parameter named
-  as a transport handle (req, res, ctx, request, response, next, reply) where the
-  contract declares an argument of its own is never a silent pairing. Neither is a
-  platform transport class (`IncomingMessage`, a fetch `Request`) or an object
-  sharing none of a record's fields where the contract declares that record; an
-  object holding every field under another name is a rename (`PARAM_NAME_MISMATCH`).
+  (`UNREALIZED_PARAM` + `UNDECLARED_PARAM`), however the handles are typed (a
+  hand-written `type Req = { params: … }` included) and wherever the contract's
+  types live (a member project's `shared::order_id` is read live): a parameter
+  named as a transport handle (req, res, ctx, request, response, next, reply) where
+  the contract declares an argument of its own is never a silent pairing. Neither
+  is a platform transport class (`IncomingMessage`, a fetch `Request`) or an
+  object sharing none of a record's fields where the contract declares that
+  record; an object holding every field under another name is a rename
+  (`PARAM_NAME_MISMATCH`), and one object carrying several of the contract's
+  parameters (`cancelOrder(input: { orderId, customerId })`) leaves each of them
+  unrealized.
+- **A record parameter is typed as the record.** Where the contract declares a
+  record, a parameter typed `any`, `unknown`, `object` or
+  `Record<string, unknown>` (or not annotated at all, in TypeScript) names no field
+  to compare, and an object missing the record's fields or adding its own
+  (`{ stops; secret }`) is another shape: both are `PARAM_TYPE_MISMATCH`. The check
+  fails closed on them, as it does on an `any` receiver.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the
   end of the list — `handler(ctx, req, orderId, customerId, res)` with
   `injectedParams: [ctx, req, res]`. An injection no handler takes is
-  `UNUSED_INJECTED_PARAM`.
+  `UNUSED_INJECTED_PARAM`, a notice: it hides nothing, so drop it when you see it.
 - **Or read the parameters off the request.** Where the framework hands the
   handler the request alone, inject it and read each contract parameter off it by
-  its own name (`req.params.orderId`, `req.query['limit']`,
-  `const { orderId } = req.params`): that realizes the parameter through the
-  handle. A parameter never read off it stays `UNREALIZED_PARAM`.
+  its own name (`req.params.orderId`, `req.query.limit`, `req.body.code`,
+  `const { orderId } = req.params`, `url.searchParams.get('limit')` on a
+  `new URL(req.url, base)`): that realizes the parameter through the handle. So
+  does a helper the request is passed to, written in the same file or in a module
+  no implementation claims (`const { orderId } = pathParams(req)`), and the one
+  record parameter is realized by reading the body whole (`req.body`). A
+  parameter never read off it stays `UNREALIZED_PARAM`.
 - **`conformance: off`** on an implementation or a method is for code wairon is
   not meant to compare with its contract (generated or vendored code). It switches
   the realization checks off — method, parameters, async, whether narrated calls
   are found — and never the doctrine: an unnarrated write
   (`UNDECLARED_WRITE_CALL`), a call the analysis cannot follow, a Portal write
-  shortcut and route coverage are judged whatever it says.
+  shortcut and route coverage are judged whatever it says. A dial turned off is
+  said: `REALIZATION_UNCHECKED` (a notice per implementation) and a
+  `Conformance off:` line in `wairon status`.
 
 A Portal's `router` (code linkage) names the entry its own file exports
 (`handleOrderRequest`), a central module's entry or table
 (`src/routes.ts#ROUTES`), or a module alone (`src/routes.ts`, every route-bearing
-export read). Several Portals may name one router; a route is declared when any
-of them declares it. Guards on `<request>.method` and `parts[i]` are read, and so
-are route tables — an array of `{ method, path }` objects or an object keyed
-`VERB /path` (template-literal keys over constants included), bound to a const or
-returned in place. A table is read under the ONE prefix its router strips off the
+export read). Several Portals may name one router — a module, or one table both
+name (`router: routes`) — and a route is declared when any of them declares it.
+Guards on `<request>.method` and `parts[i]` are read, and so are route tables — an
+array of `{ method, path }` objects or an object keyed `VERB /path`
+(template-literal keys over constants included), bound to a const or returned in
+place, spreading other tables (`[...ingestRoutes, ...statsRoutes]`) from any
+module. Route coverage is never silently off: a Portal whose contract binds HTTP
+endpoints and whose implementation names no router gets a `ROUTER_UNDECLARED`
+notice naming `router:`, and a router that cannot be read is
+`UNREADABLE_ROUTER`. A table is read under the ONE prefix its router strips off the
 path (`path.slice(BASE.length)`), so that prefix must be the Portal's `basePath`:
 another one is `UNDECLARED_ROUTE` + `UNROUTED_ENDPOINT`, naming both.
 
@@ -1466,7 +1490,7 @@ return the impact of every pack they applied in their results.
 | `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
 | `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
 | `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration, and an orphaned pin whose declaration is gone, are listed with their problem, never hidden |
-| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal), import one, or list them. OpenAPI defaults to the `project` audience, so every HTTP Portal of the project's own is described — one its L0 export table never exports included (a wider `--audience` narrows to what the table shares there); the native snapshot defaults to `instance`. In the OpenAPI document a path placeholder — `{name}`, or the Express spelling `:name`, which is rewritten to `{name}` — is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH — the one object-typed param left IS the body, as a client sends it (named under `x-wairon-body-param`, so `surface import` puts it back), and several are the properties of a body object. The Portal's `basePath` is joined into every path (the document carries no `servers` entry: where it is served is deployment, not design). The parameter that carries the credential the Portal's `auth` binds (a bearer `token`, say) is left out of the parameters and the body — `security` describes it — and named under `x-wairon-credential-param` so a wairon reader can restore it. Each operation answers the success `status` its endpoint states (`sdd_set_endpoints` `status`: `202` Accepted, a `3xx` redirect with a `Location` header and no body, a `201` for a workflow verb that files something), else its conventional code — `204` with no content for a method returning nothing; `201 Created` for a POST that creates: a method whose `effect` is `lifecycle`, or one whose effect is undeclared, `write` or `io` and whose name says it creates (`createHabit`, `placeOrder`, `signUp`); else `200` (a cancel, an archive, a log-in) — and a method returning `result<T, E>` also answers a `default` error response carrying E's schema (`surface import` reads both back). A `custom` auth becomes an `apiKey` scheme only when the Portal's `auth.name` (with `auth.in`, default header) names where the credential travels; naming none, it is an `http` scheme `custom` with the design's description — no header name is invented. Two operations of one Portal on the same verb and path (placeholders compared by position) are refused naming both, never dropped (`validate` reports them as `ENDPOINT_ROUTE_DUPLICATE`). A type another project publishes resolves from its pin, or — for a member project — from what the member exports now; a type nothing resolves is named in a warning (`The document has no schema for N type(s) it names: …`), never passed under a ✔. The components are exactly the types the operations reach, each ONCE — a member's type reached under its alias, its project id or another producer's closure is one component, keyed `<alias>.<id>` (a qualified id's `::` written `.`, so every key matches `^[a-zA-Z0-9._-]+$`); a field or parameter typed `T?` is not `required` (it stays nullable), and a field's description is carried on its property. Every status line goes to stderr, so `surface export --format openapi > api.json` writes the JSON alone; an export that publishes nothing, or of a design `validate` refuses (its error count and codes), is a warning, never a ✔. An unknown `--portal` is refused naming the portals the surface renders |
+| `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal), import one, or list them. OpenAPI defaults to the `project` audience, so every HTTP Portal of the project's own is described — one its L0 export table never exports included (a wider `--audience` narrows to what the table shares there); the native snapshot defaults to `instance`. In the OpenAPI document a path placeholder — `{name}`, or the Express spelling `:name`, which is rewritten to `{name}` — is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH — the one object-typed param left IS the body, as a client sends it — an optional one or a `T?` too, the body then optional or nullable, never wrapped under its name (named under `x-wairon-body-param`, so `surface import` puts it back), and several are the properties of a body object. The Portal's `basePath` is joined into every path (the document carries no `servers` entry: where it is served is deployment, not design). The parameter that carries the credential the Portal's `auth` binds (a bearer `token`, say) is left out of the parameters and the body — `security` describes it — and named under `x-wairon-credential-param` so a wairon reader can restore it. Each operation answers the success `status` its endpoint states (`sdd_set_endpoints` `status`: `202` Accepted, a `3xx` redirect with a `Location` header and no body, a `201` for a workflow verb that files something), else its conventional code — `204` with no content for a method returning nothing; `201 Created` for a POST that creates: a method whose `effect` is `lifecycle`, or one whose effect is undeclared, `write` or `io` and whose name says it creates (`createHabit`, `placeOrder`, `signUp`); else `200` (a cancel, an archive, a log-in) — and a method returning `result<T, E>` also answers a `default` error response carrying E's schema (`surface import` reads both back). A `custom` auth becomes an `apiKey` scheme only when the Portal's `auth.name` (with `auth.in`, default header) names where the credential travels; naming none, it is an `http` scheme `custom` with the design's description — no header name is invented. Two operations of one Portal on the same verb and path (placeholders compared by position) are refused naming both, never dropped (`validate` reports them as `ENDPOINT_ROUTE_DUPLICATE`). A type another project publishes resolves from its pin, or — for a member project — from what the member exports now; a type nothing resolves is named in a warning (`The document has no schema for N type(s) it names: …`), never passed under a ✔. The components are exactly the types the operations reach, each ONCE — a member's type reached under its alias, its project id or another producer's closure is one component, keyed `<alias>.<id>` (a qualified id's `::` written `.`, so every key matches `^[a-zA-Z0-9._-]+$`); a field or parameter typed `T?` is not `required` (it stays nullable), and a field's description is carried on its property. Every status line goes to stderr, so `surface export --format openapi > api.json` writes the JSON alone; an export that publishes nothing, or of a design `validate` refuses (its error count and codes), is a warning, never a ✔. An unknown `--portal` is refused naming the portals the surface renders |
 | `wairon surface diff [--against <ref\|file>] [--json]` | The public-surface changelog: this project's export table now against the same table at its last **committed** approval (or at a git revision, or in a saved native snapshot from `surface export`) — every exported name and contract method `added`, `removed`, `renamed` (from its rename trace) or `changed` (signature or type shape), and how many a consumer may have to follow. A field renamed per its trace keeps its own row beside its type's rename (traced, or a changed public name of the same definition — never "removed + added"), and an exported type reshaped only by a rename it embeds says which (`embeds renamed field "money.currency" → "currencyCode"`). Against a revision it also covers the project's own HTTP Portals (its service API, exported or not), with every type they name from a pinned external or a member project expanded from the pin or member of each side: a re-pin that reshapes the project's own wire format (`GET /routes/:id/tiles` answering a renamed field) is a change of its own surface, named on the verb. What a producer writes release notes from before it re-locks; `wairon externals consumers --search <dir>` then says who uses what. Read-only. With no approval ever committed it says so (lock and commit first, or name `--against`). An L0 export entry added since that publishes nothing (a wildcard over a subsystem that publishes nothing) is listed as such, never read as no change. `--against` takes a native snapshot or a git revision: an OpenAPI document, or a file the native schema does not read, is refused in one line. `sdd_surface_diff` is the same answer for an assistant |
 | `wairon produce <notion\|miro> [--page <id>] [--token <token>]` | Project the local spec tree to Notion or Miro (the token comes from `--token`, the environment, else a prompt; nothing is stored) |
 

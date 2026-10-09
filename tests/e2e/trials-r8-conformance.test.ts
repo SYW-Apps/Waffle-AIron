@@ -79,9 +79,9 @@ describe('r8 (lib-and-app R8-22, platform, solo-app): parameters', () => {
     expect(r.all).toMatch(/\[UNREALIZED_PARAM\][^\n]*"id" \(the code takes "req", a transport handle/);
     expect(r.all).toContain('getRouteTiles(req, res, id, zoom?)');
   });
-  it('a declared injection nothing takes → UNUSED_INJECTED_PARAM', async () => {
+  it('a declared injection nothing takes → UNUSED_INJECTED_PARAM (a notice since round 9: --ci exits 0)', async () => {
     const r = await sb.run(['validate', '--ci'], routes({ injectedParams: ['req'] }));
-    expect(r.code, transcript(r)).toBe(1);
+    expect(r.code, transcript(r)).toBe(0);
     expect(r.all).toMatch(/\[UNUSED_INJECTED_PARAM\][^\n]*"req"/);
   });
   it('control — the honest `planRoute(request: PlanRequest)`: --ci exits 0', async () => {

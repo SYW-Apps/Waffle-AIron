@@ -971,6 +971,16 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
     CREATE_TOOL[restatement.kind],
   );
   if (foreign !== undefined) throw new Error(foreign);
+  // ...and every name it turns into a path is an id, before any path is built.
+  const pathNames = pathBoundNames(restatement, id, parentRef);
+  const notAnId = pathNames.find((n) => idPathProblem(n.value) !== null);
+  if (notAnId) {
+    throw new Error(
+      `not-an-id: the ${notAnId.what} "${notAnId.value}" cannot name a spec — ${idPathProblem(notAnId.value)}. `
+      + 'A spec id, and the subsystem, component or contract a spec is written under, become folder and file names: '
+      + 'each is a plain id (letters, digits, "-" and "_", qualified by "::"), never a path. Nothing was written.',
+    );
+  }
   // Step 5: the parent the restatement cannot be written without.
   const parent = parentRef ? loadSpec(parentRef.kind, parentRef.id) : null;
   // Step 6: the spec this restatement re-authors, if one holds the id.
@@ -1038,6 +1048,34 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
     notices: [...gateNotices, ...persisted.notices, ...application.notices, ...cascadeNotices(cascade, false)],
     respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}),
   };
+}
+
+/** One `::`-segment of a name a write turns into a path. */
+const ID_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Why a name cannot become a folder or file name, or null: a path separator,
+ * a `.` or `..` segment, or any character outside letters, digits, `-` and `_`
+ * in one of its `::`-segments.
+ */
+function idPathProblem(value: string): string | null {
+  const segments = value.split('::');
+  const named = value.startsWith('::') ? segments.slice(1) : segments;
+  const bad = named.find((s) => !ID_SEGMENT.test(s));
+  if (bad === undefined) return null;
+  if (/[\\/]/.test(bad)) return `"${bad}" holds a path separator`;
+  if (bad.includes('.')) return `"${bad}" holds a dot`;
+  return bad === '' ? 'it has an empty segment' : `"${bad}" holds a character outside letters, digits, "-" and "_"`;
+}
+
+/** Every name a restatement turns into a path: its own id, the parent it is written under, a type's group. */
+function pathBoundNames(restatement: SpecRestatement, id: string, parentRef: SpecParent | null): { what: string; value: string }[] {
+  const out: { what: string; value: string }[] = [];
+  if (restatement.kind !== 'system' && typeof id === 'string') out.push({ what: `${restatement.kind} id`, value: id });
+  if (parentRef && typeof parentRef.id === 'string' && parentRef.kind !== 'system') out.push({ what: `${parentRef.kind} it is written under`, value: parentRef.id });
+  const group = (restatement.spec as { group?: unknown }).group;
+  if (restatement.kind === 'type' && typeof group === 'string' && group !== '') out.push({ what: 'type group', value: group });
+  return out;
 }
 
 /** The create tool each kind is written by: the call a project-boundary refusal names. */
@@ -1361,13 +1399,14 @@ export function updateSpecGated(
   id: string,
   delta: Record<string, any>,
   dryRun?: boolean,
+  tool = 'sdd_update_spec',
 ): SpecChangeReport {
   // Step 1: the bound project's configuration — the severities and project
   // type the judgement uses, and the test roots the report searches. A project
   // that has none is judged on the defaults and searches nothing.
   const bound = candidateOptions();
   // Steps 2-4: a spec of another project is updated from that project's own root.
-  const foreign = crossProjectWriteRefusal([{ kind, id }], 'sdd_update_spec');
+  const foreign = crossProjectWriteRefusal([{ kind, id }], tool);
   if (foreign !== undefined) throw new Error(foreign);
   // Step 5: the spec as it stands — the owner the judgement compares against,
   // the contract methods a delta may remove, and, when a test search may
@@ -1580,20 +1619,29 @@ export function moveMethods(
  * curable boundary finding rides along as a notice. A type carries no edges
  * and is moved without judgement.
  */
-export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean): SpecMove {
-  // Steps 1-3: the spec, and the subsystem it moves to, are the bound project's own.
+export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean, together?: string[]): SpecMove {
+  // The addressed spec first, then each one moving with it, once each.
+  const ids = [...new Set([id, ...(together ?? [])])];
+  // Steps 1-3: every spec, and the subsystem they move to, are the bound project's own.
   const foreign = crossProjectWriteRefusal(
-    [{ kind, id }, ...(subsystem ? [{ kind: 'subsystem' as const, id: subsystem }] : [])],
+    [...ids.map((sid) => ({ kind, id: sid })), ...(subsystem ? [{ kind: 'subsystem' as const, id: subsystem }] : [])],
     'sdd_move_spec',
   );
   if (foreign !== undefined) throw new Error(foreign);
-  // Step 4: a type carries no edges.
-  if (kind !== 'component') return coreMoveSpec(kind, id, subsystem, dryRun);
+  // Step 4: types carry no edges — each is planned first, so one refused type refuses them all.
+  if (kind !== 'component') {
+    const plans = ids.map((sid) => coreMoveSpec(kind, sid, subsystem, true));
+    if (dryRun) return foldMoves(plans, true);
+    return foldMoves(ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false)), false);
+  }
   // Step 5: the settings the move is judged with.
   const bound = candidateOptions();
-  // Step 6: what moves, refused exactly as the move would be.
-  const plan = coreMoveSpec(kind, id, subsystem, true);
-  // Step 7: each moved component as stored, with its new subsystem.
+  // Step 6: what moves, refused exactly as the move would be — a member a
+  // listed pattern owns moves with its owner, so it is not moved on its own.
+  const owners = ids.filter((sid) => !ids.some((other) => other !== sid && ownsTransitively(other, sid)));
+  const plans = owners.map((sid) => coreMoveSpec(kind, sid, subsystem, true));
+  const plan = foldMoves(plans, true);
+  // Step 7: every moved component as stored, with its new subsystem, all at once.
   const moving = plan.moved
     .filter((ref) => ref.kind === 'component')
     .map((ref) => loadSpec('component', ref.id) as ComponentSpec | null)
@@ -1603,16 +1651,64 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   const [first, ...rest] = moving;
   const verdict = first ? introducedFindings('component', first, bound, rest) : { errors: [], warnings: [], notices: [] };
   if (verdict.errors.length > 0) {
+    const left = collaboratorsLeftBehind(moving.map((c) => c.id), plans.map((p) => p.from));
+    const named = ids.length > 1 ? `components ${ids.map((sid) => `"${sid}"`).join(', ')}` : `component "${id}"`;
     throw new Error(
-      `Refused: moving component "${id}" to subsystem "${plan.to}" would introduce ${verdict.errors.length === 1 ? 'an error' : `${verdict.errors.length} errors`} validate reports — `
+      `Refused: moving ${named} to subsystem "${plan.to}" would introduce ${verdict.errors.length === 1 ? 'an error' : `${verdict.errors.length} errors`} validate reports — `
       + 'a forbidden edge between two blocks, or an edge into another subsystem whose target is not a Portal:\n'
       + `${verdict.errors.map((e) => `- ${e.code}: ${e.message}`).join('\n')}\n\n`
-      + 'Nothing was written. Route each such dependency through a client Adapter calling the other subsystem\'s Portal, or move its collaborators with it.',
+      + 'Nothing was written. Route each such dependency through a client Adapter calling the other subsystem\'s Portal, or move its collaborators with it'
+      + (left.length > 0
+        ? ` in the same call — together: [${[...ids.filter((sid) => sid !== id), ...left].map((sid) => `"${sid}"`).join(', ')}] moves ${left.map((sid) => `"${sid}"`).join(', ')} along and judges the whole set as one move (dryRun first shows the plan).`
+        : '.'),
     );
   }
   // Step 11: a curable boundary finding rides along.
   const notices = noticesFrom(verdict);
-  // Steps 12-13: the move itself (or, on a dry run, the plan), with the gate's notices.
-  const report = dryRun ? plan : coreMoveSpec(kind, id, subsystem, false);
+  // Steps 12-13: the moves themselves, one after another (or, on a dry run,
+  // the plan), with the gate's notices: the set was judged as a whole, so no
+  // move in between is judged on its own.
+  const report = dryRun ? plan : foldMoves(owners.map((sid) => coreMoveSpec(kind, sid, subsystem, false)), false);
   return { ...report, notices: [...report.notices, ...notices] };
+}
+
+/** Whether the component `owner` owns `member`, directly or through a member it owns. */
+function ownsTransitively(owner: string, member: string): boolean {
+  const seen = new Set<string>();
+  const visit = (cid: string): boolean => {
+    if (seen.has(cid)) return false;
+    seen.add(cid);
+    const owns = (loadSpec('component', cid) as ComponentSpec | null)?.owns ?? [];
+    return owns.includes(member) || owns.some(visit);
+  };
+  return visit(owner);
+}
+
+/**
+ * The components of the subsystems a refused move leaves that hold an edge
+ * into or out of the moved set: the collaborators `together` would take along.
+ */
+function collaboratorsLeftBehind(moved: string[], from: string[]): string[] {
+  const movedSet = new Set(moved);
+  const sources = new Set(from);
+  const all = scanAllSpecs({ memberDepth: 0 }).components;
+  const components = all.filter((c) => sources.has(c.subsystem) && !movedSet.has(c.id));
+  const movedSpecs = all.filter((c) => movedSet.has(c.id));
+  const linked = components.filter((c) => (c.dependsOn ?? []).some((d) => movedSet.has(d))
+    || movedSpecs.some((m) => (m.dependsOn ?? []).includes(c.id)));
+  // A member a pattern owns goes with its owner: name the owner.
+  const owned = new Set(components.flatMap((c) => c.owns ?? []));
+  return [...new Set(linked.map((c) => (owned.has(c.id) ? components.find((o) => (o.owns ?? []).includes(c.id))?.id ?? c.id : c.id)))].sort();
+}
+
+/** Several moves as one report: the addressed spec's identity, every spec moved, every spec rewritten. */
+function foldMoves(moves: SpecMove[], dryRun: boolean): SpecMove {
+  const [first] = moves;
+  return {
+    ...first,
+    moved: moves.flatMap((m) => m.moved),
+    rewritten: [...new Set(moves.flatMap((m) => m.rewritten))],
+    notices: moves.flatMap((m) => m.notices),
+    ...(dryRun ? { dryRun: true } : {}),
+  };
 }

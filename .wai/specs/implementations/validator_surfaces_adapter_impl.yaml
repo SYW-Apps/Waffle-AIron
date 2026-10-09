@@ -42,6 +42,20 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: unrecordedUses
+  - name: memberApprovedSurfaces
+    narrative:
+      - stepNumber: 1
+        description: Call memberApprovedSurfaces on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: memberApprovedSurfaces
+  - name: memberStatuses
+    narrative:
+      - stepNumber: 1
+        description: Call memberStatuses on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: memberStatuses
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-10-07T18:32:53.741Z'
+updatedAt: '2026-10-09T11:38:47.990Z'

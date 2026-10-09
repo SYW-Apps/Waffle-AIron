@@ -70,6 +70,9 @@ import {
   resolveDomains,
   loadProjectVariants,
   resolveVariantGuidance,
+  lockTree,
+  unlockTree,
+  readPinnedSpec,
 } from './adapters/core.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
@@ -1091,6 +1094,17 @@ const getSpecOutput = {
     + 'and sdd_write_narrative REPLACE the method list, so re-authoring from it would delete every method '
     + 'left out.',
   ),
+  pinnedSnapshot: z.object({
+    alias: z.string().describe('The external\'s alias the read went through.'),
+    project: z.string().describe('The producer project the alias names.'),
+    file: z.string().describe('The pinned snapshot file the entry was read from, project-relative.'),
+    stateId: z.string().optional().describe('The producer\'s StateId the pin was taken at, when recorded.'),
+    readOnly: z.literal(true).describe('Always true: a pinned entry is the pin\'s record, written from the producer\'s own root.'),
+    note: z.string().describe('One sentence saying where the entry comes from and where it is written.'),
+  }).optional().describe(
+    'Present only when the id named an EXTERNAL through its alias (`alias::name`): `spec` is then the entry the '
+    + 'pinned snapshot records — read-only, never a spec of this tree, never written back.',
+  ),
   variantGuidance: z.object({
     variant: z.string().describe('The variant id the component declares.'),
     base: z.string().describe('The core stereotype it specializes.'),
@@ -1417,6 +1431,66 @@ function withArgumentNames(description: string, inputSchema: Record<string, z.Zo
   return `${description.trimEnd()} Arguments: ${names.join(', ')}.`;
 }
 
+/**
+ * The folder this stdio session was opened in (mcp_hosting_portal.serveStdio):
+ * the client's first root, else the pinned WAIRON_PROJECT_DIR, else the launch
+ * cwd. Null for a server no stdio session started (the hosted per-request
+ * server, an in-process test), which has no such folder to compare.
+ */
+let sessionFolder: string | null = null;
+
+/** Whether two folders are one, compared as the platform's filesystem compares them. */
+function sameFolder(a: string, b: string): boolean {
+  const norm = (p: string): string => {
+    const resolved = path.resolve(p);
+    return process.platform === 'win32' || process.platform === 'darwin' ? resolved.toLowerCase() : resolved;
+  };
+  return norm(a) === norm(b);
+}
+
+/**
+ * mcp_orchestrator.initializeSystem steps 1-3: the refusal for a session that
+ * may not write the bound tree's L0 — one opened in a folder that is not the
+ * bound project's root (it bound upward) while that tree already holds an L0 —
+ * or null when it may.
+ */
+function initializeFromElsewhereRefusal(): string | null {
+  const existing = loadSystemSpec();
+  if (sessionFolder === null || existing === null) return null;
+  const root = getProjectRoot();
+  if (sameFolder(sessionFolder, root)) return null;
+  const rel = path.relative(root, sessionFolder).split(path.sep).join('/');
+  const inside = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+  const alias = path.basename(sessionFolder).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'member';
+  return `Refused: this session was opened in ${sessionFolder}, which is not the root of the project it is bound to — ${root}, `
+    + `whose L0 "${existing.name}" already exists. sdd_initialize_system here would re-author THAT project's L0 (its name, vision, boundaries, `
+    + 'requirements and targetLanguage). Nothing was written. '
+    + (inside
+      ? `To make this folder a project of its own, as \`wairon init\` there says: from the root run \`wairon member add ${alias} ${rel} --project\`, `
+        + 'then open a session in this folder (its own guide and .mcp.json) and design it from there. '
+      : '')
+    + `To re-author ${existing.name}'s L0 itself, open the session at ${root}.`;
+}
+
+/**
+ * mcp_server.create steps 5-6: run one spec-write handler under the bound
+ * tree's cross-process write lock, released whatever the handler answers or
+ * throws. A lock that cannot be taken (another session holding it past the
+ * wait) is the tool's refusal, never a crash.
+ */
+function underTreeLock(handler: () => CallToolResult): CallToolResult {
+  try {
+    lockTree();
+  } catch (e) {
+    return errText(e instanceof Error ? e.message : String(e));
+  }
+  try {
+    return handler();
+  } finally {
+    unlockTree();
+  }
+}
+
 function reg<Args extends Record<string, unknown>>(
   server: McpServer,
   name: string,
@@ -1448,7 +1522,10 @@ function reg<Args extends Record<string, unknown>>(
     if (freshness.writesRefused && SPEC_WRITE_TOOLS.has(name)) {
       return errText(`${name} refused — ${freshness.reason}`);
     }
-    const answered = cb(args);
+    // A spec write is a read-modify-write of the tree: serialized across
+    // processes by the tree's write lock (which also re-reads the tree), so two
+    // sessions writing one spec land both writes instead of losing one.
+    const answered = SPEC_WRITE_TOOLS.has(name) ? underTreeLock(() => cb(args)) : cb(args);
     const result = freshness.state === 'fresh'
       ? answered
       : markStale(answered, freshness, name === 'sdd_get_status' ? 'lead' : 'trail');
@@ -1892,12 +1969,16 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ name: string; vision: string; boundaries?: any[]; globalRequirements?: any[]; targetLanguage?: string }>(server,
     'sdd_initialize_system',
     {
-      description: 'Initialize the L0 System Specification (system.yaml). Re-running it on an existing system RE-AUTHORS it: the fields above are replaced, and everything this tool cannot express (databases, the project gateway publicInterfaces, diagram defaults) is carried forward. The answer carries a write receipt as structured content beside the sentence — what was written, and whether a system spec already existed — so a caller never has to read English to find out.',
+      description: 'Initialize the L0 System Specification (system.yaml). Re-running it on an existing system RE-AUTHORS it: the fields above are replaced, and everything this tool cannot express (databases, the project gateway publicInterfaces, diagram defaults) is carried forward. Refused, writing nothing, when the session was opened in a folder that is not the bound project\'s root (it bound upward to the project above it) and that project already has an L0: the refusal names the root and the next step — `wairon member add <alias> <path> --project` from the root makes the folder a project of its own. The answer carries a write receipt as structured content beside the sentence — what was written, and whether a system spec already existed — so a caller never has to read English to find out.',
       inputSchema: systemInput,
       outputSchema: specWriteReceiptOutput,
     },
     ({ name, vision, boundaries, globalRequirements, targetLanguage }) => {
       try {
+        // mcp_orchestrator.initializeSystem steps 1-3: never the L0 of a project
+        // this session only bound to from a subfolder.
+        const elsewhere = initializeFromElsewhereRefusal();
+        if (elsewhere !== null) return errText(elsewhere);
         // mcp_orchestrator.initializeSystem step 1: the restatement. Re-initializing
         // used to hard-reset databases and drop the gateway publicInterfaces and
         // diagram defaults; the seam carries whatever this input cannot express,
@@ -2027,7 +2108,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const delta = publicInterfacesReplacement(subsystem, sub.publicInterfaces ?? [], publicInterfaces);
         if (typeof delta === 'string') return errText(delta);
         // Step 3: through the authoring seam. Step 4: the change report.
-        const report = updateSpecGated('subsystem', subsystem, delta);
+        const report = updateSpecGated('subsystem', subsystem, delta, undefined, 'sdd_set_public_interfaces');
         return structured(
           `Updated public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}`,
           report,
@@ -2052,13 +2133,22 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ alias, source, description, as }) => {
       try {
-        // mcp_orchestrator.addMember step 1: create and declare via core;
-        // the answer states what was created and, for a project, its packs.
+        // mcp_orchestrator.addMember step 1: whether the folder exists yet — a
+        // `../` source that does not is a folder this call creates OUTSIDE the project.
+        const root = getProjectRoot();
+        const dir = typeof source === 'string' && !/^[a-z][a-z0-9+.-]*:|^git@|#/i.test(source.trim()) ? path.resolve(root, source.trim()) : null;
+        const relToRoot = dir === null ? null : path.relative(root, dir);
+        const outside = dir !== null && relToRoot !== null && (relToRoot.startsWith('..') || path.isAbsolute(relToRoot));
+        const createdOutside = outside && !fs.existsSync(dir!);
+        // Step 2: create and declare via core; the answer states what was
+        // created and, for a project, its packs.
         const creation = createMember(alias, source, description, as);
         const next = creation.as === 'project'
           ? `${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`
           : ` Its subsystems are this project's own: write them by their local ids. sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
-        return structured(`Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}`, creation);
+        // Step 3: a folder created beside the project is said first, never left to be found.
+        const created = createdOutside ? `Created a new folder OUTSIDE this project, at ${dir} (beside ${root}). ` : '';
+        return structured(`${created}Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}`, creation);
       } catch (e) {
         return errText(String(e));
       }
@@ -2284,12 +2374,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; newName: string; pinSymbol?: boolean; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_method',
     {
-      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name unless pinSymbol is false, so the function it already binds to keeps binding. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript; for a component one of whose contracts implements another project\'s extension point, any identifier, since the producer names those methods (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
+      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name when its code exists (the file realizing the method is on disk), so the function it already binds to keeps binding — with no code written yet nothing is pinned unless pinSymbol is true, and pinSymbol false never pins. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript; for a component one of whose contracts implements another project\'s extension point, any identifier, since the producer names those methods (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
       inputSchema: {
         id: z.string().describe('The component whose method is renamed (namespaced if needed)'),
         method: z.string().describe('The method name as it stands'),
         newName: z.string().describe('Its new name: an identifier in the method casing of the tree (snake_case in a Rust or Python tree, camelCase in a TypeScript one)'),
-        pinSymbol: z.boolean().optional().describe('Whether an implementation that declares no symbol is pinned to the old name so its function still binds; true when omitted'),
+        pinSymbol: z.boolean().optional().describe('Whether an implementation that declares no symbol is pinned to the old name so its function still binds: omitted, only when the file realizing the method exists; true always pins, false never does'),
         dryRun: z.boolean().optional().describe('Answer what the rename would move, retarget and break (the consumers that call the method through an export), and write nothing'),
         search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling checkouts), relative to the bound project root or absolute'),
       },
@@ -2451,21 +2541,22 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ kind: 'component' | 'type'; id: string; subsystem?: string; dryRun?: boolean }>(server,
+  reg<{ kind: 'component' | 'type'; id: string; subsystem?: string; dryRun?: boolean; together?: string[] }>(server,
     'sdd_move_spec',
     {
-      description: 'Move a component or a type to another subsystem of the bound project with everything that follows it. A component takes the members it owns, its contracts and their implementations (their files move to the new subsystem\'s folder in the nested layout); ids never change, so references by id stay, and what names the OLD subsystem follows: its export entries and lifecycle entrypoints for the moved components, and an L0 re-export from it. A type takes its file, its L1 export entries and every reference qualified by the old subsystem (`old::type` becomes `new::type`); omit subsystem to make a type system-level. Gated like every write: a move that would create a forbidden doctrine edge, or a cross-subsystem edge into a non-Portal, is refused with the rule\'s own words, and a curable boundary finding (a direct cross-subsystem edge into a Portal, which a client Adapter or a trustedLink would license) is named among the notices. Refuses, writing nothing: a kind other than component or type, a spec that does not exist or lives in another project, a subsystem the bound tree does not have or the one it already lives in, a component a pattern owns (move its owner), a type id the target already holds. With dryRun it answers the plan and the notices, and writes nothing.',
+      description: 'Move a component or a type to another subsystem of the bound project with everything that follows it. A component takes the members it owns, its contracts and their implementations (their files move to the new subsystem\'s folder in the nested layout); ids never change, so references by id stay, and what names the OLD subsystem follows: its export entries and lifecycle entrypoints for the moved components, and an L0 re-export from it. A type takes its file, its L1 export entries and every reference qualified by the old subsystem, in either spelling and wherever it stands in a type expression (`old::type` becomes `new::type`, `list<old.type>` becomes `list<new.type>`); omit subsystem to make a type system-level. Several specs of the same kind move as ONE move with `together` — a connected cluster (a subsystem split) whose edges no single move could keep inside one subsystem: every one is planned, the components are judged together in their new subsystem, and all are written or none. Gated like every write: a move that would create a forbidden doctrine edge, or a cross-subsystem edge into a non-Portal, is refused with the rule\'s own words — naming the collaborators left behind as the `together` list that takes them along — and a curable boundary finding (a direct cross-subsystem edge into a Portal, which a client Adapter or a trustedLink would license) is named among the notices. Refuses, writing nothing: a kind other than component or type, a spec that does not exist or lives in another project, a subsystem the bound tree does not have or the one it already lives in, a component a pattern owns (move its owner), a type id the target already holds. With dryRun it answers the plan and the notices, and writes nothing.',
       inputSchema: {
         kind: z.enum(['component', 'type']).describe('component or type'),
         id: z.string().describe('The spec to move (a type by its bare id, or as <subsystem>::<id>)'),
         subsystem: z.string().optional().describe('The subsystem it moves to; omitted for a type made system-level'),
         dryRun: z.boolean().optional().describe('Answer what the move would do — refused exactly as the move would be — and write nothing'),
+        together: z.array(z.string()).optional().describe('More specs of the same kind that move with it to the same subsystem, as one move judged together — the collaborators a single move\'s refusal names'),
       },
     },
-    ({ kind, id, subsystem, dryRun }) => {
+    ({ kind, id, subsystem, dryRun, together }) => {
       try {
-        // mcp_orchestrator.moveSpec: through the authoring seam, which judges a moved component first.
-        return json(moveSpec(kind, id, subsystem, dryRun));
+        // mcp_orchestrator.moveSpec: through the authoring seam, which judges the moved components together first.
+        return json(moveSpec(kind, id, subsystem, dryRun, together));
       } catch (e) {
         return errText(String(e));
       }
@@ -2761,7 +2852,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         }
         // Step 3: one delta naming each method with its endpoint, through the
         // authoring seam. Step 4: the change report.
-        const report = updateSpecGated('interface', interfaceId, { methods }, dryRun);
+        const report = updateSpecGated('interface', interfaceId, { methods }, dryRun, 'sdd_set_endpoints');
         return structured(
           `${dryRun ? 'Would bind' : 'Bound'} ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.\n${renderChangeReport(report)}`,
           report,
@@ -2835,7 +2926,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     bindings: z.array(z.string()).optional().describe('Optional code linkage: the hand-written binding modules (project-relative; N:1 sharing allowed) through which this realization reaches another project\'s code — a typed binding to a native library, a client stub. Outside the approval, like sourcePath. Validate compares each with the pinned snapshots of the externals this component reaches (function and method names, parameter names and arity, type field names) and reports a name the pin renamed or no longer exports (BINDING_DRIFT)'),
     router: z.string().min(1).optional().describe('Portal-only code linkage: the router entry this Portal\'s own file exports, through which whatever process serves the Portal hands it its requests (replaces the retired listener mount\'s `via`). Route coverage reads the routes out of it and export conformance holds the file to it. Outside the approval, like sourcePath'),
     technologies: z.array(z.union([z.string(), z.object({ name: z.string(), matches: z.array(z.string()).min(1).describe('The tokens the leakage and contract checks match INSTEAD of the name — for a technology whose name is also an ordinary word of the tree (the yaml package, the YAML format)') }).strict()])).optional().describe('External technologies this implementation binds to (e.g. ["mysql"], or [{ "name": "yaml", "matches": ["yaml package", "parseDocument"] }] when the bare name would match a common word) — declares this component\'s ownership tree as the technology\'s home; references outside it are flagged (TECH_LEAKAGE) and contract identifiers must stay intent-language. Only for Adapter/Store/Registry/Index components, and an Observer bound to a messaging technology.'),
-    injectedParams: z.array(z.string()).optional().describe('The parameter names this realization takes BEFORE the ones its contract declares — a config object, a data root, the transport handles a portal is handed. Supplied by whatever wires the component up, never by the caller the contract describes, which is why they belong here and not to the contract: another realization may hold them as fields instead. Declared rather than guessed, because a leading parameter the contract does not name cannot be told from one it named under a different name (`seed(config)` realized as `bootstrapInstance(cfg)`); a leading parameter this list does not name is reported (UNDECLARED_PARAM). A name matches with or without a leading `_` (`ctx` names `_ctx`). A LEADING run of these names is dropped, and so is a TRAILING run of names the contract does not declare (a handler\'s `res` after the contract\'s own parameters); one appearing in the middle of the contract\'s parameters is an argument of the caller\'s list, not wiring'),
+    injectedParams: z.array(z.string()).optional().describe('Code linkage, set by the implementer once the code exists — never at design time: leave it out while designing, and remove a name the code does not take. The parameter names this realization takes BEFORE the ones its contract declares — a config object, a data root, the transport handles a portal is handed. Supplied by whatever wires the component up, never by the caller the contract describes, which is why they belong here and not to the contract: another realization may hold them as fields instead. Declared rather than guessed, because a leading parameter the contract does not name cannot be told from one it named under a different name (`seed(config)` realized as `bootstrapInstance(cfg)`); a leading parameter this list does not name is reported (UNDECLARED_PARAM). A name matches with or without a leading `_` (`ctx` names `_ctx`). A LEADING run of these names is dropped, and so is a TRAILING run of names the contract does not declare (a handler\'s `res` after the contract\'s own parameters); one appearing in the middle of the contract\'s parameters is an argument of the caller\'s list, not wiring'),
     detail: detailEnum.optional().describe('Spec-level narrative detail default for all methods'),
     conformance: conformanceEnum.optional().describe('Spec-level conformance tier default: declared | anchored | off (omitted = stereotype default: Portal → anchored, else declared)'),
     methods: z.array(z.object(implMethodShape).strict()).optional().describe('Method implementations containing L5 narratives'),
@@ -2846,7 +2937,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; name: string; description: string; contract: string; sourcePath?: string; simPath?: string; bindings?: string[]; router?: string; technologies?: Technology[]; injectedParams?: string[]; detail?: 'full' | 'calls-only' | 'intent'; conformance?: 'declared' | 'anchored' | 'off'; methods?: { name: string; sourcePath?: string; detail?: 'full' | 'calls-only' | 'intent'; intent?: string; conformance?: 'declared' | 'anchored' | 'off'; symbol?: string; exportedVia?: string; ext?: Record<string, unknown>; narrative?: NarrativeStepIn[]; calls?: string[] }[]; status?: StatedStatus }>(server,
     'sdd_write_narrative',
     {
-      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). A method whose narrative shows no steps declares the calls it makes in `calls` (one "<component>.<method>" each): the reachability walk takes exactly those edges and no others, so an intent-level method that reaches a collaborator must name it or that collaborator is reported unused. Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in their source file (omitted = Portal: anchored, else declared). A method whose body lives in its own file names it in the method\'s sourcePath; the implementation\'s sourcePath is the default for every method that names none. Parameters the realization takes BEFORE its contract\'s own — a config object, a data root, a portal\'s transport handles — or after them (a handler\'s response handle), are wiring, and are declared once for the spec in injectedParams (matched with or without a leading `_`); a leading or trailing parameter it does not name is reported against the contract (UNDECLARED_PARAM). Re-authoring an existing id REPLACES the method list: a method left out of the input is REMOVED together with its narrative (and reported); spec-level lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
+      description: 'Write L4 Concrete Implementation spec containing L5 method narratives. Narratives are a FLAT ordered step list; flow steps (branch/switch/loop/try/parallel/jump/return/throw) jump by step number — blocks are just skipped regions. Steps may declare a `label` anchor, and every jump field has a *Label twin (toLabel, onTrueLabel, endLabel, …) resolved to step numbers at write time — prefer labels over hand-counted numbers; an unresolvable label rejects the write. Detail dial per method: full (narrative required) | calls-only (call choreography suffices) | intent (prose instead of steps); omitted = stereotype default (Portal/Observer/Adapter: calls-only, Store/Index/Registry: intent, else full). A method whose narrative shows no steps declares the calls it makes in `calls` (one "<component>.<method>" each): the reachability walk takes exactly those edges and no others, so an intent-level method that reaches a collaborator must name it or that collaborator is reported unused. Conformance dial per method or spec: declared | anchored | off — how strictly structural conformance requires contract methods to be realized in their source file (omitted = Portal: anchored, else declared). A method whose body lives in its own file names it in the method\'s sourcePath; the implementation\'s sourcePath is the default for every method that names none. Parameters the realization takes BEFORE its contract\'s own — a config object, a data root, a portal\'s transport handles — or after them (a handler\'s response handle), are wiring, and are declared once for the spec in injectedParams (matched with or without a leading `_`); a leading or trailing parameter it does not name is reported against the contract (UNDECLARED_PARAM). injectedParams are code linkage, set when the code exists: do NOT declare them while designing — the implementer declares them once its code takes such a parameter, and removes a design-time guess its code does not take (UNUSED_INJECTED_PARAM); neither asks for a re-lock. Re-authoring an existing id REPLACES the method list: a method left out of the input is REMOVED together with its narrative (and reported); spec-level lint/ext are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
       inputSchema: implInput,
       outputSchema: specWriteReceiptOutput,
     },
@@ -3062,7 +3153,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind?: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; methods?: string[] }>(server,
     'sdd_get_spec',
     {
-      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
+      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. An `alias::name` id resolves through the bound project\'s alias table exactly as a write resolves it: a member\'s spec reads under its key, and an EXTERNAL\'s spec reads from the pinned snapshot this project holds of it — the pinned contract entry or exported type as the spec, a read-only "pinnedSnapshot" marker beside it (it is written from the producer\'s own root). Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).optional().describe('The kind of specification. Omit it to infer the kind from the id: the read is refused, naming the candidate kinds, when the id names specs at more than one level (an interface and an implementation sharing an id, say), or at none'),
         id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
@@ -3072,12 +3163,38 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ kind: askedKind, id, methods }) => {
       try {
+        // mcp_orchestrator.getSpec steps 18-19: an external's spec, read from
+        // the pin this project holds of it — the pinned entry as the spec, the
+        // pinnedSnapshot marker beside it. Read-only: never a spec of this tree.
+        const pinnedAnswer = (asked: SpecKind | undefined): CallToolResult | null => {
+          if (!id.includes('::') || methods !== undefined) return null;
+          const read = readPinnedSpec(asked, id);
+          if (!read) return null;
+          const marker = {
+            alias: read.alias,
+            project: read.project,
+            file: read.file,
+            ...(read.stateId !== undefined ? { stateId: read.stateId } : {}),
+            readOnly: true as const,
+            note: `"${read.alias}" is an external of this project: this is its pinned ${read.kind === 'type' ? 'type' : 'contract entry'} "${read.id}" as ${read.file} records it — written from ${read.project}'s own root, never here.`,
+          };
+          return structured(JSON.stringify({ ...(read.spec as object), pinnedSnapshot: marker }, null, 2), {
+            kind: read.kind === 'type' ? 'type' : (asked ?? 'interface'),
+            id,
+            spec: read.spec as Record<string, unknown>,
+            pinnedSnapshot: marker,
+          });
+        };
         // mcp_orchestrator.getSpec steps 1-4: no kind asked for — infer it from the id.
         let kind: SpecKind;
         if (askedKind) {
           kind = askedKind;
         } else {
           const holders = specKindsHolding(id);
+          if (holders.length === 0) {
+            const pinned = pinnedAnswer(undefined);
+            if (pinned) return pinned;
+          }
           if (holders.length !== 1) {
             return errText(holders.length === 0
               ? `No spec of any kind has the ID "${id}".`
@@ -3096,7 +3213,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           case 'implementation': result = loadImplementationSpec(id); break;
           case 'type':           result = loadTypeSpec(id); break;
         }
-        if (!result) return errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        if (!result) return pinnedAnswer(kind) ?? errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
         // A contract answers in STORED form, its sourced methods' resolved
         // signatures beside it as a derived marker (mcp_orchestrator.getSpec).
         let resolvedSignatures: ResolvedSignatureMarker[] = [];
@@ -3724,6 +3841,15 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
     return; // client did not advertise the roots capability
   }
 
+  // The session's folder is the first root the client names, whether or not
+  // it holds a tree of its own: a session opened in a subfolder stays one.
+  for (const r of roots) {
+    try {
+      sessionFolder = path.resolve(r.uri.startsWith('file:') ? fileURLToPath(r.uri) : r.uri);
+      break;
+    } catch { /* an unreadable root names no folder */ }
+  }
+
   for (const r of roots) {
     let dir: string | null = null;
     try { dir = r.uri.startsWith('file:') ? fileURLToPath(r.uri) : r.uri; } catch { dir = null; }
@@ -3744,6 +3870,10 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
  * client's workspace roots (again whenever the client reports they changed).
  */
 export async function startMcpServer(): Promise<void> {
+  // The session's folder until the client names its own: the pinned project
+  // dir, else the folder the process was launched in.
+  const pinned = process.env['WAIRON_PROJECT_DIR'];
+  sessionFolder = path.resolve(pinned && fs.existsSync(path.join(pinned, '.wai')) ? pinned : process.cwd());
   const server    = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

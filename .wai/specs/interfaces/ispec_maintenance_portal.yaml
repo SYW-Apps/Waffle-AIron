@@ -137,8 +137,9 @@ methods:
       - name: pinSymbol
         type: bool
         description: >-
-          Whether an implementation that declares no symbol is pinned to the old name; true when
-          omitted
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
         optional: true
       - name: dryRun
         type: bool
@@ -391,4 +392,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-09T00:26:40.304Z'
+updatedAt: '2026-10-09T11:36:18.988Z'

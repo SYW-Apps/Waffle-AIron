@@ -230,7 +230,8 @@ describe('renameMethod', () => {
   it('pins the symbol of an implementation that named none, so the function it binds to keeps binding', () => {
     root = books();
 
-    const report = renameMethod('ledger', 'post', 'append');
+    // ledger_impl names no file: no code exists, so the pin is asked for (round 9: omitted, it pins only existing code).
+    const report = renameMethod('ledger', 'post', 'append', true);
 
     expect(report.pinnedSymbol).toBe('post');
     expect(method(root, 'ledger_impl', 'append').symbol).toBe('post');
@@ -463,7 +464,7 @@ describe('renameMethod — the method casing follows the tree (naming_rule_confi
   it('a Rust tree takes a snake_case name, and its trace (the pinned symbol) is kept', () => {
     root = books();
     speak(root, 'rust');
-    const report = renameMethod('ledger', 'post', 'append_entry');
+    const report = renameMethod('ledger', 'post', 'append_entry', true);
     expect(report.to).toBe('append_entry');
     expect(method(root, 'ledger_impl', 'append_entry').symbol).toBe('post');
     // The implementation that bound the old function keeps binding it.

@@ -297,7 +297,8 @@ methods:
         type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name so its
-          function still binds; true when omitted
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
         optional: true
       - name: dryRun
         type: bool
@@ -1263,16 +1264,21 @@ methods:
       method: tools/call sdd_rename_spec
   - name: moveSpec
     description: >-
-      Tool: move a component or a type to another subsystem with everything that follows it. A
+      Tool: move a component or a type to another subsystem with everything that follows it — and,
+      with `together`, more specs of the same kind in the same call: a connected cluster whose edges
+      no single move could keep inside one subsystem, judged together and planned by one dry run. A
       component takes the members it owns, its contracts and their implementations (their files move
       to the new subsystem's folder); ids do not change, so references by id stay, and what names
       the old subsystem follows — its export entries and lifecycle entrypoints for the moved
       components, an L0 re-export from it. A type takes its file, its L1 export entries and every
-      reference qualified by the old subsystem; omit subsystem to make a type system-level. Gated: a
+      reference qualified by the old subsystem, in either spelling (`old::type`, `old.type`) and
+      wherever it stands in a type expression; omit subsystem to make a type system-level. Gated: a
       move that would create a forbidden doctrine edge or a cross-subsystem edge into a non-Portal
-      is refused with the rule's words, and a curable boundary finding is named as a notice. With
-      dryRun it answers the plan and writes nothing.
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+      is refused with the rule's words — naming the collaborators to move `together` — and a curable
+      boundary finding is named as a notice. With dryRun it answers the plan and writes nothing.
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
+      list<string>): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -1289,9 +1295,15 @@ methods:
         type: bool
         description: Answer what the move would do and write nothing
         optional: true
+      - name: together
+        type: list<string>
+        description: >-
+          More specs of the same kind that move with it to the same subsystem, judged with it as one
+          move
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T01:10:19.906Z'
+updatedAt: '2026-10-09T11:36:45.147Z'

@@ -66,7 +66,14 @@ methods:
     intent: >-
       Run `git rev-parse --verify --quiet <ref>^{commit}` in the directory and answer the trimmed
       commit, or none when the ref names no commit or git fails.
+  - name: commitIntroducing
+    narrative: []
+    detail: intent
+    intent: >-
+      Run `git log --reverse --format=%H -S<text> -- <pathspec>` in the directory, never prompting
+      for credentials, and answer the first commit it prints, or none when it prints nothing or git
+      fails (no work tree, no git).
 detail: intent
 status: complete
 createdAt: '2026-10-02T20:19:38.761Z'
-updatedAt: '2026-10-07T11:35:48.288Z'
+updatedAt: '2026-10-09T11:37:46.796Z'

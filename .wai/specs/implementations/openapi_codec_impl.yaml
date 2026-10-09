@@ -100,32 +100,33 @@ methods:
           scheme carries the credential) and name it under x-wairon-credential-param; each param
           named by a path placeholder a parameter in: path, required, and the rest parameters in:
           query on a verb without a body, or the JSON body on POST/PUT/PATCH — the one object-typed
-          param left (a named data type, never a scalar, list, map or enum) AS the body, named under
-          x-wairon-body-param so a reader puts it back, and several params as the properties of a
-          body object — a param or field required unless it is optional or typed `T?`; the success
-          response under the endpoint's own `status` when it states one (a 3xx a redirect with a
-          Location header and no body), else its conventional code — 204 with no content for a
-          method returning nothing; 201 Created for a POST that creates: a method whose effect is
-          `lifecycle` (it brings an entity into existence), or one whose effect is undeclared,
-          `write` or `io` and whose name says it creates (create, add, new, register, sign up,
-          place, open, insert, submit, upload, start, issue, book); else 200 and, for a `result<T,
-          E>` returns, a `default` response whose body is E's schema; guarantees and effect noted as
-          extensions; each param and return type parsed (type_expression.parse) and rendered from
-          its canonical expression; the components are exactly the types the operations reach,
-          transitively, each identified by its owning project and its id there — an own type by its
-          id, `alias::name` from the context's pinned snapshot or member surface, a qualified
-          closure id naming a project the context holds read as that project's type — so a type
-          reached under several aliases, a member's project id or another producer's closure is
-          rendered ONCE, under `<alias>.<id>` for the first alias the context holds its project
-          under, every key matching `^[a-zA-Z0-9._-]+$` (`::` written `.`), each field's description
-          carried on its property, resolving the names a producer's type uses inside that producer's
-          own closure, until none is left unrendered; derive components.securitySchemes from the
-          entries' projected auth (deduplicating identical schemes, attaching each requirement —
-          with oauth2 scopes — to its operations; a custom scheme an apiKey only where auth.name
-          names its header or parameter, else an http scheme `custom`); name the basePath once as
-          x-wairon-base-path and declare no servers; and set the info block from the portal's name,
-          the context's declared version (else the snapshot's, else 0.0.0), the StateId and
-          generatedAt.
+          param left (a named data type, never a scalar, list, map or enum — an optional one or one
+          typed `T?` included, the body then optional or nullable rather than wrapped) AS the body,
+          required unless the param is optional, named under x-wairon-body-param so a reader puts it
+          back, and several params as the properties of a body object — a param or field required
+          unless it is optional or typed `T?`; the success response under the endpoint's own
+          `status` when it states one (a 3xx a redirect with a Location header and no body), else
+          its conventional code — 204 with no content for a method returning nothing; 201 Created
+          for a POST that creates: a method whose effect is `lifecycle` (it brings an entity into
+          existence), or one whose effect is undeclared, `write` or `io` and whose name says it
+          creates (create, add, new, register, sign up, place, open, insert, submit, upload, start,
+          issue, book); else 200 and, for a `result<T, E>` returns, a `default` response whose body
+          is E's schema; guarantees and effect noted as extensions; each param and return type
+          parsed (type_expression.parse) and rendered from its canonical expression; the components
+          are exactly the types the operations reach, transitively, each identified by its owning
+          project and its id there — an own type by its id, `alias::name` from the context's pinned
+          snapshot or member surface, a qualified closure id naming a project the context holds read
+          as that project's type — so a type reached under several aliases, a member's project id or
+          another producer's closure is rendered ONCE, under `<alias>.<id>` for the first alias the
+          context holds its project under, every key matching `^[a-zA-Z0-9._-]+$` (`::` written
+          `.`), each field's description carried on its property, resolving the names a producer's
+          type uses inside that producer's own closure, until none is left unrendered; derive
+          components.securitySchemes from the entries' projected auth (deduplicating identical
+          schemes, attaching each requirement — with oauth2 scopes — to its operations; a custom
+          scheme an apiKey only where auth.name names its header or parameter, else an http scheme
+          `custom`); name the basePath once as x-wairon-base-path and declare no servers; and set
+          the info block from the portal's name, the context's declared version (else the
+          snapshot's, else 0.0.0), the StateId and generatedAt.
         type: local
       - stepNumber: 7
         description: >-
@@ -194,4 +195,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-10-09T00:18:56.628Z'
+updatedAt: '2026-10-09T11:22:27.961Z'

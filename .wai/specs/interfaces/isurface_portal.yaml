@@ -169,6 +169,23 @@ methods:
     returns: map<string, list<string>>
     params: []
     effect: read
+  - name: memberApprovedSurfaces
+    description: >-
+      Each live member of the bound project projected at the approval it is judged against, keyed by
+      alias — what binding conformance compares a binding into a member with beside its live export.
+      Pure 1:1 forward.
+    signature: 'memberApprovedSurfaces(): map<string, SurfaceSnapshot>'
+    returns: map<string, SurfaceSnapshot>
+    params: []
+    effect: io
+  - name: memberStatuses
+    description: >-
+      Each live member of the bound project compared with the approval it is judged against — a
+      member's relation health beyond resolution failures. Pure 1:1 forward.
+    signature: 'memberStatuses(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+    effect: io
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-07T18:32:26.953Z'
+updatedAt: '2026-10-09T11:38:40.581Z'

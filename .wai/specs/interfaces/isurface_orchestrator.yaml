@@ -295,8 +295,33 @@ methods:
     returns: map<string, list<string>>
     params: []
     effect: read
+  - name: memberApprovedSurfaces
+    description: >-
+      Each live member of the bound project (contained or a `../` sibling, never pinned) projected
+      as its tree stood at the approval it is judged against — the one the bound project's lock
+      records for it, else the member's own last committed approval — keyed by the alias the bound
+      project declares it under: what a binding into a member is compared with beside the member's
+      live export, so a name the member dropped since its approval is named as removed. A member
+      with no such revision is left out. Read-only.
+    signature: 'memberApprovedSurfaces(): map<string, SurfaceSnapshot>'
+    returns: map<string, SurfaceSnapshot>
+    params: []
+    effect: io
+  - name: memberStatuses
+    description: >-
+      Each live member of the bound project compared with the approval it is judged against, as an
+      external is with its pin: every used member's digest in the member's live projection against
+      the one its approved surface carries — unchanged, changed (with the field renames and the
+      route a client spells), renamed or removed per the member's rename trace — and drifted when
+      the live content digest or a carried fact moved since; a use the approval does not hold is the
+      family run's to judge live, and is left out. A member with no approved revision is left out
+      (the family run judges it live). Read-only; the caller gates on reach.
+    signature: 'memberStatuses(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+    effect: io
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-09T00:19:20.504Z'
+updatedAt: '2026-10-09T11:38:34.382Z'

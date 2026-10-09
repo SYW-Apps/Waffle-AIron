@@ -125,6 +125,20 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: unrecordedUses
+  - name: memberApprovedSurfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward memberApprovedSurfaces to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: memberApprovedSurfaces
+  - name: memberStatuses
+    narrative:
+      - stepNumber: 1
+        description: Forward memberStatuses to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: memberStatuses
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-07T18:32:51.760Z'
+updatedAt: '2026-10-09T11:38:41.925Z'

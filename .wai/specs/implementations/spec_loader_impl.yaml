@@ -294,8 +294,36 @@ methods:
         targetComponent: spec_index
         targetMethod: typePath
     symbol: getTypePath
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: lockTree
+  - name: unlockTree
+    narrative:
+      - stepNumber: 1
+        description: Release the write lock under the bound project root
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: unlockTree
+  - name: readPinnedSpec
+    narrative: []
+    detail: intent
+    intent: >-
+      Splits the id at its first `::`: the head must be an alias the bound project declares as an
+      external (a member's alias is not one — its specs are read under its key), the rest a public
+      name. Reads that alias's pinned snapshot (.wai/externals/<alias>.yaml) through the file store
+      and parses it as a surface snapshot; an absent or unreadable pin answers null. For a component
+      or an interface asked for (or no kind), answers the contract entry whose public name matches;
+      for a type, the exported type under that public name (its definition from the snapshot's type
+      closure). The answer carries the alias, the producer project, the snapshot file and its
+      StateId beside the entry, and is never cached or written: it is the pin's record, read-only.
+    calls:
+      - spec_file_store.read
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:43:53.474Z'
+updatedAt: '2026-10-09T12:15:22.119Z'

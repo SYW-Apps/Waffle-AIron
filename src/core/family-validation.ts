@@ -31,7 +31,7 @@ import {
   resolveChainingParent,
   resolveProjectExports,
 } from './adapters/validator-core.js';
-import { getExternalsStatus, listPinnedExternals, unrecordedUses } from './adapters/validator-surfaces.js';
+import { getExternalsStatus, listPinnedExternals, memberStatuses, unrecordedUses } from './adapters/validator-surfaces.js';
 import { dependencyCycles, declaredExternals, declaredMembers, familyNode, keyIn, relationHealth, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
 import { admits, projectIdentity, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
@@ -650,10 +650,14 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
           : '')
         + `Adapt the uses${renamed ? ' (follow the rename)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
     }
-    case 'drifted':
-      // Step 8.
-      return advisory(config, 'EXTERNAL_DRIFTED',
-        `The live producer of ${who} moved since it was pinned, but nothing this project uses changed.${staleTail(status)} Re-pin when convenient (${repin(status.alias)}).`);
+    case 'drifted': {
+      // Step 8: a used verb whose route moved is named — a client spelling the route must follow.
+      const routes = status.uses.filter((u) => u.state === 'unchanged' && u.detail?.startsWith('endpoint moved: '));
+      const lead = routes.length
+        ? `The live producer of ${who} moved since it was pinned: the route of ${routes.map((u) => `${useName(u)} (${u.detail!.slice('endpoint moved: '.length).split(' — ')[0]})`).join(', ')} moved. The signatures this project uses are unchanged, but a client that spells the route (a hand-written HTTP client, a binding) must follow.`
+        : `The live producer of ${who} moved since it was pinned, but nothing this project uses changed.`;
+      return advisory(config, 'EXTERNAL_DRIFTED', `${lead}${staleTail(status)} Re-pin when convenient (${repin(status.alias)}).`);
+    }
     case 'unavailable': {
       // Step 9b: a pinned external used beyond its pin, everything else
       // compared: the live producer HAS the uses, but the pin records nothing
@@ -1245,8 +1249,14 @@ function failureAt(ref: AuthoredReference, failures: ValidationIssue[]): Validat
     && (i.resolution!.canonicalTarget === ref.authored || (i.resolution!.canonicalTarget ?? '').endsWith(`::${last}`)));
 }
 
-/** Step 11: one contained member's relation, from the consumer's own gate findings on its references into it. */
-function containedStatus(child: ProjectNode, refs: AuthoredReference[], failures: ValidationIssue[]): ExternalStatus {
+/**
+ * Step 12: one contained member's relation — the consumer's own gate findings
+ * on its references into it first, then the member compared with the approval
+ * it is judged against (`approved`, when it has one): a used member that
+ * changed, was renamed or went away since reads as it would on a pin, and the
+ * member's own drift is carried.
+ */
+function containedStatus(child: ProjectNode, refs: AuthoredReference[], failures: ValidationIssue[], approved?: ExternalStatus): ExternalStatus {
   const base = { alias: child.mountAlias!, project: child.id ?? child.namespace, sourceKind: 'family' as const, pinned: false };
   const unreachable = outsideReach(child);
   if (unreachable) {
@@ -1256,12 +1266,26 @@ function containedStatus(child: ProjectNode, refs: AuthoredReference[], failures
   const uses: ExternalStatus['uses'] = [];
   for (const ref of refs) {
     const failed = failureAt(ref, failures);
-    const use: ExternalStatus['uses'][number] = failed
-      ? { publicName: referenceUse(ref), state: 'removed', code: failed.code, detail: failed.resolution!.reason }
-      : { publicName: referenceUse(ref), state: 'unchanged' };
+    if (!failed) {
+      // Compared with its approved surface: every verdict on this public name, or unchanged.
+      const compared = (approved?.uses ?? []).filter((u) => u.publicName === referenceUse(ref));
+      for (const use of compared.length ? compared : [{ publicName: referenceUse(ref), state: 'unchanged' as const }]) {
+        if (!uses.some((u) => u.publicName === use.publicName && u.member === use.member && u.state === use.state)) uses.push(use);
+      }
+      continue;
+    }
+    const use: ExternalStatus['uses'][number] = { publicName: referenceUse(ref), state: 'removed', code: failed.code, detail: failed.resolution!.reason };
     if (!uses.some((u) => u.publicName === use.publicName && u.state === use.state)) uses.push(use);
   }
-  return { ...base, reachable: true, stale: uses.some((u) => u.state === 'removed'), uses, detail: 'a contained member, read live — nothing is pinned' };
+  return {
+    ...base,
+    reachable: true,
+    stale: uses.some((u) => u.state === 'removed' || u.state === 'changed' || u.state === 'renamed'),
+    ...(approved?.drifted ? { drifted: true } : {}),
+    ...(approved?.staleFacts?.length ? { staleFacts: approved.staleFacts } : {}),
+    uses,
+    detail: approved ? `a live member, nothing pinned — ${approved.detail ?? 'compared with its approval'}` : 'a contained member, read live — nothing is pinned',
+  };
 }
 
 /** Steps 7-11: with one project's root bound, a status per contained project member it references that no status already answers. */
@@ -1281,8 +1305,15 @@ function containedRelations(answered: ExternalStatus[]): ExternalStatus[] {
   const config = configOrNull();
   const failures = validateProject({ rules: config?.rules, projectType: config?.projectType })
     .issues.filter((i) => i.resolution !== undefined && i.resolution.outcome !== 'resolved');
-  // Step 11.
-  return consumed.map(({ child, refs }) => containedStatus(child, refs, failures));
+  // Step 11: each member compared with the approval it is judged against — never a failure of the read.
+  let approved: ExternalStatus[] = [];
+  try {
+    approved = memberStatuses();
+  } catch {
+    approved = [];
+  }
+  // Step 12.
+  return consumed.map(({ child, refs }) => containedStatus(child, refs, failures, approved.find((s) => s.alias === child.mountAlias)));
 }
 
 /** Steps 5-12: one project's relations, bound to its own root within the reach. */

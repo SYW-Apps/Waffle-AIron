@@ -134,7 +134,11 @@ methods:
           owns; an implementer's: the types whose componentClass its component is, and the types
           only its own contracts use — a type's own file and its methods'). A file the specs of
           another subsystem (for an implementer, another component) also name is no single fence's —
-          a shared models module — and is left out, so no path has two owners; the brief lists it as
+          a shared models module, or one types file holding the entity types of two components — and
+          is left out whichever way it is named: a componentClass claims its type's file only when
+          no other component's specs name that file too. A last pass holds the invariant outright: a
+          file that still lands in two implementers' fences (an inferred fallback path meeting a
+          named one) is taken out of both. So no path has two owners; the brief lists such a file as
           shared. An implementer's readPaths are the system spec, its component, contract and
           implementation specs, the specs of the types its contracts use and of the types their
           fields name, its dependencies' contract specs and the files that realize them. A planned
@@ -242,33 +246,51 @@ methods:
           locally — or a shared binding module), and, where they exist, the project setup files from
           the project root down to each folder of its files (package.json and its lockfile,
           tsconfig.json, Cargo.toml, pyproject.toml, go.mod), the package or crate roots in those
-          folders (index.ts, lib.rs, main.rs, mod.rs, __init__.py) and the source files beside its
-          own that no spec names, capped so the brief stays small. The section states the rule for
-          them once: create or extend a shared or unnamed file (a helper, the composition root, test
-          setup, a module manifest beside its code) only for this component's needs, and name each
-          in the report; a shared file that would need a responsibility of its own (domain logic,
-          held state, a decision the design does not make) is a design change — stop and report it.
-          So a first implementation (composition root, module setup, test setup) is never blocked,
-          and nothing it writes outside its own files is silent. An implementer's readPaths add the
-          specs of every type its contracts use (and of the types their fields name), its
-          dependencies' contracts and the files realizing them, so it reads the code it will call
-          instead of guessing it. The mapping: find the language the record's implementations are
-          written in (their technologies' language, else the language their source files are
-          analyzed as, else the language a planned file's extension names, else the L0
-          targetLanguage), take its write table (type_dialect.mappingFor — a shipped dialect's, or a
-          mapping-only table for a language no analyzer reads yet, which says so) and, when there is
-          one, carry it as the brief's typeMapping and as a '## Types in <language>' section of the
-          instructions — so an implementer maps `list<T>`, `T?`, `async T` and an enum by rule
-          rather than by guess. The externals: for a component the record implements that reaches
-          another project — a dependsOn, a narrative or declared call, an `implements`, or a type
-          its contracts' params and returns write, naming `alias::name` — a '## Externals used'
-          section names each alias, the names it uses, the transport and abi of the producer Portal
-          where the pin records them, the pinned snapshot `.wai/externals/<alias>.yaml`, which also
-          joins readPaths (the pin is the contract the consumer codes against) — or, for a contained
-          member project (named by its alias or its project id), that member's L0 export table read
-          live, its root named and never a pin to take — and the binding modules its implementations
-          name, which spell the producer's names exactly as the pin does. An agent that implements
-          nothing gets none of these
+          folders (index.ts, lib.rs, main.rs, mod.rs, __init__.py) — existing, or planned where a
+          spec names one, so a first-wave module beside its Portal's planned mod.rs may add the line
+          declaring itself, and a module root another agent's fence holds takes only that line — and
+          the source files beside its own that no spec names, capped so the brief stays small. The
+          section states the rule for them once: create or extend a shared or unnamed file (a
+          helper, the composition root, test setup, a module manifest beside its code) only for this
+          component's needs, and name each in the report; a shared file that would need a
+          responsibility of its own (domain logic, held state, a decision the design does not make)
+          is a design change — stop and report it. So a first implementation (composition root,
+          module setup, test setup) is never blocked, and nothing it writes outside its own files is
+          silent. An implementer's readPaths add the specs of every type its contracts use (and of
+          the types their fields name), its dependencies' contracts and the files realizing them, so
+          it reads the code it will call instead of guessing it. The mapping: find the language the
+          record's implementations are written in (their technologies' language, else the language
+          their source files are analyzed as, else the language a planned file's extension names,
+          else the L0 targetLanguage), take its write table (type_dialect.mappingFor — a shipped
+          dialect's, or a mapping-only table for a language no analyzer reads yet, which says so)
+          and, when there is one, carry it as the brief's typeMapping and as a '## Types in
+          <language>' section of the instructions — so an implementer maps `list<T>`, `T?`, `async
+          T` and an enum by rule rather than by guess. The externals: for a component the record
+          implements that reaches another project — a dependsOn, a narrative or declared call, an
+          `implements`, or a type its contracts' params and returns write, naming `alias::name` — a
+          '## Externals used' section names each alias, the names it uses, the transport and abi of
+          the producer Portal where the pin records them, the pinned snapshot
+          `.wai/externals/<alias>.yaml`, which also joins readPaths (the pin is the contract the
+          consumer codes against) — or, for a contained member project (named by its alias or its
+          project id), that member's L0 export table read live, its root named and never a pin to
+          take, each used name spelled by its PUBLIC name in that table (the internal id the loader
+          resolved a reference to is mapped back through the table's entries) — and the binding
+          modules its implementations name, which spell the producer's names exactly as the pin does
+          (for a member, as its live export table names them). The code linkage the implementer
+          owns: a record whose components include a Portal gets a '## Handler shape' section — each
+          verb's function takes the contract's own parameters in order under the contract's names;
+          the handles its framework hands it (a request, a response, a context, next) are wiring,
+          named in the implementation's injectedParams at the start or the end of the list; where
+          the framework hands the function the request alone, each contract parameter is read off it
+          by its own name (the request's params, query or body, or a URL's searchParams); the router
+          linkage names the entry its file exports or a central route table; and the conformance
+          dial `off` is for generated or vendored code only and never switches the doctrine off.
+          Every record with a fence is told that injectedParams are code linkage the implementer
+          declares once its code takes such a parameter (sdd_write_narrative injectedParams, or
+          sdd_update_spec — no re-lock), never guessed at design time, and the ones its
+          implementations already declare are listed as possibly design-time guesses, to be removed
+          when the code does not take them (UNUSED_INJECTED_PARAM). An agent that implements nothing
+          gets none of these
         type: local
       - stepNumber: 14
         description: >-
@@ -293,4 +315,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T18:58:42.180Z'
+updatedAt: '2026-10-09T11:21:51.967Z'

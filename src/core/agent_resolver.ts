@@ -529,9 +529,14 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
         if (owners.size === 1 && owners.has(comp.id)) add(file);
       }
       // The types this component realizes (its componentClass) are its code
-      // too, whoever else's contract uses them.
+      // too, whoever else's contract uses them — but only in a file no other
+      // component's specs name: one types file holding the entity types of
+      // two Stores is neither Store's to fence.
       for (const type of types.filter((t) => t.componentClass === comp.id && t.subsystem === comp.subsystem)) {
-        for (const file of typeSourceFiles(type)) add(file);
+        for (const file of typeSourceFiles(type)) {
+          const owners = claims.get(file);
+          if (!owners || [...owners].every((o) => o === comp.id)) add(file);
+        }
       }
 
       const namesAny = compImpls.some((impl) => codeLocationsOf(impl).length > 0);
@@ -580,6 +585,18 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
         createdAt: comp.createdAt,
         updatedAt: comp.updatedAt,
       });
+    }
+
+    // The invariant held outright: no file in two implementers' fences. A
+    // file that still lands in two (an inferred fallback path meeting a named
+    // one) is taken out of both — the briefs list it as shared instead.
+    const implementerRecords = agents.filter((a) => a.template === 'implementer');
+    const fencedBy = new Map<string, number>();
+    for (const r of implementerRecords) for (const p of r.ownedPaths) fencedBy.set(p, (fencedBy.get(p) ?? 0) + 1);
+    for (const r of implementerRecords) {
+      if (!r.ownedPaths.some((p) => (fencedBy.get(p) ?? 0) > 1)) continue;
+      r.ownedPaths = r.ownedPaths.filter((p) => (fencedBy.get(p) ?? 0) <= 1);
+      r.writePaths = r.ownedPaths;
     }
   }
 
@@ -685,10 +702,11 @@ export function composeAgentBrief(agentId: string): AgentBrief {
         ? 'Every file this agent\'s specs name is named by another component\'s specs too, so none is this agent\'s alone: they are listed as shared below.\n'
         : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n';
     const sharedSection = sharedPaths.length > 0
-      ? `\nShared, owned by no single agent — create or extend these only for what this component needs (an import, a wiring line, a module setting), and name each one you touch in your report. A shared type file is created at its planned home exactly as its spec declares it, never redeclared in your own file:\n\n${sharedPaths.map(shown).join('\n')}\n`
+      ? `\nShared, owned by no single agent — create or extend these only for what this component needs (an import, a wiring line, a module setting), and name each one you touch in your report. A shared type file is created at its planned home exactly as its spec declares it, never redeclared in your own file. A module root listed here (\`mod.rs\`, \`index.ts\`, \`__init__.py\`) may be another agent's file: add only the line that declares or re-exports your module:\n\n${sharedPaths.map(shown).join('\n')}\n`
       : '';
     const rule = '\nA file no spec names — a shared helper, the composition root, test setup, a module manifest beside your code — may be created or extended the same way, for this component\'s needs only. If a shared or unnamed file would need a responsibility of its own (domain logic, held state, a decision the design does not make), that is a design change: stop and report it instead of writing it.\n';
     instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${ownSection}${sharedSection}${rule}`;
+    instructions = `${instructions.trimEnd()}\n\n${linkageSection(record)}`;
   }
 
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
@@ -716,9 +734,16 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   let readPaths = record.readPaths;
   if (externals.length > 0) {
     const bindings = bindingModulesOf(record);
+    // What the binding is compared with: a pin, a member's live export table, or either.
+    const membersOnly = externals.every((e) => e.member);
+    const pinsOnly = externals.every((e) => !e.member);
+    const source = membersOnly
+      ? 'the member\'s live L0 export table names them now'
+      : pinsOnly ? 'the pin has them' : 'the pin has them (for a member, as its live L0 export table names them now)';
+    const comparedWith = membersOnly ? 'that table' : pinsOnly ? 'the pin' : 'the pin or the table';
     const bindingNote = bindings.length > 0
-      ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as the pin has them (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.\n`
-      : '\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as `bindings` — code linkage, no re-lock — so `validate` compares it with the pin.\n';
+      ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as ${source} (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.\n`
+      : `\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as \`bindings\` — code linkage, no re-lock — so \`validate\` compares it with ${comparedWith}.\n`;
     instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot (for a member project, its live L0 export table), never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
     readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
   }
@@ -945,6 +970,33 @@ const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', 
 /** At most this many unnamed sibling files are listed, so the brief stays small. */
 const MAX_UNNAMED_SIBLINGS = 8;
 
+/**
+ * The code linkage the implementer owns, as brief sections: for a record
+ * whose components include a Portal, the honest handler shape; for every
+ * record with a fence, that injectedParams are declared once the code takes
+ * such a parameter — never guessed at design time — with the ones its
+ * implementations already declare, which may be such guesses.
+ */
+function linkageSection(record: AgentRecord): string {
+  const comps = scopeComponents(record);
+  const ids = new Set(comps.map((c) => c.id));
+  const contractOwner = new Map(loadInterfaceSpecs().map((i) => [i.id, i.component]));
+  const impls = loadImplementationSpecs().filter((impl) => ids.has(contractOwner.get(impl.contract) ?? ''));
+  const parts: string[] = [];
+  if (comps.some((c) => c.componentType === 'Portal')) {
+    parts.push('## Handler shape\n\n'
+      + 'Each verb\'s function takes the contract\'s OWN parameters, in order, under the contract\'s names. What its framework hands it besides those — a request, a response, a context, `next` — is wiring: name it in the implementation\'s `injectedParams` (it matches at the start or the end of the list, with or without a leading `_`). Two honest shapes: the router unpacks the path, query and body and calls the verb with the contract\'s parameters; or the function gets the request alone and reads each contract parameter off it by its own name (`req.params.<name>`, `req.query.<name>`, `req.body.<name>`, `url.searchParams.get(\'<name>\')`). A `(req, res)` handler that reads nothing by the contract\'s names is reported as substitutions. Set the implementation\'s `router` to the entry its file exports, or to a central route table (`src/routes.ts#ROUTES`). `conformance: off` is only for generated or vendored code: it switches the realization checks off, never the doctrine. The full rules: `sdd-implement`, **Handler shape** and **Routers**.\n');
+  }
+  const declared = impls.filter((impl) => (impl.injectedParams ?? []).length > 0);
+  const listed = declared.length > 0
+    ? ` Declared now: ${declared.map((impl) => `\`${impl.id}\`: [${(impl.injectedParams ?? []).join(', ')}]`).join('; ')}. These may be guesses written before any code existed: keep the ones your code really takes and remove the rest with \`sdd_update_spec\` (\`{"injectedParams": [{"value": "<name>", "action": "delete"}]}\`, or \`[]\` to clear) — an injection no function takes is UNUSED_INJECTED_PARAM.`
+    : '';
+  parts.push('## Code linkage you own\n\n'
+    + '`injectedParams` are code linkage, not design: declare them only when your code takes a parameter its framework or wiring imposes beside the contract\'s own (a request handle, a context), with `sdd_write_narrative` (`injectedParams`) or `sdd_update_spec` — no re-lock. A dependency held as a field or passed to a constructor is not one.'
+    + `${listed}\n`);
+  return parts.join('\n');
+}
+
 /** Whether any implementation of the record's components names a code file at all. */
 function namesAnyCode(record: AgentRecord): boolean {
   const ids = new Set(scopeComponents(record).map((c) => c.id));
@@ -997,12 +1049,18 @@ function sharedFilesOf(record: AgentRecord, fence: string[]): string[] {
   for (const dir of [...chain].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
     for (const file of SHARED_SETUP_FILES) if (fs.existsSync(path.join(root, dir, file))) add(join(dir, file));
   }
-  for (const dir of ownFolders) {
-    for (const file of SHARED_ROOT_FILES) if (fs.existsSync(path.join(root, dir, file))) add(join(dir, file));
-  }
-  // The unnamed source files beside its own: shared helpers, a composition root.
+  // The package or crate roots of its folders — existing, or PLANNED where a
+  // spec names one (a Portal's mod.rs): a first-wave module beside it needs
+  // the one line that declares it there.
   const named = new Set<string>(claims.keys());
   for (const type of types) for (const file of typeSourceFiles(type)) named.add(file);
+  for (const dir of ownFolders) {
+    for (const file of SHARED_ROOT_FILES) {
+      const rootFile = join(dir, file);
+      if (named.has(rootFile) || fs.existsSync(path.join(root, dir, file))) add(rootFile);
+    }
+  }
+  // The unnamed source files beside its own: shared helpers, a composition root.
   let siblings = 0;
   for (const dir of ownFolders) {
     let entries: fs.Dirent[] = [];
@@ -1101,7 +1159,11 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
     if (node) {
       // A contained member is read live: its L0 export table is the contract, never a pin.
       const system = path.relative(root, path.join(node.directory, '.wai', 'specs', '.index.yaml')).replace(/\\/g, '/');
-      out.push({ alias, names: [...names].sort(), pin: system, pinned: true, bindings: new Map(), member: { id: node.id ?? node.namespace, system } });
+      // Spelled by the PUBLIC names of its export table: the loader resolves
+      // `geo::distance` to the internal id it names, which the brief maps back.
+      const publicName = memberPublicNames(path.join(node.directory, '.wai', 'specs', '.index.yaml'));
+      const spelled = [...new Set([...names].map((n) => publicName.get(n) ?? n))].sort();
+      out.push({ alias, names: spelled, pin: system, pinned: true, bindings: new Map(), member: { id: node.id ?? node.namespace, system } });
       continue;
     }
     const pin = `.wai/externals/${alias}.yaml`;
@@ -1116,6 +1178,24 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
     } catch { /* no pin on disk: named as unpinned */ }
     out.push({ alias, names: [...names].sort(), pin, pinned, bindings });
   }
+  return out;
+}
+
+/**
+ * A member's L0 export table read as internal id → public name: each entry's
+ * component or typeDef under the name it is exported `as`. Empty when the
+ * table cannot be read — the internal ids are then shown as they are.
+ */
+function memberPublicNames(systemSpec: string): Map<string, string> {
+  const out = new Map<string, string>();
+  try {
+    const doc = readYamlFile(systemSpec) as { publicInterfaces?: Array<{ component?: string; typeDef?: string; as?: string; name?: string }> } | null;
+    for (const entry of doc?.publicInterfaces ?? []) {
+      const exported = entry.as ?? entry.name;
+      const internal = entry.component ?? entry.typeDef;
+      if (internal && exported && !out.has(internal)) out.set(internal, exported);
+    }
+  } catch { /* unreadable: the ids are shown as they are */ }
   return out;
 }
 

@@ -237,7 +237,7 @@ methods:
       - stepNumber: 4
         description: >-
           Find the producer's node by its directory; none means nothing in the family read consumes
-          it
+          it — the projects composing it from a path are still looked for
         type: branch
         condition: the producer's node is in the graph
         onFalseStep: 9
@@ -272,23 +272,65 @@ methods:
           names it still writes that bind to none (broken), sorted
         type: local
       - stepNumber: 9
+        label: parents
+        description: >-
+          May the folders around the bound root be read for a project that composes it as a member
+          from a `../` path, which no climb reaches?
+        type: branch
+        condition: >-
+          the request is local (no hosted record lookup is bound) and its reach does not stop at its
+          own root
+        onFalseStep: 14
+      - stepNumber: 10
+        label: parentRoots
+        description: For each project root enclosed with the bound one
+        type: loop
+        loopKind: forEach
+        over: >-
+          the project roots directly under the folders enclosing the bound root and the highest root
+          reached — other than those two and the roots the family listed; a folder holding more than
+          256 folders (a temp or home directory, never a checkout folder) is not read without a
+          search
+        endStep: 13
+      - stepNumber: 11
+        description: Does it compose the producer as a member from a path?
+        type: branch
+        condition: >-
+          its configuration file — read straight, parsed only when it declares members — declares a
+          member whose path source (a `../` sibling, or a contained path) resolves to the bound root
+        onFalseStep: 10
+      - stepNumber: 12
+        description: Read that root's project graph, bound to it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 13
+        label: parentFound
+        description: >-
+          Record every project of that graph that declares the producer — the composing root itself
+          first — as the family's consumers are recorded: a parent that composes this project is a
+          consumer the climb cannot reach
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 14
         label: search
         description: >-
           Searched folders: the project roots outside the family that declare the producer are
           looked for there
         type: branch
         condition: folders were given to search
-        onFalseStep: 16
-      - stepNumber: 10
+        onFalseStep: 21
+      - stepNumber: 15
         description: A hosted request reads its own project's records, never a folder on the server's disk
         type: branch
         condition: the request is a hosted one (a hosted record lookup is bound)
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 17
+      - stepNumber: 16
         description: Refuse the search for a hosted request
         type: throw
         error: searching folders is a local read
-      - stepNumber: 12
+      - stepNumber: 17
         label: roots
         description: For each project root a searched folder holds
         type: loop
@@ -296,32 +338,36 @@ methods:
         over: >-
           the project roots in, or directly under, each searched folder — other than the bound root
           and the roots the family listed
-        endStep: 15
-      - stepNumber: 13
-        description: Does it declare the producer as an external, by path or by git?
+        endStep: 20
+      - stepNumber: 18
+        description: Does it declare the producer as an external, by path or by git — or as a member by a path?
         type: branch
         condition: >-
           its configuration declares an external whose path source resolves to the bound root, or
-          whose git source names the producer's project id
-        onFalseStep: 12
-      - stepNumber: 14
+          whose git source names the producer's project id, or a member whose path source resolves
+          to the bound root
+        onFalseStep: 17
+      - stepNumber: 19
         description: Read that root's project graph, bound to it, to find its node
         type: call
         targetComponent: spec_loader
         targetMethod: graph
-      - stepNumber: 15
+      - stepNumber: 20
         label: found
         description: >-
           Count the public names its specs spell through the alias, each with the methods its
           references reach (`uses`), and record it as a consumer found by the search (found: search)
+          — for a root that declares it as a member, every project of that root's graph that
+          declares the producer, each with its export usage (spec_loader.exportUsage), as the
+          composing parents are recorded
         type: call
         targetComponent: spec_loader
         targetMethod: pinnedUsage
-      - stepNumber: 16
+      - stepNumber: 21
         label: done
         description: >-
           Restore the caller's binding and answer the family's consumers (ordered by key), then the
-          searched ones (ordered by root)
+          composing parents', then the searched ones (ordered by root)
         type: return
         outcome: ExternalConsumer[]
     detail: full
@@ -388,6 +434,74 @@ methods:
         type: throw
         error: no git work tree
     detail: full
+  - name: memberRevisions
+    narrative:
+      - stepNumber: 1
+        description: A hosted request reads no folder outside its own records
+        type: branch
+        condition: the request is a hosted one (a hosted record lookup is bound)
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer no member
+        type: return
+        outcome: none
+      - stepNumber: 3
+        description: >-
+          Read the bound project's graph: its direct live members, each with its alias and root, and
+          its own namespace
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
+        description: >-
+          Read the bound project's lock record, if any: the composition subject it records for each
+          member (`members.<alias>.subject`, `<algorithm>:<digest>`)
+        type: local
+      - stepNumber: 5
+        label: member
+        description: For each live member
+        type: loop
+        loopKind: forEach
+        over: >-
+          the graph's direct project members that are contained or `../` siblings (never a part, a
+          git or a hosted one)
+        endStep: 10
+      - stepNumber: 6
+        description: Map the bound project's references into it onto its public names
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 7
+        description: >-
+          The commit of the member's own `.wai/lock.json` that introduced the digest the lock
+          records for it, when it records one
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: commitIntroducing
+      - stepNumber: 8
+        description: Else (no record, or no commit holds it) the member's own last committed approval
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: lastCommitOf
+      - stepNumber: 9
+        description: >-
+          Materialize the member's tree at that commit, read-only, in the fetch cache — skipped when
+          no commit was found or the member is in no work tree (then it has no revision)
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 10
+        label: recorded
+        description: >-
+          Record the member: alias, project id, root, usage and the revision (its directory, commit
+          and label — the approval this project's lock records, or the member's own last approval);
+          a git failure leaves the revision out, never fails the read
+        type: local
+      - stepNumber: 11
+        description: Answer one entry per live member, in declaration order
+        type: return
+        outcome: list<member_revision>
+    detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-07T18:42:20.456Z'
+updatedAt: '2026-10-09T12:01:13.186Z'

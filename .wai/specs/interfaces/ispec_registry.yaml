@@ -159,6 +159,15 @@ methods:
         description: The edits for this spec
     guarantees:
       - idempotent
+  - name: lockTree
+    description: >-
+      Take the cross-process write lock of the bound project's spec tree (spec_file_store.lockTree),
+      then make every workspace re-read its tree's file signature on its next scan, instead of after
+      the cache's time-to-live: a write that follows reads what another session wrote before it,
+      never a cached tree. Two sessions writing one spec serialize instead of losing one write.
+    signature: 'lockTree(): void'
+    returns: void
+    effect: io
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-10-04T23:37:47.891Z'
+updatedAt: '2026-10-09T12:16:30.715Z'

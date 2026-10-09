@@ -30,8 +30,8 @@ methods:
       loses data unannounced. A dry run takes the same path and is refused exactly as the write
       would be.
     signature: >-
-      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
-      SpecChangeReport
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool, tool?:
+      string): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -46,6 +46,12 @@ methods:
       - name: dryRun
         type: bool
         description: Answer with what the delta would do and write nothing
+        optional: true
+      - name: tool
+        type: string
+        description: >-
+          The tool the caller answers for, named in a project-boundary refusal; sdd_update_spec when
+          omitted
         optional: true
   - name: moveMethods
     description: >-
@@ -153,7 +159,9 @@ methods:
       Portal) rides along as a notice — then the move is written through the core adapter. A type is
       moved without judgement: it carries no edges. A dry run answers the plan and the notices and
       writes nothing.
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
+      list<string>): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -170,6 +178,13 @@ methods:
         type: bool
         description: Answer what the move would do and write nothing
         optional: true
+      - name: together
+        type: list<string>
+        description: >-
+          More specs of the same kind moving with it to the same subsystem: every one is planned,
+          the components are judged in their tree together with their new subsystem, and all are
+          written or none
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-09T00:30:59.454Z'
+updatedAt: '2026-10-09T11:30:44.099Z'

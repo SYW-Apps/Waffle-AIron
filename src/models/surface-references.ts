@@ -80,7 +80,16 @@ function closureTypeOf(snapshot: SurfaceSnapshot, identifier: string): SurfaceTy
   const ref = local.join('::');
   const matches = snapshot.types.filter((def) => matchTypeRef(ref, def.id));
   if (matches.length === 1) return matches[0];
-  return matches.find((def) => nameKey(def.id) === nameKey(ref));
+  const exact = matches.find((def) => nameKey(def.id) === nameKey(ref));
+  if (exact || matches.length > 0) return exact;
+  // `orders.order`: a subsystem-qualified spelling of a local record the
+  // closure holds unqualified (the projector qualifies an id only when two
+  // subsystems share it). A `::` spelling names another project — never this.
+  if (local.length === 2 && !identifier.includes('::')) {
+    const unqualified = snapshot.types.filter((def) => !def.id.includes('::') && !def.id.includes('.') && nameKey(def.id) === nameKey(local[1]));
+    if (unqualified.length === 1) return unqualified[0];
+  }
+  return undefined;
 }
 
 /** The expression with every named reference rewritten through `rename`, the structure kept. */
@@ -246,6 +255,12 @@ export function carriedFactChanges(pinned: SurfaceSnapshot, live: SurfaceSnapsho
       const nowMethod = liveMethods.get(method.name);
       if (!nowMethod) continue;
       differs(`effect of ${entry.id}.${method.name}`, method.effect, nowMethod.effect);
+      // The wire endpoint a hand-written client spells: no digest reads it, so
+      // a moved route is a carried fact, named with where it went. A pin that
+      // recorded no endpoint (an older pin, or a verb bound since) moves nothing.
+      if (method.endpoint && factValue(method.endpoint) !== factValue(nowMethod.endpoint)) {
+        changes.push(`endpoint of ${entry.id}.${method.name} (${shownEndpoint(method.endpoint)} → ${shownEndpoint(nowMethod.endpoint)})`);
+      }
       differs(`rename trace of ${entry.id}.${method.name}`, method.formerly, nowMethod.formerly);
       // A parameter's name is no part of a signature digest, so a rename never
       // breaks a caller — but the pin still spells the old name: named with
@@ -326,7 +341,11 @@ export interface SurfaceChange {
 
 /** A contract method's signature as a changelog shows it. */
 function shownSignature(method: MethodSignature): string {
-  return method.signature || `${method.name}(${(method.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${method.returns}`;
+  // Structured params are read as they are: each parameter under its own
+  // name, never a prose signature whose names a canonicalizer may have
+  // mistaken for types (`order_id: order_id`).
+  const derived = `${method.name}(${(method.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${method.returns}`;
+  return (method.params?.length ? derived : method.signature) || derived;
 }
 
 /** The facts of a contract entry a consumer's pin carries beside its digests, as (label, before, after). */
@@ -500,6 +519,61 @@ function renamesIn(ids: string[], notes: Map<string, string[]>): string[] {
 }
 
 /**
+ * The closure ids a method reaches THROUGH one of the surface's own
+ * unexported records: every type an unexported type it names (directly, or
+ * through another such record) embeds, exported or not. An exported type the
+ * method names directly is not one: its own row names its change, and a
+ * record the surface exports carries its own row too — but one embedded in a
+ * local record (`order.total: money`) changes this verb's wire shape, and no
+ * other row names the verb.
+ */
+function carriedThroughOwnRecords(snapshot: SurfaceSnapshot, method: MethodSignature, exported: ReadonlySet<string>): Set<string> {
+  const byId = new Map(snapshot.types.map((def) => [def.id, def] as const));
+  const carried = new Set<string>();
+  const expanded = new Set<string>();
+  const queue = methodTypeRefs(method).flatMap((expr) => extractTypeIdentifiers(canonicalTypeRef(snapshot, expr))).filter((id) => byId.has(id) && !exported.has(id));
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (expanded.has(id)) continue;
+    expanded.add(id);
+    for (const expr of typeDefExprs(byId.get(id)!)) {
+      for (const child of extractTypeIdentifiers(canonicalTypeRef(snapshot, expr))) {
+        if (!byId.has(child)) continue;
+        carried.add(child);
+        if (!exported.has(child)) queue.push(child);
+      }
+    }
+  }
+  return carried;
+}
+
+/**
+ * The renames a newer closure's trace carries for the types that replaced a
+ * spelling the older signature still writes: each such type's own rename and
+ * each of its fields' — so a signature that reads differently only because a
+ * renamed type took its former name's place says what moved inside it (the
+ * field a client reads), not only the type swap.
+ */
+function tracedRenamesBehind(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: MethodSignature, now: MethodSignature): string[] {
+  const written = new Set(methodTypeRefs(was).flatMap((expr) => expr.match(TYPE_IDENTIFIER) ?? []).map((token) => token.replace(/^::/, '')));
+  const olderDefs = new Map(older.types.map((d) => [d.id, d] as const));
+  const out: string[] = [];
+  for (const id of closureIds(newer, now)) {
+    const def = newer.types.find((d) => d.id === id)!;
+    const from = (def.formerly ?? []).find((f) => written.has(f) && !written.has(def.id));
+    if (from === undefined) continue;
+    out.push(`type "${from}" renamed to "${def.id}"`);
+    // Against the older definition when the older side expanded it; else every field the trace carries.
+    const olderDef = olderDefs.get(from);
+    const renamed = olderDef
+      ? fieldRenames(olderDef, def)
+      : def.fields.flatMap((field) => (field.formerly ?? []).filter((f) => !def.fields.some((x) => x.name === f)).slice(-1).map((f) => ({ from: f, to: field.name })));
+    for (const r of renamed) out.push(`field "${def.id}.${r.from}" renamed to "${r.to}"`);
+  }
+  return out;
+}
+
+/**
  * How a method whose digest moved changed: its signature, when it reads
  * differently; else the types it names whose shape moved — null when every one
  * of them is an exported type whose own shape change the changelog lists.
@@ -507,7 +581,10 @@ function renamesIn(ids: string[], notes: Map<string, string[]>): string[] {
 function signatureChange(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: MethodSignature, now: MethodSignature, undoneNow: MethodSignature = now): string | null {
   // A rename is its own row: the signature reads differently only when it
   // still does with the method's own name and the traced renames undone.
-  if (shownSignature(was) !== shownSignature(underName(undoneNow, was.name))) return `signature ${shownSignature(was)} → ${shownSignature(now)}`;
+  if (shownSignature(was) !== shownSignature(underName(undoneNow, was.name))) {
+    const behind = tracedRenamesBehind(older, newer, was, now);
+    return `signature ${shownSignature(was)} → ${shownSignature(now)}${behind.length ? ` (${behind.join('; ')})` : ''}`;
+  }
   const oldDefs = new Map(older.types.map((d) => [d.id, d] as const));
   const newDefs = new Map(newer.types.map((d) => [d.id, d] as const));
   const ids = [...new Set([...closureIds(older, was), ...closureIds(newer, now)])].sort();
@@ -517,7 +594,9 @@ function signatureChange(older: SurfaceSnapshot, newer: SurfaceSnapshot, was: Me
     return !a || !b || canonicalize(typeShape(older, a)) !== canonicalize(typeShape(newer, b));
   });
   const exported = new Set([...(newer.exportedTypes ?? []), ...(older.exportedTypes ?? [])].map((t) => t.type));
-  const unlisted = moved.filter((id) => !exported.has(id));
+  // An exported type reached through an own unexported record is this verb's to name: no other row names the verb.
+  const carried = carriedThroughOwnRecords(newer, now, exported);
+  const unlisted = moved.filter((id) => !exported.has(id) || carried.has(id));
   if (moved.length > 0 && unlisted.length === 0) return null;
   const named = (unlisted.length > 0 ? unlisted : moved).map((id) => `"${id}"`).join(', ');
   return named ? `signature reads the same, but a type it names changed shape: ${named}` : 'signature reads the same, but a type it names changed shape';
@@ -675,7 +754,9 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
         // no row of this surface lists them (a type it exports under no name —
         // another project's type expanded into it).
         const exported = new Set((newer.exportedTypes ?? []).map((t) => t.type));
-        const embedded = renamesIn(closureIds(newer, method).filter((id) => !exported.has(id)), notes);
+        // An exported type the verb reaches only through an own unexported record is said here too.
+        const carried = carriedThroughOwnRecords(newer, method, exported);
+        const embedded = renamesIn(closureIds(newer, method).filter((id) => !exported.has(id) || carried.has(id)), notes);
         if (embedded.length > 0) {
           const key = embedded.join('; ');
           embeddedBy.set(key, [...(embeddedBy.get(key) ?? []), method.name]);

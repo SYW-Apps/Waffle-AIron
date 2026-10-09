@@ -2,10 +2,13 @@ kind: value-object
 id: spec_read_result
 name: SpecReadResult
 description: >-
-  What a spec read answers with: the STORED spec, and beside it the two derived markers a read may
+  What a spec read answers with: the STORED spec, and beside it the derived markers a read may
   attach. They are kept separate rather than folded in, so nothing derived can be mistaken for
-  something stored and written back. The text rendering folds both into the spec, as it always has,
-  for a client that reads no structured content.
+  something stored and written back. The text rendering folds them into the spec, as it always has,
+  for a client that reads no structured content. An `alias::name` read resolves through the alias
+  table the way a write does: a member's spec is read under its key; an EXTERNAL's is read from the
+  pinned snapshot this project holds of it, the answer then carrying the pinnedSnapshot marker and
+  the snapshot's entry as its spec — read-only, never a spec of this tree.
 subsystem: sdd_mcp
 fields:
   - name: kind
@@ -30,6 +33,13 @@ fields:
       Derived, read-only guidance for a variant-tagged component, resolved from the variant registry
       rather than stored on the spec. Never written back.
     optional: true
+  - name: pinnedSnapshot
+    type: PinnedSpecRead?
+    description: >-
+      Present only when the id named an external through its alias: the read came from the pin
+      (alias, producer, snapshot file, StateId), and the spec is the pinned entry — read-only,
+      written from the producer's own root.
+    optional: true
 methods: []
 lint:
   allow:
@@ -39,4 +49,4 @@ lint:
         sdd_get_spec in src/mcp/server.ts (a plain const of zod fields, no type alias), so there is
         no symbol a sourcePath could bind.
 createdAt: '2026-09-19T23:05:27.992Z'
-updatedAt: '2026-10-07T06:30:25.676Z'
+updatedAt: '2026-10-09T11:30:36.278Z'

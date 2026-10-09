@@ -38,31 +38,49 @@ methods:
         targetMethod: assessBuildFreshness
       - stepNumber: 5
         description: >-
+          Wrap every spec-write tool registered below in the tree's cross-process write lock, taken
+          through the core client adapter before the handler runs on each call — the lock also
+          re-reads the tree, so the handler's read-modify-write starts from what another session
+          wrote; two sessions writing one spec within milliseconds land both writes instead of
+          losing one while both answer success. A lock another session holds past the wait is the
+          tool's refusal, never a crash
+        type: register
+        targetComponent: mcp_core_adapter
+        targetMethod: lockTree
+      - stepNumber: 6
+        description: >-
+          …and released through the core client adapter once the handler has answered, a refusal or
+          an exception included
+        type: register
+        targetComponent: mcp_core_adapter
+        targetMethod: unlockTree
+      - stepNumber: 7
+        description: >-
           Register tool 'listAgents', which reads the resolved agent registry through the core
           client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadRegistry
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Register tool 'getAgent', which retrieves a single resolved agent's details from the same
           registry
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadRegistry
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Register the validation tool, which runs the owner's gate (validateProject) or the family
           run (validateFamily) through the validator client adapter
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 8
+      - stepNumber: 10
         description: Register loader tools to fetch system, subsystem, and component specs from spec_loader
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 9
+      - stepNumber: 11
         description: >-
           Resolve the bound root's chaining context through the core adapter; when the root is a
           chained subproject, announce the parent project, the mounting subsystem id, and the
@@ -72,7 +90,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
           Return the bare McpServer instance; the MCP portal mounts its own surface (resources,
           prompts, the hosted-tool advertisement) on it
@@ -166,4 +184,4 @@ methods:
         outcome: unreadable
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-03T18:01:21.253Z'
+updatedAt: '2026-10-09T12:11:26.678Z'

@@ -4,7 +4,9 @@
  *
  * Documented intents pinned here (all warnings):
  *  - TECH_ON_LOGIC_COMPONENT: only data-layer stereotypes (Adapter/Store/
- *    Registry/Index) should bind a technology directly.
+ *    Registry/Index) should bind a technology directly — and a Portal, the
+ *    transport seam, binds the framework serving its endpoints, never a
+ *    technology a data-layer component binds.
  *  - VENDOR_NAME_IN_CONTRACT: L3 contract IDENTIFIERS must stay
  *    intent-language — even on the owning component's own interface (the
  *    contract is the swap seam). Two documented identifier surfaces
@@ -81,6 +83,33 @@ const SUPPLY_CONFIG_IMPL = {
   methods: [{ name: 'readThresholds', narrative: [{ stepNumber: 1, type: 'local', description: 'Parse the YAML export with parseDocument from the yaml package.' }] }],
 };
 
+/** The booking API Portal, binding what `technologies` says. */
+const BOOKING_PORTAL: FixtureSpecInput = {
+  id: 'booking-portal',
+  componentType: 'Portal',
+  subsystem: 'inventory',
+  transport: 'HTTP',
+  description: 'The supply booking HTTP API the clinic front desk calls.',
+  dependsOn: ['replenishment-orchestrator'],
+  invokedBy: { kind: 'entry', caller: 'The clinic front-desk web app, over HTTPS' },
+};
+
+const bookingPortalTree = (technologies: string[]) => ({
+  system: SYSTEM,
+  subsystems: [INVENTORY_SUB],
+  components: [BOOKING_PORTAL, REPLENISH_ORCH('Plans nightly stock reorders from current levels.'), STOCK_STORE_NEUTRAL],
+  interfaces: [
+    STOCK_LEDGER_INTERFACE,
+    { id: 'ireplenishment', component: 'replenishment-orchestrator', methods: [{ name: 'planReorders', description: 'Plan the nightly reorder batch.' }] },
+    { id: 'ibooking_portal', component: 'booking-portal', methods: [{ name: 'bookSupply', description: 'Book one supply delivery.' }] },
+  ],
+  implementations: [
+    STOCK_LEDGER_IMPL,
+    { id: 'replenishment_impl', contract: 'ireplenishment', methods: [{ name: 'planReorders', narrative: [{ stepNumber: 1, type: 'local', description: 'Compute the reorder quantities from current stock levels.' }] }] },
+    { id: 'booking_portal_impl', contract: 'ibooking_portal', technologies, methods: [{ name: 'bookSupply', narrative: [{ stepNumber: 1, type: 'local', description: 'Answer the booking request.' }] }] },
+  ],
+});
+
 const REPLENISH_ORCH = (description: string): FixtureSpecInput => ({
   id: 'replenishment-orchestrator',
   componentType: 'Orchestrator',
@@ -148,6 +177,23 @@ export default [
         },
       ],
     },
+  }),
+
+  defineRuleFixture({
+    code: 'TECH_ON_LOGIC_COMPONENT',
+    severity: 'warning',
+    anchoredTo: 'booking_portal_impl',
+    expectFire: true,
+    scenario:
+      'The implementation of the booking API Portal binds postgresql, the technology the stock ledger store already binds, beside its web framework.',
+    tree: bookingPortalTree(['express', 'postgresql']),
+  }),
+  defineRuleFixture({
+    code: 'TECH_ON_LOGIC_COMPONENT',
+    expectFire: false,
+    reason: 'A Portal is the transport seam: the web framework serving its endpoints is bound there.',
+    scenario: 'The implementation of the booking API Portal binds express, the web framework that serves its endpoints.',
+    tree: bookingPortalTree(['express']),
   }),
 
   // -------------------------------------------------------------------------

@@ -14,11 +14,16 @@ methods:
       free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the
       method's parameters, so each must be closed, appear once and name a parameter of the method or
       a field of a parameter's type (a method that states no structured params is not judged on
-      names). One HTTP route binds one verb: two methods bound to the same HTTP method and path —
-      the Portal's basePath joined in, placeholders compared by position whatever their name or
-      spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that
-      declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI
-      document holds one operation per path and verb.
+      names). An HTTP endpoint's stated `status` is the success code its callers and its OpenAPI
+      document read, so it must be a standard success or redirect code (200-208, 226, 300-308) and
+      must agree with what the method answers: a 204 or a 304 carries no body, so a method that
+      answers a value cannot state it, and a redirect sends the caller on with a Location header and
+      no body, so the value a redirecting method answers is that location — a string (or a named
+      type holding one), never a record. One HTTP route binds one verb: two methods bound to the
+      same HTTP method and path — the Portal's basePath joined in, placeholders compared by position
+      whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal,
+      or across Portals that declare the same basePath, are a duplicate route: no router can
+      dispatch both and an OpenAPI document holds one operation per path and verb.
     signature: 'portalEndpoints(ctx: RuleContext): void'
     returns: void
     params:
@@ -42,6 +47,12 @@ methods:
         summary: >-
           Two methods bound to the same HTTP method and path (placeholders compared by position)
           within one Portal, or across Portals declaring the same basePath
+      - code: ENDPOINT_STATUS_MISMATCH
+        severity: warning
+        summary: >-
+          An HTTP endpoint states a status that is no standard success or redirect code, or one that
+          contradicts what its method answers: a 204 or 304 for a method answering a value, or a
+          redirect for a method answering anything but the location (a string)
   - name: nonPortalEndpoints
     description: >-
       Rule non-portal-endpoints. Only a Portal may carry endpoints: a method on a non-Portal
@@ -528,4 +539,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-08T08:28:33.816Z'
+updatedAt: '2026-10-09T11:22:30.901Z'

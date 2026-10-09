@@ -665,11 +665,29 @@ function tableEntry(
  * must settle, or the table answers nothing at all — a table read in part
  * would accuse the endpoints of the entries it skipped.
  */
-function tableRoutes(ts: TsModule, value: TsExpression, initializerOf: InitializerOf, literalOf: LiteralOf | undefined): RouteFact[] {
+function tableRoutes(ts: TsModule, value: TsExpression, initializerOf: InitializerOf, literalOf: LiteralOf | undefined, depth = 0): RouteFact[] {
+  if (depth > SETTLE_DEPTH) return [];
   const at = bareExpression(ts, value);
   const out: RouteFact[] = [];
+  // A spread entry is the table it names, followed through the constants (and,
+  // with a checker, any module's): `[...ingestRoutes, ...statsRoutes]` is one
+  // table. One that settles on no table leaves the whole table unread.
+  const spread = (expression: TsExpression): RouteFact[] | undefined => {
+    const named = bareExpression(ts, expression);
+    if (!ts.isIdentifier(named) && !ts.isPropertyAccessExpression(named)) return undefined;
+    const initializer = initializerOf(named);
+    if (!initializer) return undefined;
+    const inner = tableRoutes(ts, initializer, initializerOf, literalOf, depth + 1);
+    return inner.length > 0 ? inner : undefined;
+  };
   if (ts.isArrayLiteralExpression(at)) {
     for (const element of at.elements) {
+      if (ts.isSpreadElement(element)) {
+        const routes = spread(element.expression);
+        if (!routes) return [];
+        out.push(...routes);
+        continue;
+      }
       const entry = bareExpression(ts, element);
       if (!ts.isObjectLiteralExpression(entry)) return [];
       const route = tableEntry(ts, entry, initializerOf, literalOf);
@@ -680,6 +698,12 @@ function tableRoutes(ts: TsModule, value: TsExpression, initializerOf: Initializ
   }
   if (ts.isObjectLiteralExpression(at)) {
     for (const property of at.properties) {
+      if (ts.isSpreadAssignment(property)) {
+        const routes = spread(property.expression);
+        if (!routes) return [];
+        out.push(...routes);
+        continue;
+      }
       // A key written as a template literal or a concatenation over the
       // file's constants (`[\`POST ${PREFIX}/orders\`]`) settles like any
       // other compared value.
@@ -901,6 +925,199 @@ function readRoutes(
   returns(fn.body);
   return routes;
 }
+
+// ---------------------------------------------------------------------------
+// What a body reads off a handle (parameter_fact.reads).
+//
+// A framework handler realizes a contract parameter by reading it off the
+// request it is handed, and real handlers do that in more than one spelling:
+// `req.params.id`, `url.searchParams.get('limit')`, `const { id } =
+// pathParams(req)`, the body read whole. Every one of them is the same fact —
+// the parameter's NAME is read off what the handle carries — so one walk
+// follows the handle's value wherever it flows unchanged in what it names: a
+// member chain, a destructuring at any depth, a local it is copied into, a
+// URL or a parsed body built from it, and a helper it is handed to (whose own
+// reads off it count, and whose result carries what the handle did). Only
+// helpers a resolver hands back are entered: the syntactic walk knows the
+// functions of its own file; the type checker any project file no
+// implementation claims — another component's code is that component's.
+// ---------------------------------------------------------------------------
+
+/** Where a helper the handle is passed to takes it: the helper's body, and the name (or the destructured keys) it binds the argument to. */
+interface HelperParam {
+  body: TsNode;
+  name?: string;
+  keys?: string[];
+}
+
+/** The helper a call hands the handle to at an argument index, where it is one to enter. */
+type HelperOf = (call: import('typescript').CallExpression, index: number) => HelperParam | undefined;
+
+/** How many names one parameter's reads may hold — a bound, not a measurement. */
+const READS_CAP = 64;
+/** How many locals and helpers deep a handle's value is followed. */
+const READS_DEPTH = 3;
+/** The constructors and parsers a handle's value passes through keeping the names it carries: a URL, its query, a parsed body. */
+const FLOW_CALLS = new Set(['URL', 'URLSearchParams', 'parse']);
+
+/** The property names an object destructuring binds, at every depth. */
+function bindingKeys(ts: TsModule, pattern: import('typescript').BindingName, out: Set<string>): void {
+  if (!ts.isObjectBindingPattern(pattern)) return;
+  for (const element of pattern.elements) {
+    const key = element.propertyName ?? element.name;
+    if (ts.isIdentifier(key) || ts.isStringLiteral(key)) out.add(key.text);
+    if (!ts.isIdentifier(element.name)) bindingKeys(ts, element.name, out);
+  }
+}
+
+/** The name a callee is called by: `URL` in `new URL(…)`, `parse` in `JSON.parse(…)`. */
+function calleeName(ts: TsModule, expression: TsExpression): string | undefined {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
+  return undefined;
+}
+
+/** A parameter of a helper, as the walk binds the argument it is handed: its name, or the keys its destructuring takes. */
+function helperParam(ts: TsModule, fn: TsNode, index: number): HelperParam | undefined {
+  const body = (fn as { body?: TsNode }).body;
+  const parameter = ((fn as import('typescript').SignatureDeclarationBase).parameters ?? [])[index];
+  if (!body || !parameter || parameter.dotDotDotToken) return undefined;
+  if (ts.isIdentifier(parameter.name)) return { body, name: parameter.name.text };
+  const keys = new Set<string>();
+  bindingKeys(ts, parameter.name, keys);
+  return keys.size > 0 ? { body, keys: [...keys] } : undefined;
+}
+
+/**
+ * The names a body reads off `name` (see the section above), added to `out`:
+ * the member names and literal keys of every chain off it, the literal a
+ * method of the chain is called with, the keys a destructuring binds, and the
+ * same off a local its value flows into or a helper it is handed to.
+ */
+function handleReads(
+  ts: TsModule,
+  body: TsNode,
+  name: string,
+  helperOf: HelperOf | undefined,
+  out: Set<string> = new Set<string>(),
+  depth = 0,
+  seen: Set<string> = new Set<string>(),
+): Set<string> {
+  const visitKey = `${body.getSourceFile().fileName}:${body.pos}:${body.end}:${name}`;
+  if (seen.has(visitKey)) return out;
+  seen.add(visitKey);
+  const deeper = (scope: TsNode, local: string): void => {
+    if (depth < READS_DEPTH) handleReads(ts, scope, local, helperOf, out, depth + 1, seen);
+  };
+  const follow = (node: TsNode): void => {
+    let at: TsNode = node;
+    for (;;) {
+      const up = at.parent;
+      if (!up || out.size >= READS_CAP) return;
+      if (ts.isParenthesizedExpression(up) || ts.isNonNullExpression(up) || ts.isAsExpression(up)
+        || ts.isTypeAssertionExpression(up) || ts.isAwaitExpression(up)
+        || (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(up))) { at = up; continue; }
+      if (ts.isBinaryExpression(up) && (up.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+        || up.operatorToken.kind === ts.SyntaxKind.BarBarToken)) { at = up; continue; }
+      if (ts.isPropertyAccessExpression(up) && up.expression === at) { out.add(up.name.text); at = up; continue; }
+      if (ts.isElementAccessExpression(up) && up.expression === at) {
+        if (!ts.isStringLiteralLike(up.argumentExpression)) return;
+        out.add(up.argumentExpression.text);
+        at = up;
+        continue;
+      }
+      // A method of the chain: the key it is asked for (`.get('limit')`), or —
+      // asked for nothing — what it answers carries what the chain did
+      // (`await request.json()`).
+      if (ts.isCallExpression(up) && up.expression === at) {
+        const [first] = up.arguments;
+        if (first && ts.isStringLiteralLike(first)) { out.add(first.text); return; }
+        if (up.arguments.length > 0) return;
+        at = up;
+        continue;
+      }
+      // Handed on as an argument: into a helper the resolver knows, or through
+      // a constructor or parser that keeps the names (`new URL(req.url, base)`).
+      if ((ts.isCallExpression(up) || ts.isNewExpression(up)) && up.expression !== at) {
+        const args: readonly TsExpression[] = up.arguments ?? [];
+        const index = args.indexOf(at as TsExpression);
+        if (index < 0) return;
+        const helper = ts.isCallExpression(up) && depth < READS_DEPTH ? helperOf?.(up, index) : undefined;
+        if (helper) {
+          for (const key of helper.keys ?? []) out.add(key);
+          if (helper.name) deeper(helper.body, helper.name);
+          at = up;
+          continue;
+        }
+        const callee = calleeName(ts, up.expression);
+        if (callee !== undefined && FLOW_CALLS.has(callee)) { at = up; continue; }
+        return;
+      }
+      if (ts.isVariableDeclaration(up) && up.initializer === at) {
+        if (ts.isIdentifier(up.name)) {
+          if (up.name.text !== name) deeper(body, up.name.text);
+        } else {
+          bindingKeys(ts, up.name, out);
+        }
+      }
+      return;
+    }
+  };
+  const visit = (node: TsNode): void => {
+    if (out.size >= READS_CAP) return;
+    if (ts.isIdentifier(node) && node.text === name) {
+      const parent = node.parent;
+      const declares = !!parent && (
+        (ts.isPropertyAccessExpression(parent) && parent.name === node)
+        || (ts.isPropertyAssignment(parent) && parent.name === node)
+        || ((ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent)) && parent.name === node)
+        || (ts.isBindingElement(parent) && parent.propertyName === node));
+      if (!declares) follow(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return out;
+}
+
+/**
+ * The helpers a file's own code may hand a handle to, by the name a call
+ * spells: its top-level functions (a declaration, or a const bound to a
+ * function), and a class's own methods called on `this`.
+ */
+function sameFileHelpers(ts: TsModule, sf: import('typescript').SourceFile): HelperOf {
+  const functions = new Map<string, TsNode>();
+  for (const statement of sf.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) functions.set(statement.name.text, statement);
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        const initializer = declaration.initializer && bareExpression(ts, declaration.initializer);
+        if (ts.isIdentifier(declaration.name) && initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer))) {
+          functions.set(declaration.name.text, initializer);
+        }
+      }
+    }
+  }
+  return (call, index) => {
+    const callee = call.expression;
+    if (ts.isIdentifier(callee)) {
+      const fn = functions.get(callee.text);
+      return fn ? helperParam(ts, fn, index) : undefined;
+    }
+    if (ts.isPropertyAccessExpression(callee) && callee.expression.kind === ts.SyntaxKind.ThisKeyword) {
+      let owner: TsNode | undefined = call.parent;
+      while (owner && !ts.isClassLike(owner)) owner = owner.parent;
+      const member = owner && ts.isClassLike(owner)
+        ? owner.members.find(m => ts.isMethodDeclaration(m) && m.name && propertyKeyText(ts, m.name) === callee.name.text)
+        : undefined;
+      return member ? helperParam(ts, member, index) : undefined;
+    }
+    return undefined;
+  };
+}
+
+/** The handle names a request is handed by — the parameters whose reads realize a contract's parameters, and the only ones the checker re-reads. */
+const REQUEST_HANDLE_NAMES = new Set(['req', 'request', 'ctx', 'context', 'event', 'url']);
 
 /** One parameter list as the walk read it, at the position of the function declaring it. */
 interface ParameterSite {
@@ -1500,46 +1717,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // a value, so a shadowing local keeps the parameter judged — the only safe
   // way for this reading to be wrong.
   /**
-   * The member names and literal keys a body reads off one name, through
-   * every link of a chain, and the property names a destructuring of such a
-   * read binds — `req.params.code`, `req.query['limit']`, `const { code } =
-   * req.params`. Bounded, sorted, deduplicated.
+   * What a body reads off one name (handleReads): every chain off it, the
+   * keys a destructuring binds, a local or a helper of this file its value
+   * flows into — `req.params.code`, `url.searchParams.get('limit')`,
+   * `const { code } = pathParams(req)`. Bounded, sorted, deduplicated.
    */
-  const readsOff = (body: import('typescript').Node, name: string): string[] => {
-    const out = new Set<string>();
-    const visit = (node: import('typescript').Node): void => {
-      if (out.size >= 64) return;
-      if (ts.isIdentifier(node) && node.text === name) {
-        const parent = node.parent;
-        const memberName = !!parent && ((ts.isPropertyAccessExpression(parent) && parent.name === node)
-          || (ts.isPropertyAssignment(parent) && parent.name === node));
-        if (!memberName) {
-          let at: import('typescript').Node = node;
-          for (;;) {
-            const up = at.parent;
-            if (!up) break;
-            if (ts.isParenthesizedExpression(up) || ts.isNonNullExpression(up) || ts.isAsExpression(up)) { at = up; continue; }
-            if (ts.isPropertyAccessExpression(up) && up.expression === at) { out.add(up.name.text); at = up; continue; }
-            if (ts.isElementAccessExpression(up) && up.expression === at && ts.isStringLiteralLike(up.argumentExpression)) {
-              out.add(up.argumentExpression.text);
-              at = up;
-              continue;
-            }
-            if (ts.isVariableDeclaration(up) && up.initializer === at && ts.isObjectBindingPattern(up.name)) {
-              for (const element of up.name.elements) {
-                const key = element.propertyName ?? element.name;
-                if (ts.isIdentifier(key) || ts.isStringLiteral(key)) out.add(key.text);
-              }
-            }
-            break;
-          }
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(body);
-    return [...out].sort();
-  };
+  const helpersHere = sameFileHelpers(ts, sf);
+  const readsOff = (body: import('typescript').Node, name: string): string[] =>
+    [...handleReads(ts, body, name, helpersHere)].sort();
 
   const declaredParameters = (fn: import('typescript').Node): ParameterFact[] => {
     const parameters = (fn as import('typescript').SignatureDeclarationBase).parameters ?? [];
@@ -2664,6 +2849,7 @@ function resolveCalls(
   ts: TsModule,
   files: Map<string, string>,
   projectRoot: string,
+  claimed: ReadonlySet<string> = new Set<string>(),
 ): CheckerReading {
   const out = new Map<string, ResolvedCallFact[]>();
   if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
@@ -3378,8 +3564,19 @@ function resolveCalls(
             const reading: ParameterReading = {};
             if (kind) reading.kind = kind;
             if (kind === 'object') {
-              const props = checker.getPropertiesOfType(checker.getNonNullableType(type)).map(p => p.getName());
+              // The DATA properties: a method is behaviour, never a field a
+              // declared record could be compared with.
+              const props = checker.getPropertiesOfType(checker.getNonNullableType(type))
+                .filter(p => (p.flags & ts.SymbolFlags.Method) === 0)
+                .map(p => p.getName());
               if (props.length > 0) reading.fields = props.slice(0, 200);
+            }
+            if (opaqueType(type)) reading.opaque = true;
+            // A request handle's reads again, the checker following a helper
+            // it is handed into any project file no implementation claims.
+            if (ts.isIdentifier(parameter.name) && REQUEST_HANDLE_NAMES.has(parameter.name.text.replace(/^_+/, '').toLowerCase())) {
+              const read = handleReads(ts, body, parameter.name.text, checkerHelpers);
+              if (read.size > 0) reading.reads = [...read].sort();
             }
             return reading;
           } catch {
@@ -3412,6 +3609,20 @@ function resolveCalls(
           if (table.length > 0) fileRoutes.set(node.name.text, new Map(table.map(route => [routeKey(route), route])));
         } catch {
           // a table the checker cannot settle keeps the syntactic reading
+        }
+      }
+      // A route table IMPORTED under a name, read where it is declared: a
+      // Portal naming the table it imports (`router: ROUTES`) names that table.
+      if (ts.isImportSpecifier(node) && !node.isTypeOnly && !fileRoutes.has(node.name.text)) {
+        try {
+          const declaration = symbolOf(node.name)?.valueDeclaration;
+          if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+            && (ts.getCombinedNodeFlags(declaration) & ts.NodeFlags.Const) !== 0) {
+            const table = tableRoutes(ts, declaration.initializer, initializerOf, literalOf);
+            if (table.length > 0) fileRoutes.set(node.name.text, new Map(table.map(route => [routeKey(route), route])));
+          }
+        } catch {
+          // an import the checker cannot follow is no table here
         }
       }
       ts.forEachChild(node, visit);
@@ -3481,6 +3692,44 @@ function resolveCalls(
   return { calls: out, imports, kinds, routes, prefixes, crossProjectImports };
 
   /**
+   * Whether a parameter's type admits any value, nullability set aside: any,
+   * unknown, `object`, `{}`, or an object type of an index signature alone
+   * (`Record<string, unknown>`) — a type naming no field a declared record
+   * could be compared with. An unresolvable name (the checker's error type)
+   * is no claim about the value at all, and is not one.
+   */
+  function opaqueType(type: import('typescript').Type): boolean {
+    const at = checker.getNonNullableType(type);
+    if ((at as unknown as { intrinsicName?: string }).intrinsicName === 'error') return false;
+    if ((at.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.NonPrimitive)) !== 0) return true;
+    if ((at.flags & ts.TypeFlags.Object) === 0 || at.getProperties().length > 0) return false;
+    if (at.getCallSignatures().length > 0 || at.getConstructSignatures().length > 0) return false;
+    const lists = checker as unknown as { isArrayType?: (t: import('typescript').Type) => boolean; isTupleType?: (t: import('typescript').Type) => boolean };
+    return !(lists.isArrayType?.(at) || lists.isTupleType?.(at));
+  }
+
+  /**
+   * The helper a call hands a request handle to, where the checker resolves
+   * it to a function-like with a body in a project file that is this file or
+   * one no implementation claims (`claimed`): another component's code is
+   * that component's, and a library's is nobody's design.
+   */
+  function checkerHelpers(call: import('typescript').CallExpression, index: number): HelperParam | undefined {
+    let declaration: import('typescript').Declaration | undefined;
+    try {
+      declaration = checker.getResolvedSignature(call)?.getDeclaration();
+    } catch {
+      return undefined;
+    }
+    if (!declaration || !(declaration as { body?: TsNode }).body) return undefined;
+    const home = declaration.getSourceFile();
+    if (home.isDeclarationFile || !ownKey(home)) return undefined;
+    const absolute = path.resolve(home.fileName);
+    if (absolute !== path.resolve(call.getSourceFile().fileName) && claimed.has(absolute)) return undefined;
+    return helperParam(ts, declaration, index);
+  }
+
+  /**
    * The kind of a parameter annotated with a platform class the run's fixed
    * ES library leaves out (a URL, a fetch Request, node:http's
    * IncomingMessage…), where the checker could not resolve it: an object,
@@ -3540,10 +3789,12 @@ const TRANSPORT_TYPES = new Set([
   'Http2ServerRequest', 'Http2ServerResponse', 'Socket', 'FastifyRequest', 'FastifyReply', 'NextRequest', 'NextResponse',
 ]);
 
-/** What a type checker settles about one parameter: the kind of value it takes, and an object's property names. */
+/** What a type checker settles about one parameter: the kind of value it takes, an object's data property names, whether its type admits any value, and a request handle's reads. */
 interface ParameterReading {
   kind?: ParameterKind;
   fields?: string[];
+  opaque?: boolean;
+  reads?: string[];
 }
 
 /** What the type checker settles over the run's files beyond their calls. */
@@ -3602,8 +3853,11 @@ export function buildCodeModel(
   // — analyzed like any other file, since proving one a re-export barrel means
   // reading it. Same containment, same tiers, same dedup (N:1).
   const declaredPaths: string[] = [];
+  /** Every file an implementation names, absolute: the helpers a handle's reads never follow into (another component's code is that component's). */
+  const claimedFiles = new Set<string>();
   for (const impl of implementations) {
     declaredPaths.push(...implementationSourceFiles(impl));
+    for (const file of implementationSourceFiles(impl)) claimedFiles.add(path.resolve(projectRoot, file));
     if (impl.simPath) declaredPaths.push(impl.simPath);
     // A router linkage naming a module of its own (a central routes.ts) is a
     // file route coverage reads, whatever spec otherwise names it.
@@ -3722,7 +3976,7 @@ export function buildCodeModel(
     let imports = new Map<string, ModuleImports>();
     let reading: CheckerReading | undefined;
     try {
-      reading = resolveCalls(ts, checkerRoots, projectRoot);
+      reading = resolveCalls(ts, checkerRoots, projectRoot, claimedFiles);
       ({ calls: resolved, imports } = reading);
     } catch {
       resolved = new Map();
@@ -3748,6 +4002,8 @@ export function buildCodeModel(
             const reading = settled[index][at];
             if (reading.kind) param.kind = reading.kind;
             if (reading.fields) param.fields = reading.fields;
+            if (reading.opaque) param.opaque = true;
+            if (reading.reads) param.reads = [...new Set([...(param.reads ?? []), ...reading.reads])].sort();
           });
         });
       }

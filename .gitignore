@@ -50,3 +50,5 @@ STATE.md
 # and .wai/context/*.md (agent-facing guidance people read on GitHub).
 .wai/docs/diagrams/
 .wai/generated/
+# Short-lived lock spec writers take; never committed.
+.wai/.spec-write.lock

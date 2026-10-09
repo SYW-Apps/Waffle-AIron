@@ -121,8 +121,14 @@ export {
   // spec_tree_portal retiredReachFacts: the retired reachability forms the
   // scan read compatibly — a passthrough read of the spec repository.
   retiredReachFacts,
+  // spec_tree_portal lockTree / unlockTree: the bound tree's
+  // cross-process write lock, taken around every spec-write tool; and
+  // readPinnedSpec: an external's spec read from its pinned snapshot.
+  lockTree,
+  unlockTree,
+  readPinnedSpec,
 } from './specs.js';
-export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile } from './specs.js';
+export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile, PinnedSpecRead } from './specs.js';
 export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
 
 /**
@@ -155,6 +161,8 @@ export { resolveDeclared as resolveExternals } from './external-producers.js';
 export { resolveCandidate as resolveExternalCandidate, listConsumers as listExternalConsumers } from './external-producers.js';
 // spec_tree_portal approvedRevision: the bound project's tree at its last committed approval (or a named revision), for a surface changelog.
 export { approvedRevision, type ApprovedRevision } from './external-producers.js';
+// spec_tree_portal memberRevisions: each live member with its usage and its tree at the approval it is judged against.
+export { memberRevisions, type MemberRevision } from './external-producers.js';
 
 // spec_tree_portal excerptParent (stage 8): with a part's root bound, the
 // excerpt of its parent it can be judged against alone — a dispatch to the

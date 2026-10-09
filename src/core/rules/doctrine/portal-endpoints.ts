@@ -1,5 +1,6 @@
 import { SddRule, type RuleContext } from '../types.js';
 import { transportRequiresEndpoint } from '../../../models/index.js';
+import { parseTypeExpression, type TypeExpression } from '../../../models/type-grammar.js';
 
 /**
  * The PORTAL side of endpoint bindings: a Portal's every interface method needs
@@ -65,12 +66,13 @@ export const portalsRule: SddRule = {
   name: 'portal-endpoints',
   judges: 'design',
   description:
-    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's parameters, so each must be closed, appear once and name a parameter of the method or a field of a parameter's type (a method that states no structured params is not judged on names). One HTTP route binds one verb: two methods bound to the same HTTP method and path — the Portal's basePath joined in, placeholders compared by position whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI document holds one operation per path and verb.",
+    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's parameters, so each must be closed, appear once and name a parameter of the method or a field of a parameter's type (a method that states no structured params is not judged on names). An HTTP endpoint's stated `status` is the success code its callers and its OpenAPI document read, so it must be a standard success or redirect code (200-208, 226, 300-308) and must agree with what the method answers: a 204 or a 304 carries no body, so a method that answers a value cannot state it, and a redirect sends the caller on with a Location header and no body, so the value a redirecting method answers is that location — a string (or a named type holding one), never a record. One HTTP route binds one verb: two methods bound to the same HTTP method and path — the Portal's basePath joined in, placeholders compared by position whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI document holds one operation per path and verb.",
   codes: [
     { code: 'MISSING_ENDPOINT', defaultSeverity: 'error', summary: 'Portal method without a wire endpoint binding, on a transport that requires one' },
     { code: 'ENDPOINT_TRANSPORT_MISMATCH', defaultSeverity: 'error', summary: "Endpoint transport does not match the Portal's transport" },
     { code: 'ENDPOINT_PATH_PLACEHOLDER', defaultSeverity: 'error', summary: 'An HTTP endpoint path holds an unclosed placeholder, one placeholder twice, or a placeholder that names no parameter of its method' },
     { code: 'ENDPOINT_ROUTE_DUPLICATE', defaultSeverity: 'error', summary: 'Two methods bound to the same HTTP method and path (placeholders compared by position) within one Portal, or across Portals declaring the same basePath' },
+    { code: 'ENDPOINT_STATUS_MISMATCH', defaultSeverity: 'warning', summary: 'An HTTP endpoint states a status that is no standard success or redirect code, or one that contradicts what its method answers: a 204 or 304 for a method answering a value, or a redirect for a method answering anything but the location (a string)' },
   ],
   check(ctx) {
     for (const comp of ctx.components) {
@@ -128,7 +130,9 @@ export const portalsRule: SddRule = {
         }
       }
     }
-    // Steps 13-16: one HTTP route binds one verb.
+    // Step 13: a stated status the protocol or the method contradicts.
+    statusMismatches(ctx);
+    // Steps 14-17: one HTTP route binds one verb.
     duplicateRoutes(ctx);
   },
 };
@@ -157,7 +161,7 @@ function sharedBase(basePath: string | undefined): string | undefined {
 }
 
 /**
- * Steps 13-16 of portal-endpoints: every HTTP route of the tree, grouped by
+ * Steps 14-17 of portal-endpoints: every HTTP route of the tree, grouped by
  * scope (its Portal, or the basePath Portals declaring one share), verb and
  * normalized path; a group two or more methods bind is ENDPOINT_ROUTE_DUPLICATE
  * on each interface in it — a contradiction, never downgraded on a draft.
@@ -191,6 +195,68 @@ function duplicateRoutes(ctx: RuleContext): void {
         // A contradiction, not unfinished work: never downgraded on a draft.
         false,
       );
+    }
+  }
+}
+
+/** The standard success and redirect codes an endpoint may state. */
+const STANDARD_STATUSES = new Set([200, 201, 202, 203, 204, 205, 206, 207, 208, 226, 300, 301, 302, 303, 304, 305, 306, 307, 308]);
+
+/** A redirect's codes: the response is a Location header and no body. */
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
+
+/** What a method answers, awaited and with a result's failure set aside: its success expression, or null when it cannot be read. */
+function answered(returns: string | undefined): TypeExpression | null {
+  if (!returns) return null;
+  const expr = parseTypeExpression(returns.trim(), 'returns').expression;
+  const awaited = expr?.form === 'async' ? expr.args[0] : expr;
+  return (awaited?.form === 'result' ? awaited.args[0] : awaited) ?? null;
+}
+
+/** Whether an answer is a string a Location header can carry: `string`, or a named type the tree defines as holding one (optional or not). */
+function isLocation(ctx: RuleContext, expr: TypeExpression): boolean {
+  const inner = expr.form === 'optional' ? expr.args[0] : expr;
+  if (inner.form === 'primitive') return inner.name === 'string';
+  if (inner.form !== 'named' || !inner.name) return false;
+  const local = inner.name.slice(inner.name.lastIndexOf('::') + (inner.name.includes('::') ? 2 : 0)).split('.').pop() ?? inner.name;
+  const def = ctx.types.find((t) => t.id === inner.name || t.id === local || t.id.endsWith(`::${local}`));
+  return def?.holds?.trim() === 'string';
+}
+
+/**
+ * Step 13 of portal-endpoints: each HTTP endpoint that states a status —
+ * one no client library names, a no-content code on a method answering a
+ * value, or a redirect on a method answering anything but the location — is
+ * ENDPOINT_STATUS_MISMATCH.
+ */
+function statusMismatches(ctx: RuleContext): void {
+  for (const comp of ctx.components) {
+    if (comp.componentType !== 'Portal' || comp.transport !== 'HTTP') continue;
+    const isDraftCtx = ctx.isComponentDraft(comp.id);
+    for (const intf of ctx.interfaces.filter((i) => i.component === comp.id)) {
+      const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
+      for (const m of intf.methods) {
+        const endpoint = m.endpoint as { transport?: string; method?: string; path?: string; status?: number } | undefined;
+        if (endpoint?.transport !== 'HTTP' || endpoint.status === undefined) continue;
+        const status = endpoint.status;
+        const answer = answered(m.returns);
+        const value = answer !== null && !(answer.form === 'primitive' && answer.name === 'void');
+        const problem = !STANDARD_STATUSES.has(status)
+          ? `${status} is no standard success or redirect code (200-208, 226, 300-308), so no client library names it`
+          : (status === 204 || status === 304) && value
+            ? `${status} carries no body, yet the method answers "${m.returns}" — the response would drop it`
+            : REDIRECTS.has(status) && value && answer !== null && !isLocation(ctx, answer)
+              ? `${status} is a redirect, answered with a Location header and no body, yet the method answers "${m.returns}" — a redirecting method answers the location itself (a string), so the response would drop it`
+              : null;
+        if (problem === null) continue;
+        ctx.addIssue(
+          'warning',
+          'ENDPOINT_STATUS_MISMATCH',
+          `Method "${m.name}" on interface "${intf.id}" binds ${endpoint.method ?? 'HTTP'} ${endpoint.path ?? ''} with status ${status}: ${problem}. State the status the method's answer allows, or change what it answers.`,
+          intf.id,
+          isDraftCtx || isIntfDraft,
+        );
+      }
     }
   }
 }

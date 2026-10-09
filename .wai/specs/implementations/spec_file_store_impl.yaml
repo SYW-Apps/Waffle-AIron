@@ -103,6 +103,27 @@ methods:
         type: return
         outcome: removed
     symbol: removeSpecFile
+  - name: lockTree
+    sourcePath: src/core/spec-files.ts
+    narrative: []
+    detail: intent
+    intent: >-
+      Creates the lock file beside the tree (<root>/.wai/.spec-write.lock) exclusively — the one
+      filesystem operation every platform, Windows included, makes atomic — writing the holder's pid
+      and the time into it. A process that already holds the lock counts one more hold and returns
+      at once (reentrant), so a write tool that calls another write path never waits on itself. When
+      another holder has the file, it waits in short synchronous sleeps: a lock whose holder process
+      is gone, or older than any write could take, is removed and taken over; after a bounded wait
+      it throws, naming the holder's pid, so a stuck writer never hangs the session. A root holding
+      no .wai folder has no tree to guard: nothing is created.
+  - name: unlockTree
+    sourcePath: src/core/spec-files.ts
+    narrative: []
+    detail: intent
+    intent: >-
+      Counts one hold down; the last hold removes the lock file, and only when this process wrote it
+      — a lock taken over by another process after this one was judged gone is never removed by the
+      late original holder. Releasing a lock this process does not hold does nothing.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-05T06:49:47.366Z'
+updatedAt: '2026-10-09T12:14:22.289Z'

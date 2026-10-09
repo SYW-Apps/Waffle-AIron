@@ -150,6 +150,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: approvedRevision
+  - name: memberRevisions
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: memberRevisions
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-07T10:55:02.809Z'
+updatedAt: '2026-10-09T11:37:58.170Z'

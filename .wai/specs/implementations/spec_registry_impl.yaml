@@ -247,21 +247,38 @@ methods:
     intent: >-
       Reads the stored document of the spec through the file store, as authored text (never the
       bound in-memory value, whose keys are the scan's). Walks the positions the loader parses — the
-      same position vocabulary AuthoredReference records, an L0 export entry's `from` included — and
-      for each edit finds its position: a whole-value position must hold exactly `from`; a type
-      position must hold `from` as one qualified token of the type string, and the display signature
-      beside a param or return is rewritten token for token with it. An edit whose `to` already
-      stands at its position (and `from` no longer does) was applied before and is a no-op, which is
-      what makes the write idempotent. When any other edit's `from` is absent from its position,
-      refuses before writing, naming the spec, the position and both texts. Otherwise replaces each
-      and — for an interface or a type — re-derives each params-bearing method's text from its
-      params (method_signature.derivedSignature; a sourced method is left as it is), so a respelled
-      param or returns type moves the text with it; serializes, and writes through the file store
-      only when the text changed, answering whether it wrote.
+      same position vocabulary AuthoredReference records, an L0 export entry's `from` and a
+      contract's `implements` included — and for each edit finds its position: a whole-value
+      position must hold exactly `from`; a type position must hold `from` as one qualified token of
+      the type string, and the display signature beside a param or return is rewritten token for
+      token with it. One text standing at several positions of one spec (a contract implementing
+      `alias::point` whose methods take their signatures from `alias::point.<method>`) is found at
+      each, every one rewritten by the same edit. An edit whose `to` already stands at its position
+      (and `from` no longer does) was applied before and is a no-op, which is what makes the write
+      idempotent. When any other edit's `from` is absent from its position, refuses before writing,
+      naming the spec, the position and both texts. Otherwise replaces each and — for an interface
+      or a type — re-derives each params-bearing method's text from its params
+      (method_signature.derivedSignature; a sourced method is left as it is), so a respelled param
+      or returns type moves the text with it; serializes, and writes through the file store only
+      when the text changed, answering whether it wrote.
     calls:
       - spec_file_store.read
       - spec_file_store.write
     symbol: respellReferences
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: Take the cross-process write lock under the bound project root
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: lockTree
+      - stepNumber: 2
+        description: >-
+          Expire every registered workspace's freshness IN PLACE, so its next scan re-reads the
+          tree's file signature whatever the time-to-live says — the read-modify-write of the write
+          that follows starts from the tree as it is on disk
+        type: local
+    symbol: registryLockSpecTree
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -272,4 +289,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-09T01:00:49.010Z'
+updatedAt: '2026-10-09T12:14:39.231Z'

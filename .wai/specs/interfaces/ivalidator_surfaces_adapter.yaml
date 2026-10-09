@@ -47,6 +47,23 @@ methods:
     returns: map<string, list<string>>
     params: []
     effect: read
+  - name: memberApprovedSurfaces
+    description: >-
+      Each live member of the bound project projected at the approval it is judged against, keyed by
+      alias, via the surface portal — what binding conformance names a name a member dropped since
+      its approval against.
+    signature: 'memberApprovedSurfaces(): map<string, SurfaceSnapshot>'
+    returns: map<string, SurfaceSnapshot>
+    params: []
+    effect: io
+  - name: memberStatuses
+    description: >-
+      Each live member of the bound project compared with the approval it is judged against, via the
+      surface portal — what a member's relation health reads beyond the gate's resolution failures.
+    signature: 'memberStatuses(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+    effect: io
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-10-07T18:32:28.572Z'
+updatedAt: '2026-10-09T11:38:46.576Z'

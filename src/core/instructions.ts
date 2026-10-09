@@ -156,7 +156,14 @@ brief with \`sdd_get_agent_brief\`, and spawn a scoped subagent from it — its
 its \`sharedPaths\` as the files it may touch only for its own needs. Briefs are composed
 from the current spec tree on every call, so a re-lock never requires a session
 restart — fetch fresh per delegation. \`wairon-skill://sdd-delegate\` carries the
-full flow.`;
+full flow.
+
+## Facts to state, not guess
+
+\`injectedParams\` are never set at design time: the implementer sets them once its
+code takes one. The human runs the CLI: \`wairon lock\`; \`wairon validate --ci\`
+(fails on errors and non-draft warnings, never on notices); \`wairon surface export
+--format openapi --portal <id>\` for a Portal's OpenAPI.`;
 }
 
 /**

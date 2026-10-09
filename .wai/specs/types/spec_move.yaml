@@ -6,7 +6,9 @@ description: >-
   owns, its contracts and their implementations with it, and keeps every id, so references by id
   stay as they are; what names the old subsystem follows instead — its export entries for the moved
   specs, lifecycle entrypoints, an L0 re-export `from` the old subsystem narrowed to them, and every
-  subsystem-qualified type reference.
+  subsystem-qualified type reference in either spelling. A move of several specs together (a
+  connected cluster) is one report: id names the spec addressed, moved lists every spec every one of
+  them took along, rewritten every spec any of them rewrote.
 fields:
   - name: kind
     type: WritableSpecKind
@@ -53,4 +55,4 @@ fields:
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-09T00:25:06.826Z'
-updatedAt: '2026-10-09T00:25:07.510Z'
+updatedAt: '2026-10-09T11:30:37.082Z'

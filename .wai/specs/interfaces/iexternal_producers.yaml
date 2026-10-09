@@ -52,12 +52,19 @@ methods:
       root the reach-gated climb reaches, and for every other project in it that declares the bound
       project — as an external whose producer it binds to, or as a contained member — its id, key,
       root, alias, section, the public names its specs use (spec_loader.exportUsage) and the names
-      it still writes that the producer no longer exports (broken). With search folders, also every
-      project root in (or directly under) them that declares the bound project as an external by a
-      path source resolving to it or a git source naming its id — a sibling checkout outside the
-      family — with the names it spells through that alias (spec_loader.pinnedUsage), marked found:
-      search. Read-only; a hosted request may not search folders (refused). Empty when nothing
-      consumes it.
+      it still writes that the producer no longer exports (broken). A project that composes the
+      bound one as a MEMBER from a path no climb follows — a `../` sibling declared under `members:`
+      — is a consumer too: the project roots in the folders enclosing the bound root and the highest
+      root reached are read for a `members` entry whose path source resolves to the bound root, and
+      every project of such a root's graph that declares the bound project is listed as the family's
+      are (never on a hosted request, nor when the request's reach stops at its own root). With
+      search folders, also every project root in (or directly under) them that declares the bound
+      project as an external by a path source resolving to it or a git source naming its id — a
+      sibling checkout outside the family — with the names it spells through that alias
+      (spec_loader.pinnedUsage), marked found: search; and every root there that declares it as a
+      member by a path source resolving to it, with every project of that root's graph that declares
+      it (spec_loader.exportUsage), marked found: search. Read-only; a hosted request may not search
+      folders (refused). Empty when nothing consumes it.
     signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
     returns: list<ExternalConsumer>
     params:
@@ -80,6 +87,19 @@ methods:
         description: A git revision; the last committed approval when omitted
         optional: true
     effect: io
+  - name: memberRevisions
+    description: >-
+      Each live member of the bound project — a contained member or a `../` sibling declared under
+      `members`, read where it is stored and never pinned — with its root, the bound project's usage
+      of it by public name (spec_loader.exportUsage) and its tree at the approval it is judged
+      against, materialized read-only in the fetch cache: the commit that introduced the member
+      approval the bound project's lock records for it (its composition subject), else the member's
+      own last committed approval. A member in no git work tree, or whose approval no commit holds,
+      comes back with no revision. Never on a hosted request (answers none). No network.
+    signature: 'memberRevisions(): list<member_revision>'
+    returns: list<member_revision>
+    params: []
+    effect: io
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-07T10:53:21.442Z'
+updatedAt: '2026-10-09T11:37:49.469Z'

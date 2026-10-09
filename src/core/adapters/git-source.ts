@@ -223,6 +223,20 @@ export function lastCommitOf(directory: string, pathspec: string): string | null
 }
 
 /**
+ * igit_source_adapter.commitIntroducing — the oldest commit of the work tree
+ * holding a directory whose change to the file at `pathspec` (relative to the
+ * directory) introduced `text`: the commit that first recorded it. Null when
+ * none did, the directory is in no work tree or git is not installed. No network.
+ */
+export function commitIntroducing(directory: string, pathspec: string, text: string): string | null {
+  try {
+    return git(['log', '--reverse', '--format=%H', `-S${text}`, '--', pathspec], directory).split(/\r?\n/).find((l) => l.trim() !== '')?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * igit_source_adapter.commitOf — the full commit a ref (a branch, tag or
  * commit) names in the work tree holding a directory, or null when it names
  * none. No network.

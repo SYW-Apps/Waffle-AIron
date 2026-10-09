@@ -154,7 +154,10 @@ export function planAttach(family: ProjectFamily, bound: string, request: Migrat
   // A completed attach plans nothing: the alias already declares this directory.
   const held = ownGet(config.members, alias);
   const heldPath = held !== undefined ? memberLocationOf(held) : undefined;
-  if (dir !== null && heldPath !== undefined && path.resolve(node.directory, heldPath) === dir) return plan;
+  if (dir !== null && heldPath !== undefined && path.resolve(node.directory, heldPath) === dir) {
+    plan.notes.push(`"${alias}" is already attached: ${label(bound)}'s members already declare ${alias} → ${heldPath}. Nothing to do.`);
+    return plan;
+  }
   if (!EXTERNAL_ALIAS_RE.test(alias)) refuse(plan, 'alias-invalid', bound, `"${alias}" is no alias: ${aliasGrammarProblem(alias)}`);
   else if (ownGet(config.members, alias) !== undefined || ownGet(config.externals, alias) !== undefined) refuse(plan, 'alias-taken', bound, `${label(bound)} already declares "${alias}"`);
   if (dir !== null) {

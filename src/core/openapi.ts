@@ -134,7 +134,9 @@ function schemaScope(ownDefs: readonly SurfaceTypeDef[], externals: ReadonlyMap<
       return hit !== undefined ? own(hit) : undefined;
     },
     isObject(typeRef: string): boolean {
-      const expr = expressionOf(typeRef);
+      // `T?` is T or nothing: an optional object is still the object a body carries.
+      const read = expressionOf(typeRef);
+      const expr = read?.form === 'optional' ? read.args[0] : read;
       if (!expr || (expr.form !== 'named' && expr.form !== 'applied')) return false;
       const name = expr.name ?? '';
       const sep = name.indexOf('::');
@@ -417,9 +419,10 @@ function operationFor(method: MethodSignature, scope: SchemaScope, entry?: Surfa
     const bodyParam = rest.length === 1 ? rest[0] : undefined;
     if (bodyVerbs.has(httpVerb) && bodyParam && scope.isObject(bodyParam.type)) {
       // One object-typed param IS the body, as a client sends it — never
-      // wrapped under its name; the name rides along for a reader.
+      // wrapped under its name, an optional one or a `T?` included (the body
+      // may then be left out, or sent as null); the name rides along for a reader.
       op.requestBody = {
-        required: !bodyParam.optional && !admitsNoValue(bodyParam.type),
+        required: !bodyParam.optional,
         ...(bodyParam.description ? { description: bodyParam.description } : {}),
         content: { 'application/json': { schema: schemaFor(bodyParam.type, scope) } },
       };

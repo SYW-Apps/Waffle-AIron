@@ -128,10 +128,13 @@ methods:
       grammar (type_expression.parse) and answered as its canonical text, so an alias and its
       canonical spelling digest alike, with every named reference rewritten in place — an identifier
       naming a type of this snapshot's closure (bare, or prefixed with this snapshot's own project
-      id or alias, compared by reference_resolution.nameKey) becomes that type's id; an identifier
-      that names another project's type becomes `<producer id>::<its id>`; anything unresolvable is
-      kept as written. A text that does not parse is kept as written, identifier by identifier, as
-      before the grammar. Pure: the snapshot is the whole input.
+      id or alias, compared by reference_resolution.nameKey — or written `<subsystem>.<id>` for one
+      the closure holds unqualified, the way a contract names a local record of another subsystem,
+      `orders.order`) becomes that type's id, so a local record's closure — the member types it
+      embeds — is read by every digest; an identifier that names another project's type becomes
+      `<producer id>::<its id>`; anything unresolvable is kept as written. A text that does not
+      parse is kept as written, identifier by identifier, as before the grammar. Pure: the snapshot
+      is the whole input.
     sourcePath: src/models/surface-references.ts
   - name: carriedFactChanges
     signature: 'carriedFactChanges(live: SurfaceSnapshot): list<string>'
@@ -143,15 +146,18 @@ methods:
     description: >-
       The carried facts this pinned snapshot holds differently from the live one, each named where
       it sits: per public entry its export kind, transport, abi, role, stereotype, basePath, auth
-      scheme and rename trace, per contract method its effect and rename trace and each parameter
-      the producer renamed with a trace (named with its new name — a parameter name enters no
-      digest, so the rename never breaks a caller, but the pin still spells the old one), per type
-      its rename trace and each field it renamed with a trace (with its new name), the producer's id
-      and targetLanguage, and the names the producer declares but no longer resolves. These are what
-      the rules judge from a pin beside the signatures (LANGUAGE_BRIDGE_MISSING reads the abi), so a
-      pin whose content digest is unchanged can still be stale; prose (descriptions, display names)
-      and provenance (stateId, generatedAt) are never a fact here. Empty when the snapshot says what
-      the producer says now. Pure.
+      scheme and rename trace, per contract method its effect, its wire endpoint (an HTTP verb, path
+      or stated status, or another transport's address — named with where it went, `endpoint of
+      stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`, since a hand-written client
+      spells the route and no digest reads it) and rename trace and each parameter the producer
+      renamed with a trace (named with its new name — a parameter name enters no digest, so the
+      rename never breaks a caller, but the pin still spells the old one), per type its rename trace
+      and each field it renamed with a trace (with its new name), the producer's id and
+      targetLanguage, and the names the producer declares but no longer resolves. These are what the
+      rules judge from a pin beside the signatures (LANGUAGE_BRIDGE_MISSING reads the abi), so a pin
+      whose content digest is unchanged can still be stale; prose (descriptions, display names) and
+      provenance (stateId, generatedAt) are never a fact here. Empty when the snapshot says what the
+      producer says now. Pure.
     sourcePath: src/models/surface-references.ts
   - name: changesSince
     signature: 'changesSince(older: surface_snapshot): list<surface_change>'
@@ -181,21 +187,30 @@ methods:
       renamed type or field anywhere in its closure, its own fields kept) is a `changed` row naming
       each of them (`embeds renamed field "money.currency" → "currencyCode"`), so release notes list
       every type a rename reshapes; contract methods whose signatures moved only through such
-      renames of types the surface exports under no name of its own (its own unexported types, or
-      another project's types expanded into it) say so ONCE per contract entry and set of renames —
-      one row naming every such method, never one identical row per method. Every row beyond a
-      rename is judged against this snapshot with its TRACED RENAMES UNDONE: each closure type
-      renamed per its trace (`formerly`) read back under its old id, each field renamed per its
-      trace read back under its old name, and each type another project supplies whose reference
-      only changed alias (`a::name` → `b::name`, the same local name and shape) read under the older
-      spelling — so a type or field rename is counted once, as its rename, and never again as a
-      shape change of every type or method that names it, and an alias respelling is no change at
-      all. A signature row is written only when the signature still reads differently once the
-      method's own rename and those renames are undone (a renamed method whose shape is unchanged is
-      one row, its rename); a method whose signature reads the same but whose digest still moved
-      because a type it names changed shape says exactly that, naming the type, and is left out when
-      every such type is an exported name whose own shape change is already listed. Prose and
-      provenance are never a change, and no row is listed twice. Sorted by name, then member. Pure.
+      renames of types the surface exports under no name of its own (its own unexported types,
+      another project's types expanded into it, or an exported type the method reaches only through
+      one of the surface's own unexported records — a local `order` whose `total` embeds `money`:
+      the verb's response changes on the wire, and the exported type's own row names no verb) say so
+      ONCE per contract entry and set of renames — one row naming every such method, never one
+      identical row per method. Every row beyond a rename is judged against this snapshot with its
+      TRACED RENAMES UNDONE: each closure type renamed per its trace (`formerly`) read back under
+      its old id, each field renamed per its trace read back under its old name, and each type
+      another project supplies whose reference only changed alias (`a::name` → `b::name`, the same
+      local name and shape) read under the older spelling — so a type or field rename is counted
+      once, as its rename, and never again as a shape change of every type or method that names it,
+      and an alias respelling is no change at all. A signature row is written only when the
+      signature still reads differently once the method's own rename and those renames are undone (a
+      renamed method whose shape is unchanged is one row, its rename); a method whose signature
+      reads the same but whose digest still moved because a type it names changed shape says exactly
+      that, naming the type, and is left out only when every such type is an exported name whose own
+      shape change is already listed AND the method names it directly, never through an unexported
+      record of its own. A signature row renders each parameter under its own name, never respelled,
+      and when it reads differently only because a renamed type replaced its former spelling — a
+      type another project supplies, which the older side could not expand — it names the renames
+      the newer side's trace carries for that type: its own (`type "tile_coord" renamed to "tile"`)
+      and each of its fields' (`field "tile.zoom" renamed to "z"`), so the wire change inside a
+      consumer's own response is named, not only the type swap. Prose and provenance are never a
+      change, and no row is listed twice. Sorted by name, then member. Pure.
     sourcePath: src/models/surface-references.ts
     symbol: surfaceChanges
   - name: fieldRenames
@@ -242,4 +257,4 @@ methods:
     sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-09T00:19:06.822Z'
+updatedAt: '2026-10-09T11:50:48.254Z'

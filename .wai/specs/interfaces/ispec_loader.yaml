@@ -265,6 +265,34 @@ methods:
       is not stored yet. A brief's readPaths name the specs of the types a contract uses through it.
     signatureFrom: spec_index.typePath
     effect: read
+  - name: lockTree
+    description: >-
+      Take the cross-process write lock of the bound project's spec tree and re-read the tree at
+      once. Pure 1:1 forward to the registry write face.
+    signatureFrom: spec_registry.lockTree
+    effect: io
+  - name: unlockTree
+    description: Release the bound project's spec-tree write lock. Pure 1:1 forward to the file store.
+    signature: 'unlockTree(): void'
+    returns: void
+    effect: io
+  - name: readPinnedSpec
+    description: >-
+      Read a spec of an EXTERNAL from the pinned snapshot this project holds of it, by
+      `alias::name`: the alias one this project declares as an external, the name a public name its
+      pin recorded — an export entry (for a component or an interface asked for) or an exported type
+      (for a type). Null when the alias is no declared external, its pin is absent or unreadable, or
+      the pin holds no such name. Read-only: the answer says it is pinned, and nothing is written.
+    signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
+    returns: PinnedSpecRead?
+    params:
+      - name: kind
+        type: string
+        description: 'The kind asked for: component or interface read the contract entry, type the exported type'
+      - name: id
+        type: string
+        description: The `alias::name` asked for
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:43:51.898Z'
+updatedAt: '2026-10-09T12:16:34.840Z'

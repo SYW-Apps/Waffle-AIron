@@ -813,14 +813,19 @@ methods:
         type: branch
         condition: >-
           impl.technologies is non-empty, comp resolves, and comp.componentType is not one of the
-          technology-seam stereotypes (Adapter, Store, Registry, Index, Observer)
+          technology-seam stereotypes (Adapter, Store, Registry, Index, Observer, Portal) — or comp
+          is a Portal binding a technology (by technology.label, case set aside) that an
+          implementation of an Adapter, Store, Registry, Index or Observer of the tree also binds
         onFalseStep: 5
       - stepNumber: 4
         label: report_binding
         description: >-
           Report TECH_ON_LOGIC_COMPONENT (warning; draft context ctx.isImplementationDraft(impl))
           naming impl.id, the name of each technology in impl.technologies (technology.label),
-          comp.id and comp.componentType, and pointing at the data-layer seam to extract.
+          comp.id and comp.componentType: for a Portal, the data-layer technologies it binds that a
+          data-layer component binds too, and that a Portal is the transport seam, binding only the
+          framework that serves its endpoints; for any other stereotype, the data-layer seam to
+          extract.
         type: local
       - stepNumber: 5
         label: impl_done
@@ -1053,4 +1058,4 @@ methods:
     exportedVia: signatureSourceSuggestionsRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-07T21:45:05.936Z'
+updatedAt: '2026-10-09T11:26:58.366Z'

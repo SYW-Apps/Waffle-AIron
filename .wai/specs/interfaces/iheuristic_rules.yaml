@@ -55,10 +55,13 @@ methods:
   - name: technologyBinding
     description: >-
       Rule technology-binding. Only the stereotypes that sit at a technology seam
-      (Adapter/Store/Registry/Index, and Observer — the edge block that subscribes to a messaging
-      technology) should bind a technology directly: an L4 that declares `technologies` on logic has
-      no swap seam. No hardcoded vendor lists — only declared tokens are policed, so the rule never
-      fires on a tree that doesn't opt in.
+      (Adapter/Store/Registry/Index, Observer — the edge block that subscribes to a messaging
+      technology — and a Portal, the transport seam, which binds the framework that serves its
+      endpoints) should bind a technology directly: an L4 that declares `technologies` on logic has
+      no swap seam. A Portal binding a technology an Adapter, Store, Registry, Index or Observer of
+      the tree also binds is reaching past its own seam into theirs, and is reported. No hardcoded
+      vendor lists — only declared tokens are policed, so the rule never fires on a tree that
+      doesn't opt in.
     signature: 'technologyBinding(ctx: RuleContext): void'
     returns: void
     params:
@@ -68,7 +71,9 @@ methods:
     findings:
       - code: TECH_ON_LOGIC_COMPONENT
         severity: warning
-        summary: Technology bound by a non-data-layer stereotype
+        summary: >-
+          Technology bound by a stereotype that sits at no technology seam, or a Portal binding a
+          technology a data-layer stereotype binds
   - name: technologyBoundaries
     description: >-
       Rule technology-boundaries. Technology stays behind its owning boundary: an L4 that declares
@@ -265,4 +270,4 @@ methods:
           could name them as their signatureFrom
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-07T21:45:01.146Z'
+updatedAt: '2026-10-09T11:26:54.444Z'
