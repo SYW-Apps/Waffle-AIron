@@ -5,4 +5,4 @@
 // surface snapshots and its pinned externals for the owner's gate, and the
 // externals status a family run composes from.
 // ---------------------------------------------------------------------------
-export { listSnapshots, listPinnedExternals, getExternalsStatus, pinnedParent, unrecordedUses } from '../surface-portal.js';
+export { listSnapshots, listPinnedExternals, getExternalsStatus, pinnedParent, unrecordedUses, memberApprovedSurfaces, memberStatuses } from '../surface-portal.js';

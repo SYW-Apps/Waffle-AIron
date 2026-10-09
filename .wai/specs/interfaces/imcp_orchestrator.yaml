@@ -8,7 +8,11 @@ methods:
   - name: initializeSystem
     description: >-
       Persist the L0 system specification and answer with the receipt for it: which spec was written
-      and whether one already held that id.
+      and whether one already held that id. Refused, writing nothing, when the bound tree already
+      holds an L0 and the session's folder is not that tree's root — a session opened in a subfolder
+      binds upward to the project above it, and re-initializing from there would re-author THAT
+      project's L0; the refusal names the root and the next step (`wairon member add <alias> <path>
+      --project` from the root), as `wairon init` does.
     signature: 'initializeSystem(spec: SystemSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: addSubsystem
@@ -142,8 +146,9 @@ methods:
       - name: pinSymbol
         type: bool
         description: >-
-          Whether an implementation that declares no symbol is pinned to the old name; true when
-          omitted
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
         optional: true
       - name: dryRun
         type: bool
@@ -243,14 +248,18 @@ methods:
       adapter, optionally narrowed to named methods, and answer with the stored spec plus the
       derived markers a read may attach. The kind may be omitted: it is then inferred from the id by
       reading it at every level, and a read is refused — naming the candidate kinds — when the id
-      names specs at more than one level, or names none. A contract's methods are answered in their
-      stored form (method_signature.storedForm), so a sourced method shows its signatureFrom and not
-      the params the loader resolved into it; those come back beside the spec as the derived
-      resolvedSignatures marker, one entry per sourced method, never inside it. A methods filter
-      that names something the spec does not declare returns nothing and says what it does declare,
-      so a misspelling never reads as a method with no content; a narrowed answer carries the
-      partial-result marker, because the write tools REPLACE a method list and re-authoring from a
-      partial read would delete every method left out.
+      names specs at more than one level, or names none. An `alias::name` id resolves through the
+      bound project's alias table exactly as a write resolves it: a member's spec by its key, and an
+      EXTERNAL's from the pinned snapshot this project holds of it — answered with the pinned entry
+      as the spec and the pinnedSnapshot marker beside it (read-only: written from the producer's
+      own root). A contract's methods are answered in their stored form
+      (method_signature.storedForm), so a sourced method shows its signatureFrom and not the params
+      the loader resolved into it; those come back beside the spec as the derived resolvedSignatures
+      marker, one entry per sourced method, never inside it. A methods filter that names something
+      the spec does not declare returns nothing and says what it does declare, so a misspelling
+      never reads as a method with no content; a narrowed answer carries the partial-result marker,
+      because the write tools REPLACE a method list and re-authoring from a partial read would
+      delete every method left out.
     signature: 'getSpec(kind?: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
@@ -512,10 +521,14 @@ methods:
         optional: true
   - name: moveSpec
     description: >-
-      The sdd_move_spec workflow: move a component or a type to another subsystem through the
-      authoring client adapter, gated, and answer with what moved, what was rewritten and the gate's
-      notices; a dry run answers the plan and writes nothing
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+      The sdd_move_spec workflow: move a component or a type — and, with `together`, more specs of
+      the same kind as one move, a connected cluster no single move could take without crossing an
+      edge — to another subsystem through the authoring client adapter, gated, and answer with what
+      moved, what was rewritten and the gate's notices; a dry run answers the plan for all of them
+      and writes nothing
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
+      list<string>): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -532,6 +545,10 @@ methods:
         type: bool
         description: Answer what the move would do and write nothing
         optional: true
+      - name: together
+        type: list<string>
+        description: More specs of the same kind moving with it
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-09T00:33:58.070Z'
+updatedAt: '2026-10-09T11:36:10.504Z'

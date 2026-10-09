@@ -91,7 +91,10 @@ methods:
           member project) says instead that there is nothing to approve yet — add a subsystem, then
           `wairon lock` — as `wairon lock` and `lock-check` say of it. States are read, never
           recomputed here, so the report from a parent and from the member agree by construction
-          (status-agrees). Without approvals the report shows no states
+          (status-agrees). Without approvals the report shows no states. Before that sentence, one
+          line names each implementation whose conformance dial is off — on the implementation, or
+          on the methods it lists — as realization not checked: the dial is code linkage outside the
+          approval, and the dashboard is where a reader looks for what the gate does not judge
         type: local
       - stepNumber: 10
         description: >-
@@ -103,4 +106,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-09T00:18:32.580Z'
+updatedAt: '2026-10-09T11:27:02.673Z'

@@ -1,4 +1,4 @@
-<!-- wairon-version: 5.1.1-dev.112 -->
+<!-- wairon-version: 5.1.1-dev.113 -->
 <!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
 # Domain Map (13 domains)
@@ -51,3 +51,19 @@ If `.wai/specs/` exists, the wairon SDD workflow is active; otherwise ignore it.
   7. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
   8. **Members & References**: A project may declare **members** in its `.wai/project.yaml` `members` (create one with `sdd_add_member`). A **part** (the default) stores some of this project's subsystems in another folder or repository: local ids, this project's lock. A **project** member is an independent boundary with its own spec tree and lock, designed from its own root. Reference what another project exports as `alias::name` (the alias is a member or a declared external, the name a public name of its L0 export table); an id without `::` is local. A leading `::`, `super::`, member paths and an L1 subsystem carrying `projectPath` are deprecated: they still resolve for one release, are reported, and `wairon doctor --fix` rewrites them.
   9. **Reachability**: every Portal verb is reached by a modelled caller or declared an entry (`invokedBy: { kind: entry }`) for real callers outside the design — never an entry invented to silence a finding.
+
+### Code linkage facts
+- **`injectedParams` are set when the code exists, by the implementer**: never declare them at design time. They name a parameter a framework imposes on written code (a request handle, a context) beside the contract's own; the implementer declares them with `sdd_write_narrative` (`injectedParams`) or `sdd_update_spec` once its code takes one, and removes a design-time guess its code does not take (`UNUSED_INJECTED_PARAM`) the same way — code linkage, no re-lock.
+- **Plain JavaScript is checked too**: a JSDoc `@typedef` with `@property` lines declares a plain-JS shape, and in a binding module its field names are compared with the producer's type like a TypeScript interface's — add one rather than telling the human a `.js`/`.cjs` binding's fields cannot be checked.
+
+### What the human runs — recommend these, never run them
+The `wairon` CLI is the human developer's tool: you never run it, but when the human asks for something only it does, tell them the exact command:
+- `wairon lock` — approve the design (then commit `.wai/lock.json`); `wairon lock-check` is the CI merge gate on that approval.
+- `wairon validate --ci` — the CI gate. It FAILS on any error and on any warning, except the draft-related ones (a `DRAFT_*` warning, or an `UNUSED_COMPONENT` whose component is itself still draft or design status); notices never fail it, nor do the advisory live-externals findings. Say so plainly — no run is needed to know it.
+- `wairon surface export --format openapi --portal <portal-id> --out <file>` — a Portal's OpenAPI document (one per Portal); `wairon surface diff` — the public-surface changelog since the last approval; `wairon export` — the whole resolved design as one JSON document.
+- `wairon externals pin <alias>` — re-pin an external once its uses are adapted; `wairon externals status` — the live compatibility gate (exit 1 incompatible, 2 not compared).
+- `wairon network declare` — declare this project's network boundary (your tool for it is `sdd_set_network`).
+- `wairon member add | attach | detach | adopt | promote | demote | internalize | move | rename-alias | update` — the human's twins of the member tools; their `--report` is your `dryRun`.
+- `wairon doctor --fix` — rewrite deprecated forms; `wairon generate` — refresh the generated guides, skills and context.
+- `wairon agent customize <id>` — scaffold `.wai/agents/<id>.md`, guidance folded into every brief of that agent; `wairon agent brief <id>` — print a live brief.
+- `wairon status` — readiness and approval; `wairon diagram` — architecture diagrams; `wairon network flows` — the allowed-flows matrix.

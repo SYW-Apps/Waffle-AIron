@@ -21,11 +21,14 @@ methods:
         targetMethod: resolve
       - stepNumber: 2
         description: >-
-          Check the alias against the bound node's alias table (members and externals): one the
-          identifier grammar refuses (identifier.problemAs alias) is alias-invalid, carrying its
-          reason (as rename-alias names it); declared is alias-taken; an external of the bound
-          project whose source path resolves to this directory is already-member, naming `member
-          adopt`; a family node at this directory is already-member
+          An alias already declaring this very directory is an attach already done: the plan is
+          empty and its note says so — the member is already attached, nothing to do — so an empty
+          plan never reads as an unexplained no-op. Otherwise check the alias against the bound
+          node's alias table (members and externals): one the identifier grammar refuses
+          (identifier.problemAs alias) is alias-invalid, carrying its reason (as rename-alias names
+          it); declared is alias-taken; an external of the bound project whose source path resolves
+          to this directory is already-member, naming `member adopt`; a family node at this
+          directory is already-member
         type: local
       - stepNumber: 3
         description: Is there anything left to read?
@@ -302,4 +305,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-09T01:00:54.165Z'
+updatedAt: '2026-10-09T11:36:20.394Z'

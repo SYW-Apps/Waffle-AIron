@@ -24,6 +24,30 @@ export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
 // Guide content
 // ---------------------------------------------------------------------------
 
+/**
+ * What the human runs: the CLI is never the assistant's to run, but the
+ * assistant must be able to NAME the command that does what the human asks
+ * (a Portal's OpenAPI document, an approval, a re-pin) instead of guessing it —
+ * and to state the CI gate's verdict rule without asking for a run.
+ */
+const HUMAN_COMMANDS = `\
+### What the human runs — recommend these, never run them
+The \`wairon\` CLI is the human developer's tool: you never run it, but when the human asks for something only it does, tell them the exact command:
+- \`wairon lock\` — approve the design (then commit \`.wai/lock.json\`); \`wairon lock-check\` is the CI merge gate on that approval.
+- \`wairon validate --ci\` — the CI gate. It FAILS on any error and on any warning, except the draft-related ones (a \`DRAFT_*\` warning, or an \`UNUSED_COMPONENT\` whose component is itself still draft or design status); notices never fail it, nor do the advisory live-externals findings. Say so plainly — no run is needed to know it.
+- \`wairon surface export --format openapi --portal <portal-id> --out <file>\` — a Portal's OpenAPI document (one per Portal); \`wairon surface diff\` — the public-surface changelog since the last approval; \`wairon export\` — the whole resolved design as one JSON document.
+- \`wairon externals pin <alias>\` — re-pin an external once its uses are adapted; \`wairon externals status\` — the live compatibility gate (exit 1 incompatible, 2 not compared).
+- \`wairon network declare\` — declare this project's network boundary (your tool for it is \`sdd_set_network\`).
+- \`wairon member add | attach | detach | adopt | promote | demote | internalize | move | rename-alias | update\` — the human's twins of the member tools; their \`--report\` is your \`dryRun\`.
+- \`wairon doctor --fix\` — rewrite deprecated forms; \`wairon generate\` — refresh the generated guides, skills and context.
+- \`wairon agent customize <id>\` — scaffold \`.wai/agents/<id>.md\`, guidance folded into every brief of that agent; \`wairon agent brief <id>\` — print a live brief.
+- \`wairon status\` — readiness and approval; \`wairon diagram\` — architecture diagrams; \`wairon network flows\` — the allowed-flows matrix.`;
+
+/** Two facts an assistant got wrong in the trials: when injectedParams are set, and that plain JavaScript is checked. */
+const LINKAGE_FACTS = `\
+- **\`injectedParams\` are set when the code exists, by the implementer**: never declare them at design time. They name a parameter a framework imposes on written code (a request handle, a context) beside the contract's own; the implementer declares them with \`sdd_write_narrative\` (\`injectedParams\`) or \`sdd_update_spec\` once its code takes one, and removes a design-time guess its code does not take (\`UNUSED_INJECTED_PARAM\`) the same way — code linkage, no re-lock.
+- **Plain JavaScript is checked too**: a JSDoc \`@typedef\` with \`@property\` lines declares a plain-JS shape, and in a binding module its field names are compared with the producer's type like a TypeScript interface's — add one rather than telling the human a \`.js\`/\`.cjs\` binding's fields cannot be checked.`;
+
 const GLOBAL_GUIDE_BODY = `\
 ## wairon — Spec-Driven Development (optional)
 
@@ -41,7 +65,12 @@ If \`.wai/specs/\` exists, the wairon SDD workflow is active; otherwise ignore i
   6. **Prose is design; linkage is not**: an L4/L5 prose change — an implementation's or a method's description, intent or narrative step text — IS a design change: it re-opens the approval, so \`wairon lock\` is owed before code is implemented against it (an implement step asked for in the same turn as a prose edit waits for the human's re-lock; sequence spec turn → lock → code turn). Only code linkage is outside it.
   7. **Consistency**: Code must match L3 interfaces and L5 narratives exactly. If the spec is wrong, stop and update the spec.
   8. **Members & References**: A project may declare **members** in its \`.wai/project.yaml\` \`members\` (create one with \`sdd_add_member\`). A **part** (the default) stores some of this project's subsystems in another folder or repository: local ids, this project's lock. A **project** member is an independent boundary with its own spec tree and lock, designed from its own root. Reference what another project exports as \`alias::name\` (the alias is a member or a declared external, the name a public name of its L0 export table); an id without \`::\` is local. A leading \`::\`, \`super::\`, member paths and an L1 subsystem carrying \`projectPath\` are deprecated: they still resolve for one release, are reported, and \`wairon doctor --fix\` rewrites them.
-  9. **Reachability**: every Portal verb is reached by a modelled caller or declared an entry (\`invokedBy: { kind: entry }\`) for real callers outside the design — never an entry invented to silence a finding.`;
+  9. **Reachability**: every Portal verb is reached by a modelled caller or declared an entry (\`invokedBy: { kind: entry }\`) for real callers outside the design — never an entry invented to silence a finding.
+
+### Code linkage facts
+${LINKAGE_FACTS}
+
+${HUMAN_COMMANDS}`;
 
 const LOCAL_GUIDE_BODY = `\
 ## Wairon — Spec-Driven Development (you are operating inside it)
@@ -59,13 +88,16 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
 - **Members & cross-project references**: relocate a member with \`sdd_move_member\`. Every other change of the family's shape is a **family migration**, each with \`dryRun\`: promote/demote, make an existing project a member with \`sdd_attach_member\`, take one out and back with \`sdd_detach_member\` / \`sdd_adopt_member\`, rename a project's id with \`sdd_rename_project\` or an alias with \`sdd_rename_member_alias\`, move a subsystem into a part with \`sdd_externalize_subsystem\` and fold a member back in with \`sdd_internalize_member\`. Run it with \`dryRun: true\` first and show the plan (the human's CLI calls the same plan \`--report\`); applied, it writes every project it touches or none, and never locks — it names the projects to re-lock. A project member is never a subsystem of its parent: it has its own \`.wai/\` tree and is designed from its own root — its specs, its L0 export table and its \`project.yaml\` are written by a session opened in that member's folder (its own guide and \`.mcp.json\`), and the tools here refuse such a write naming that folder.
   - **\`alias::name\`**: An id without \`::\` is local to the project that writes it. Anything another project provides is referenced as \`alias::name\` — the alias is one of your members or declared \`externals\`, the name a public name in that project's L0 export table. A reference to something it does not export is reported (\`EXTERNAL_NOT_EXPORTED\`).
   - **Deprecated forms** (they still resolve for one release, are reported, and \`wairon doctor --fix\` rewrites them): a leading \`::\` (\`::shared::error-type\`), \`super::\` (\`super::sibling_comp\`), member paths (\`billing::invoice::invoice_portal\`), and an L1 subsystem carrying \`projectPath\` (\`DEPRECATED_MOUNT_FORM\`).
-- **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands.
+- **Do not run the \`wairon\` CLI**: Use \`sdd_validate_tree\` and \`sdd_get_status\` instead of CLI commands — and name the human's command when they ask for what only it does (see *What the human runs* below).
 - **Handoff to implementation**: Once design is complete and validates cleanly, tell the human: *"The specs are complete and validate. Please run \`wairon lock\` to approve them, and commit \`.wai/lock.json\`."* The lock records the approval; it does not rewrite spec files or their \`status\`. When a change to an approved design stays inside one subsystem, the human may re-approve just that subsystem with \`wairon lock --subsystem <id>\` (refused as a first approval, when anything outside the subsystem moved, and for a member project's subsystem, which is locked at the member's own root). In a family, members lock first at their own roots, then the parent pins them. No session restart is needed after the lock — delegate implementation right away via the \`sdd-delegate\` skill.
 - **Approval, not status**: a design is ready to implement when it is APPROVED — \`sdd_get_status\` reports the approval state (approved, or which specs changed since), and \`wairon lock-check\` gives the same verdict in CI. A spec's \`status\` (draft/design/complete) is authoring readiness only; never wait for it to become \`complete\`. It is left out of the approval, so promoting a status never reopens an approved design.
 - **Prose is design; linkage is not**: an L4/L5 prose change — an implementation's or a method's description, intent or narrative step text — IS a design change: it re-opens the approval, so \`wairon lock\` is owed before code is implemented against it (an implement step asked for in the same turn as a prose edit is refused until the human re-locks; sequence spec turn → lock → code turn). Only code linkage is outside it.
 - **Code linkage is not approval**: the lock approves the DESIGN. Where it is realized — \`sourcePath\`, \`symbol\`, \`exportedVia\`, \`simPath\`, \`injectedParams\`, conformance tiers, timestamps — is outside the approved digests, so setting or changing it never asks for a re-lock. Declare each implementation's planned \`sourcePath\` at design time: a named file not written yet is \`SOURCE_FILE_PLANNED\` (a notice), at method level as at implementation level; once the component's realization begins (any file it names exists), a contract method naming no file is \`METHOD_SOURCE_PATH_MISSING\` (warning) and one its existing file does not hold is \`UNREALIZED_METHOD\`. \`rules.conformance.requireCode: true\` makes the planned and unlinked notices errors. Briefs fence planned files, marked \`(planned — create it)\`.
+${LINKAGE_FACTS}
 - **Externals — the pin gates, live drift is visible**: declare a project this one consumes with \`sdd_add_external\` (alias, and a source \`../sibling\`, \`hosted:<id>\`, \`<git url>\` or \`<git url>#<commit>\`) — never by hand-editing \`.wai/project.yaml\`; it is checked against the producer and pinned. Change its \`use\` imports with \`sdd_update_external\` and remove it (declaration and pin together) with \`sdd_remove_external\`. A name the producer exports to a narrower audience (\`project\` < \`department\` < \`instance\` < \`partner\` < \`external\`) than this project is read at is refused, naming both. The owner's gate judges every external against its pin. \`sdd_validate_tree\` and \`sdd_get_status\` also compare each external with its LIVE producer, offline, as ADVISORY findings (\`advisory: true\`): \`EXTERNAL_LIVE_INCOMPATIBLE\` (a used member changed, was renamed — the new name is given — or is gone), \`EXTERNAL_DRIFTED\`, \`EXTERNAL_LIVE_UNCOMPARED\`. They never make the tree invalid or fail \`--ci\`; the fix is to adapt the uses, then ask the human to re-pin (\`wairon externals pin <alias>\`). A git producer is compared live only by \`wairon externals status\` — the opt-in live CI gate (exit 1 incompatible, 2 not compared, 0 otherwise).
 - **To implement code**: Delegate via the \`sdd-delegate\` skill: fetch the component's live brief with the \`sdd_get_agent_brief\` MCP tool (or the \`wairon-agent://\` resource) and spawn a subagent from it. Briefs are composed per call from the current spec tree, so they are always current — never wait for a restart. Implementations must match L3 interfaces and L5 narratives exactly. Generated agent files under \`.claude/agents/\` are an optional materialized view of the same topology — the live briefs are canonical.
+
+${HUMAN_COMMANDS}
 
 ### Rules (enforced by \`sdd_validate_tree\`)
 1. **Design before code**: Complete spec and pass validator before writing source code.

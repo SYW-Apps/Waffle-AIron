@@ -478,6 +478,16 @@ export interface RuleContext {
    */
   bindingModules?: import('../binding-modules.js').BindingModule[];
   /**
+   * Each live member of the bound project (contained or a `../` sibling)
+   * projected at the approval it is judged against — the one the bound
+   * project's lock records, else the member's own last committed approval —
+   * keyed by the alias the bound project declares it under, read by the
+   * validator only when a binding module was read: what binding conformance
+   * names a name the member dropped since its approval against. Absent on a
+   * candidate run, a reach-only run, and when no binding module was read.
+   */
+  memberApprovedSurfaces?: Record<string, SurfaceSnapshot>;
+  /**
    * The validated root's identity, resolved by the validator from its project
    * configuration against the id its lock recorded, so the project-identity
    * rule does no I/O. Absent when the root has no readable configuration, and

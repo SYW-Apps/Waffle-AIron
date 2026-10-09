@@ -228,8 +228,8 @@ export interface ParameterFact {
    */
   kind?: ParameterKind;
   /**
-   * The property names the type checker says an OBJECT-kind parameter's type
-   * has, nullability set aside; absent for any other kind, where no checker
+   * The DATA property names (a method set aside) the type checker says an
+   * OBJECT-kind parameter's type has, nullability set aside; absent for any other kind, where no checker
    * read the file, and for a type with no property it can name. What a
    * declared record type is compared with structurally: an object sharing
    * none of the record's fields is a different argument, whatever either side
@@ -246,13 +246,27 @@ export interface ParameterFact {
   /**
    * The member names and literal keys the body reads off the parameter, at
    * any depth of a chain (`req.params.code` reads params and code;
-   * `req.query['limit']` reads query and limit), and the property names a
-   * destructuring of such a read binds (`const { code } = req.params`).
+   * `req.query['limit']` reads query and limit), the string literal a method
+   * of such a chain is called with (`url.searchParams.get('limit')` reads
+   * limit), the property names a destructuring of such a read binds at any
+   * depth (`const { code } = req.params`), and the same read off a local its
+   * value flows into (`??`, `||`, `await`, `new URL(…)`,
+   * `new URLSearchParams(…)`, `JSON.parse(…)`) or off what a helper it is
+   * passed to reads and returns — a helper of the same file, or, where a type
+   * checker read the file, of any project file no implementation claims.
    * Absent when the parameter is unnamed or nothing is read off it. What says
    * a contract parameter an injected request handle carries is realized
    * through it.
    */
   reads?: string[];
+  /**
+   * True when the type checker says the parameter's type admits any value —
+   * any, unknown, object, {}, or an index signature alone
+   * (`Record<string, unknown>`) — nullability set aside: a type naming no
+   * field a declared record could be compared with, which the parameter check
+   * fails closed on. Absent where no checker read the file.
+   */
+  opaque?: boolean;
 }
 
 /** The kinds of value a parameter can take, as the type checker settles them. */

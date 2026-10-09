@@ -196,6 +196,15 @@ methods:
         description: A git revision; the last committed approval when omitted
         optional: true
     effect: io
+  - name: memberRevisions
+    description: >-
+      Forward to the core portal: each live member of the bound project with its usage and its tree
+      at the approval it is judged against — what a member consumer's relation and binding are
+      compared with.
+    signature: 'memberRevisions(): list<member_revision>'
+    returns: list<member_revision>
+    params: []
+    effect: io
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-07T10:55:01.004Z'
+updatedAt: '2026-10-09T11:37:57.139Z'

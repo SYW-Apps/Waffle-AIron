@@ -43,4 +43,6 @@ export {
   getLoaderIssues,
   // `wairon surface diff`: the project's tree at its last committed approval.
   approvedRevision,
+  // A live member's tree at the approval it is judged against: what its consumer's relation and binding compare with.
+  memberRevisions,
 } from '../index.js';

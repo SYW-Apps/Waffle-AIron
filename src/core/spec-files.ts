@@ -71,6 +71,141 @@ export function removeSpecFile(specPath: string, specsRoot: string): boolean {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// The tree's write lock — one lock file per project tree, across processes.
+//
+// Two sessions (two MCP servers, a session and its delegated subagents)
+// writing the same spec within milliseconds both read the file, both merged
+// their delta and both wrote: the second write silently replaced the first,
+// and both answered "Updated". A write is a read-modify-write of the tree, so
+// it is serialized here: `wx` creates the lock file exclusively, which every
+// platform — Windows included — makes atomic. The holder writes its pid and the
+// time; a lock whose holder is gone, or older than any write could take, is
+// broken. Holds are counted per process, so a write path that calls another
+// never waits on itself.
+// ---------------------------------------------------------------------------
+
+/** The lock file of a project's tree. Not a spec document: the tree walk never lists it. */
+const LOCK_FILE = '.spec-write.lock';
+/** A held lock older than this is a crashed writer's, never a live write. */
+const LOCK_STALE_MS = 60_000;
+/** How long a writer waits for another before it gives up, naming the holder. */
+const LOCK_WAIT_MS = 30_000;
+/** The holds this process has on each lock file, by path. */
+const lockHolds = new Map<string, number>();
+
+/** Sleep the calling thread without spinning: the write tools are synchronous end to end. */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Whether a process of that id is alive on this machine (a permission refusal means it is). */
+function processAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/** The holder a lock file names, or null when it cannot be read (a holder mid-write reads as live). */
+function lockHolder(file: string): { pid: number; at: number } | null {
+  try {
+    const [pid, at] = fs.readFileSync(file, 'utf8').split('\n');
+    // A holder caught between creating the file and writing into it is live.
+    if (!/^\d+$/.test(pid ?? '') || !/^\d+$/.test(at ?? '')) return null;
+    return { pid: Number(pid), at: Number(at) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * spec_file_store.lockTree — take the write lock of the spec tree under
+ * `root`, waiting for another holder; reentrant within this process. A root
+ * holding no .wai folder has no tree to guard.
+ */
+export function lockTree(root: string): void {
+  const dir = path.join(root, '.wai');
+  if (!fs.existsSync(dir)) return;
+  const file = path.join(dir, LOCK_FILE);
+  const held = lockHolds.get(file) ?? 0;
+  if (held > 0) {
+    lockHolds.set(file, held + 1);
+    return;
+  }
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  while (!tryCreateLock(file)) {
+    if (breakStaleLock(file)) continue;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `spec-tree-locked: another session (process ${lockHolder(file)?.pid ?? 'unknown'}) has been writing this project's specs for over ${LOCK_WAIT_MS / 1000}s `
+        + `(${file}). Nothing was written. Try again once it finishes; a lock left by a process that is gone is broken automatically.`,
+      );
+    }
+    sleepSync(15 + Math.floor(Math.random() * 20));
+  }
+  lockHolds.set(file, 1);
+}
+
+/** How long ago the lock file was last written; 0 when it is gone. */
+function lockAge(file: string): number {
+  try {
+    return Date.now() - fs.statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+/** Create the lock file exclusively, holder and time inside; false when another holds it. */
+function tryCreateLock(file: string): boolean {
+  let fd: number;
+  try {
+    fd = fs.openSync(file, 'wx');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw e;
+  }
+  try {
+    fs.writeSync(fd, `${process.pid}\n${Date.now()}\n`);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return true;
+}
+
+/**
+ * Remove a stale lock and answer whether it did: its holder is gone, it is
+ * older than any write, or it is this process's own while no hold of it is
+ * counted (a leftover, never a write under way — this thread is the only one
+ * that could be making it). A lock whose holder cannot be read yet is live.
+ */
+function breakStaleLock(file: string): boolean {
+  const holder = lockHolder(file);
+  const stale = holder === null
+    ? lockAge(file) > LOCK_STALE_MS
+    : holder.pid === process.pid || !processAlive(holder.pid) || Date.now() - holder.at > LOCK_STALE_MS;
+  if (!stale) return false;
+  try { fs.unlinkSync(file); } catch { /* another waiter broke it first */ }
+  return true;
+}
+
+/** spec_file_store.unlockTree — release one hold; the last removes the lock file, when this process holds it. */
+export function unlockTree(root: string): void {
+  const file = path.join(root, '.wai', LOCK_FILE);
+  const held = lockHolds.get(file) ?? 0;
+  if (held <= 0) return;
+  if (held > 1) {
+    lockHolds.set(file, held - 1);
+    return;
+  }
+  lockHolds.delete(file);
+  if (lockHolder(file)?.pid !== process.pid) return;
+  try { fs.unlinkSync(file); } catch { /* already gone */ }
+}
+
 /** Remove each empty directory from `dir` upward, stopping before `specsRoot`. */
 function pruneEmptyDirs(dir: string, specsRoot: string): void {
   let at = dir;

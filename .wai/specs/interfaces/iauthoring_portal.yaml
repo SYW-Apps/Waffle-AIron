@@ -18,10 +18,11 @@ methods:
       under fields that were legal before. Answers with the change report: exactly what changed,
       which of the delta's paths changed nothing, or that nothing did and nothing was written. A dry
       run runs the whole write, gate included, and answers with the report it would have produced
-      without touching disk. Routed to the gated workflow.
+      without touching disk. `tool` names the tool the caller answers for, so a refusal names the
+      call to make in another project's session. Routed to the gated workflow.
     signature: >-
-      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
-      SpecChangeReport
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool, tool?:
+      string): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: kind
@@ -38,6 +39,12 @@ methods:
         description: >-
           Answer with what the delta would do and write nothing; the report carries dryRun true and
           written false
+        optional: true
+      - name: tool
+        type: string
+        description: >-
+          The tool the caller answers for (sdd_set_endpoints, sdd_set_public_interfaces);
+          sdd_update_spec when omitted
         optional: true
   - name: moveMethods
     description: >-
@@ -102,9 +109,13 @@ methods:
     description: >-
       Move a component or a type to another subsystem through the gate, with everything that follows
       it: its owned members, contracts and implementations, the export entries and lifecycle
-      entrypoints naming it, and every reference qualified by the old subsystem. Routed to the gated
-      workflow.
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+      entrypoints naming it, and every reference qualified by the old subsystem. `together` names
+      more specs of the same kind that move with it in the same call — a connected cluster whose
+      edges no single move could keep inside one subsystem — judged together by the gate and planned
+      by one dry run. Routed to the gated workflow.
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
+      list<string>): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -121,6 +132,12 @@ methods:
         type: bool
         description: Answer what the move would do and write nothing
         optional: true
+      - name: together
+        type: list<string>
+        description: >-
+          More specs of the same kind moving with it to the same subsystem, judged with it as one
+          move
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-10-09T00:31:03.549Z'
+updatedAt: '2026-10-09T11:30:40.014Z'

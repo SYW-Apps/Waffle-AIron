@@ -728,14 +728,18 @@ methods:
           table publishes nothing at that audience) or when the gate found errors (their count and
           codes, and `wairon validate` to see them). An OpenAPI document with a type it could not
           resolve (the result's unresolvedTypes) is a warning too, naming each type and how to
-          resolve it (pin the external, or export the type from the member's or external's L0), gate
-          errors or not. Every written path is listed — with several portals and no --portal, one
-          file per portal is written and each path is listed. Without an out path, print the single
-          document when one portal remains, else list the available portals (portalId + name) so the
-          caller can pick with --portal, rather than printing nothing. An OpenAPI export with no
-          HTTP Portal (an in-process library) is refused naming why, never answered with the native
-          entries, and one whose operations collide on a path and verb is refused naming both
-          (nothing written).
+          resolve it by what its alias names in this project's configuration: an external is pinned
+          (`wairon externals pin <alias>`), or the type exported from its L0; a member — never
+          pinned — must export the type from its L0, or the reference names a public name the member
+          retired, to follow at the project that writes it; this project's own id names its own
+          export table; an alias nothing declares is said so — never "pin" for a member or for the
+          project itself, gate errors or not. Every written path is listed — with several portals
+          and no --portal, one file per portal is written and each path is listed. Without an out
+          path, print the single document when one portal remains, else list the available portals
+          (portalId + name) so the caller can pick with --portal, rather than printing nothing. An
+          OpenAPI export with no HTTP Portal (an in-process library) is refused naming why, never
+          answered with the native entries, and one whose operations collide on a path and verb is
+          refused naming both (nothing written).
         type: return
         outcome: exported
       - stepNumber: 5
@@ -1503,7 +1507,6 @@ methods:
         description: Done.
         type: return
         outcome: allowances listed
-    conformance: 'off'
     symbol: showExecution
   - name: runExecutionSetTier
     sourcePath: src/commands/execution.ts
@@ -1574,7 +1577,6 @@ methods:
         description: Done.
         type: return
         outcome: tier set
-    conformance: 'off'
     symbol: setExecutionTier
   - name: runDoctor
     sourcePath: src/commands/doctor.ts
@@ -4078,6 +4080,16 @@ lint:
         and every `pack` subcommand's endpoint dispatches to runPack directly, so scope-based
         sub-dispatchers would be invented here rather than named in the code. Adding a pack
         subcommand adds two steps, which is the point.
+    - code: PARAM_TYPE_MISMATCH
+      at: runMcpInstall
+      covers:
+        - options
+      reason: >-
+        The CLI runner is handed its flags, not the record: commander gives mcpInstallCommand the
+        options object it parsed (--hosted, --project, --token, keyed by flag), and the handler maps
+        them one-to-one onto mcp_install_options (hostedUrl, hostedProject, hostedToken) before the
+        command adapter runs — the CLI counterpart of a router unpacking a request, with the flag
+        names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T01:01:01.251Z'
+updatedAt: '2026-10-09T11:40:06.500Z'

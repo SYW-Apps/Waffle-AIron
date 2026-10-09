@@ -652,7 +652,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the selected projects, root first
-        endStep: 15
+        endStep: 16
       - stepNumber: 4
         description: Can its root be opened within the request's reach?
         type: branch
@@ -660,7 +660,7 @@ methods:
           the project loaded and its root is on disk (or in the fetch cache) and within the reach
           the caller granted — on a hosted request, a contained member's record is one the request's
           record lookup answers
-        onFalseStep: 14
+        onFalseStep: 15
       - stepNumber: 5
         description: >-
           Bind the project's own root for the next calls, keeping the granted reach and restoring
@@ -684,7 +684,7 @@ methods:
         condition: >-
           its own project graph holds a reference from it into a contained project member whose
           alias no status above names
-        onFalseStep: 12
+        onFalseStep: 13
       - stepNumber: 8
         description: >-
           Read its own project graph there: the references it writes into each contained project
@@ -706,32 +706,45 @@ methods:
         targetMethod: validateProject
       - stepNumber: 11
         description: >-
+          Read, through the surfaces adapter, each live member compared with the approval it is
+          judged against (the one this project's lock records, else the member's own last committed
+          approval), as an external is with its pin
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: memberStatuses
+      - stepNumber: 12
+        description: >-
           Answer each such member with one status under the alias the project declares it by: each
           reference a use, removed (so the relation reads incompatible) when the gate raised
           EXTERNAL_NOT_EXPORTED or any other resolution failure at that reference's call site, with
-          the resolution's reason, and unchanged otherwise. A contained member is read live, so it
-          is never drifted and carries no pin. A member whose record lies outside the request's
-          reach is answered unreachable and out of reach, every use unavailable — never ok
+          the resolution's reason, and otherwise the verdict the comparison with its approved
+          surface gives it — unchanged, changed (a signature, a field rename, a route moved or
+          removed), renamed or removed per the member's trace — with the comparison's drift (a
+          content or carried fact the member moved since its approval) carried, so a member reads
+          drifted or incompatible as an external does; a member with no approved revision reads its
+          uses unchanged and is never drifted. It carries no pin. A member whose record lies outside
+          the request's reach is answered unreachable and out of reach, every use unavailable —
+          never ok
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         label: record
         description: Record the project's statuses with the time they were read
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Next project
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 16
+      - stepNumber: 15
         label: unopened
         description: >-
           Record the project with no statuses and the reason (not on disk, not fetched, or outside
           the request's reach), so every edge from it is drawn unavailable — never a pass
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         label: next
         description: On to the next project
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the entries, root first
         type: return
         outcome: ProjectRelations[]
@@ -799,8 +812,11 @@ methods:
       - stepNumber: 8
         label: drift
         description: >-
-          Report one EXTERNAL_DRIFTED (notice, advisory): the producer moved while nothing used did
-          — re-pin when convenient
+          Report one EXTERNAL_DRIFTED (notice, advisory): the producer moved while no signature used
+          did — re-pin when convenient; when a used verb's wire endpoint moved (a use whose detail
+          says `endpoint moved`), the finding names each such verb with its old and new route and
+          says that a client spelling the route (a hand-written HTTP client, a binding) must follow,
+          never that nothing used changed
         type: local
       - stepNumber: 9
         description: Next external
@@ -1142,4 +1158,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-09T01:02:13.531Z'
+updatedAt: '2026-10-09T11:39:17.465Z'

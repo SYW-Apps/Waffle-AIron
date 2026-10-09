@@ -56,7 +56,11 @@ function roundTrip(type: string): string {
 }
 
 describe('toOpenApiSet — every form from its parsed expression', () => {
-  const schemaOf = (type: string): any => bodyProps(JSON.parse(singlePortalDocument(snapshotOf([{ name: 'value', type }])))).value;
+  // The one object-typed param — a `T?` one included (round 9) — IS the body, bare; any other is a property of the body object.
+  const schemaOf = (type: string): any => {
+    const doc = JSON.parse(singlePortalDocument(snapshotOf([{ name: 'value', type }])));
+    return doc.paths['/op'].post['x-wairon-body-param'] === 'value' ? doc.paths['/op'].post.requestBody.content['application/json'].schema : bodyProps(doc).value;
+  };
 
   it('maps the primitives and their formats', () => {
     expect(schemaOf('string')).toEqual({ type: 'string' });

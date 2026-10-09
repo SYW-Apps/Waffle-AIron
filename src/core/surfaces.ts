@@ -10,6 +10,7 @@ import {
   SurfaceSnapshotSchema,
   SurfaceContractEntry,
   SurfaceTypeDef,
+  type MethodSignature,
   SurfaceOrigin,
   SURFACE_AUDIENCES,
   NamedOpenApiSpec,
@@ -63,6 +64,7 @@ import {
   listExternalConsumers,
   getLoaderIssues,
   approvedRevision,
+  memberRevisions,
 } from './adapters/surfaces-core.js';
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
@@ -375,7 +377,12 @@ function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
       ...entry,
       methods: entry.methods.map((m) => ({
         ...m,
-        signature: canon(m.signature),
+        // Rebuilt from the structured params when it has them: a parameter's
+        // NAME is never a type position, so one spelled like a type
+        // (`order_id: order_id`) keeps its name.
+        signature: m.params?.length
+          ? `${m.name}(${m.params.map((p) => `${p.name}${p.optional ? '?' : ''}: ${canon(p.type)}`).join(', ')}): ${canon(m.returns)}`
+          : canon(m.signature),
         returns: canon(m.returns),
         ...(m.params ? { params: m.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
       })),
@@ -787,7 +794,7 @@ export function foreignSurfaces(): Map<string, SurfaceSnapshot> {
   } catch {
     // An unreadable pin resolves nothing.
   }
-  let members: { alias: string; path?: string; storage: string; problem?: string }[] = [];
+  let members: { alias: string; path?: string; source: { path?: string }; storage: string; problem?: string }[] = [];
   try {
     const config = loadProjectConfig();
     members = config ? declaredMembers(config) : [];
@@ -796,15 +803,27 @@ export function foreignSurfaces(): Map<string, SurfaceSnapshot> {
   }
   const root = getProjectRoot();
   for (const m of members) {
-    // A contained member and a `../` sibling are read live, where they are stored (round 8).
-    if (m.problem || (m.storage !== 'contained' && m.storage !== 'path') || m.path === undefined || out.has(m.alias)) continue;
+    // A contained member and a `../` sibling are read live, where they are
+    // stored (round 8) — a sibling's location is its source path (round 9:
+    // only a contained member carried `path`, so a sibling never resolved).
+    const location = m.path ?? m.source.path;
+    if (m.problem || (m.storage !== 'contained' && m.storage !== 'path') || location === undefined || out.has(m.alias)) continue;
     try {
-      const surface = runWithProjectRoot(path.resolve(root, m.path), () => projectOwnSurface('project'));
+      const surface = runWithProjectRoot(path.resolve(root, location), () => projectOwnSurface('project'));
       out.set(m.alias, surface);
       if (surface.projectId && !out.has(surface.projectId)) out.set(surface.projectId, surface);
     } catch {
       // A part, or a member whose tree cannot be projected: its types stay unresolved.
     }
+  }
+  // The bound project's own surface under its own id: a member that consumes
+  // this project's L0 re-exports (the shape `member promote` writes) names its
+  // types `<this project's id>::name`, which resolve here.
+  try {
+    const own = boundProjectId();
+    if (own !== undefined && !out.has(own)) out.set(own, projectOwnSurface('project'));
+  } catch {
+    // No L0 to project: its own id resolves nothing.
   }
   return out;
 }
@@ -1197,6 +1216,13 @@ function narrowerExports(external: ResolvedExternal, missing: string[], read: Su
   return [...out].map(([name, audience]) => ({ name, audience }));
 }
 
+/** A pin's detail with what moved since the replaced pin said first. */
+function withMoved(detail: { detail?: string }, moved: string[]): { detail?: string } {
+  if (moved.length === 0) return detail;
+  const said = `moved since the last pin: ${moved.join(', ')}`;
+  return { detail: detail.detail ? `${said}; ${detail.detail}` : said };
+}
+
 /** Pin one resolved binding: the snapshot written when its content moved, and the lock entry. */
 function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: ExternalPin; changed: boolean } {
   const { external } = binding;
@@ -1221,6 +1247,9 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   // entry's transport and role), and a re-pin is how they are refreshed.
   const snapshotChanged = !pinned || contentDigest(pinned) !== digest || pinnedContentKey(pinned) !== pinnedContentKey(snapshot);
   if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
+  // What moved since the replaced pin that no digest reads — a used verb's
+  // route above all: a re-pin never rewrites it without a word.
+  const moved = pinned && snapshotChanged ? carriedFactChanges(pinned, snapshot) : [];
   // Step 14: the lock entry — `used` maps each used member to its digest.
   const { used, missing, uncarried } = usedDigests(binding.usage, snapshot, external.alias);
   // A used name the producer does export — only narrower than this project
@@ -1242,7 +1271,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
       digest,
       usedNames: Object.keys(used).length,
       unexported: [...unexported, ...uncarried],
-      ...(pinDetail(missing, Object.keys(used).length, external.alias, narrower, external.audience)),
+      ...(withMoved(pinDetail(missing, Object.keys(used).length, external.alias, narrower, external.audience), moved)),
     },
     changed: entryChanged,
   };
@@ -1529,6 +1558,31 @@ function changedDetail(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, pu
   return { detail: `${renames.join('; ')}${renameOnly ? ' (its shape is otherwise unchanged) — follow the rename' : ' (and its shape changed beyond that)'}` };
 }
 
+/** A wire endpoint as a status line shows it: an HTTP verb and path (with its stated status), another transport's address, or none. */
+function routeOf(endpoint: MethodSignature['endpoint'] | undefined): string {
+  if (!endpoint) return 'none';
+  if (endpoint.transport === 'HTTP') return `${endpoint.method} ${endpoint.path}${endpoint.status !== undefined ? ` (answers ${endpoint.status})` : ''}`;
+  const { transport, ...address } = endpoint as Record<string, unknown>;
+  return `${String(transport)} ${Object.entries(address).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}=${String(v)}`).join(' ')}`;
+}
+
+/**
+ * How a used contract method's wire endpoint moved since the pin: the route a
+ * hand-written client spells, which no digest reads. Null when the pinned
+ * snapshot is not at hand, records no endpoint for it, or the route is the
+ * same; `removed` when the live method is bound to no route any more.
+ */
+function endpointMove(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string): { removed: boolean; detail: string } | null {
+  if (!pinned || member === 'type' || member.startsWith('capability:')) return null;
+  const was = pinned.interfaces.find((e) => e.id === publicName)?.methods.find((m) => m.name === member)?.endpoint;
+  if (!was) return null;
+  const now = live.interfaces.find((e) => e.id === publicName)?.methods.find((m) => m.name === member)?.endpoint;
+  if (canonicalize(was) === canonicalize(now ?? null)) return null;
+  return now
+    ? { removed: false, detail: `endpoint moved: ${routeOf(was)} → ${routeOf(now)} — its signature is unchanged, but a client that spells the route (a hand-written HTTP client, a binding) must follow` }
+    : { removed: true, detail: `endpoint ${routeOf(was)} removed — the verb is bound to no route any more, so a client calling it over the wire breaks` };
+}
+
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
 function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
@@ -1539,11 +1593,26 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
       uses.push(liveHas(publicName) ? { publicName, state: 'unchanged' } : goneUse(live, publicName, undefined, undefined));
       continue;
     }
-    for (const [member, digest] of Object.entries(members)) {
+    for (const [member, locked] of Object.entries(members)) {
+      // The baseline re-read from the pinned snapshot when it is at hand: a
+      // digest an older release recorded for the same snapshot is no change.
+      const digest = (pinned ? memberDigest(pinned, publicName, member) : null) ?? locked;
       const now = memberDigest(live, publicName, member);
-      if (now === null) uses.push(goneUse(live, publicName, member, digest, pinned));
-      else if (now === digest) uses.push({ publicName, member, state: 'unchanged' });
-      else uses.push({ publicName, member, state: 'changed', ...changedDetail(pinned, live, publicName, member, digest) });
+      if (now === null) {
+        uses.push(goneUse(live, publicName, member, digest, pinned));
+        continue;
+      }
+      // The route a client spells moved, or went: said beside the signature verdict.
+      const route = endpointMove(pinned, live, publicName, member);
+      if (now === digest) {
+        uses.push(route === null
+          ? { publicName, member, state: 'unchanged' }
+          : { publicName, member, state: route.removed ? 'changed' : 'unchanged', detail: route.detail });
+        continue;
+      }
+      const changed = changedDetail(pinned, live, publicName, member, digest);
+      const detail = [changed.detail, route?.detail].filter((d): d is string => !!d).join('; ');
+      uses.push({ publicName, member, state: 'changed', ...(detail ? { detail } : {}) });
     }
   }
   // A use the lock does not hold is still compared with the live producer: one
@@ -1642,7 +1711,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   const staleFacts = snapshot ? carriedFactChanges(snapshot, live) : [];
   // Drifted is "the producer moved since the pin": its contract digest, or a
   // fact the pin carries beside it — one answer with the health it reports.
-  const drifted = entry !== undefined ? contentDigest(live) !== entry.digest || staleFacts.length > 0 : undefined;
+  const drifted = entry !== undefined ? contentDigest(live) !== (snapshot ? contentDigest(snapshot) : entry.digest) || staleFacts.length > 0 : undefined;
   return {
     ...base,
     reachable: true,
@@ -1651,6 +1720,75 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
     ...(staleFacts.length ? { staleFacts } : {}),
     uses,
   };
+}
+
+/** One live member projected at its own root, bound read-only; null when it cannot be projected. */
+function projectedAt(directory: string): SurfaceSnapshot | null {
+  try {
+    return runWithProjectRoot(directory, () => projectOwnSurface('project'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * surface_orchestrator.memberApprovedSurfaces — each live member of the bound
+ * project projected as its tree stood at the approval it is judged against
+ * (the one the bound project's lock records, else its own last committed
+ * approval), keyed by alias: what a binding into a member is compared with
+ * beside its live export, so a name it dropped since is named. A member with
+ * no such revision is left out. Read-only.
+ */
+export function memberApprovedSurfaces(): Record<string, SurfaceSnapshot> {
+  // Step 1: each live member with its approved revision.
+  const out: Record<string, SurfaceSnapshot> = {};
+  // Steps 2-4: each projected there, at its widest table.
+  for (const member of memberRevisions()) {
+    if (!member.revision) continue;
+    const approved = projectedAt(member.revision.directory);
+    if (approved) out[member.alias] = approved;
+  }
+  // Step 5.
+  return out;
+}
+
+/**
+ * surface_orchestrator.memberStatuses — each live member of the bound project
+ * compared with the approval it is judged against, as an external is with its
+ * pin: the used members' digests in its live projection against its approved
+ * surface's, and drifted when its content or a carried fact moved since. A use
+ * the approval does not hold is the family run's to judge live; a member with
+ * no approved revision is left out. Read-only.
+ */
+export function memberStatuses(): ExternalStatus[] {
+  const out: ExternalStatus[] = [];
+  // Steps 1-2: each live member with its usage and its approved revision.
+  for (const member of memberRevisions()) {
+    if (!member.revision) continue;
+    // Step 3: live, and as approved.
+    const live = projectedAt(member.root);
+    const approved = projectedAt(member.revision.directory);
+    if (!live || !approved) continue;
+    // Step 4: compared as a pin is — the approved surface standing in for the pinned snapshot.
+    const { used } = usedDigests(member.usage, approved, member.alias);
+    const entry: ExternalLockEntry = { project: member.project, snapshot: '', digest: contentDigest(approved), used };
+    const uses = compareUses(entry, undefined, live, approved).filter((u) => u.state !== 'unlocked' && u.state !== 'unavailable');
+    const staleFacts = carriedFactChanges(approved, live);
+    out.push({
+      alias: member.alias,
+      project: member.project,
+      sourceKind: 'family',
+      pinned: false,
+      reachable: true,
+      stale: uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed'),
+      drifted: contentDigest(live) !== contentDigest(approved) || staleFacts.length > 0,
+      ...(staleFacts.length ? { staleFacts } : {}),
+      uses,
+      detail: `a live member, compared with ${member.revision.label}`,
+    });
+  }
+  // Step 5.
+  return out;
 }
 
 /** A source.hosted external read outside a hosted server: its problem says so, and nothing is wrong with the external. */

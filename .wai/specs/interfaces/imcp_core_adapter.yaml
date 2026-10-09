@@ -99,8 +99,9 @@ methods:
       - name: pinSymbol
         type: bool
         description: >-
-          Whether an implementation that declares no symbol is pinned to the old name; true when
-          omitted
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
         optional: true
       - name: dryRun
         type: bool
@@ -326,6 +327,27 @@ methods:
         type: bool
         description: Answer what the rename would do, and write nothing
         optional: true
+  - name: lockTree
+    description: >-
+      Forward to spec_tree_portal.lockTree: take the bound tree's cross-process write lock before a
+      write tool runs
+    signature: 'lockTree(): void'
+    returns: void
+  - name: unlockTree
+    description: 'Forward to spec_tree_portal.unlockTree: release it once the write tool has answered'
+    signature: 'unlockTree(): void'
+    returns: void
+  - name: readPinnedSpec
+    description: 'Forward to spec_tree_portal.readPinnedSpec: an external''s spec read from its pinned snapshot'
+    signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
+    returns: PinnedSpecRead?
+    params:
+      - name: kind
+        type: string
+        description: component, interface or type
+      - name: id
+        type: string
+        description: The `alias::name` asked for
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:33:36.335Z'
+updatedAt: '2026-10-09T12:16:44.357Z'

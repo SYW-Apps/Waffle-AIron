@@ -22,7 +22,7 @@ import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, writeLockRecord as persistLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { listSpecFiles, readSpecFile, removeSpecFile, writeSpecFile } from './spec-files.js';
+import { listSpecFiles, lockTree as lockTreeFile, readSpecFile, removeSpecFile, unlockTree as unlockTreeFile, writeSpecFile } from './spec-files.js';
 // git_source_adapter: a git part is read from the content-addressed fetch cache at its pinned commit (stage 8).
 import * as gitSource from './adapters/git-source.js';
 import * as crypto from 'crypto';
@@ -1392,6 +1392,8 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
       break;
     case 'interface':
       at(doc, 'component', 'contract');
+      // The extension point a contract realizes: another project's export, a raw position.
+      at(doc, 'implements', 'implements');
       typedSlots('interface', doc, map);
       break;
     case 'implementation':
@@ -2091,6 +2093,88 @@ function parseOrThrow<S extends z.ZodTypeAny>(schema: S, value: unknown, kind: s
 // process (the MCP server) notices external YAML edits.
 const SIGNATURE_TTL_MS = 2000;
 
+/**
+ * The code-linkage lists of an implementation a delta REPLACES rather than
+ * merges: injectedParams states the realization's leading (and trailing)
+ * parameters in order, bindings its binding modules — each the code's reality
+ * stated whole, where an entry left over from an earlier statement is itself a
+ * finding (UNUSED_INJECTED_PARAM, BINDING_UNREAD). A removal marker still
+ * merges, removing one value and keeping the rest.
+ */
+const REPLACED_LINKAGE_LISTS: ReadonlySet<string> = new Set(['injectedParams', 'bindings']);
+
+/** The top-level field of a spec a reference position sits under, for a change report's path. */
+function respelledField(kind: string, position: string): string {
+  switch (position) {
+    case 'narrative':
+    case 'calls':
+    case 'auth':
+      return 'methods';
+    case 'type':
+      return kind === 'type' ? 'fields' : 'methods';
+    case 'contract':
+      return kind === 'interface' ? 'component' : 'contract';
+    default:
+      return position;
+  }
+}
+
+/**
+ * What a no-change answer says of a list the delta restated with stored
+ * elements left out: lists upsert, so what it leaves out is kept — and the
+ * one way to remove an element is a delete marker beside its name.
+ */
+function omittedListNotices(kind: string, stored: Record<string, any>, delta: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const fields = kind === 'type' ? ['methods', 'fields'] : kind === 'interface' || kind === 'implementation' ? ['methods'] : [];
+  for (const field of fields) {
+    const given = delta[field];
+    if (!Array.isArray(given) || given.length === 0) continue;
+    const named = new Set(given.map((e) => (e && typeof e === 'object' ? (e as { name?: unknown }).name : undefined)).filter((n): n is string => typeof n === 'string'));
+    const kept = (Array.isArray(stored[field]) ? stored[field] : []).map((e: { name?: unknown }) => e?.name).filter((n: unknown): n is string => typeof n === 'string' && !named.has(n));
+    if (kept.length === 0) continue;
+    out.push(
+      `${field}: the delta left out ${kept.map((n: string) => `"${n}"`).join(', ')}, and a list delta upserts — what it leaves out is kept, never removed. `
+      + `To remove one, name it with a delete marker: {"${field}": [{"name": "${kept[0]}", "action": "delete"}]}.`,
+    );
+  }
+  return out;
+}
+
+/** One `::`-segment of an id a path is built from: letters, digits, `-` and `_`, never a separator or a dot. */
+const PATH_SAFE_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Why an id cannot be turned into a path, or null when it can: every
+ * `::`-segment (a leading `::` aside) is letters, digits, `-` and `_` — no
+ * path separator, no `.` or `..` segment, nothing a filesystem reads as a step
+ * out of the folder the id is placed in.
+ */
+function pathSafeIdProblem(id: string): string | null {
+  if (typeof id !== 'string' || id === '') return 'it is empty';
+  const segments = id.split('::');
+  const named = id.startsWith('::') ? segments.slice(1) : segments;
+  const bad = named.find((s) => !PATH_SAFE_SEGMENT.test(s));
+  if (bad === undefined) return null;
+  if (/[\\/]/.test(bad)) return `"${bad}" holds a path separator`;
+  if (bad === '' ) return 'it has an empty segment';
+  if (/^\.+$/.test(bad) || bad.includes('.')) return `"${bad}" holds a dot`;
+  return `"${bad}" holds a character outside letters, digits, "-" and "_"`;
+}
+
+/** Refuse, before any path is built, an id that is not path-safe (pathSafeIdProblem). */
+function assertPathSafe(id: string, what: string): void {
+  const problem = pathSafeIdProblem(id);
+  if (problem !== null) {
+    throw new Error(`not-an-id: the ${what} id "${id}" cannot name a spec — ${problem}. An id becomes a folder or a file name, so it is a plain id (letters, digits, "-" and "_", qualified by "::"), never a path. Nothing was written.`);
+  }
+}
+
+/** Whether a document found at an id's path is stored under exactly that id (its last segment), case included. */
+function storedUnder(storedId: unknown, askedId: string): boolean {
+  return typeof storedId !== 'string' || storedId === askedId.split('::').pop();
+}
+
 function computeSpecTreeSignature(dirs: string[], files: string[] = []): string {
   const parts: string[] = [];
   // Each walked root's .wai/project.yaml: an edit to a root's externals re-scans.
@@ -2235,6 +2319,28 @@ export interface SpecChange {
  * write that changed nothing is how a typo'd delta ("dependson", a method-level
  * `unset` that no-opped) read as a completed edit for a whole session.
  */
+/**
+ * pinned_spec_read — a spec of another project read from the pinned snapshot
+ * this project holds of it: the pin's record, read-only, never a spec of
+ * this tree and never written back.
+ */
+export interface PinnedSpecRead {
+  /** The external's alias the read went through. */
+  alias: string;
+  /** The producer project the alias names. */
+  project: string;
+  /** interface for a contract entry, type for an exported type. */
+  kind: 'interface' | 'type';
+  /** The public name read. */
+  id: string;
+  /** The pinned snapshot file, project-relative. */
+  file: string;
+  /** The producer's StateId the pin was taken at, when recorded. */
+  stateId?: string;
+  /** The snapshot's entry exactly as pinned. */
+  spec: unknown;
+}
+
 export interface SpecChangeReport {
   kind: WritableSpecKind;
   id: string;
@@ -4269,11 +4375,121 @@ export class SpecWorkspace {
     return { ...mapped, id: localOf(from, spec.id).split('::').pop()! };
   }
 
+  /**
+   * The keys an `alias::name` read lands on when no spec holds the id as
+   * written: the id bound through the bound project's alias table as a write
+   * binds it (a public name to the member's key), and the member's own key for
+   * a name it does not export — so a read resolves the form the guide
+   * prescribes exactly as a write resolves it to refuse. None for a bare id.
+   */
+  private aliasedReadKeys(id: string): string[] {
+    if (!id.includes('::') || pathSafeIdProblem(id) !== null) return [];
+    const out: string[] = [];
+    try {
+      const bound = this.bindReference('', id);
+      if (bound !== id) out.push(bound);
+    } catch { /* an id the binder cannot read lands nowhere */ }
+    const at = id.indexOf('::');
+    const namespace = this.cachedRawRoots[0]?.record.aliases.get(id.slice(0, at));
+    if (namespace !== undefined && namespace !== '' && this.rootCovering(namespace) !== null) out.push(`${namespace}::${id.slice(at + 2)}`);
+    return [...new Set(out)];
+  }
+
+  /**
+   * The references a delta writes in ANOTHER TEXT than the stored spec holds
+   * at the same position while both bind to one target (core_orchestrator
+   * updateSpec step 14): the stored file's authored texts read per position,
+   * the delta's read the same way, and a delta text the position does not hold
+   * whose binding equals a stored text's binding is a respelling of it.
+   */
+  private referenceRespellingsOf(kind: WritableSpecKind, id: string, delta: Record<string, unknown>): { position: string; from: string; to: string }[] {
+    if (kind === 'system') return [];
+    const file = this.storedFileOf(kind, id);
+    if (!file || !pathExists(file)) return [];
+    let stored: Record<string, unknown>;
+    try {
+      stored = JSON.parse(JSON.stringify(readSpecFile(file))) as Record<string, unknown>;
+    } catch {
+      return [];
+    }
+    const held = new Map<string, Set<string>>();
+    respellStoredReferences(kind, stored, (position, value) => {
+      held.set(position, (held.get(position) ?? new Set<string>()).add(value));
+      return value;
+    });
+    const written: { position: string; value: string }[] = [];
+    respellStoredReferences(kind, JSON.parse(JSON.stringify(delta)) as Record<string, unknown>, (position, value) => {
+      written.push({ position, value });
+      return value;
+    });
+    const prefix = this.writePrefixFor(id);
+    const bind = (value: string): string => {
+      try {
+        return this.bindReference(prefix, value);
+      } catch {
+        return value;
+      }
+    };
+    const out: { position: string; from: string; to: string }[] = [];
+    for (const w of written) {
+      const texts = held.get(w.position);
+      if (!texts || texts.has(w.value)) continue;
+      const target = bind(w.value);
+      const from = [...texts].find((s) => s !== w.value && bind(s) === target);
+      if (from !== undefined && !out.some((o) => o.position === w.position && o.from === from)) out.push({ position: w.position, from, to: w.value });
+    }
+    return out;
+  }
+
+  /**
+   * spec_loader.readPinnedSpec — an EXTERNAL's spec read by `alias::name` from
+   * the pinned snapshot the bound project holds of it: the contract entry (a
+   * component or an interface asked for, or no kind) or the exported type (a
+   * type). Null when the alias is no declared external (a member's alias is
+   * read under its key instead), its pin is absent or unreadable, or the pin
+   * holds no such public name. Read-only, never cached.
+   */
+  readPinnedSpec(kind: string | undefined, id: string): PinnedSpecRead | null {
+    const at = id.indexOf('::');
+    const pin = at > 0 ? this.pinnedSnapshotOf(id.slice(0, at)) : null;
+    if (!pin) return null;
+    const name = id.slice(at + 2);
+    const entry = kind === 'type' ? undefined : pin.snapshot.interfaces.find((e) => e.id === name);
+    if (entry) return { ...pin.base, kind: 'interface', id: name, spec: entry };
+    const definition = kind === undefined || kind === 'type' ? pinnedTypeDefinition(pin.snapshot, name) : undefined;
+    return definition ? { ...pin.base, kind: 'type', id: name, spec: definition } : null;
+  }
+
+  /** The pinned snapshot of the bound project's external `alias` — none for a member's alias, an undeclared one, or an absent or unreadable pin. */
+  private pinnedSnapshotOf(alias: string): { snapshot: SurfaceSnapshot; base: Omit<PinnedSpecRead, 'kind' | 'id' | 'spec'> } | null {
+    this.scanAll();
+    const root = this.cachedRawRoots[0];
+    const config = root?.record.config;
+    if (!root || !config || root.record.aliases.has(alias)) return null;
+    const declared = declaredExternals(config).find((d) => d.alias === alias && !d.problem);
+    const file = path.join(aiPathsAt(root.dir).root(), 'externals', `${alias}.yaml`);
+    if (!declared || !pathExists(file)) return null;
+    try {
+      const snapshot = SurfaceSnapshotSchema.parse(readSpecFile(file));
+      const rel = path.relative(root.dir, file).split(path.sep).join('/');
+      return { snapshot, base: { alias, project: declared.project, file: rel, ...(snapshot.stateId !== undefined ? { stateId: snapshot.stateId } : {}) } };
+    } catch {
+      return null;
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Path builders
+  //
+  // Every id a path is built from must be path-safe FIRST: a subsystem, a
+  // component, a contract, an implementation or a type id becomes a folder or
+  // a file name, and one carrying a separator or a `..` segment would build a
+  // path out of the tree — into another project's specs. Refused here, before
+  // any path exists, whichever write asked.
   // -------------------------------------------------------------------------
 
   getSubsystemPath(id: string): string {
+    assertPathSafe(id, 'subsystem');
     const index = this.scanAll();
     if (index.paths.subsystem[id]) {
       return index.paths.subsystem[id];
@@ -4304,6 +4520,8 @@ export class SpecWorkspace {
   }
 
   getComponentPath(id: string, subsystemId?: string): string {
+    assertPathSafe(id, 'component');
+    if (subsystemId !== undefined) assertPathSafe(subsystemId, 'subsystem');
     const index = this.scanAll();
     if (index.paths.component[id]) {
       return index.paths.component[id];
@@ -4346,6 +4564,8 @@ export class SpecWorkspace {
   }
 
   getInterfacePath(id: string, componentId?: string): string {
+    assertPathSafe(id, 'interface');
+    if (componentId !== undefined) assertPathSafe(componentId, 'component');
     const index = this.scanAll();
     if (index.paths.interface[id]) {
       return index.paths.interface[id];
@@ -4387,6 +4607,8 @@ export class SpecWorkspace {
   }
 
   getImplementationPath(id: string, contractId?: string): string {
+    assertPathSafe(id, 'implementation');
+    if (contractId !== undefined) assertPathSafe(contractId, 'interface');
     const index = this.scanAll();
     if (index.paths.implementation[id]) {
       return index.paths.implementation[id];
@@ -4428,6 +4650,9 @@ export class SpecWorkspace {
   }
 
   getTypePath(id: string, subsystemId?: string, group?: string): string {
+    assertPathSafe(id, 'type');
+    if (subsystemId !== undefined && subsystemId !== '') assertPathSafe(subsystemId, 'subsystem');
+    if (group !== undefined && group !== '') assertPathSafe(group, 'group');
     const index = this.scanAll();
     if (index.paths.type[id]) return index.paths.type[id];
 
@@ -4589,12 +4814,18 @@ export class SpecWorkspace {
     const index = this.scanAll();
     const cached = index.subsystems.find((s) => s.id === id);
     if (cached) return cached;
+    const aliased = this.aliasedReadKeys(id).map((key) => index.subsystems.find((s) => s.id === key)).find((s) => s !== undefined);
+    if (aliased) return aliased;
+    // An id that is no path-safe id names no file: never a path out of the tree.
+    if (pathSafeIdProblem(id) !== null) return null;
 
     const p = this.getSubsystemPath(id);
     if (!pathExists(p)) return null;
     try {
       const raw = readSpecFile(p);
-      return SubsystemSpecSchema.parse(raw);
+      const parsed = SubsystemSpecSchema.parse(raw);
+      // A case-insensitive filesystem finds `Links` for `links`: only the exact id is that spec.
+      return storedUnder(parsed.id, id) ? parsed : null;
     } catch (e: any) {
       this.loaderIssues.push({
         severity: 'error',
@@ -4802,11 +5033,15 @@ export class SpecWorkspace {
     const index = this.scanAll();
     const spec = index.components.find((c) => c.id === id);
     if (spec) return spec;
+    const aliased = this.aliasedReadKeys(id).map((key) => index.components.find((c) => c.id === key)).find((c) => c !== undefined);
+    if (aliased) return aliased;
+    if (pathSafeIdProblem(id) !== null) return null;
 
     const p = this.getComponentPath(id);
     if (!pathExists(p)) return null;
     try {
       const raw = readSpecFile(p) as Record<string, unknown>;
+      if (!storedUnder(raw.id, id)) return null;
       readRetiredReachForms('component', raw);
       return attachRetiredMounts(ComponentSpecSchema.parse(raw), raw);
     } catch (e: any) {
@@ -4944,11 +5179,15 @@ export class SpecWorkspace {
     const index = this.scanAll();
     const spec = index.interfaces.find((i) => i.id === id);
     if (spec) return spec;
+    const aliased = this.aliasedReadKeys(id).map((key) => index.interfaces.find((i) => i.id === key)).find((i) => i !== undefined);
+    if (aliased) return aliased;
+    if (pathSafeIdProblem(id) !== null) return null;
 
     const p = this.getInterfacePath(id);
     if (!pathExists(p)) return null;
     try {
       const raw = readSpecFile(p) as Record<string, unknown>;
+      if (!storedUnder(raw.id, id)) return null;
       const owner = typeof raw.component === 'string' ? index.components.find((c) => c.id === raw.component) : undefined;
       readRetiredReachForms('interface', raw, owner?.componentType === 'Portal');
       // A file the scan did not index is resolved alone, against the index's components and types.
@@ -5066,11 +5305,15 @@ export class SpecWorkspace {
     const index = this.scanAll();
     const spec = index.implementations.find((impl) => impl.id === id);
     if (spec) return spec;
+    const aliased = this.aliasedReadKeys(id).map((key) => index.implementations.find((impl) => impl.id === key)).find((impl) => impl !== undefined);
+    if (aliased) return aliased;
+    if (pathSafeIdProblem(id) !== null) return null;
 
     const p = this.getImplementationPath(id);
     if (!pathExists(p)) return null;
     try {
-      const raw = readSpecFile(p);
+      const raw = readSpecFile(p) as Record<string, unknown>;
+      if (!storedUnder(raw.id, id)) return null;
       return ImplementationSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
@@ -5129,7 +5372,10 @@ export class SpecWorkspace {
   }
 
   loadTypeSpec(id: string): TypeSpec | null {
-    return this.scanAll().types.find((t) => t.id === id) ?? null;
+    const types = this.scanAll().types;
+    return types.find((t) => t.id === id)
+      ?? this.aliasedReadKeys(id).map((key) => types.find((t) => t.id === key)).find((t) => t !== undefined)
+      ?? null;
   }
 
   /**
@@ -6749,6 +6995,11 @@ export class SpecWorkspace {
           res.dispatch = inDeltaOrder(key, existing.dispatch, value, mergeKeyedArray(existing.dispatch, value, b => String(b?.capability)));
         } else if (key === 'lifecycle' && Array.isArray(value) && Array.isArray(existing.lifecycle)) {
           res.lifecycle = inDeltaOrder(key, existing.lifecycle, value, mergeKeyedArray(existing.lifecycle, value, le => `${le?.phase} ${le?.component} ${le?.method}`));
+        } else if (kind === 'implementation' && delta2 === qualifiedDelta && REPLACED_LINKAGE_LISTS.has(key)
+                   && Array.isArray(value) && !value.some(isValueMarker)) {
+          // Code linkage stated whole (REPLACED_LINKAGE_LISTS): the list as
+          // restated REPLACES the stored one; a removal marker still merges.
+          res[key] = value;
         } else if (Array.isArray(value) && isPlainValueList(key, existing[key], value)) {
           // A list of plain values merges: values appended when absent, a marked
           // value removed, nothing the delta did not name lost.
@@ -6932,6 +7183,12 @@ export class SpecWorkspace {
     const canonicalStored = canonical(storedBefore);
     const canonicalMerged = canonical(mergedResult);
     const changes = specChanges(canonicalStored, canonicalMerged);
+    // A reference the delta writes in another spelling of what the stored spec
+    // already names (the public name for an internal id, `geo::distance` for
+    // `geo::distance_portal`) binds to the same target, so the bound comparison
+    // above sees nothing — but the TEXT is what the gate judges. It is a change.
+    const referenceRespellings = this.referenceRespellingsOf(kind, id, mergeableDelta);
+    for (const r of referenceRespellings) changes.push({ path: respelledField(kind, r.position), change: 'set', before: r.from, after: r.to });
 
     // …and what the delta named that the write did NOT act on. The top-level
     // unknown-key refusal above cannot see one depth down, where the delta is
@@ -6942,7 +7199,7 @@ export class SpecWorkspace {
       canonicalMerged,
       canonicalStored,
       respellings,
-    );
+    ).filter((line) => !referenceRespellings.some((r) => line.startsWith(respelledField(kind, r.position)) && line.includes('already held')));
 
     // A write that changes nothing writes NOTHING and says so. Re-stamping
     // updatedAt and answering "Successfully updated" is how a delta that
@@ -6957,7 +7214,7 @@ export class SpecWorkspace {
         dryRun,
         changes,
         ineffective,
-        notices,
+        notices: [...notices, ...omittedListNotices(kind, storedBefore, mergeableDelta)],
         respellings: [],
         testsToRevisit: [],
         summary: `No change to ${kind} "${id}" — the delta matches what is stored, so nothing ${dryRun ? 'would be' : 'was'} written.`,
@@ -7010,6 +7267,11 @@ export class SpecWorkspace {
     };
 
     notices.push(...this.saveOfKind(kind, mergedResult, opts));
+    // The save carried each reference's stored text; a respelled one is
+    // written in the delta's text at its position, nothing else moved.
+    if (referenceRespellings.length > 0) {
+      this.respellReferences(kind, id, referenceRespellings.map((r) => ({ kind, specId: id, position: r.position, from: r.from, to: r.to })));
+    }
 
     return {
       kind,
@@ -7959,6 +8221,38 @@ function registryInvalidateCache(): void {
 /** spec_loader.invalidateCache — forwarded 1:1 to the registry write face. */
 export function invalidateSpecCache(): void {
   registryInvalidateCache();
+}
+
+/**
+ * spec_registry.lockTree — take the cross-process write lock of the bound
+ * project's tree, then make every workspace re-read its tree's file signature
+ * on its next scan: a write that follows reads what another session wrote
+ * before it, never a cache still inside its time-to-live.
+ */
+function registryLockSpecTree(): void {
+  lockTreeFile(getProjectRoot());
+  for (const ws of workspaces.values()) ws.expireFreshness();
+}
+
+/** spec_loader.lockTree — forwarded 1:1 to the registry write face. */
+export function lockTree(): void {
+  registryLockSpecTree();
+}
+
+/** The definition a pinned snapshot holds for the type it exports under `name`, from its type closure. */
+function pinnedTypeDefinition(snapshot: SurfaceSnapshot, name: string): unknown {
+  const exported = (snapshot.exportedTypes ?? []).find((t) => t.id === name);
+  return exported ? snapshot.types.find((t) => t.id === exported.type) : undefined;
+}
+
+/** spec_loader.readPinnedSpec — an external's spec read by `alias::name` from its pinned snapshot; null when none holds it. */
+export function readPinnedSpec(kind: string | undefined, id: string): PinnedSpecRead | null {
+  return current().readPinnedSpec(kind, id);
+}
+
+/** spec_loader.unlockTree — release the bound project's tree write lock. */
+export function unlockTree(): void {
+  unlockTreeFile(getProjectRoot());
 }
 
 export function getLoaderIssues(): ValidationIssue[] {

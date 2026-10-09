@@ -77,9 +77,14 @@ methods:
       symbol, here or through the imports and republications this file forwards it by, so a
       signature, an ambient or interface declaration or a plain value binding stops reading as an
       implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern
-      table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is
-      missing or could not be analyzed are left to source-file-linkage, and implementations under
-      chained subsystems (projectPath) validate standalone in their own project run.
+      table | generic scan) so weaker analysis is visible. A dial turned off is said once per
+      implementation as a notice (REALIZATION_UNCHECKED) naming the methods it covers: the dial is
+      code linkage, outside the approval, so without it one line in an implementation spec would
+      switch the realization checks off — method, parameters, async, whether narrated calls are
+      found — with no surface saying so; the doctrine checks still run. Methods whose file escapes
+      the root, is missing or could not be analyzed are left to source-file-linkage, and
+      implementations under chained subsystems (projectPath) validate standalone in their own
+      project run.
     signature: 'methodRealization(ctx: RuleContext): void'
     returns: void
     params:
@@ -98,6 +103,12 @@ methods:
           The method symbol IS declared in its own source file, but the file holds no function-like
           body under it — a signature, an ambient or interface declaration, a value binding, an
           imported or re-exported name
+      - code: REALIZATION_UNCHECKED
+        severity: notice
+        summary: >-
+          An implementation's conformance dial is off, on itself or on some of its methods, so
+          whether those methods are realized in its code — present, taking the contract's
+          parameters, async as declared, making the calls their narratives claim — is not checked
   - name: findingRealization
     description: >-
       Rule finding-realization. Code↔spec Level 1: every finding code an L3 contract method declares
@@ -755,41 +766,55 @@ methods:
       is set aside only where the analysis proves it is — named, with no identifier of that name in
       the body or in another parameter's default value and no read of `arguments`, as the request
       and URL a transport hands a handler that never reads them: a used `_secret` is judged like any
-      parameter, and a name compared for a rename is read without its leading underscores. The rest
-      are PAIRED in order, since a caller passes arguments in order: among the order-keeping
-      pairings, the one where the most names agree, then the most declared types, then the most
-      kinds of value, and on a tie the one aligned against the TAIL of the realization's list — so
-      an inserted first argument is the one named undeclared, never the declared one it pushed
-      along. The declared type is what tells a rename from a substitution. Types agree when the
-      code's annotation, read through the dialect of the language the file was analyzed as
-      (type_dialect.agrees), is the contract's canonical type — so `string[]` agrees with
-      `list<string>`, TypeScript's `number` with int and float alike, and an annotation the dialect
-      cannot read agrees with nothing; a named type agrees through its code-level name, an EXTERNAL
-      one (`alias::name`) through the name its pinned snapshot gives it, else its public name's last
-      segment in the code's type casing. Where a type checker read the file, each parameter the code
-      annotates also carries the KIND of value it takes (string, number, boolean, list, object or
-      function; a platform class the checker's fixed library leaves out — a URL, a Request,
-      node:http's IncomingMessage — is an object), compared with the kind the contract's type is (a
-      primitive's, a list, a map or set as an object, an enum as a string, a named scalar as what it
-      holds, a record type as an object, a signature as a function; a date or a datetime as a string
-      or an object, a duration as a number or a string, bytes as an object, a list or a string;
-      anything unsettled compares with nothing). A paired parameter whose name differs and whose
-      type agrees — or whose kind is the same primitive, or one of the kinds a date or bytes is
-      written as — is a rename, said with the contract's former name when the code still uses it;
-      one whose name differs and whose kind of value differs is a SUBSTITUTION, a different argument
-      in the declared one's place, so the declared parameter is unrealized and the code's
-      undeclared: `getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` is
-      never a silent pairing. Where the contract's type is a record, an object is compared
-      STRUCTURALLY, by the property names the checker gives its type: one holding every field of the
-      record is a rename, one sharing none of them a substitution whatever either side calls it, and
-      a platform transport class (node:http's IncomingMessage, a fetch Request or Response, a URL, a
-      socket) where a record is declared is a substitution too — so `planRoute(req:
-      IncomingMessage)` and `planRoute(session: { user: string })` realizing `planRoute(request:
-      plan_request)` are never silent pairings. Where the code settles no kind — unannotated
-      JavaScript, a parameter typed any — a paired parameter named as a transport handle (req, res,
-      ctx, request, response, next, reply) standing where the contract declares an argument of its
-      own is a substitution: `cancelOrder(req, res)` realizing `cancelOrder(orderId, customerId)` is
-      a handler's shape, not the contract's. Where neither side settles a type and no handle name
+      parameter, and a name compared for a rename is read without its leading underscores. An OBJECT
+      whose properties name two or more of the contract's own parameters BUNDLES them and is set
+      apart first: each parameter it bundles is unrealized (the code takes it inside the object) and
+      the object undeclared, so `cancelOrder(input: { orderId, customerId })` realizing
+      `cancelOrder(orderId, customerId)` names both, never one half by position. The rest are PAIRED
+      in order, since a caller passes arguments in order: among the order-keeping pairings, the one
+      where the most names agree, then the most declared types, then the most kinds of value, and on
+      a tie the one aligned against the TAIL of the realization's list — so an inserted first
+      argument is the one named undeclared, never the declared one it pushed along. The declared
+      type is what tells a rename from a substitution. Types agree when the code's annotation, read
+      through the dialect of the language the file was analyzed as (type_dialect.agrees), is the
+      contract's canonical type — so `string[]` agrees with `list<string>`, TypeScript's `number`
+      with int and float alike, and an annotation the dialect cannot read agrees with nothing; a
+      named type agrees through its code-level name, an EXTERNAL one (`alias::name`) through the
+      name its pinned snapshot gives it, a MEMBER's through the name its own type spec gives it,
+      read live from the family with its kind and fields — so where a parameter's type lives never
+      decides whether it is compared — else its public name's last segment in the code's type
+      casing. Where a type checker read the file, each parameter the code annotates also carries the
+      KIND of value it takes (string, number, boolean, list, object or function; a platform class
+      the checker's fixed library leaves out — a URL, a Request, node:http's IncomingMessage — is an
+      object), compared with the kind the contract's type is (a primitive's, a list, a map or set as
+      an object, an enum as a string, a named scalar as what it holds, a record type as an object, a
+      signature as a function; a date or a datetime as a string or an object, a duration as a number
+      or a string, bytes as an object, a list or a string; anything unsettled compares with
+      nothing). A paired parameter whose name differs and whose type agrees — or whose kind is the
+      same primitive, or one of the kinds a date or bytes is written as — is a rename, said with the
+      contract's former name when the code still uses it; one whose name differs and whose kind of
+      value differs is a SUBSTITUTION, a different argument in the declared one's place, so the
+      declared parameter is unrealized and the code's undeclared: `getRoute(params: Record<string,
+      string>)` realizing `getRoute(id: string)` is never a silent pairing. Where the contract's
+      type is a record, an object is compared STRUCTURALLY, by the data property names the checker
+      gives its type: one holding every field of the record is a rename, one sharing none of them a
+      substitution whatever either side calls it, and a platform transport class (node:http's
+      IncomingMessage, a fetch Request or Response, a URL, a socket) where a record is declared is a
+      substitution too — so `planRoute(req: IncomingMessage)` and `planRoute(session: { user: string
+      })` realizing `planRoute(request: plan_request)` are never silent pairings. A paired parameter
+      named as a transport handle (req, res, ctx, request, response, next, reply) standing where the
+      contract declares an argument of its own is a substitution unless its type agrees with the
+      declared one or holds every field of the declared record — however the handle is typed, a
+      hand-written `type Req = { params: … }` included: `cancelOrder(req, res)` realizing
+      `cancelOrder(orderId, customerId)` is a handler's shape, not the contract's. Where the
+      contract's type is a record, a paired parameter whose type cannot hold it fails closed, as an
+      opaque receiver does (PARAM_TYPE_MISMATCH): an OPAQUE type — any, unknown, object, {}, an
+      index signature alone (`Record<string, unknown>`), or no annotation at all in a TypeScript
+      file — names no field the analysis could compare, and an object sharing some of the record's
+      fields but not all of them, or adding fields the record does not declare, is another shape;
+      the finding names the fields missing and the fields added, so `planRoute(request: any)` and
+      `planRoute(request: { stops: unknown[]; secret: string })` realizing `planRoute(request:
+      plan_request)` are never silent pairings. Where neither side settles a type and no handle name
       speaks, nothing is said about the name. A parameter standing ahead of every kept pair under a
       name transports give their handles (req, request, res, response, reply, url, ctx, context,
       next, event, socket) is how a transport handle arrives, and the finding names the one green
@@ -797,13 +822,20 @@ methods:
       the router unpacking the request into them — or, where the framework hands the function the
       handles alone, the contract's parameters read off the injected request by their own names: a
       contract parameter the code does not take but reads off an injected request handle (req,
-      request, ctx, context, event) by its own name — `req.params.code`, `req.query['limit']`, a
-      destructuring of such a read — is realized through that handle. An injected name none of the
-      implementation's realizing functions read in this run takes is stale linkage
-      (UNUSED_INJECTED_PARAM): it would wave through the next parameter of that name unread. A name
-      with several bodies is judged on what they all agree on, and a method the named file only
-      CALLS is left to `methodRealization`, which already reports that the body is not here; a
-      method whose conformance dial is off (its own, else its implementation's) is not judged.
+      request, ctx, context, event, url) by its own name is realized through that handle —
+      `req.params.code`, `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a
+      destructuring at any depth, a local the handle's value flows into (`const url = new
+      URL(req.url, base)`), and what a helper the handle is passed to reads off it or its result
+      yields, where the helper is written in the same file or in a file no implementation claims
+      (`const { orderId } = pathParams(req)`) — and the one RECORD parameter left unpaired is
+      realized by the request's body read whole (`req.body`). An injected name none of the
+      implementation's realizing functions read in this run takes is said as a NOTICE
+      (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and one nothing
+      takes hides nothing, since no function takes a parameter it could set aside — so it never
+      fails a gate. A name with several bodies is judged on what they all agree on, and a method the
+      named file only CALLS is left to `methodRealization`, which already reports that the body is
+      not here; a method whose conformance dial is off (its own, else its implementation's) is not
+      judged.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -833,11 +865,18 @@ methods:
           A contract and its realization disagree about whether a parameter may be left out — one of
           them is telling a caller an argument is required when it is not, or the reverse
       - code: UNUSED_INJECTED_PARAM
-        severity: warning
+        severity: notice
         summary: >-
           An implementation declares an injected parameter that none of its realizing functions
-          takes — stale linkage that would wave through the next parameter of that name, wherever it
-          appears
+          takes — stale code linkage, said so it can be dropped; nothing takes it, so it hides
+          nothing and never fails a gate
+      - code: PARAM_TYPE_MISMATCH
+        severity: warning
+        summary: >-
+          A contract parameter declared as a record is realized by a parameter whose type cannot
+          hold it — opaque (any, unknown, an index signature) or an object missing the record's
+          fields or adding its own — so what a caller hands over is never compared with what the
+          design declares
   - name: routeCoverage
     description: >-
       Rule route-coverage. Code-to-contract for the ROUTES: does every route a router actually
@@ -848,27 +887,33 @@ methods:
       code linkage): an entry its own files export, an entry or route table another module exports
       (`<module>#<name>`, a central routes.ts), or a module alone, every route-bearing export of
       which is read as one router; the routes are read out of that entry and the functions of its
-      file it calls by name. A router several Portals name is read once against them all: a route is
-      declared when any of them declares it, and an endpoint is unrouted per Portal. Two idioms are
-      read: guards (a method comparison with comparisons on the path's split segments), where a
-      prefix the router strips before splitting the path is folded in front; and a route table — a
-      const the router names, one it returns or states in place unnamed, or the table the linkage
-      names itself — (an array of objects pairing a method with a `/a/:b` template or an anchored
-      regular expression, or an object keyed `VERB /path`, a key written as a template literal or a
-      concatenation over constants settling like any other value), read only when every entry
-      settles. A table is written under the ONE prefix its router strips off the path before
-      matching it (`path.slice(BASE.length)`, `.replace(BASE, '')`), which is folded in front of
-      every entry that does not already state it, so a stripped prefix that is not the Portal's
-      basePath is read as the different URL it is, and the finding names both. Every compared value
-      is a literal or one the code's constants, concatenations and template literals settle —
-      through the type checker, any module's constant and any expression it types as one string
-      literal — and never a guess. A route that states the whole path is read under the Portal's
-      basePath, which the contract's endpoint paths are written beneath; a leading path segment a
-      guard router never checks is completed from the first segments of the Portal's own HTTP
-      endpoint paths, the segments whatever serves the Portal routes on. Which process serves which
-      Portal is implementation, so no listener is consulted. A router that yields no route in either
-      idiom is reported as unread, never passed: a check that cannot see a router must say so rather
-      than stay quiet.
+      file it calls by name. A router several Portals name — the same entry or table in the same
+      file, however each linkage spells it — is read once against them all: a route is declared when
+      any of them declares it, and an endpoint is unrouted per Portal. Two idioms are read: guards
+      (a method comparison with comparisons on the path's split segments), where a prefix the router
+      strips before splitting the path is folded in front; and a route table — a const the router
+      names, one it returns or states in place unnamed, or the table the linkage names itself — (an
+      array of objects pairing a method with a `/a/:b` template or an anchored regular expression,
+      or an object keyed `VERB /path`, a key written as a template literal or a concatenation over
+      constants settling like any other value; an array may spread other tables and an object other
+      objects, `[...ingestRoutes, ...statsRoutes]`, each followed through the type checker to the
+      table it names in any module), read only when every entry settles. A table is written under
+      the ONE prefix its router strips off the path before matching it (`path.slice(BASE.length)`,
+      `.replace(BASE, '')`), which is folded in front of every entry that does not already state it,
+      so a stripped prefix that is not the Portal's basePath is read as the different URL it is, and
+      the finding names both. Every compared value is a literal or one the code's constants,
+      concatenations and template literals settle — through the type checker, any module's constant
+      and any expression it types as one string literal — and never a guess. A route that states the
+      whole path is read under the Portal's basePath, which the contract's endpoint paths are
+      written beneath; a leading path segment a guard router never checks is completed from the
+      first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the
+      Portal routes on. Which process serves which Portal is implementation, so no listener is
+      consulted. Route coverage is never silently off: a router that yields no route in either
+      idiom, or a linkage naming a declaration that holds neither a function body nor a route table
+      this analysis reads, is reported as unread; and a Portal binding HTTP endpoints whose
+      implementation names no router while its code is read at exact grade is said as a notice
+      (ROUTER_UNDECLARED) naming `router:` and the route-bearing names its files hold — a check that
+      cannot see a router must say so rather than stay quiet.
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
     params:
@@ -891,6 +936,11 @@ methods:
         summary: >-
           A Portal's router entry yields no route this analysis can read, so its routes were not
           checked against the contract at all
+      - code: ROUTER_UNDECLARED
+        severity: notice
+        summary: >-
+          A Portal binds HTTP endpoints but its implementation names no router (`router:`), so none
+          of the routes its code serves were checked against its contract
   - name: portalImports
     description: >-
       Rule portal-imports. A runtime import that crosses a subsystem boundary must land on a file
@@ -1029,4 +1079,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-09T00:42:25.774Z'
+updatedAt: '2026-10-09T11:26:50.355Z'

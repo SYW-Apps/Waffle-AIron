@@ -111,7 +111,8 @@ describe('sdd_rename_method', () => {
     root = books();
     client = await connect(createMcpServer());
 
-    const result = await call({ id: 'ledger', method: 'post', newName: 'append' });
+    // The fixture's implementation names no file, so the pin is asked for: omitted, a pin is set only for code that exists (round 9).
+    const result = await call({ id: 'ledger', method: 'post', newName: 'append', pinSymbol: true });
 
     expect(result.isError ?? false).toBe(false);
     expect(JSON.parse(textOf(result))).toEqual({

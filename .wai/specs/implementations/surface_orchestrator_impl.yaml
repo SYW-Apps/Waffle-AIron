@@ -28,9 +28,12 @@ methods:
         description: >-
           Render the snapshot's HTTP entries as one OpenAPI 3.1 document per backing portal into
           renderedSet, handing the codec the render context: each declared external's pinned
-          snapshot and each contained member project's surface as its L0 export table exports it now
-          (where a schema's `alias::name` resolves, a member's alias included) and the version the
-          project declares in its package manifest (package.json, else Cargo.toml or
+          snapshot, each member project's surface as its L0 export table exports it now — a
+          contained member and a `../` sibling member alike, read where it is stored — and the bound
+          project's own surface under its own id (where a member's types written `<this project's
+          id>::name` — this project's L0 re-exports, the shape `member promote` writes — resolve),
+          so a schema's `alias::name` resolves for every project the design composes and the version
+          the project declares in its package manifest (package.json, else Cargo.toml or
           pyproject.toml), read here
         type: call
         targetComponent: openapi_codec
@@ -250,7 +253,12 @@ methods:
           refresh them. Each kept entry's `retired` lists the method names the replaced snapshot's
           entry held (or already listed as retired) that the new entry neither holds nor names in
           any method's `formerly` — a removal, never a rename — so binding conformance can name a
-          removed verb a consumer's binding still declares
+          removed verb a consumer's binding still declares. And say what moved since the replaced
+          pin: every carried fact the replaced snapshot holds differently from the new one
+          (SurfaceSnapshot.carriedFactChanges — a used verb's wire endpoint moved, a transport, an
+          abi, a rename trace) is named in the pin's detail (`moved since the last pin: endpoint of
+          stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`), so a re-pin never
+          rewrites a route a hand-written client spells without a word
         type: call
         targetComponent: externals_repository
         targetMethod: saveSnapshot
@@ -368,29 +376,37 @@ methods:
           Restore the consumer's binding. Compare every used member — the lock's and the one the
           references use now — at signature level, for every producer alike (family, path, git,
           hosted, a referenced project): a live SurfaceSnapshot.memberDigest equal to the locked one
-          is unchanged, a different one changed — and a changed one whose closure holds a field the
-          producer renamed with a trace says so in its detail, naming each field with its new name
-          (SurfaceSnapshot.fieldRenamesSince against the pinned snapshot) and whether the renames
-          are the whole change, so the consumer reads "follow the rename" rather than an anonymous
-          signature change; one absent under its name is RENAMED when a live entry's `formerly` (the
-          producer's rename trace) names it — renamedTo is that entry's public name (and member),
-          and its signature is still compared so the detail says whether it also changed and how:
-          each parameter renamed per its trace (`parameter "code" renamed to "shortCode"`, which a
-          digest that ignores parameter names cannot see), each field of its closure renamed per its
-          trace, and whether anything beyond the renames moved (its answer or parameter types) —
-          never "unchanged" beside a parameter or answer that moved — and removed otherwise, the
-          detail naming the source's rename when the live snapshot lists the name among its
-          unresolved re-exports; a name or member used now but not in the lock is compared live too:
-          gone from the live table it is renamed or removed (a break the live producer already
-          proves, pinned or not), present it is unlocked (not in the lock — re-pin), named member by
-          member as `wairon lock` names what it refuses; an unexported reference of a family
-          producer is unavailable — and a name already answered as renamed or removed (under any
-          member, a type's `type` included) is answered once, never a second time for its unexported
-          references. Stale when a used member changed, was renamed or went away; drifted when the
-          live content digest differs from the pinned one, or when the pinned snapshot carries facts
-          the live one no longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned
-          snapshot against the live one) — so `drifted` and the health agree on every surface — and
-          a stale snapshot is never ok
+          is unchanged, a different one changed — the locked digest re-read from the pinned snapshot
+          when it is at hand (and the content digest drift is judged against likewise), so a digest
+          an older release recorded for the same pinned snapshot never reads as a producer's change
+          — and a changed one whose closure holds a field the producer renamed with a trace says so
+          in its detail, naming each field with its new name (SurfaceSnapshot.fieldRenamesSince
+          against the pinned snapshot) and whether the renames are the whole change, so the consumer
+          reads "follow the rename" rather than an anonymous signature change; one absent under its
+          name is RENAMED when a live entry's `formerly` (the producer's rename trace) names it —
+          renamedTo is that entry's public name (and member), and its signature is still compared so
+          the detail says whether it also changed and how: each parameter renamed per its trace
+          (`parameter "code" renamed to "shortCode"`, which a digest that ignores parameter names
+          cannot see), each field of its closure renamed per its trace, and whether anything beyond
+          the renames moved (its answer or parameter types) — never "unchanged" beside a parameter
+          or answer that moved — and removed otherwise, the detail naming the source's rename when
+          the live snapshot lists the name among its unresolved re-exports; a name or member used
+          now but not in the lock is compared live too: gone from the live table it is renamed or
+          removed (a break the live producer already proves, pinned or not), present it is unlocked
+          (not in the lock — re-pin), named member by member as `wairon lock` names what it refuses;
+          a used contract method's wire endpoint (an HTTP verb, path or stated status, another
+          transport's address) is compared with the pinned snapshot's too — the endpoint is what a
+          consumer's hand-written client spells, and no digest reads it: a route that MOVED leaves
+          the use unchanged in signature but says so in its detail (`endpoint moved: GET
+          /stats/{code} → GET /v2/stats/{code}`) and drifts the external (a carried fact), and a
+          route REMOVED (the method no longer bound to one) makes the use changed — a break; an
+          unexported reference of a family producer is unavailable — and a name already answered as
+          renamed or removed (under any member, a type's `type` included) is answered once, never a
+          second time for its unexported references. Stale when a used member changed, was renamed
+          or went away; drifted when the live content digest differs from the pinned one, or when
+          the pinned snapshot carries facts the live one no longer says (staleFacts =
+          SurfaceSnapshot.carriedFactChanges of the pinned snapshot against the live one) — so
+          `drifted` and the health agree on every surface — and a stale snapshot is never ok
         type: local
       - stepNumber: 10
         description: Next external
@@ -842,8 +858,77 @@ methods:
         description: Answer the map
         type: return
         outcome: unrecorded uses by alias
+  - name: memberApprovedSurfaces
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: Read each live member with its tree at the approval it is judged against
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: memberRevisions
+      - stepNumber: 2
+        label: member
+        description: For each member with an approved revision
+        type: loop
+        loopKind: forEach
+        over: the members that have a revision
+        endStep: 4
+      - stepNumber: 3
+        description: Bind the revision's directory read-only, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 4
+        label: projected
+        description: >-
+          Project it at the `project` ceiling, its widest table, and key it by the member's alias; a
+          revision that cannot be projected is left out
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 5
+        description: Answer the approved surfaces by alias
+        type: return
+        outcome: map<string, SurfaceSnapshot>
+    detail: full
+  - name: memberStatuses
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: Read each live member with its usage and its tree at the approval it is judged against
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: memberRevisions
+      - stepNumber: 2
+        label: member
+        description: For each member with an approved revision
+        type: loop
+        loopKind: forEach
+        over: the members that have a revision
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Project the member live at its root, and its approved revision, each at the `project`
+          ceiling, each bound read-only and the caller's binding restored
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 4
+        label: compared
+        description: >-
+          Compare as an external's status compares a pin: every used member's digest in the approved
+          surface (SurfaceSnapshot.memberDigest) against the live one — unchanged, changed (the
+          closure's field renames and a moved or removed route named), renamed per the member's
+          rename trace or removed — leaving out a use the approval does not hold or cannot compare
+          (the family run judges it live); drifted when the content digest moved or
+          SurfaceSnapshot.carriedFactChanges of the approved surface against the live one names a
+          fact; stale when a used member changed, was renamed or went away; never pinned
+        type: local
+      - stepNumber: 5
+        description: Answer one status per member compared, in declaration order
+        type: return
+        outcome: list<ExternalStatus>
+    detail: full
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-09T01:01:03.640Z'
+updatedAt: '2026-10-09T12:02:18.789Z'

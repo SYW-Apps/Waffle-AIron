@@ -24,8 +24,10 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
-          Ask the core adapter whether the spec lives in another project: a member's spec read
-          through this tree, or one named through an external's alias
+          Ask the core adapter whether the spec lives in another project — a member's spec read
+          through this tree, or one named through an external's alias — answering for the tool the
+          caller names (sdd_set_endpoints, sdd_set_public_interfaces), sdd_update_spec when it names
+          none, so the refusal names the call to make in that project's session
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: crossProjectWriteRefusal
@@ -227,8 +229,8 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Ask the core adapter whether the spec, or the subsystem it moves to, lives in another
-          project
+          Ask the core adapter whether the spec, every spec moving together with it, or the
+          subsystem they move to, lives in another project
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: crossProjectWriteRefusal
@@ -244,8 +246,8 @@ methods:
         error: 'chained-spec: the spec lives in another project'
       - stepNumber: 4
         description: >-
-          Decide whether a component moves: a type carries no edges, so it is moved without
-          judgement
+          Decide whether components move: types carry no edges, so the type and every type moving
+          together with it are moved one after another without judgement
         type: branch
         condition: the kind is component
         onFalseStep: 12
@@ -258,20 +260,25 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 6
         description: >-
-          Ask the core adapter for the move's plan as a dry run: what moves — the component and
-          every member it owns — refused exactly as the move would be
+          Ask the core adapter for the move's plan as a dry run, for the addressed component and
+          each one moving together with it (a member a listed pattern owns goes with its owner):
+          what moves — each component and every member it owns — refused exactly as the move would
+          be, so one refused spec refuses them all before anything is written
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: moveSpec
       - stepNumber: 7
-        description: Read each moved component as stored, and set its new subsystem
+        description: >-
+          Read every moved component as stored, and set its new subsystem — all of them at once, so
+          an edge between two of them stays inside the new subsystem
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
       - stepNumber: 8
         description: >-
-          Ask which design findings the moved components introduce in the bound tree together —
-          every edge into or out of them read with their new subsystem
+          Ask which design findings the moved components introduce in the bound tree TOGETHER —
+          every edge into or out of the moved set read with their new subsystem, an edge between two
+          moved components judged as the one subsystem it now lies in
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: introducedFindings
@@ -284,7 +291,9 @@ methods:
         label: refused
         description: >-
           Refuse the move with the rule's own words — a forbidden doctrine edge, or a
-          cross-subsystem edge into a non-Portal the move would create — before anything is written
+          cross-subsystem edge into a non-Portal the move would create — before anything is written,
+          naming the collaborators left behind (the components of the old subsystem with an edge
+          into or out of the moved set) as the `together` list that takes them along
         type: throw
         error: the move would introduce an error validate reports
       - stepNumber: 11
@@ -293,7 +302,11 @@ methods:
           for the report
         type: local
       - stepNumber: 12
-        description: Move the spec through the core client adapter, forwarding the caller's dry run
+        description: >-
+          Move each spec through the core client adapter in turn — the addressed one first, then
+          each moving together with it — forwarding the caller's dry run; the gate already judged
+          the whole set, so no move in between is judged on its own. The reports fold into one: what
+          moved, what was rewritten
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: moveSpec
@@ -321,15 +334,25 @@ methods:
         targetComponent: authoring_core_adapter
         targetMethod: crossProjectWriteRefusal
       - stepNumber: 3
-        description: Decide on the project boundary
+        description: >-
+          Decide on the project boundary, and on the names this write turns into paths: the spec's
+          own id, the parent it names (a component's or a type's subsystem, an interface's
+          component, an implementation's contract) and a type's group each become a folder or a file
+          name, so each must be an id of the grammar — no path separator, no `.` or `..` segment,
+          nothing but letters, digits, `-` and `_` per `::`-segment — and a parent must name a spec
+          the tree holds under exactly that id, never one a case-insensitive filesystem would find
+          under another case. Both are asked before any path is built
         type: branch
         condition: the spec or its parent lives in another project
         onFalseStep: 5
       - stepNumber: 4
         label: chained-spec
         description: >-
-          Refuse before anything is judged or written, with the core's sentence: the member, its
-          folder, the session to open there and the call to make there
+          Refuse before anything is judged or written: with the core's sentence (the member, its
+          folder, the session to open there and the call to make there), or not-an-id, naming the
+          name, where it sits and the grammar — so a path-shaped subsystem
+          (`../../other/.wai/specs/x`, `links/../analytics`, `Links`) never writes into another tree
+          or another subsystem
         type: throw
         error: 'chained-spec: the spec lives in another project'
       - stepNumber: 5
@@ -647,4 +670,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-09T00:57:43.785Z'
+updatedAt: '2026-10-09T11:35:16.808Z'

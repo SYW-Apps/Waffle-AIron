@@ -445,4 +445,59 @@ export default [
       ],
     },
   }),
+  // -------------------------------------------------------------------------
+  // ENDPOINT_STATUS_MISMATCH
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'ENDPOINT_STATUS_MISMATCH',
+    severity: 'warning',
+    anchoredTo: 'ibooking_api',
+    expectFire: true,
+    scenario: 'The booking portal states 299 for its booking read: a code no client library names.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [{ id: 'booking_portal', componentType: 'Portal', transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'The patient web app and the clinic front desk, over HTTPS' }, description: 'The booking API.' }],
+      interfaces: [{
+        id: 'ibooking_api', component: 'booking_portal', methods: [
+          { name: 'getBooking', description: 'Read one booking.', params: [{ name: 'bookingId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/bookings/{bookingId}', status: 299 } },
+        ],
+      }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'ENDPOINT_STATUS_MISMATCH',
+    severity: 'warning',
+    anchoredTo: 'ibooking_api',
+    expectFire: true,
+    scenario: 'The booking portal answers its booking summary under a 302 redirect: the response is a Location header and no body, so the summary record it answers is dropped.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [{ id: 'booking_portal', componentType: 'Portal', transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'The patient web app and the clinic front desk, over HTTPS' }, description: 'The booking API.' }],
+      interfaces: [{
+        id: 'ibooking_api', component: 'booking_portal', methods: [
+          { name: 'getSummary', description: 'Read one booking summary.', params: [{ name: 'bookingId', type: 'string' }], returns: 'booking_summary', endpoint: { transport: 'HTTP', method: 'GET', path: '/bookings/{bookingId}/summary', status: 302 } },
+        ],
+      }],
+      types: [{ id: 'booking_summary', kind: 'value-object', subsystem: 'scheduling', name: 'BookingSummary', description: 'A booking at a glance.', fields: [{ name: 'slot', type: 'string' }] }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'ENDPOINT_STATUS_MISMATCH',
+    expectFire: false,
+    reason: 'A redirect whose method answers the location (a string) and a 202 for a method answering nothing both agree with what the response carries.',
+    scenario: 'The booking portal redirects GET /b/{code} to the booking page (the method answers the page URL) and accepts a reminder request with 202.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [{ id: 'booking_portal', componentType: 'Portal', transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'The patient web app and the clinic front desk, over HTTPS' }, description: 'The booking API.' }],
+      interfaces: [{
+        id: 'ibooking_api', component: 'booking_portal', methods: [
+          { name: 'openBookingLink', description: 'Send the caller on to the booking page.', params: [{ name: 'code', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/b/{code}', status: 302 } },
+          { name: 'queueReminder', description: 'Queue a reminder.', params: [{ name: 'bookingId', type: 'string' }], returns: 'async void', endpoint: { transport: 'HTTP', method: 'POST', path: '/bookings/{bookingId}/reminders', status: 202 } },
+        ],
+      }],
+    },
+  }),
 ];

@@ -54,7 +54,12 @@ methods:
   - name: loadSubsystemSpec
     narrative:
       - stepNumber: 1
-        description: Resolve the subsystem id to its spec file path
+        description: >-
+          Resolve the subsystem id to its spec: the key the scan recorded first — an `alias::name`
+          id bound through the bound project's alias table as a write binds it, so a member's spec
+          is found under its key and through its internal id — and only then the file the id would
+          be stored at. An id that is not path-safe (a path separator, a `.` or `..` segment) names
+          no file and is no spec, never a path out of the tree
         type: local
       - stepNumber: 2
         description: Read the YAML document through the file store
@@ -63,8 +68,9 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse against SubsystemSpecSchema, keyed and bound as the scan binds it; an absent
-          document yields null
+          Parse against its level's schema, keyed and bound as the scan binds it; an absent document
+          yields null, and so does a document whose own id is not exactly the one asked for — a
+          case-insensitive filesystem finding `Links` for `links` reads no spec
         type: local
   - name: loadComponentSpecs
     narrative:
@@ -86,7 +92,12 @@ methods:
   - name: loadComponentSpec
     narrative:
       - stepNumber: 1
-        description: Resolve the component id to its spec file path (flat or per-subsystem layout)
+        description: >-
+          Resolve the component id to its spec: the key the scan recorded first — an `alias::name`
+          id bound through the bound project's alias table as a write binds it, so a member's spec
+          is found under its key and through its internal id — and only then the file the id would
+          be stored at. An id that is not path-safe (a path separator, a `.` or `..` segment) names
+          no file and is no spec, never a path out of the tree
         type: local
       - stepNumber: 2
         description: Read the YAML document through the file store
@@ -95,8 +106,9 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse against ComponentSpecSchema, keyed and bound as the scan binds it; an absent
-          document yields null
+          Parse against its level's schema, keyed and bound as the scan binds it; an absent document
+          yields null, and so does a document whose own id is not exactly the one asked for — a
+          case-insensitive filesystem finding `Links` for `links` reads no spec
         type: local
   - name: loadInterfaceSpecs
     narrative:
@@ -118,7 +130,12 @@ methods:
   - name: loadInterfaceSpec
     narrative:
       - stepNumber: 1
-        description: Resolve the interface id to its spec file path
+        description: >-
+          Resolve the interface id to its spec: the key the scan recorded first — an `alias::name`
+          id bound through the bound project's alias table as a write binds it, so a member's spec
+          is found under its key and through its internal id — and only then the file the id would
+          be stored at. An id that is not path-safe (a path separator, a `.` or `..` segment) names
+          no file and is no spec, never a path out of the tree
         type: local
       - stepNumber: 2
         description: Read the YAML document through the file store
@@ -127,8 +144,9 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse against InterfaceSpecSchema, keyed and bound as the scan binds it; an absent
-          document yields null
+          Parse against its level's schema, keyed and bound as the scan binds it; an absent document
+          yields null, and so does a document whose own id is not exactly the one asked for — a
+          case-insensitive filesystem finding `Links` for `links` reads no spec
         type: local
   - name: loadImplementationSpecs
     narrative:
@@ -152,7 +170,12 @@ methods:
   - name: loadImplementationSpec
     narrative:
       - stepNumber: 1
-        description: Resolve the implementation id to its spec file path
+        description: >-
+          Resolve the implementation id to its spec: the key the scan recorded first — an
+          `alias::name` id bound through the bound project's alias table as a write binds it, so a
+          member's spec is found under its key and through its internal id — and only then the file
+          the id would be stored at. An id that is not path-safe (a path separator, a `.` or `..`
+          segment) names no file and is no spec, never a path out of the tree
         type: local
       - stepNumber: 2
         description: Read the YAML document through the file store
@@ -161,8 +184,9 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse against ImplementationSpecSchema, keyed and bound as the scan binds it; an absent
-          document yields null
+          Parse against its level's schema, keyed and bound as the scan binds it; an absent document
+          yields null, and so does a document whose own id is not exactly the one asked for — a
+          case-insensitive filesystem finding `Links` for `links` reads no spec
         type: local
   - name: loadTypeSpecs
     narrative:
@@ -224,8 +248,9 @@ methods:
         targetMethod: read
       - stepNumber: 3
         description: >-
-          Parse each against TypeSpecSchema and answer with the one whose id matches, or null when
-          none does
+          Parse each against TypeSpecSchema and answer with the one whose id matches — an
+          `alias::name` id bound through the bound project's alias table to the member's key first —
+          or null when none does
         type: local
   - name: load
     narrative:
@@ -527,7 +552,11 @@ methods:
   - name: subsystemPath
     narrative:
       - stepNumber: 1
-        description: Answer the path the workspace's index records for the subsystem's spec
+        description: >-
+          Answer the path the workspace's index records for the subsystem's spec. Every id this path
+          is built from — the subsystem's own and the owner it is placed under — must be path-safe
+          first (letters, digits, `-` and `_` per `::`-segment): one that is not is refused before
+          any path exists, so no write lands outside the tree
         type: local
     symbol: getSubsystemPath
   - name: componentPath
@@ -535,7 +564,10 @@ methods:
       - stepNumber: 1
         description: >-
           Answer the path the index records for the component's spec, or its placement under its
-          subsystem when it is not stored yet
+          subsystem when it is not stored yet. Every id this path is built from — the component's
+          own and the owner it is placed under — must be path-safe first (letters, digits, `-` and
+          `_` per `::`-segment): one that is not is refused before any path exists, so no write
+          lands outside the tree
         type: local
     symbol: getComponentPath
   - name: interfacePath
@@ -543,7 +575,10 @@ methods:
       - stepNumber: 1
         description: >-
           Answer the path the index records for the interface's spec, or its placement under its
-          component when it is not stored yet
+          component when it is not stored yet. Every id this path is built from — the interface's
+          own and the owner it is placed under — must be path-safe first (letters, digits, `-` and
+          `_` per `::`-segment): one that is not is refused before any path exists, so no write
+          lands outside the tree
         type: local
     symbol: getInterfacePath
   - name: implementationPath
@@ -551,7 +586,10 @@ methods:
       - stepNumber: 1
         description: >-
           Answer the path the index records for the implementation's spec, or its placement under
-          its contract when it is not stored yet
+          its contract when it is not stored yet. Every id this path is built from — the
+          implementation's own and the owner it is placed under — must be path-safe first (letters,
+          digits, `-` and `_` per `::`-segment): one that is not is refused before any path exists,
+          so no write lands outside the tree
         type: local
     symbol: getImplementationPath
   - name: snapshot
@@ -603,9 +641,12 @@ methods:
       - stepNumber: 1
         description: >-
           Answer the path the index records for the type's spec, or its placement under its
-          subsystem and group when it is not stored yet
+          subsystem and group when it is not stored yet. Every id this path is built from — the
+          type's own and the owner it is placed under — must be path-safe first (letters, digits,
+          `-` and `_` per `::`-segment): one that is not is refused before any path exists, so no
+          write lands outside the tree
         type: local
     symbol: getTypePath
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-09T01:00:50.528Z'
+updatedAt: '2026-10-09T11:36:21.714Z'

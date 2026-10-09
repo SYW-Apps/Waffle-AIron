@@ -12,7 +12,8 @@
  *    none of the record's fields, and a transport handle's name where the code
  *    settles no kind are substitutions (UNREALIZED_PARAM); a date realized as a
  *    string under a fresh name is a rename (PARAM_NAME_MISMATCH); an injection
- *    nothing takes is stale linkage (UNUSED_INJECTED_PARAM).
+ *    nothing takes is stale linkage (UNUSED_INJECTED_PARAM, a notice since
+ *    round 9: it hides nothing).
  *  - A name imported from another project's source that the project does not
  *    export is reported (CROSS_PROJECT_SOURCE_IMPORT); a declared binding
  *    module is the sanctioned place for that reach.
@@ -156,7 +157,7 @@ export default [
   defineRuleFixture({
     code: 'UNUSED_INJECTED_PARAM',
     expectFire: true,
-    severity: 'warning',
+    severity: 'notice',
     scenario: 'The route planner\'s implementation still declares the request handle as injected after every handler stopped taking it.',
     tree: routes({ injectedParams: ['req'] }),
   }),

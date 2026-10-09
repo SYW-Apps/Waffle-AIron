@@ -3,6 +3,7 @@ name: Host HTTP Portal Implementation
 description: 'Data-plane HTTP boundary: routes /mcp to the request orchestrator and answers the health probes.'
 contract: ihost_http_portal
 sourcePath: src/server/http.ts
+router: routeData
 methods:
   - name: handleMcpRequest
     narrative:
@@ -33,4 +34,4 @@ methods:
     symbol: /view/diagram
 status: complete
 createdAt: '2026-07-04T12:53:08.334Z'
-updatedAt: '2026-07-11T19:14:22.235Z'
+updatedAt: '2026-10-09T11:40:12.197Z'

@@ -1126,7 +1126,12 @@ methods:
       - stepNumber: 5
         description: >-
           draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
-          component.defaultConformanceTier()
+          component.defaultConformanceTier(). When the dial is off on the implementation or on any
+          of its method entries, report REALIZATION_UNCHECKED (notice; spec impl.id; draft context
+          from draft; site conformance) once, naming every method it covers — or the whole
+          implementation — and that the doctrine checks still run: the dial is code linkage outside
+          the approval, and this notice is the one surface where switching the realization checks
+          off shows
         type: local
       - stepNumber: 6
         label: methodLoop
@@ -1903,11 +1908,11 @@ methods:
           so every candidate is kept. Every name each candidate takes is noted for its
           implementation, read without its leading underscores, before anything is judged: once
           every method has been read, each injected name (implementation_spec.injectedParams) none
-          of an implementation's read functions takes is reported as UNUSED_INJECTED_PARAM (warning;
-          site injectedParams; units the stale names) — stale linkage that would wave through the
-          next parameter of that name unread, said only where at least one of its functions was
-          read. A contract method declaring no parameters makes no claim a signature could
-          contradict
+          of an implementation's read functions takes is reported as UNUSED_INJECTED_PARAM (notice;
+          site injectedParams; units the stale names) — stale code linkage, said so it can be
+          dropped: no function takes a parameter it could set aside, so it hides nothing and never
+          fails a gate; said only where at least one of its functions was read. A contract method
+          declaring no parameters makes no claim a signature could contradict
         type: local
       - stepNumber: 2
         description: Decide whether a signature is there to read
@@ -1931,7 +1936,13 @@ methods:
           of its name in the body or another parameter's default value, no read of `arguments`),
           unless its bare name is the contract's own: a leading underscore means unused, and it is
           believed only where it is true — a used `_secret` is a credential like any other, and is
-          judged like any other parameter
+          judged like any other parameter. Then set apart an OBJECT (parameter_fact.fields) whose
+          properties name two or more of the contract's own parameters, its type agreeing with none
+          of them and holding no declared record whole: it BUNDLES them, so each is reported
+          unrealized — the code takes it inside the object — and the object undeclared, naming the
+          parameters it bundles (`cancelOrder(input: { orderId, customerId })` for
+          `cancelOrder(orderId, customerId)` names both, never one half by position); the rest are
+          paired
         type: local
       - stepNumber: 4
         description: >-
@@ -1961,17 +1972,21 @@ methods:
         description: >-
           Report the surplus on whichever side has it: a declared parameter with no pair is one the
           code would never receive — unless the code reads it off an injected request handle (req,
-          request, ctx, context, event) by its own name (parameter_fact.reads: `req.params.code`,
-          `req.query['limit']`, a destructuring of such a read), which realizes it through that
-          handle, the green path for a framework that hands its handlers the request alone — and a
-          realized parameter with no pair is an argument a caller must supply that the design never
-          mentions, the shape that hid a credential in a signature nobody had read against its
-          contract. Where parameters left over (or substituted) stand ahead of every kept pair under
-          a name transports give their handles (req, request, res, response, reply, url, ctx,
-          context, next, event, socket), the finding names the one green path for them: the handles
-          in the implementation's injectedParams, the contract's own parameters after them in order
-          — spelled out as the method's signature — the router unpacking the path, query and body
-          into them, or the contract's parameters read off the injected request by their own names
+          request, ctx, context, event, url) by its own name (parameter_fact.reads:
+          `req.params.code`, `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a
+          destructuring at any depth, a local the handle's value flows into, and what a helper of
+          the same file or of a file no implementation claims reads off it when the handle is passed
+          to it, or its result yields), which realizes it through that handle, the green path for a
+          framework that hands its handlers the request alone; and the one RECORD parameter left
+          unpaired is realized by the request's body read whole (`req.body`) — and a realized
+          parameter with no pair is an argument a caller must supply that the design never mentions,
+          the shape that hid a credential in a signature nobody had read against its contract. Where
+          parameters left over (or substituted) stand ahead of every kept pair under a name
+          transports give their handles (req, request, res, response, reply, url, ctx, context,
+          next, event, socket), the finding names the one green path for them: the handles in the
+          implementation's injectedParams, the contract's own parameters after them in order —
+          spelled out as the method's signature — the router unpacking the path, query and body into
+          them, or the contract's parameters read off the injected request by their own names
         type: local
       - stepNumber: 7
         label: compare
@@ -1984,22 +1999,30 @@ methods:
           (parameter_fact.transport) where the contract declares a record; when the contract's type
           is a record whose fields the code's object (parameter_fact.fields) shares NONE of,
           whatever either side calls it (`planRoute(session: { user: string })` for
-          `planRoute(request: plan_request)`); or, the code settling no kind (unannotated
-          JavaScript, a parameter typed any), when the code's name is a transport handle's (req,
+          `planRoute(request: plan_request)`); or when the code's name is a transport handle's (req,
           res, ctx, request, response, next, reply) where the contract declares an argument of its
-          own (`cancelOrder(req, res)` for `cancelOrder(orderId, customerId)`). Otherwise, for a
-          pair whose names differ, report a rename where the declared type agrees: through the
-          file's dialect (source_file_facts.dialect, then type_dialect.agrees on the code's
-          annotation and the contract's canonical type, a named type matching through its code-level
-          name), as the same primitive kind of value (string, number, boolean) of an annotated
-          parameter or one of the kinds a date, a datetime, a duration or bytes is written as, or as
-          an object holding every field of the declared record — naming the contract's former name
-          (its previousNames) when the code still uses it. An EXTERNAL type (alias::name) answers to
-          the name its pinned snapshot gives it under that public name (ctx.pinnedExternals), else
-          to its public name's last segment in the code's type casing. With no dialect, no
-          annotation, no settled kind and no handle name, say nothing about the name — without it a
-          rename cannot be told from a substitution, and a guess about somebody's signature is worse
-          than silence
+          own and its type holds no declared record whole — however the handle is typed
+          (`cancelOrder(req: Req, res: Res)` for `cancelOrder(orderId, customerId)`). Short of a
+          substitution, where the contract declares a record and the code's parameter is OPAQUE
+          (parameter_fact.opaque, or no annotation at all in a TypeScript file) or an object sharing
+          only some of the record's fields or adding fields of its own, report PARAM_TYPE_MISMATCH
+          (warning; site the method; units the parameter names) naming the fields missing and added:
+          its type cannot hold what the design declares, and the analysis fails closed on it as on
+          an opaque receiver. Otherwise, for a pair whose names differ, report a rename where the
+          declared type agrees: through the file's dialect (source_file_facts.dialect, then
+          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
+          type matching through its code-level name), as the same primitive kind of value (string,
+          number, boolean) of an annotated parameter or one of the kinds a date, a datetime, a
+          duration or bytes is written as, or as an object holding every field of the declared
+          record — naming the contract's former name (its previousNames) when the code still uses
+          it. An EXTERNAL type (alias::name) answers to the name its pinned snapshot gives it under
+          that public name (ctx.pinnedExternals); a MEMBER's type (alias::name of a project the
+          family composes, ctx.projectFamily) to its own type spec in ctx.types, read live — its
+          code name, its kind and its fields — so where a parameter's type lives never decides
+          whether it is compared; anything else to its public name's last segment in the code's type
+          casing. With no dialect, no annotation, no settled kind and no handle name, say nothing
+          about the name — without it a rename cannot be told from a substitution, and a guess about
+          somebody's signature is worse than silence
         type: local
       - stepNumber: 8
         description: >-
@@ -2028,13 +2051,19 @@ methods:
           bare name is an entry the Portal's own files hold; `<module>#<name>` an entry or a route
           table another module holds (a central routes.ts); a module alone, every route-bearing
           export of it. Find the routes the analyzer read (source_file_facts.functionRoutes — a
-          function's, or a route table const's under its name) from that entry and from the
-          functions of its file it calls by name: a router delegating its matching to a helper that
-          reads a route table is one router. Note the ONE prefix those functions strip off the path
-          before matching (source_file_facts.routePrefixes), where exactly one settles. Routers
-          naming the same module and entry are one router, read once against every Portal naming it.
-          A Portal with no router entry is served method by method, and has no router of its own to
-          read
+          function's, or a route table const's under its name, a spread table's entries included)
+          from that entry and from the functions of its file it calls by name: a router delegating
+          its matching to a helper that reads a route table is one router. Note the ONE prefix those
+          functions strip off the path before matching (source_file_facts.routePrefixes), where
+          exactly one settles. Routers resolving to the same entry in the same files are one router,
+          read once against every Portal naming it, however each linkage spells it. A Portal that
+          binds HTTP endpoints and names no router, while a file of its implementation is read at
+          exact grade, is reported once as ROUTER_UNDECLARED (notice; site router), naming the
+          route-bearing functions and tables its files hold: its routes are checked against nothing,
+          and that is said, never left silent. A router linkage naming a declaration of an
+          exact-grade file that holds neither a function body nor a route table is reported as
+          unread (step 4); one naming nothing the module declares is export-conformance's
+          UNREALIZED_EXPORT_HANDLE
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
@@ -2239,7 +2268,14 @@ methods:
           references spell it) — whose surface is its L0 export table in ctx.exportTables read live:
           each exported component's contract methods (narrowed to the exported interface) with their
           params' previousNames and their own, each exported type's fields with their previousNames
-          and the type's previousIds
+          and the type's previousIds — and, when ctx.memberApprovedSurfaces holds the member's
+          surface at the approval it is judged against, each exported entry's `retired`: the method
+          names that approved entry held that the live entry neither holds nor names in any method's
+          trace (a removal, never a rename), so a name the member dropped since its approval is
+          named even though a member is never pinned. A segment naming the bound project's OWN id (a
+          member's signature copied into this project spells this project's L0 re-exports, the shape
+          `member promote` writes) reaches each member project the bound root's L0 export table
+          re-exports from
         type: loop
         over: ctx.bindingModules
         endStep: 8
@@ -2275,8 +2311,10 @@ methods:
           For each member of a declaration matched to an interface, and each matched function: a
           name that is a method's former name is drift with the rename to follow; a name the matched
           interface does not hold (a tagged function's included, and any name a pinned entry's
-          retired list holds) is drift, removed; otherwise compare the parameter list's arity and
-          names by nameKey with the method's params, a param's previousNames giving the rename
+          retired list holds — or a member entry's, which says the member's approved design held it)
+          is drift, removed — an untagged exported function too, matched by that retired name;
+          otherwise compare the parameter list's arity and names by nameKey with the method's
+          params, a param's previousNames giving the rename
         type: local
       - stepNumber: 6
         description: >-
@@ -2306,4 +2344,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-09T00:54:06.217Z'
+updatedAt: '2026-10-09T11:39:15.565Z'

@@ -106,6 +106,23 @@ methods:
       - name: ref
         type: string
     effect: io
+  - name: commitIntroducing
+    description: >-
+      The oldest commit of the work tree holding a directory whose change to the file at the
+      pathspec (relative to the directory) introduced the given text — the commit that first
+      recorded it (`git log -S`, oldest first) — or none when no commit did, the directory is in no
+      work tree or git is not installed. No network.
+    signature: 'commitIntroducing(directory: string, pathspec: string, text: string): string?'
+    returns: string?
+    params:
+      - name: directory
+        type: string
+      - name: pathspec
+        type: string
+      - name: text
+        type: string
+        description: The text the commit introduced (an approval's StateId digest)
+    effect: io
 status: complete
 createdAt: '2026-10-02T20:19:32.127Z'
-updatedAt: '2026-10-07T10:53:26.720Z'
+updatedAt: '2026-10-09T11:37:45.823Z'

@@ -3,6 +3,7 @@ name: Admin Portal Implementation
 description: 'Control-plane HTTP boundary: forwards each admin operation to the admin orchestrator.'
 contract: iadmin_portal
 sourcePath: src/server/http.ts
+router: routeAdmin
 methods:
   - name: createProject
     narrative:
@@ -237,4 +238,4 @@ methods:
         targetMethod: previewProjectPackRemoval
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-09-29T16:16:52.868Z'
+updatedAt: '2026-10-09T11:40:11.062Z'

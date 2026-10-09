@@ -24,7 +24,11 @@ import { CodeIndex, RuleContext, SddRule } from '../types.js';
 //              registrations). The stereotype default for Portals.
 //   off      — method checks skipped (generated/vendored code); the existence
 //              check of every named source file (source-file-linkage) always
-//              applies.
+//              applies. A dial turned off is SAID, once per implementation, as
+//              REALIZATION_UNCHECKED (a notice): the dial is code linkage,
+//              outside the approval, so one line in an implementation spec
+//              switched every realization check off with `validate --ci`
+//              saying "All checks passed" and `status` silent.
 //
 // N:1 is native: many implementations may share one file, and one anchor
 // satisfies every component that declares that method name — telling WHICH
@@ -82,10 +86,11 @@ export const methodRealizationRule: SddRule = {
   name: 'method-realization',
   judges: 'code',
   description:
-    'Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method\'s sourcePath, else the implementation\'s) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.',
+    "Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method's sourcePath, else the implementation's) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. A dial turned off is said once per implementation as a notice (REALIZATION_UNCHECKED) naming the methods it covers: the dial is code linkage, outside the approval, so without it one line in an implementation spec would switch the realization checks off — method, parameters, async, whether narrated calls are found — with no surface saying so; the doctrine checks still run. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.",
   codes: [
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its own source file (the method\'s sourcePath, else the implementation\'s) at the required conformance tier' },
     { code: 'METHOD_BODY_NOT_FOUND', defaultSeverity: 'warning', summary: 'The method symbol IS declared in its own source file, but the file holds no function-like body under it — a signature, an ambient or interface declaration, a value binding, an imported or re-exported name', carryable: true },
+    { code: 'REALIZATION_UNCHECKED', defaultSeverity: 'notice', summary: "An implementation's conformance dial is off, on itself or on some of its methods, so whether those methods are realized in its code — present, taking the contract's parameters, async as declared, making the calls their narratives claim — is not checked" },
   ],
 
   check(ctx: RuleContext): void {
@@ -103,6 +108,31 @@ export const methodRealizationRule: SddRule = {
       const draft = ctx.isImplementationDraft(impl);
       const specTier = (impl.conformance as ConformanceTier | undefined)
         ?? defaultConformanceTier(component);
+
+      // A dial turned off — on the implementation, or on some of its methods
+      // — is said once: it is code linkage outside the approval, and this is
+      // the one finding where switching the realization checks off shows.
+      const offMethods = contract.methods
+        .filter(method => ((impl.methods.find(m => m.name === method.name)?.conformance as ConformanceTier | undefined) ?? specTier) === 'off')
+        .map(method => method.name);
+      if (specTier === 'off' || offMethods.length > 0) {
+        const covers = specTier === 'off' && offMethods.length === contract.methods.length
+          ? `on the implementation itself — every method of contract "${impl.contract}"`
+          : `on ${offMethods.length} method(s) of contract "${impl.contract}" — ${offMethods.map(name => `"${name}"`).join(', ')}`;
+        ctx.addIssue(
+          'notice',
+          'REALIZATION_UNCHECKED',
+          `Realization not checked: conformance off on "${impl.id}", ${covers}. Whether those methods are in the code, take `
+          + 'the contract\'s parameters, are async as declared and make the calls their narratives claim is not compared; the '
+          + 'doctrine checks (an unnarrated write, a call the analysis cannot follow, a Portal write shortcut, route coverage) '
+          + 'still run. The dial is code linkage, outside the approval — this notice is where it shows. It is meant for '
+          + 'generated or vendored code; drop it (sdd_update_spec unset conformance) to have the code compared again.',
+          impl.id,
+          draft,
+          undefined,
+          { at: 'conformance' },
+        );
+      }
 
       for (const method of contract.methods) {
         const methodImpl = impl.methods.find(m => m.name === method.name);

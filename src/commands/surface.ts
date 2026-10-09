@@ -69,6 +69,40 @@ function exportGateErrors(): string[] {
   }
 }
 
+/**
+ * How to resolve the types an OpenAPI document could not describe, by what
+ * each one's alias names in this project's configuration: an external is
+ * pinned, a member exports it (or the reference names a public name the
+ * member retired), this project's own id names its own export table — never
+ * "pin" for a member, which is never pinned, nor for the project itself.
+ */
+function unresolvedAdvice(unresolved: string[]): string {
+  let config: ReturnType<typeof loadProjectConfig> = null;
+  try {
+    config = loadProjectConfig();
+  } catch {
+    config = null;
+  }
+  const members = new Set(Object.keys(config?.members ?? {}));
+  const externals = new Set(Object.keys(config?.externals ?? {}));
+  const own = new Set([config?.id, config?.name].filter((n): n is string => !!n));
+  const by = new Map<string, string[]>();
+  for (const name of unresolved) {
+    const alias = name.includes('::') ? name.slice(0, name.indexOf('::')) : '';
+    by.set(alias, [...(by.get(alias) ?? []), name]);
+  }
+  const said: string[] = [];
+  for (const [alias, names] of by) {
+    const list = names.join(', ');
+    if (externals.has(alias)) said.push(`${list}: pin the external "${alias}" (\`wairon externals pin ${alias}\`), or export the type from its L0`);
+    else if (members.has(alias)) said.push(`${list}: the member "${alias}" is read live and never pinned — export the type from its L0, or, when the name is one it retired, follow the rename at the project that writes it`);
+    else if (own.has(alias)) said.push(`${list}: this project's own L0 export table names no such type — export it there, or point the reference at the project that holds it`);
+    else if (alias === '') said.push(`${list}: no type of this project's own has that name`);
+    else said.push(`${list}: "${alias}" is neither a member nor an external this project declares`);
+  }
+  return said.join('; ');
+}
+
 /** One changelog line per change, grouped by kind as release notes read. */
 function printSurfaceDiff(diff: SurfaceDiff): void {
   logger.info(`Public surface of "${diff.project}" against ${diff.against}:`);
@@ -133,7 +167,7 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       // A schema the document could not resolve is named, gate errors or not: a client generator gets nothing for it.
       const unresolved = result.unresolvedTypes ?? [];
       if (unresolved.length > 0) {
-        status('warn', `The document has no schema for ${unresolved.length} type(s) it names: ${unresolved.join(', ')}. Each reads "Unresolved type" where a client generator expects a schema: pin the external it comes from (\`wairon externals pin\`), or export the type from the member's or external's L0.`);
+        status('warn', `The document has no schema for ${unresolved.length} type(s) it names: ${unresolved.join(', ')}. Each reads "Unresolved type" where a client generator expects a schema: ${unresolvedAdvice(unresolved)}.`);
       }
       if (gateErrors.length > 0) {
         const codes = [...new Set(gateErrors)].map((c) => `${c}${gateErrors.filter((x) => x === c).length > 1 ? ` ×${gateErrors.filter((x) => x === c).length}` : ''}`).join(', ');

@@ -96,7 +96,6 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-    conformance: 'off'
   - name: computeStateId
     narrative:
       - stepNumber: 1
@@ -104,7 +103,6 @@ methods:
         type: call
         targetComponent: state_hash
         targetMethod: compute
-    conformance: 'off'
   - name: readLockRecord
     narrative:
       - stepNumber: 1
@@ -112,7 +110,6 @@ methods:
         type: call
         targetComponent: lock_store
         targetMethod: read
-    conformance: 'off'
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
@@ -305,7 +302,6 @@ methods:
         outcome: >-
           member created: the MemberCreation (whether the configuration was created, the adopted
           selections, the unadopted requirements, the projectType written)
-    conformance: 'off'
   - name: moveMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -374,7 +370,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: setMemberPath
-    conformance: 'off'
   - name: externalizeSubsystem
     sourcePath: src/core/provision.ts
     narrative:
@@ -445,7 +440,6 @@ methods:
           promote's result)
         type: return
         outcome: externalized, with the promote result for a project
-    conformance: 'off'
   - name: internalizeMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -533,7 +527,10 @@ methods:
           file paths (sourcePath, each method's sourcePath, simPath, each binding-module path) and
           each moved type's (sourcePath, each method's sourcePath) relative to the bound root. Each
           reference that crossed the old boundary is re-expressed with the target the scan bound it
-          to before the move, so the re-save below keeps every target
+          to before the move, so the re-save below keeps every target — a type position through the
+          one type-reference rewriter a type move uses, token by token: a bare parameter type, a
+          generic argument (`list<alias::x>`), an optional (`alias::x?`), a union and a returns
+          alike, so no position keeps the alias the internalize retires
         type: local
       - stepNumber: 13
         description: Is there a project boundary to dissolve, or only storage to move?
@@ -631,7 +628,6 @@ methods:
           what was deleted
         type: return
         outcome: 'internalized: the InternalizeResult'
-    conformance: 'off'
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
@@ -706,7 +702,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: create
-    conformance: 'off'
   - name: upsertPackSelection
     narrative:
       - stepNumber: 1
@@ -714,7 +709,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: upsertPackSelection
-    conformance: 'off'
   - name: removePackSelection
     narrative:
       - stepNumber: 1
@@ -722,7 +716,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: removePackSelection
-    conformance: 'off'
   - name: setProjectType
     narrative:
       - stepNumber: 1
@@ -730,7 +723,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: setProjectType
-    conformance: 'off'
   - name: recordProfileSelection
     narrative:
       - stepNumber: 1
@@ -738,7 +730,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: recordProfileSelection
-    conformance: 'off'
   - name: setExecutionTier
     narrative:
       - stepNumber: 1
@@ -746,7 +737,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: setExecutionTier
-    conformance: 'off'
   - name: registerPackRef
     narrative:
       - stepNumber: 1
@@ -754,7 +744,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: registerPackRef
-    conformance: 'off'
   - name: deregisterPackRef
     narrative:
       - stepNumber: 1
@@ -762,7 +751,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: deregisterPackRef
-    conformance: 'off'
   - name: markSelectionsBundled
     narrative:
       - stepNumber: 1
@@ -770,7 +758,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: markSelectionsBundled
-    conformance: 'off'
   - name: ensureProjectInitialized
     sourcePath: src/core/provision.ts
     narrative:
@@ -1050,7 +1037,11 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadComponentSpec
       - stepNumber: 2
-        description: 'Guard: the component must exist'
+        description: >-
+          Guard: the component must exist — asked after the project boundary of step 4 for an id
+          carrying `::`, so a member's or an external's component, by its key or through an
+          `alias::name` the bound project's alias table resolves, is refused with the boundary's
+          sentence and never reported missing
         type: branch
         condition: the component does not exist
         onFalseStep: 4
@@ -1060,7 +1051,9 @@ methods:
         type: throw
         error: 'component-missing: no component has this id'
       - stepNumber: 4
-        description: 'Guard: the component must belong to the bound project itself'
+        description: >-
+          Guard: the component must belong to the bound project itself — the project boundary every
+          write asks (crossProjectWriteRefusal), asked first for an id carrying `::`
         type: branch
         condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
         onFalseStep: 6
@@ -1217,8 +1210,10 @@ methods:
         targetMethod: loadComponentSpec
       - stepNumber: 2
         description: >-
-          Guard: the component must exist, and belong to the bound project itself — a member project
-          is written from its own root
+          Guard: the component must belong to the bound project itself — the project boundary every
+          write asks (crossProjectWriteRefusal), asked FIRST for an id carrying `::`, so a member's
+          or an external's component named through its alias is refused with the boundary's sentence
+          rather than reported missing — and exist
         type: branch
         condition: >-
           the component does not exist, or componentId is namespaced into a chained mount (it
@@ -1348,8 +1343,11 @@ methods:
         endStep: 20
       - stepNumber: 18
         description: >-
-          An implementation that named no symbol needs one now: the function it binds to still
-          carries the old name
+          An implementation that named no symbol needs one now when its code exists: the function it
+          binds to still carries the old name. Its code exists when the file realizing the method
+          (its own sourcePath, else the implementation's) is on disk; with no code written yet there
+          is nothing to keep binding, so no pin is set unless the caller asks for one (pinSymbol
+          true), and a caller declining it (pinSymbol false) is never pinned
         type: branch
         condition: the method declares no symbol and pinSymbol is not false
         onFalseStep: 20
@@ -1618,7 +1616,12 @@ methods:
           standing. When the delta names exactly the stored elements of a list — the same
           identities, none added, none removed, no marker — in another order, the merged list takes
           the delta's order: a reorder is an edit, never a silent no-op, while an element the delta
-          adds still appends
+          adds still appends. Two code-linkage lists of an implementation are the exception:
+          injectedParams and bindings, restated, REPLACE what is stored — the first states the
+          realization's leading (and trailing) parameters in order, the second its binding modules,
+          each whole, and an entry left over from an earlier statement is itself reported
+          (UNUSED_INJECTED_PARAM, BINDING_UNREAD) — while a removal marker in them still removes one
+          value and keeps the rest
         type: local
       - stepNumber: 13
         description: >-
@@ -1638,14 +1641,19 @@ methods:
           permissive delta cannot refuse, and one whose value the stored spec already held; a list
           the write reordered is acted on, never 'already held', and a type position the write
           respelled to its canonical form (string[] stored as list<string>) is stored, never 'not
-          kept'. Read the stored FILE raw as well and name every key it carries that the level's
-          canonical schema does not know, each as `path: value` (strippedKeys): the parse already
-          discarded them, and the write re-serializes through the schema, so they would otherwise be
-          lost without a word. A list whose elements stayed the same but changed place is reported
-          as reordered, before and after naming both orders; a list of plain values (a requirement
-          written as text or as its description alike) is compared value by value, so a mixed edit
-          reads as the values added and removed, never as the whole list set; and an unset that puts
-          a defaulted list back at its default counts as the removal it is
+          kept'. A reference is compared by its WRITTEN text, not only by what it binds to: a delta
+          naming a reference the stored spec holds in another spelling that binds to the same target
+          (`geo::distance` for a stored `geo::distance_portal`, the public name for the internal id)
+          is a respelling — a change, reported with both texts and written at its position, so the
+          spelling the gate asks for can be written by the tool meant to write it. Read the stored
+          FILE raw as well and name every key it carries that the level's canonical schema does not
+          know, each as `path: value` (strippedKeys): the parse already discarded them, and the
+          write re-serializes through the schema, so they would otherwise be lost without a word. A
+          list whose elements stayed the same but changed place is reported as reordered, before and
+          after naming both orders; a list of plain values (a requirement written as text or as its
+          description alike) is compared value by value, so a mixed edit reads as the values added
+          and removed, never as the whole list set; and an unset that puts a defaulted list back at
+          its default counts as the removal it is
         type: local
       - stepNumber: 15
         description: Decide whether there is anything to write
@@ -1655,8 +1663,11 @@ methods:
       - stepNumber: 16
         description: >-
           Write nothing, leave the stored updatedAt untouched, and report that the delta matched
-          what is stored, naming the paths it did not act on; a caller asking only what the delta
-          would do is answered the same way, because there is nothing it would do
+          what is stored, naming the paths it did not act on; when the delta restated a list of
+          methods or fields and left stored ones out, the answer says that lists upsert — what a
+          delta leaves out is kept — and how to remove one: `{"name": "<method>", "action":
+          "delete"}`. A caller asking only what the delta would do is answered the same way, because
+          there is nothing it would do
         type: return
         outcome: unchanged
       - stepNumber: 17
@@ -2366,7 +2377,6 @@ methods:
           re-expressed and the signature texts re-derived
         type: return
         outcome: the promote result
-    conformance: 'off'
   - name: demoteMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -2491,7 +2501,6 @@ methods:
           which signature texts were re-derived; nothing locked
         type: return
         outcome: InternalizeResult
-    conformance: 'off'
   - name: advanceMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -2551,7 +2560,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: describeProject
-    conformance: 'off'
   - name: repairSignatures
     sourcePath: src/core/signature-repair.ts
     narrative:
@@ -2701,7 +2709,9 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadTypeSpec
       - stepNumber: 2
-        description: 'Guard: the type must exist'
+        description: >-
+          Guard: the type must exist — asked after the project boundary of step 4 for an id carrying
+          an `alias::` qualifier, so another project's type is refused with the boundary's sentence
         type: branch
         condition: the type does not exist
         onFalseStep: 4
@@ -2711,7 +2721,11 @@ methods:
         type: throw
         error: 'type-missing: no type has this id'
       - stepNumber: 4
-        description: 'Guard: the type must belong to the bound project itself'
+        description: >-
+          Guard: the type must belong to the bound project itself — the project boundary every write
+          asks (crossProjectWriteRefusal), asked first for a qualifier naming no own subsystem, so
+          its sentence names the member project by its id and folder, or the external this project
+          only reads through its pin, as every other write tool does
         type: branch
         condition: 'typeId is namespaced into a member project (it carries an alias:: prefix)'
         onFalseStep: 6
@@ -2843,7 +2857,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: setNetwork
-    conformance: 'off'
   - name: renameField
     sourcePath: src/core/provision.ts
     narrative:
@@ -2854,9 +2867,9 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 2
         description: >-
-          Resolve the type: an `alias::` qualifier naming no own subsystem is another project's
-          (chained-type); a subsystem-qualified id names the type within that owner; none found is
-          type-missing
+          Resolve the type: an `alias::` qualifier naming no own subsystem is another project's,
+          refused with the project boundary every write asks (crossProjectWriteRefusal); a
+          subsystem-qualified id names the type within that owner; none found is type-missing
         type: local
       - stepNumber: 3
         description: >-
@@ -2928,8 +2941,9 @@ methods:
         targetMethod: loadComponentSpec
       - stepNumber: 2
         description: >-
-          A component that does not exist, or one inside a chained subproject, is refused before
-          anything is read further
+          A component of another project — asked first through the project boundary every write asks
+          (crossProjectWriteRefusal), so an alias-named one is refused with its sentence — or one
+          that does not exist, is refused before anything is read further
         type: branch
         condition: the component exists and is not inside a chained subproject
         onFalseStep: 20
@@ -3181,8 +3195,9 @@ methods:
         targetMethod: loadInterfaceSpec
       - stepNumber: 4
         description: >-
-          Guard: the spec must exist, belong to the bound project, and the new id must fit the
-          grammar
+          Guard: the spec must belong to the bound project — the project boundary every write asks
+          (crossProjectWriteRefusal), asked first for an id carrying `::` — exist, and the new id
+          must fit the grammar
         type: branch
         condition: >-
           no spec of the kind holds the id, or the id carries ::, or the new id is not a lowercase
@@ -3371,9 +3386,15 @@ methods:
         error: the type cannot move there
       - stepNumber: 18
         description: >-
-          Plan the rewrites: every type position qualified by the old subsystem names the new one,
-          its L1 export entries move with it, and an L0 re-export from the old subsystem naming it
-          is re-pointed
+          Plan the rewrites: every type reference that names the moved type through its old
+          subsystem — in either spelling the loader resolves, `old::type` or `old.type`, matched as
+          the loader matches (case and punctuation aside, a deprecated own-project prefix and a
+          foreign key's `.field` tail included), wherever it stands in a type expression: a bare
+          position, a generic argument (`list<old.type>`, `map<string, old::type>`), an optional
+          (`old::type?`), a union, a result, a returns, a field, a signature type — is respelled to
+          name the new subsystem in the same spelling (the bare id at system level), through the one
+          type-reference rewriter every type move shares; its L1 export entries move with it, and an
+          L0 re-export from the old subsystem naming it is re-pointed
         type: local
       - stepNumber: 19
         description: A dry run stops here
@@ -3405,4 +3426,4 @@ methods:
         outcome: SpecMove
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T01:01:41.375Z'
+updatedAt: '2026-10-09T11:39:55.346Z'

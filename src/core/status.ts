@@ -478,6 +478,18 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   for (const absent of (options.approvals ?? []).filter((a) => a.key !== '' && a.as !== 'part' && !referencedKeys.has(a.key) && !family.nodes.some((n) => n.namespace === a.key))) {
     output += `${mark.structure('    ')}${mark.missing(`[Project] ${absent.alias ?? absent.key} (no project on disk)`)}${approvalTag(absent)}\n`;
   }
+  // A conformance dial turned off is code linkage outside the approval, so the
+  // approval line below cannot show it: one line names every implementation
+  // whose realization the gate does not check, before that sentence.
+  const dialledOff = implementations.flatMap((impl) => {
+    if (impl.conformance === 'off') return [`${impl.id} (every method)`];
+    const off = impl.methods.filter((m) => m.conformance === 'off').map((m) => m.name);
+    return off.length > 0 ? [`${impl.id} (${off.join(', ')})`] : [];
+  });
+  if (dialledOff.length > 0) {
+    output += `${mark.layer('system', 'Conformance off:')} ${dialledOff.join(', ')} — realization not checked (method, parameters, async, narrated calls); the doctrine checks still run\n`;
+  }
+
   // Always said, a lone project never approved included: `status` promises the
   // approval state, and leaving it out read as "nothing to say" rather than "never".
   const own = options.approvals?.find((a) => a.key === '');

@@ -211,7 +211,28 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: renameSpecId
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: Call lockTree on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: lockTree
+  - name: unlockTree
+    narrative:
+      - stepNumber: 1
+        description: Call unlockTree on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: unlockTree
+  - name: readPinnedSpec
+    narrative:
+      - stepNumber: 1
+        description: Call readPinnedSpec on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: readPinnedSpec
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:33:38.608Z'
+updatedAt: '2026-10-09T12:16:46.859Z'

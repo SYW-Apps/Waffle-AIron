@@ -1085,6 +1085,19 @@ methods:
           OpenAPI document would describe a parameter nobody sends
         type: local
       - stepNumber: 13
+        label: statuses
+        description: >-
+          Judge every stated status: for each HTTP-bound method of a Portal whose transport is HTTP
+          that states a status, report ENDPOINT_STATUS_MISMATCH (warning, on intf.id; draft context
+          isDraftCtx || isIntfDraft) naming the method, the verb and path, the status and what is
+          wrong with it when it contradicts the protocol or the method — a code outside the standard
+          success and redirect codes (200-208, 226, 300-308), which no client library names; a 204
+          or a 304, which carry no body, on a method that answers a value (returns other than void,
+          async void or result<void, E>); a redirect (301, 302, 303, 307, 308), answered with a
+          Location header and no body, on a method answering a value other than the location itself
+          — a string, or a named type holding a string
+        type: local
+      - stepNumber: 14
         label: routes
         description: >-
           Collect every HTTP route of the tree: for each Portal whose transport is HTTP, each
@@ -1095,19 +1108,19 @@ methods:
           Portal, or, when the Portal declares a basePath other than `/`, that normalized basePath,
           which Portals sharing it share
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         label: routeGroup
         description: For each group of routes sharing scope, verb and normalized path
         type: loop
         loopKind: forEach
         over: the route groups
-        endStep: 16
-      - stepNumber: 15
+        endStep: 17
+      - stepNumber: 16
         description: Do two or more methods bind it?
         type: branch
         condition: the group holds more than one route
-        onFalseStep: 14
-      - stepNumber: 16
+        onFalseStep: 15
+      - stepNumber: 17
         label: routeReport
         description: >-
           Report ENDPOINT_ROUTE_DUPLICATE (error, never in draft context: two verbs on one route is
@@ -1611,4 +1624,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-08T08:28:42.050Z'
+updatedAt: '2026-10-09T12:02:20.301Z'

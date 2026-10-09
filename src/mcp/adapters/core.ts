@@ -37,4 +37,8 @@ export {
   resolveVariantGuidance,
   reinjectLocalGuides,
   registerProjectServer,
+  // The tree's write lock around every spec-write tool, and an external's pinned spec read.
+  lockTree,
+  unlockTree,
+  readPinnedSpec,
 } from '../../core/index.js';

@@ -102,35 +102,39 @@ methods:
           body DECLARES — its name unless destructured, its annotation as written, whether a caller
           may leave it out, whether its annotation names a platform transport class (a request, a
           response, a socket, a URL or its headers, resolved or not — parameter_fact.transport), the
-          member names and literal keys the body reads off it at any depth of a chain and the
-          property names a destructuring of such a read binds (parameter_fact.reads), and whether it
-          is PROVABLY unused: named, with no identifier of that name in the body or in another
-          parameter's default value and no read of `arguments` (a shadowing local counts as a use,
-          which can only keep a parameter judged) — and the routes it serves, read two ways. The
-          guard idiom: an `if` whose conditions, together with every enclosing `if`'s, compare
-          `<request>.method` with a string and `parts[i]` / `parts.length` with literals, every
-          compared value a string literal or one this file's constants, concatenations and template
-          literals settle; where the function strips a prefix before splitting the path
-          (`.slice(BASE.length)`, `.slice('/v1'.length)`, `.substring(BASE.length)`, `.replace(BASE,
-          '')`) and that prefix settles, its segments are folded in front of each route, marked
-          fullPath. The table idiom: every entry of a route table the function names — a top-level
-          constant array of object literals each pairing a method (a `method` or `verb` property,
-          else any property whose value is an HTTP verb) with a path (a `path`, `pattern`, `route`
-          or `url` property, else any property whose value is a path or a regular-expression
-          literal: a `/a/:b` or `/a/{b}` template, or an expression anchored with ^ whose segments
-          are literals or capture groups, the groups being the wildcards), or a top-level constant
-          object keyed `VERB /path` — each marked fullPath. An object table's key written as a
-          template literal or a concatenation over constants settles like any compared value; a
-          table the function returns or states in place unnamed (`return [ … ]`, an arrow's
-          expression body) is read as one it names; and a top-level constant that IS a route table
-          records its routes under its own name, so a router linkage may name the table itself. Each
-          table entry is marked table. The ONE prefix a function strips off a path anywhere in its
-          body (`.slice(BASE.length)`, `.substring(…)`, `.substr(…)`, `.replace(BASE, '')`), where
-          exactly one settles, is recorded by function name (source_file_facts.routePrefixes): what
-          a route table read by the same router is written under. A body that neither speaks of a
-          method or a verb nor writes an HTTP verb out is no router. A table any of whose entries
-          cannot be settled is read as no table at all, never as part of one: a route is never
-          invented
+          member names and literal keys the body reads off it at any depth of a chain, the string
+          literal a method of that chain is called with (`url.searchParams.get('limit')`), the
+          property names a destructuring of such a read binds at any depth, and the same read off a
+          local its value flows into (through `??`, `||`, `await`, `new URL(…)`, `new
+          URLSearchParams(…)`, `JSON.parse(…)`) or off what a function of this file it is passed to
+          reads and returns (parameter_fact.reads), and whether it is PROVABLY unused: named, with
+          no identifier of that name in the body or in another parameter's default value and no read
+          of `arguments` (a shadowing local counts as a use, which can only keep a parameter judged)
+          — and the routes it serves, read two ways. The guard idiom: an `if` whose conditions,
+          together with every enclosing `if`'s, compare `<request>.method` with a string and
+          `parts[i]` / `parts.length` with literals, every compared value a string literal or one
+          this file's constants, concatenations and template literals settle; where the function
+          strips a prefix before splitting the path (`.slice(BASE.length)`, `.slice('/v1'.length)`,
+          `.substring(BASE.length)`, `.replace(BASE, '')`) and that prefix settles, its segments are
+          folded in front of each route, marked fullPath. The table idiom: every entry of a route
+          table the function names — a top-level constant array of object literals each pairing a
+          method (a `method` or `verb` property, else any property whose value is an HTTP verb) with
+          a path (a `path`, `pattern`, `route` or `url` property, else any property whose value is a
+          path or a regular-expression literal: a `/a/:b` or `/a/{b}` template, or an expression
+          anchored with ^ whose segments are literals or capture groups, the groups being the
+          wildcards), or a top-level constant object keyed `VERB /path`, an array entry spreading
+          another table and an object entry another object, each followed through this file's
+          constants — each marked fullPath. An object table's key written as a template literal or a
+          concatenation over constants settles like any compared value; a table the function returns
+          or states in place unnamed (`return [ … ]`, an arrow's expression body) is read as one it
+          names; and a top-level constant that IS a route table records its routes under its own
+          name, so a router linkage may name the table itself. Each table entry is marked table. The
+          ONE prefix a function strips off a path anywhere in its body (`.slice(BASE.length)`,
+          `.substring(…)`, `.substr(…)`, `.replace(BASE, '')`), where exactly one settles, is
+          recorded by function name (source_file_facts.routePrefixes): what a route table read by
+          the same router is written under. A body that neither speaks of a method or a verb nor
+          writes an HTTP verb out is no router. A table any of whose entries cannot be settled is
+          read as no table at all, never as part of one: a route is never invented
         type: local
       - stepNumber: 8
         label: chaseReexports
@@ -219,25 +223,29 @@ methods:
           whose every landing is a member of an interface or type shape no project class realizes is
           marked port. The SIGNATURES: each parameter of each named function-like with a body gets
           the kind of value the checker says it takes (string, number, boolean, list, object or
-          function, nullability set aside; none where no one kind settles; for an object, the
-          property names its type has, as parameter_fact.fields; a platform class the fixed ES
-          library leaves out — URL, Request, Response, Headers, IncomingMessage, ServerResponse,
-          Buffer and their kin — an object where the checker cannot resolve it), joined onto the
-          parameter facts in the order the walk met the functions, wherever both read the same
-          functions with the same number of parameters. The ROUTES of every such function whose body
-          speaks of a method or a verb — both idioms compare one — are re-read with the checker
-          settling each compared value — a constant another module exports, and any expression the
-          checker types as one string literal — and replace the syntactic reading of that function.
-          And the CROSS-PROJECT IMPORTS: each import declaration of a root file, type-only or not,
-          whose module lies in ANOTHER project — the nearest folder above the file the specifier
-          resolves to (or would, for a relative specifier resolving to nothing) that holds a
-          .wai/project.yaml is not the analyzed project's root, nothing under node_modules — each
-          recorded as a CrossProjectImportFact (the specifier, the name, the other project's root,
-          the line, whether it is type-only): one that resolves to nothing — the module missing, or
-          a name imported from it whose alias the checker resolves to no declaration — as it is, and
-          one that resolves under each name it binds (`*` for a namespace import, none for a
-          side-effect import), marked resolved, with the module it lands in relative to that
-          project's root
+          function, nullability set aside; none where no one kind settles; for an object, the DATA
+          property names its type has, a method set aside, as parameter_fact.fields; whether that
+          type admits any value — any, unknown, object, {}, an index signature alone — as
+          parameter_fact.opaque; for a parameter named as a request handle (req, request, ctx,
+          context, event, url), its reads again, the checker following a helper it is passed to into
+          any project file no implementation claims, unioned onto the walk's parameter_fact.reads; a
+          platform class the fixed ES library leaves out — URL, Request, Response, Headers,
+          IncomingMessage, ServerResponse, Buffer and their kin — an object where the checker cannot
+          resolve it), joined onto the parameter facts in the order the walk met the functions,
+          wherever both read the same functions with the same number of parameters. The ROUTES of
+          every such function whose body speaks of a method or a verb — both idioms compare one —
+          are re-read with the checker settling each compared value — a constant another module
+          exports, a table spread from another module, and any expression the checker types as one
+          string literal — and replace the syntactic reading of that function. And the CROSS-PROJECT
+          IMPORTS: each import declaration of a root file, type-only or not, whose module lies in
+          ANOTHER project — the nearest folder above the file the specifier resolves to (or would,
+          for a relative specifier resolving to nothing) that holds a .wai/project.yaml is not the
+          analyzed project's root, nothing under node_modules — each recorded as a
+          CrossProjectImportFact (the specifier, the name, the other project's root, the line,
+          whether it is type-only): one that resolves to nothing — the module missing, or a name
+          imported from it whose alias the checker resolves to no declaration — as it is, and one
+          that resolves under each name it binds (`*` for a namespace import, none for a side-effect
+          import), marked resolved, with the module it lands in relative to that project's root
         type: local
       - stepNumber: 11
         description: >-
@@ -324,4 +332,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-09T00:42:32.063Z'
+updatedAt: '2026-10-09T11:27:00.937Z'

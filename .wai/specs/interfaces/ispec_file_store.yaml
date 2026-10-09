@@ -62,6 +62,31 @@ methods:
           The specs directory the prune stops before; the caller resolves it, because the store
           reads no project configuration of its own
     effect: write
+  - name: lockTree
+    description: >-
+      Take the write lock of the spec tree under the given project root, across every process on the
+      machine: a lock file beside the tree created exclusively, held until unlockTree. A process
+      already holding it takes it again (reentrant, counted). Another holder is waited for; a lock
+      left by a process that is gone, or older than any write could take, is broken. Refused after a
+      bounded wait, naming the holder, so a stuck writer never hangs a session.
+    signature: 'lockTree(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+        description: The project root whose spec tree is locked
+    effect: io
+  - name: unlockTree
+    description: >-
+      Release one hold of the write lock of the spec tree under the given project root; the lock
+      file goes with the last hold. Releasing a lock this process does not hold does nothing.
+    signature: 'unlockTree(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+        description: The project root whose spec tree is unlocked
+    effect: io
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-10-04T10:19:36.815Z'
+updatedAt: '2026-10-09T12:16:19.937Z'

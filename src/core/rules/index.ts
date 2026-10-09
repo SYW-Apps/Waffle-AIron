@@ -275,6 +275,8 @@ export interface BuildContextOptions {
   pinnedExternals?: PinnedExternal[];
   /** The binding modules the implementations name, as read (see RuleContext.bindingModules); absent on a candidate run. */
   bindingModules?: import('../binding-modules.js').BindingModule[];
+  /** Each live member projected at the approval it is judged against, by alias (see RuleContext.memberApprovedSurfaces). */
+  memberApprovedSurfaces?: Record<string, SurfaceSnapshot>;
   /** Source-code model for structural conformance; empty when not built. */
   codeModel?: CodeModel;
   /** The writer's round-trip dry-run findings for the in-scope specs, gathered by the caller (see RuleContext.roundTripIssues). */
@@ -1065,6 +1067,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(opts.typeSpellingFacts ? { typeSpellingFacts: opts.typeSpellingFacts } : {}),
     pinnedExternals,
     ...(opts.bindingModules ? { bindingModules: opts.bindingModules } : {}),
+    ...(opts.memberApprovedSurfaces ? { memberApprovedSurfaces: opts.memberApprovedSurfaces } : {}),
     codeModel: opts.codeModel ?? emptyCodeModel(),
     roundTripIssues: opts.roundTripIssues,
     lintAllows,

@@ -24,7 +24,7 @@ You are the **Delegation Orchestrator**. Your job is to hand scoped work to a fo
    - Pick the agent whose `ownedPaths`/domain matches the task. If no agent fits, stop and tell the user the topology has a gap.
 2. **Fetch the LIVE brief**:
    - Call `sdd_get_agent_brief(agentId)` (or read the `wairon-agent://<agentId>` resource).
-   - The brief carries: `agentId`, `name`, `template`, `domainRoot?`, `ownedPaths`, `readPaths?`, `instructions`, `variantGuidance?`, `typeMapping?` (how the contracts' neutral types are spelled in the language the agent's code is written in, also folded into `instructions` under `## Types in <language>`; TypeScript's table is the one code conformance reads back, while Rust's and Python's are mapping-only tables the code analyzer does not check, and the table says so), `codeFence?` (where the agent may write code: exactly the files its specs alone name — its implementation, method, simPath and binding files and the files of the types it owns — planned ones included, never a folder glob, so parallel fences never overlap), `sharedPaths?` (files it may touch but does not own: files other components' specs name too, such as a shared type module, and the module setup on the way to its code — manifests, compiler settings, package roots — plus unnamed helpers beside it), an `## Externals used` section for a component reaching another project (each alias, the names it uses, the producer's transport and abi, the pinned snapshot `.wai/externals/<alias>.yaml`, which joins `readPaths` — code against the pin, never the producer's source — and the binding modules its implementations name), and — when the project opted into `execution.tier` — `profile` and `budget`.
+   - The brief carries: `agentId`, `name`, `template`, `domainRoot?`, `ownedPaths`, `readPaths?`, `instructions`, `variantGuidance?`, `typeMapping?` (how the contracts' neutral types are spelled in the language the agent's code is written in, also folded into `instructions` under `## Types in <language>`; TypeScript's table is the one code conformance reads back, while Rust's and Python's are mapping-only tables the code analyzer does not check, and the table says so), `codeFence?` (where the agent may write code: exactly the files its specs alone name — its implementation, method, simPath and binding files and the files of the types it owns — planned ones included, never a folder glob, so parallel fences never overlap), `sharedPaths?` (files it may touch but does not own: files other components' specs name too, such as a shared type module, and the module setup on the way to its code — manifests, compiler settings, package roots, a planned one included (a Portal's `mod.rs`, where its sibling adds only the line declaring its module) — plus unnamed helpers beside it), an `## Externals used` section for a component reaching another project (each alias, the names it uses, the producer's transport and abi where the pin records them, the pinned snapshot `.wai/externals/<alias>.yaml`, which joins `readPaths` — code against the pin, never the producer's source — or, for a member project, its L0 export table read live, with the names spelled as that table exports them; and the binding modules its implementations name), a `## Handler shape` section for a Portal (the contract's own parameters per verb, the handles named in `injectedParams`, the `router` linkage), a `## Code linkage you own` section (when to declare `injectedParams`, and the ones declared now, which may be design-time guesses to remove), and — when the project opted into `execution.tier` — `profile` and `budget`.
    - **Never reuse a brief across delegations or after a re-lock** — fetch fresh per delegation; the call is cheap and the brief is always current.
 3. **Spawn a GENERIC subagent from the brief**:
    - Prompt: `brief.instructions`, plus the concrete task description.
@@ -65,13 +65,11 @@ Point the subagent at that skill and spend the brief on what only you know:
   it: a paraphrase drifts, and the subagent cannot tell which copy is current.
 * **The premise you are asking them to act on**, stated *as* a premise, so it can
   be contradicted.
-* **For a Portal, its handler shape** — the contract's own parameters per verb,
-  the handles its framework hands each function (to be named in the
-  implementation's `injectedParams`), and its `router` linkage (an entry of its
-  own file, `<module>#<name>`, or a central module) — quoted from the
-  implementation spec, with a pointer to `sdd-implement`'s **Handler shape** and
-  **Routers** rules. A subagent left to guess writes `(req, res)` handlers, and
-  the gate reads those as substitutions.
+* **For a Portal, what its handler shape section cannot know** — the brief's
+  `## Handler shape` states the rule; add the framework this project uses and the
+  handles it really hands each function, so the subagent declares exactly those in
+  `injectedParams` (and removes any guessed earlier). A subagent left to guess
+  writes `(req, res)` handlers, and the gate reads those as substitutions.
 
 One design decision never goes into a brief as an instruction: **an entry**. A
 subagent that meets an unreached Portal verb (`UNUSED_COMPONENT` /

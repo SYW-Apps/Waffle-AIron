@@ -1,0 +1,46 @@
+kind: value-object
+id: pinned_spec_read
+name: PinnedSpecRead
+description: >-
+  A spec of another project read from the pinned snapshot this project holds of it
+  (.wai/externals/<alias>.yaml): never a stored spec of this tree, never written back. An external's
+  specs are written from that project's own root; this project only reads what its pin recorded —
+  the export entry or the exported type under its public name.
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The external's alias the read went through
+    optional: false
+  - name: project
+    type: string
+    description: The producer project the alias names
+    optional: false
+  - name: kind
+    type: string
+    description: >-
+      interface for a contract entry (a component or an interface asked for), type for an exported
+      type
+    optional: false
+  - name: id
+    type: string
+    description: 'The public name read: the export entry''s or the exported type''s'
+    optional: false
+  - name: file
+    type: string
+    description: The pinned snapshot file it was read from, project-relative
+    optional: false
+  - name: stateId
+    type: string
+    description: The producer's StateId the pin was taken at, when the snapshot records one
+    optional: true
+  - name: spec
+    type: any
+    description: >-
+      The snapshot's entry exactly as pinned: a contract entry with its methods, or a type
+      definition
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-10-09T11:28:51.049Z'
+updatedAt: '2026-10-09T11:28:51.869Z'

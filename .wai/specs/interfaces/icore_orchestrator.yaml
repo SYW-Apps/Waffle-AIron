@@ -477,19 +477,20 @@ methods:
       <component>.<method>, and every debt-register entry (.wai/project.yaml
       rules.conformance.carried) keyed the same way, rewritten in place with every comment and all
       other formatting kept and each edit reported. An implementation that declared no symbol is
-      pinned to the old name unless pinSymbol is false, so the function it already binds to keeps
-      binding. Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming
-      a contract method must not silently rename an RPC; both are reported as mentions. When the
-      contract is exported (an L1 or L0 entry), the rename changes a published member: the report
-      names those entries (publishedIn), and nothing prevents it. Refuses, before the first write: a
-      component or method that does not exist, a name already declared on that interface or retired
-      there by one of its methods (name-retired), a name outside the identifier grammar, a component
-      inside a chained subproject (rename it from that project's root), and a register that cannot
-      be rewritten that precisely. A lock goes stale as with any edit. Inside a hosted request every
-      spec the rename would write is judged against the request's write reach before the first
-      write: a rename that would change a spec of a subsystem the request may not change is refused
-      (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
-      nothing is written.
+      pinned to the old name when its code exists — the file realizing the method is on disk — so
+      the function it already binds to keeps binding; with no code written yet nothing binds, and no
+      pin is set unless pinSymbol is true. pinSymbol false never pins. Prose is never rewritten and
+      a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently
+      rename an RPC; both are reported as mentions. When the contract is exported (an L1 or L0
+      entry), the rename changes a published member: the report names those entries (publishedIn),
+      and nothing prevents it. Refuses, before the first write: a component or method that does not
+      exist, a name already declared on that interface or retired there by one of its methods
+      (name-retired), a name outside the identifier grammar, a component inside a chained subproject
+      (rename it from that project's root), and a register that cannot be rewritten that precisely.
+      A lock goes stale as with any edit. Inside a hosted request every spec the rename would write
+      is judged against the request's write reach before the first write: a rename that would change
+      a spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming
+      every such subsystem and the rung that decided each, and nothing is written.
     signature: >-
       renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
       dryRun?: bool): MethodRename
@@ -512,7 +513,8 @@ methods:
         type: bool
         description: >-
           Whether an implementation that declares no symbol is pinned to the old name so its
-          function still binds; true when omitted
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
         optional: true
       - name: dryRun
         type: bool
@@ -1449,12 +1451,13 @@ methods:
       subsystem's publicInterfaces, its lifecycle entrypoints naming one move too, and an L0
       re-export from the old subsystem that names a moved component or type is re-pointed at the new
       one. A type takes its file, its L1 export entries and every type reference qualified by its
-      old subsystem (`old::type` becomes `new::type`); a type moves to system level (no subsystem)
-      or from it. Refuses, before the first write: a kind other than component or type, a spec that
-      does not exist, one in another project, a target subsystem the bound tree does not have or the
-      one it already lives in, a component another pattern owns (move its owner), and a type id the
-      target already holds. A dry run answers the plan and writes nothing. The caller's gate judges
-      the moved components before this runs.
+      old subsystem, in either spelling and wherever it stands in a type expression (`old::type`
+      becomes `new::type`, `list<old.type>` becomes `list<new.type>`); a type moves to system level
+      (no subsystem) or from it. Refuses, before the first write: a kind other than component or
+      type, a spec that does not exist, one in another project, a target subsystem the bound tree
+      does not have or the one it already lives in, a component another pattern owns (move its
+      owner), and a type id the target already holds. A dry run answers the plan and writes nothing.
+      The caller's gate judges the moved components before this runs.
     signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
     returns: SpecMove
     params:
@@ -1474,4 +1477,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:26:32.991Z'
+updatedAt: '2026-10-09T11:35:57.366Z'

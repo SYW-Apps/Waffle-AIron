@@ -30,10 +30,12 @@ methods:
       fence, domain context, variant guidance), fold in the code write fence — exact files the agent
       alone owns (never a folder glob), the shared files it may touch for its own needs with the
       rule that governs them, and the stop-and-report line for a shared file that would need a
-      responsibility of its own —, the optional user-owned project guidance file
-      (.wai/agents/<agentId>.md, read live) and, when a type dialect is shipped for the language the
-      agent's implementations are written in, the type mapping (how the contracts' neutral types are
-      spelled in that language), and return the structured AgentBrief — rendered instructions plus
+      responsibility of its own —, for a Portal the handler shape its code takes and, for every
+      implementer, that injectedParams are code linkage it declares once its code takes such a
+      parameter, the optional user-owned project guidance file (.wai/agents/<agentId>.md, read live)
+      and, when a type dialect is shipped for the language the agent's implementations are written
+      in, the type mapping (how the contracts' neutral types are spelled in that language), and
+      return the structured AgentBrief — rendered instructions plus
       ownedPaths/readPaths/codeFence/sharedPaths and typeMapping. Always reflects the CURRENT spec
       tree and guidance, so a re-lock or a guidance edit changes the next call's result with no
       session restart; an unknown agentId (or an alias that names no direct member) throws. A hosted
@@ -57,4 +59,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:20:40.557Z'
+updatedAt: '2026-10-09T11:22:02.340Z'

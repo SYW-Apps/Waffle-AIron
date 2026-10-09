@@ -88,7 +88,11 @@ methods:
       - stepNumber: 12
         description: >-
           Stamp identity (the system name and, when the project has a configuration, its effective
-          id), origin generated, the current StateId, and generatedAt
+          id), origin generated, the current StateId, and generatedAt; every type reference written
+          in its canonical form (surface_snapshot.canonicalTypeRef) — a method's display signature
+          rebuilt from its structured params when it has them, each parameter under its name as
+          authored and only its type canonical, so a parameter whose name spells like a type
+          (`order_id: order_id`) is never rewritten into that type's qualified id
         type: local
       - stepNumber: 13
         description: Return the self-contained snapshot
@@ -96,4 +100,4 @@ methods:
         outcome: SurfaceSnapshot
 status: complete
 createdAt: '2026-07-10T23:15:11.894Z'
-updatedAt: '2026-10-07T10:56:19.385Z'
+updatedAt: '2026-10-09T11:24:36.079Z'

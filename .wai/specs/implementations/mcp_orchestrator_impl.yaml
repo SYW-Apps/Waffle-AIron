@@ -13,11 +13,34 @@ methods:
   - name: initializeSystem
     narrative:
       - stepNumber: 1
+        description: Read the L0 the bound tree already holds, if any, through the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: >-
+          Decide whether this session may write the bound tree's L0: a session opened in a subfolder
+          binds UPWARD to the project above it, and re-initializing from there would replace that
+          project's name, vision, boundaries, requirements and targetLanguage
+        type: branch
+        condition: >-
+          the bound tree holds an L0 and the session's folder (the folder the stdio session was
+          opened in, or the client's workspace root) is not the bound project's root
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse, writing nothing: name the bound root and the L0 it holds, and the next step
+          `wairon init` names for the same folder — from the root, `wairon member add <alias> <path>
+          --project` makes the folder a member project designed from its own root — or open the
+          session at the root to re-author this L0 there
+        type: return
+        outcome: refused
+      - stepNumber: 4
         description: >-
           State the restatement: the L0 as the tool's arguments give it, and the fields this tool's
           input can express
         type: local
-      - stepNumber: 2
+      - stepNumber: 5
         description: >-
           Write it through the authoring client adapter, which re-authors an existing L0 in place
           and carries what this input cannot express (databases, the project gateway
@@ -25,7 +48,7 @@ methods:
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: writeSpec
-      - stepNumber: 3
+      - stepNumber: 6
         description: >-
           Answer with the receipt: the sentence and its notices as text, the receipt itself as
           structured content
@@ -296,8 +319,9 @@ methods:
       - stepNumber: 4
         description: >-
           Bind them through the authoring client adapter as one delta naming each method with its
-          endpoint, forwarding the caller's dry run, so the write is judged and reported like any
-          other
+          endpoint, forwarding the caller's dry run and answering for sdd_set_endpoints, so the
+          write is judged and reported like any other and a contract of another project is refused
+          naming this tool
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: updateSpecGated
@@ -325,7 +349,9 @@ methods:
           promises
         type: local
       - stepNumber: 3
-        description: Apply it through the authoring client adapter
+        description: >-
+          Apply it through the authoring client adapter, answering for sdd_set_public_interfaces, so
+          a subsystem of another project is refused naming this tool
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: updateSpecGated
@@ -431,28 +457,38 @@ methods:
         targetMethod: loadTypeSpec
       - stepNumber: 17
         label: found-check
-        description: Decide whether a spec of that kind holds that id
+        description: >-
+          Decide whether a spec of that kind holds that id — the loaders resolve an `alias::name` id
+          through the bound project's alias table, as a write does, so a member's spec is found
+          under its key
         type: branch
         condition: the load found nothing
-        onFalseStep: 19
+        onTrueStep: 20
+        onFalseStep: 18
       - stepNumber: 18
         label: not-found
-        description: Refuse a read of a spec that does not exist, naming the kind and the id asked for
-        type: return
-        outcome: no such spec
+        description: >-
+          No spec of this tree holds it: when the id is `alias::name` and the alias names an
+          external of this project, read the spec from the pinned snapshot this project holds of it
+          — the contract entry for a component or an interface, the exported type for a type
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: readPinnedSpec
       - stepNumber: 19
-        description: Decide whether the read was narrowed to named methods
-        type: branch
-        condition: the read named methods to filter by
-        onFalseStep: 21
+        description: >-
+          Answer the pinned read when the pin holds the name — the pinned entry as the spec, the
+          pinnedSnapshot marker beside it (alias, producer, snapshot file, StateId), read-only: an
+          external is written from its own root — else refuse a read of a spec that does not exist,
+          naming the kind and the id asked for
+        type: return
       - stepNumber: 20
         description: >-
-          Refuse the filter outright when the spec declares no methods at all, or when a name it
-          does not declare is asked for — naming the ones it does, and returning nothing, so a
-          misspelling never reads as a method with no content. Otherwise keep the named methods and
-          attach the partial-result marker: what is shown, how many are omitted, and the warning
-          that a write REPLACES the method list, so re-authoring from this answer would remove every
-          method left out
+          When the read was narrowed to named methods: refuse the filter outright when the spec
+          declares no methods at all, or when a name it does not declare is asked for — naming the
+          ones it does, and returning nothing, so a misspelling never reads as a method with no
+          content. Otherwise keep the named methods and attach the partial-result marker: what is
+          shown, how many are omitted, and the warning that a write REPLACES the method list, so
+          re-authoring from this answer would remove every method left out
         type: local
       - stepNumber: 21
         description: Decide whether the spec read carries variant guidance
@@ -609,11 +645,23 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Note whether the folder the source names exists yet, resolved from the bound project root:
+          a `../` sibling that does not exist is a folder the call is about to create OUTSIDE this
+          project
+        type: local
+      - stepNumber: 2
+        description: >-
           Scaffold the member project and declare it in `members` via core; the answer states the
           required packs the new member was given and the requirements nothing installed satisfies
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: createMember
+      - stepNumber: 3
+        description: >-
+          Answer what was created and declared; when the call created a folder outside this project,
+          say so first — where it was created — so a new folder beside the project never appears
+          without a word
+        type: return
     symbol: sdd_add_member
   - name: validateTree
     narrative:
@@ -830,8 +878,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Move the spec through the authoring client adapter, which judges a moved component in its
-          tree before anything is written — or, with dryRun, answers the plan
+          Move the spec — and every spec named in `together` with it, as one move — through the
+          authoring client adapter, which judges the moved components together in their tree before
+          anything is written, or, with dryRun, answers the plan for all of them
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: moveSpec
@@ -876,4 +925,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-09T00:34:08.106Z'
+updatedAt: '2026-10-09T11:34:04.166Z'
