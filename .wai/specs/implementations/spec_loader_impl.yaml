@@ -329,8 +329,27 @@ methods:
         type: call
         targetComponent: spec_file_store
         targetMethod: inspectLock
+  - name: readProjectSystem
+    narrative: []
+    detail: intent
+    intent: >-
+      A bare id answers this project's own L0 (the loader's L0 read) when it is `system`, the L0's
+      name or the project's effective id, and otherwise the names it is read by. An `alias::name` id
+      splits at its last `::`: the head is an alias of the bound project (bound through its alias
+      table to a member's key) or a member's key itself, the rest the name asked for. A member
+      project root the scan followed under that key answers with its own L0, read from its root's L0
+      file through the file store and parsed as an L0 — when the name is `system`, that L0's name or
+      the member's project id; any other name, an unreadable L0 or none at all answers the reason
+      instead, naming the names the member's L0 is read by. A part of the bound project answers that
+      it has no L0 of its own (its subsystems are this project's, under this project's L0). An
+      external with a readable pin answers that its L0 is not held here, naming the public names its
+      pin exports; a declared external without one, that it is read once pinned; anything else, that
+      the prefix is no member, part or external. Never one project's L0 under another's id, never
+      cached, never written.
+    calls:
+      - spec_file_store.read
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T16:55:45.419Z'
+updatedAt: '2026-10-15T16:06:32.539Z'

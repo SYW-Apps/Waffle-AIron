@@ -231,7 +231,7 @@ describe('list edits: reorder, element-level reports, unset, and a dry run that 
   it('reports a mixed list edit value by value, never as the whole list set', () => {
     seed();
     const report = updateSpec('system', 'system', { globalRequirements: ['five', { value: 'two', action: 'delete' }, { description: 'six' }] });
-    expect(report.changes.map((c) => `${c.change} ${c.after ?? c.before}`)).toEqual(['removed two', 'added five', 'added {"description":"six"}']);
+    expect(report.changes.map((c) => `${c.change} ${c.after ?? c.before}`)).toEqual(['removed two', 'added five', 'added six']); // round 11: stored as text beside text
     expect(report.changes.some((c) => c.change === 'set')).toBe(false);
   });
 

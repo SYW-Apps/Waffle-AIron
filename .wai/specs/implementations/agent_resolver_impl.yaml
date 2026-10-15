@@ -233,29 +233,34 @@ methods:
           FILES, never a folder glob: each file the specs name for this record's components alone —
           implementation and method source files, simPath harnesses and binding modules, and the
           source files of the types it owns (an implementer's: the types whose componentClass its
-          component is, and the types only its own contracts use; an owner's: its subsystem's types)
-          — existing or planned; a file the specs of another component (for an owner, another
-          subsystem) also name belongs to no single fence. Carried as codeFence and as a '## Code
-          write fence' section placed ahead of the project guidance (which stays the last word),
-          each planned file marked `(planned — create it)`; when no spec names a location yet, the
-          section says so and that the spawning session should declare the planned sourcePath on the
-          implementation now — code linkage, not part of the approval, so it costs no re-lock. The
-          shared files come next, carried as sharedPaths and listed in the same section apart from
-          the fence: the files its specs name that other components' specs also name (a shared type
-          module — created at its planned home exactly as its spec declares it, never redeclared
-          locally — or a shared binding module), and, where they exist, the project setup files from
-          the project root down to each folder of its files (package.json and its lockfile,
-          tsconfig.json, Cargo.toml, pyproject.toml, go.mod), the package or crate roots in those
-          folders (index.ts, lib.rs, main.rs, mod.rs, __init__.py) — existing, or planned where a
-          spec names one, so a first-wave module beside its Portal's planned mod.rs may add the line
-          declaring itself, and a module root another agent's fence holds takes only that line — and
-          the source files beside its own that no spec names, capped so the brief stays small. The
+          component is, and the types only its own contracts use, and the file only a type's METHODS
+          name when its narratives alone call one of those methods — the pure logic it implements,
+          never a shared file nobody owns; an owner's: its subsystem's types) — existing or planned;
+          a file the specs of another component (for an owner, another subsystem) also name belongs
+          to no single fence. Carried as codeFence and as a '## Code write fence' section placed
+          ahead of the project guidance (which stays the last word), each planned file marked
+          `(planned — create it)`; when no spec names a location yet, the section says so and that
+          the spawning session should declare the planned sourcePath on the implementation now —
+          code linkage, not part of the approval, so it costs no re-lock. The shared files come
+          next, carried as sharedPaths and listed in the same section apart from the fence: the
+          files its specs name that other components' specs also name (a shared type module —
+          created at its planned home exactly as its spec declares it, never redeclared locally — or
+          a shared binding module), and, where they exist, the project setup files from the project
+          root down to each folder of its files (package.json and its lockfile, tsconfig.json,
+          Cargo.toml, pyproject.toml, go.mod), the package or crate roots in those folders
+          (index.ts, lib.rs, main.rs, mod.rs, __init__.py) — existing, or planned where a spec names
+          one, so a first-wave module beside its Portal's planned mod.rs may add the line declaring
+          itself, and a module root another agent's fence holds takes only that line — and the
+          source files beside its own that no spec names, capped so the brief stays small. The
           section states the rule for them once: create or extend a shared or unnamed file (a
           helper, the composition root, test setup, a module manifest beside its code) only for this
           component's needs, and name each in the report; a shared file that would need a
           responsibility of its own (domain logic, held state, a decision the design does not make)
-          is a design change — stop and report it. So a first implementation (composition root,
-          module setup, test setup) is never blocked, and nothing it writes outside its own files is
+          is a design change — stop and report it; and it never deletes or moves a file or folder
+          outside the files the brief fences (an ignored or scratch-looking project folder included)
+          nor uses an existing project folder as scratch space — scratch work lives in a temporary
+          directory outside the repository. So a first implementation (composition root, module
+          setup, test setup) is never blocked, and nothing it writes outside its own files is
           silent. An implementer's readPaths add the specs of every type its contracts use (and of
           the types their fields name), its dependencies' contracts and the files realizing them, so
           it reads the code it will call instead of guessing it. The mapping: find the language the
@@ -315,4 +320,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T11:21:51.967Z'
+updatedAt: '2026-10-15T16:03:25.126Z'

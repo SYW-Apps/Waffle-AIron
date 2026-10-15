@@ -127,7 +127,9 @@ methods:
           approval was taken under another wairon release, say so in one line beside the findings —
           carried: `approved under <old>, re-validated under <new>: still approved`; not carried:
           `the new release finds N issue(s) in the approved design`, naming them — the very verdict
-          `lock-check` exits on. Informational: it is never part of the failure decision
+          `lock-check` exits on; with no release verdict, an approval an older release took that
+          still holds is one notice line (lock_record.carriedNotice). Informational: it is never
+          part of the failure decision
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyApprovals
@@ -182,4 +184,4 @@ methods:
         targetMethod: adviseExternals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:18:36.183Z'
+updatedAt: '2026-10-15T16:03:36.520Z'

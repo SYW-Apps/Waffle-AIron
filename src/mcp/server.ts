@@ -32,7 +32,7 @@ import {
 import { EndpointSchema, transportKind, transportRequiresEndpoint, type Endpoint, type EndpointTransport, type Transport, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import type { ComponentSpec, Technology } from '../models/specs.js';
 import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
-import type { SpecChange, SpecChangeReport } from '../core/specs.js';
+import type { ProjectSystemRead, SpecChange, SpecChangeReport } from '../core/specs.js';
 import * as pathsModule from '../config/paths.js';
 import { summarize } from '../models/execution.js';
 import type { AgentBrief } from '../models/agent.js';
@@ -73,6 +73,7 @@ import {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  readProjectSystem,
   publishedUsesOf,
 } from './adapters/core.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
@@ -1112,6 +1113,16 @@ const getSpecOutput = {
   }).optional().describe(
     'Present only when the id named an EXTERNAL through its alias (`alias::name`): `spec` is then the entry the '
     + 'pinned snapshot records — read-only, never a spec of this tree, never written back.',
+  ),
+  memberProject: z.object({
+    alias: z.string().describe('The member\'s alias the read went through.'),
+    project: z.string().describe('The member project the alias names.'),
+    root: z.string().describe('The member\'s root, relative to the bound project.'),
+    readOnly: z.literal(true).describe('Always true: a member project\'s L0 is written from its own root.'),
+    note: z.string().describe('One sentence saying whose L0 this is and where it is written.'),
+  }).optional().describe(
+    'Present only when a system read named a MEMBER project through its alias (`alias::system`, `alias::<its L0 name>`): '
+    + '`spec` is then that member\'s own L0 as stored at its root, its export table included — never this project\'s.',
   ),
   variantGuidance: z.object({
     variant: z.string().describe('The variant id the component declares.'),
@@ -3181,10 +3192,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ kind?: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; methods?: string[] }>(server,
     'sdd_get_spec',
     {
-      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. An `alias::name` id resolves through the bound project\'s alias table exactly as a write resolves it: a member\'s spec reads under its key, and an EXTERNAL\'s spec reads from the pinned snapshot this project holds of it — the pinned contract entry or exported type as the spec, a read-only "pinnedSnapshot" marker beside it (it is written from the producer\'s own root). Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
+      description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. An `alias::name` id resolves through the bound project\'s alias table exactly as a write resolves it: a member\'s spec reads under its key, and an EXTERNAL\'s spec reads from the pinned snapshot this project holds of it — the pinned contract entry or exported type as the spec, a read-only "pinnedSnapshot" marker beside it (it is written from the producer\'s own root). A system read by `alias::system` (or `alias::<its L0 name>`) answers that MEMBER project\'s own L0 — its export table included — with a read-only "memberProject" marker beside it, and is refused, naming why, for a part, an external (naming the names its pin exports) or an unknown prefix; a bare id answers this project\'s L0 only by one of its names, so no read answers one project\'s L0 under another\'s id. Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).optional().describe('The kind of specification. Omit it to infer the kind from the id: the read is refused, naming the candidate kinds, when the id names specs at more than one level (an interface and an implementation sharing an id, say), or at none'),
-        id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass the system name or "system")'),
+        id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass "system", its name or the project id; a member project\'s L0 is read as "<alias>::system")'),
         methods: z.array(z.string().min(1)).optional().describe('Return only these methods by name; every other field of the spec comes back unchanged. Only an interface, an implementation or a type declares methods — asking for one elsewhere is refused, as is a name the spec does not declare (the answer names the ones it does). Omit it for the whole spec.'),
       },
       outputSchema: getSpecOutput,
@@ -3241,6 +3252,24 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             pinnedSnapshot: marker,
           });
         };
+        // mcp_orchestrator.getSpec step 6: the L0 a system id names — this
+        // project's own by one of its names, a member's own read from its root
+        // by `alias::system` — or refused naming why none answers; never one
+        // project's L0 under another project's id. Null for this project's own
+        // L0, which takes the shared answer path.
+        const memberSystem = (read: ProjectSystemRead): CallToolResult | null => {
+          if (!read.spec) return errText(`No L0 answers "${id}": ${read.problem}.`);
+          if (read.source === 'own') return null;
+          const marker = {
+            alias: read.alias,
+            project: read.project,
+            root: read.root,
+            readOnly: true as const,
+            note: `"${read.alias}" is a member project of this one: this is ${read.project}'s own L0 as stored at ${read.root} — its export table is what this project may reference as ${read.alias}::<name>; it is written from ${read.project}'s own root, never here.`,
+          };
+          const spec = read.spec as unknown as Record<string, unknown>;
+          return structured(JSON.stringify({ ...spec, memberProject: marker }, null, 2), { kind: 'system', id, spec, memberProject: marker });
+        };
         // mcp_orchestrator.getSpec steps 1-4: no kind asked for — infer it from the id.
         let kind: SpecKind;
         if (askedKind) {
@@ -3250,6 +3279,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           if (holders.length === 0) {
             const pinned = pinnedAnswer(undefined);
             if (pinned) return pinned;
+            // A member's L0 by its alias: no kind needed (a name its L0 does not go by is no L0 read).
+            const member = id.includes('::') ? readProjectSystem(id) : null;
+            if (member?.spec) return memberSystem(member)!;
           }
           if (holders.length !== 1) {
             return errText(holders.length === 0
@@ -3261,8 +3293,13 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         let result: unknown = null;
         /** The filter marker, when `methods` narrowed the read; null when it read whole. */
         let partial: { shown: string[]; omitted: number; warning: string } | null = null;
+        const systemRead = kind === 'system' ? readProjectSystem(id) : null;
+        if (systemRead) {
+          const answered = memberSystem(systemRead);
+          if (answered) return answered;
+        }
         switch (kind) {
-          case 'system':         result = loadSystemSpec(); break;
+          case 'system':         result = systemRead?.spec ?? null; break;
           case 'subsystem':      result = loadSubsystemSpec(id); break;
           case 'component':      result = loadComponentSpec(id); break;
           case 'interface':      result = loadInterfaceSpec(id); break;

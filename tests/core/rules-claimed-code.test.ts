@@ -198,7 +198,7 @@ describe('type-realization — a type claim is judged like every other claim on 
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
-  it('names the methods that pointed at a broken file, not the type, when the file is a method\'s own', () => {
+  it('a method\'s own file not written yet is planned, naming the method, while the type\'s file exists (round 11)', () => {
     const dir = mkTemp();
     try {
       write(dir, 'src/billing/invoice.ts', 'export interface Invoice { id: string; }\n');
@@ -206,7 +206,8 @@ describe('type-realization — a type claim is judged like every other claim on 
         id: 'invoice', name: 'Invoice', sourcePath: 'src/billing/invoice.ts',
         methods: [{ name: 'total', signature: 'total(): number', returns: 'number', sourcePath: 'src/billing/totals.ts' }],
       })]);
-      expect(issues.map((i) => i.code)).toEqual(['MISSING_SOURCE_FILE']);
+      expect(issues.map((i) => i.code)).toEqual(['SOURCE_FILE_PLANNED']);
+      expect(issues[0].severity).toBe('notice');
       expect(issues[0].message).toContain('method "total"');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });

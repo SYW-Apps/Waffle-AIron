@@ -361,6 +361,17 @@ methods:
       - name: methods
         type: list<string>
         description: The contract methods, as <interface>.<method>
+  - name: readProjectSystem
+    description: >-
+      Forward to spec_tree_portal.readProjectSystem: the L0 a system id names (this project's by one
+      of its names, a member's own read from its root by `alias::system`), or why none answers
+    signature: 'readProjectSystem(id: string): ProjectSystemRead'
+    returns: ProjectSystemRead
+    params:
+      - name: id
+        type: string
+        description: 'The system id asked for: a name of this L0, or `alias::name`'
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T16:51:08.149Z'
+updatedAt: '2026-10-15T16:06:30.757Z'

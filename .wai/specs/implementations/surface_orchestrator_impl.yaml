@@ -397,20 +397,21 @@ methods:
           proves, pinned or not), present it is unlocked (not in the lock — re-pin), named member by
           member as `wairon lock` names what it refuses; a used contract method's wire endpoint (an
           HTTP verb, path or stated status, another transport's address) is compared with the pinned
-          snapshot's too — the endpoint is what a consumer's hand-written client spells, and no
-          digest reads it: a route that MOVED leaves the use unchanged in signature but says so in
-          its detail (`endpoint moved: GET /stats/{code} → GET /v2/stats/{code}`) and drifts the
-          external (a carried fact), and a route REMOVED (the method no longer bound to one) makes
-          the use changed — a break; an unexported reference of a family producer is unavailable —
-          and a name already answered as renamed or removed (under any member, a type's `type`
-          included) is answered once, never a second time for its unexported references. Stale when
-          a used member changed, was renamed or went away; drifted when the live content digest
-          differs from the pinned one, or when the pinned snapshot carries facts the live one no
-          longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
-          against the live one) — so `drifted` and the health agree on every surface — and a stale
-          snapshot is never ok A contract the lock records as used WHOLE (a bare dependency, no
-          member named) stands for every method the pinned snapshot's entry holds — whatever reaches
-          it through that dependency (its binding, its client) may call any of them, as
+          snapshot's too — the endpoint is what a client calling over the wire spells, and no digest
+          reads it: a route that MOVED or was REMOVED makes the use changed — a break for that
+          client exactly as a renamed verb is, so the external is incompatible (`wairon externals
+          status` exits 1) — with the move in its detail (`endpoint moved: GET /stats/{code} → GET
+          /v2/stats/{code}`); an InProcess Portal (a library, called directly) binds no route, so it
+          has none to move; an unexported reference of a family producer is unavailable — and a name
+          already answered as renamed or removed (under any member, a type's `type` included) is
+          answered once, never a second time for its unexported references. Stale when a used member
+          changed, was renamed or went away; drifted when the live content digest differs from the
+          pinned one, or when the pinned snapshot carries facts the live one no longer says
+          (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot against the live
+          one) — so `drifted` and the health agree on every surface — and a stale snapshot is never
+          ok A contract the lock records as used WHOLE (a bare dependency, no member named) stands
+          for every method the pinned snapshot's entry holds — whatever reaches it through that
+          dependency (its binding, its client) may call any of them, as
           external_consumer.narrowedToUses reads such a use — so each is compared like a named
           member: one removed, renamed (with its new name) or whose route moved or went is said by
           name and judged as above, and only a contract whose every method held answers one
@@ -953,4 +954,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-09T17:15:02.443Z'
+updatedAt: '2026-10-15T16:03:41.834Z'

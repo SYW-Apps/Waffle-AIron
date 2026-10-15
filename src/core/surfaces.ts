@@ -1582,18 +1582,23 @@ function routeOf(endpoint: MethodSignature['endpoint'] | undefined): string {
 
 /**
  * How a used contract method's wire endpoint moved since the pin: the route a
- * hand-written client spells, which no digest reads. Null when the pinned
- * snapshot is not at hand, records no endpoint for it, or the route is the
- * same; `removed` when the live method is bound to no route any more.
+ * client calling over the wire spells, which no digest reads. A consumer of a
+ * wire Portal reaches the verb only by its route, so a route that moved (or
+ * went) breaks it exactly as a renamed verb does. Null when the pinned
+ * snapshot is not at hand, records no endpoint for it, the route is the same,
+ * or the Portal is an InProcess library (called directly: no route to spell).
  */
 function endpointMove(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string): { removed: boolean; detail: string } | null {
   if (!pinned || member === 'type' || member.startsWith('capability:')) return null;
-  const was = pinned.interfaces.find((e) => e.id === publicName)?.methods.find((m) => m.name === member)?.endpoint;
+  const entry = pinned.interfaces.find((e) => e.id === publicName);
+  const liveEntry = live.interfaces.find((e) => e.id === publicName);
+  if ((liveEntry?.transport ?? entry?.transport) === 'InProcess') return null;
+  const was = entry?.methods.find((m) => m.name === member)?.endpoint;
   if (!was) return null;
-  const now = live.interfaces.find((e) => e.id === publicName)?.methods.find((m) => m.name === member)?.endpoint;
+  const now = liveEntry?.methods.find((m) => m.name === member)?.endpoint;
   if (canonicalize(was) === canonicalize(now ?? null)) return null;
   return now
-    ? { removed: false, detail: `endpoint moved: ${routeOf(was)} → ${routeOf(now)} — its signature is unchanged, but a client that spells the route (a hand-written HTTP client, a binding) must follow` }
+    ? { removed: false, detail: `endpoint moved: ${routeOf(was)} → ${routeOf(now)} — its signature is unchanged, but a client calling it over the wire spells the route, so it must follow` }
     : { removed: true, detail: `endpoint ${routeOf(was)} removed — the verb is bound to no route any more, so a client calling it over the wire breaks` };
 }
 
@@ -1621,12 +1626,13 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   const compared = (publicName: string, member: string, digest: string): ExternalUseStatus => {
     const now = memberDigest(live, publicName, member);
     if (now === null) return goneUse(live, publicName, member, digest, pinned);
-    // The route a client spells moved, or went: said beside the signature verdict.
+    // The route a wire client spells moved, or went: a break for it, said
+    // beside the signature verdict (an InProcess library has no route).
     const route = endpointMove(pinned, live, publicName, member);
     if (now === digest) {
       return route === null
         ? { publicName, member, state: 'unchanged' }
-        : { publicName, member, state: route.removed ? 'changed' : 'unchanged', detail: route.detail };
+        : { publicName, member, state: 'changed', detail: route.detail };
     }
     const changed = changedDetail(pinned, live, publicName, member, digest);
     const detail = [changed.detail, route?.detail].filter((d): d is string => !!d).join('; ');

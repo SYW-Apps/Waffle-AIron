@@ -202,19 +202,21 @@ describe('1. a used verb\'s route moving reaches the consumer', () => {
     return { producer, consumer };
   }
 
-  it('a moved path drifts the external, names the route on the use and in the advisory — and the re-pin says what moved', () => {
+  // Round 11 (solo-app top-3): a moved route is a BREAK for the client that
+  // calls it over the wire — changed, incompatible — no longer a drift.
+  it('a moved path breaks the use, names the route on the use and in the advisory — and the re-pin says what moved', () => {
     const { producer, consumer } = pinnedPair();
     moveRoute(producer, '/stats/{shortCode}', '/v2/stats/{shortCode}');
     bind(consumer);
     const [status] = getExternalsStatus();
-    expect(status.uses).toEqual([{ publicName: 'stats_portal', member: 'getStats', state: 'unchanged', detail: expect.stringContaining('endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}') }]);
+    expect(status.uses).toEqual([{ publicName: 'stats_portal', member: 'getStats', state: 'changed', detail: expect.stringContaining('endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}') }]);
     expect(status.drifted).toBe(true);
     expect(status.staleFacts).toContain('endpoint of stats_portal.getStats (GET /stats/{shortCode} → GET /v2/stats/{shortCode})');
-    expect(relationHealth(status)).toBe('drifted');
+    expect(relationHealth(status)).toBe('incompatible');
     bind(consumer);
     const advised = adviseExternals();
-    expect(advised.map((i) => i.code)).toEqual(['EXTERNAL_DRIFTED']);
-    expect(advised[0].message).toContain('the route of "stats_portal.getStats" (GET /stats/{shortCode} → GET /v2/stats/{shortCode}) moved');
+    expect(advised.map((i) => i.code)).toEqual(['EXTERNAL_LIVE_INCOMPATIBLE']);
+    expect(advised[0].message).toContain('"stats_portal.getStats" changed since it was pinned: endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}');
     // The re-pin rewrites the route with a word, never silently (round 9: "pinned 1 used name(s)").
     bind(consumer);
     const [pin] = pinExternals();

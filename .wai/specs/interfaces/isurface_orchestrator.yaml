@@ -311,11 +311,12 @@ methods:
     description: >-
       Each live member of the bound project compared with the approval it is judged against, as an
       external is with its pin: every used member's digest in the member's live projection against
-      the one its approved surface carries — unchanged, changed (with the field renames and the
-      route a client spells), renamed or removed per the member's rename trace — and drifted when
-      the live content digest or a carried fact moved since; a use the approval does not hold is the
-      family run's to judge live, and is left out. A member with no approved revision is left out
-      (the family run judges it live). Read-only; the caller gates on reach.
+      the one its approved surface carries — unchanged, changed (with the field renames, or a wire
+      route that moved or went — a break for a client calling it over the wire), renamed or removed
+      per the member's rename trace — and drifted when the live content digest or a carried fact
+      moved since; a use the approval does not hold is the family run's to judge live, and is left
+      out. A member with no approved revision is left out (the family run judges it live).
+      Read-only; the caller gates on reach.
     signature: 'memberStatuses(): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params: []
@@ -324,4 +325,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-09T11:38:34.382Z'
+updatedAt: '2026-10-15T16:03:47.267Z'

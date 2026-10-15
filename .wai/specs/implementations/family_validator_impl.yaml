@@ -812,11 +812,10 @@ methods:
       - stepNumber: 8
         label: drift
         description: >-
-          Report one EXTERNAL_DRIFTED (notice, advisory): the producer moved while no signature used
-          did — re-pin when convenient; when a used verb's wire endpoint moved (a use whose detail
-          says `endpoint moved`), the finding names each such verb with its old and new route and
-          says that a client spelling the route (a hand-written HTTP client, a binding) must follow,
-          never that nothing used changed
+          Report one EXTERNAL_DRIFTED (notice, advisory): the producer moved while nothing this
+          project uses did — re-pin when convenient. A used verb whose wire endpoint moved is no
+          drift: its use is changed, and step 6 reports it as EXTERNAL_LIVE_INCOMPATIBLE with the
+          old and new route
         type: local
       - stepNumber: 9
         description: Next external
@@ -1164,4 +1163,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-09T17:38:41.497Z'
+updatedAt: '2026-10-15T16:03:43.665Z'

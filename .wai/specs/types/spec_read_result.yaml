@@ -8,7 +8,9 @@ description: >-
   for a client that reads no structured content. An `alias::name` read resolves through the alias
   table the way a write does: a member's spec is read under its key; an EXTERNAL's is read from the
   pinned snapshot this project holds of it, the answer then carrying the pinnedSnapshot marker and
-  the snapshot's entry as its spec — read-only, never a spec of this tree.
+  the snapshot's entry as its spec — read-only, never a spec of this tree. A system read by
+  `alias::system` (or the member's L0 name) answers a MEMBER project's own L0 with the memberProject
+  marker; it never answers this project's L0 under another project's id.
 subsystem: sdd_mcp
 fields:
   - name: kind
@@ -40,6 +42,13 @@ fields:
       (alias, producer, snapshot file, StateId), and the spec is the pinned entry — read-only,
       written from the producer's own root.
     optional: true
+  - name: memberProject
+    type: ProjectSystemRead?
+    description: >-
+      Present only when a system read named a member project through its alias: the spec is that
+      member's own L0 as stored at its root (its export table included) — read-only, written from
+      the member's own root.
+    optional: true
 methods: []
 lint:
   allow:
@@ -49,4 +58,4 @@ lint:
         sdd_get_spec in src/mcp/server.ts (a plain const of zod fields, no type alias), so there is
         no symbol a sourcePath could bind.
 createdAt: '2026-09-19T23:05:27.992Z'
-updatedAt: '2026-10-09T11:30:36.278Z'
+updatedAt: '2026-10-15T16:03:20.271Z'

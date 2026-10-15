@@ -62,7 +62,7 @@ const FILE_PROBLEMS: Record<string, { code: string; severity: 'error' | 'warning
   missing: {
     code: 'MISSING_SOURCE_FILE',
     severity: 'error',
-    detail: 'does not resolve to a file although the type\'s realization has begun — a broken link: the spec names code that does not exist.',
+    detail: 'does not resolve to a file although the type\'s realization has begun (a file its methods name exists) — a broken link: the type\'s declaration is what its methods build on.',
   },
   unreadable: {
     code: 'CONFORMANCE_ANALYSIS_SKIPPED',
@@ -83,14 +83,14 @@ export const typeRealizationRule: SddRule = {
   name: 'type-realization',
   judges: 'code',
   description:
-    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode). Once it has begun, every file it names must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath of its own claims no code, so nothing ever compares its shape with the code — and that is said, never left silent: before the code of the type\'s subsystem has begun (no file an implementation of that subsystem names exists; for a type no subsystem owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice — plan the type\'s sourcePath with the implementations\'), and once that code exists it is a type no check reads (a warning). rules.conformance.requireCode reports the notice at error, naming the setting. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
+    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode) — and a file only its METHODS name stays planned once it has begun, as a component method\'s planned file does. Once it has begun, the type\'s own file must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), and every file it names must stay inside the root and be readable, its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath of its own claims no code, so nothing ever compares its shape with the code — and that is said, never left silent: before the code of the type\'s subsystem has begun (no file an implementation of that subsystem names exists; for a type no subsystem owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice — plan the type\'s sourcePath with the implementations\'), and once that code exists it is a type no check reads (a warning). rules.conformance.requireCode reports the notice at error, naming the setting. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [
     { code: 'UNREALIZED_TYPE', defaultSeverity: 'warning', summary: 'A type names a sourcePath but its declaration is nowhere in that file — the claim points at code that does not hold it' },
     { code: 'UNREALIZED_TYPE_METHOD', defaultSeverity: 'warning', summary: 'A pure method of a claimed type is nowhere in its own source file (the method\'s sourcePath, else the type\'s)' },
-    { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names does not resolve to a file on disk although the type\'s realization has begun (another file it names exists)' },
+    { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'The source file a type names for its own declaration does not resolve to a file on disk although the type\'s realization has begun (a file its methods name exists)' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file a type or one of its methods names could not be analyzed (binary/unreadable) — what it would have realized was not checked' },
-    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file a type names is not on disk and none of its named files is — planned, not written yet; an error under rules.conformance.requireCode' },
+    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file a type names is not on disk and none of its named files is — or a file only its methods name is not on disk yet — planned, not written yet; an error under rules.conformance.requireCode' },
     { code: 'MISSING_TYPE_SOURCE_PATH', defaultSeverity: 'notice', summary: "A type names no sourcePath of its own, so its shape is never compared with code — a notice while its subsystem has no code yet (plan the path with the implementations'), a warning once it has; an error under rules.conformance.requireCode" },
   ],
 
@@ -150,12 +150,21 @@ export const typeRealizationRule: SddRule = {
         const facts = code.factsAt(key);
         if (!facts || facts.status === 'analyzed') continue;
         blocked.add(key);
-        if (facts.status === 'missing' && !begun) {
+        // A file only the type's METHODS name is planned whether or not the
+        // type's own file exists — as a component method's planned file is:
+        // the methods are written after the fields, by whoever implements
+        // them. The type's OWN file missing once another it names exists is
+        // a broken link: its declaration is what the methods' file builds on.
+        const methodsOnly = pathKey(type.sourcePath) !== key;
+        if (facts.status === 'missing' && (!begun || methodsOnly)) {
           const planned = plannedCode(ctx);
+          const owner = ownerOf(type, file);
           ctx.addIssue(
             planned.severity,
             'SOURCE_FILE_PLANNED',
-            `${ownerOf(type, file)} sourcePath "${file}" is planned, not written yet — conformance judges the type once a file it names exists${planned.note}.`,
+            begun
+              ? `${owner} sourcePath "${file}" is planned, not written yet — the type's own file exists, and ${owner.includes(' methods ') ? 'these methods are' : 'this method is'} judged once "${file}" exists${planned.note}.`
+              : `${owner} sourcePath "${file}" is planned, not written yet — conformance judges the type once a file it names exists${planned.note}.`,
             type.id,
           );
           continue;

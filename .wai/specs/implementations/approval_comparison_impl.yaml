@@ -133,18 +133,20 @@ methods:
           stamp without a review); not carried — release_verdict.staleSentence: its reason when it
           has one (a record from before gate parts, a newer or invalid stamp, parts that do not
           break down the identity), else `the new release finds N issue(s) in the approved design`
-          with the first few named, never the generic candidate list. When the entry carries
-          partsIgnored, one notice says the record's gate parts are ignored; when it carries
-          stampProblem, one notice names the stamp and that `wairon lock` replaces it. Else note
-          when it is upgraded — the lock was taken under an earlier gate identity. For a format-2
-          lock that is stale under its own algorithm, say that it predates code linkage leaving the
-          approval and something it covered moved since — the design, or only code linkage, which
-          can no longer be told apart — so it takes one re-lock, after which linkage never drifts it
-          again; for an earlier identity, say the identity gained inputs — rather than implying the
-          design moved. Then take the direct members (parent = the root) whose pin moved, and those
-          drifted or never approved. A moved pin is a change this project must re-approve even when
-          none of its OWN specs shifted; a drifted or never-approved member is the member's to lock,
-          named so the parent knows before it locks
+          with the first few named, never the generic candidate list. With no release verdict, an
+          approval an older release recorded that still holds says so in one notice
+          (lock_record.carriedNotice: approved under <old>; this release judges the design by the
+          same rules). When the entry carries partsIgnored, one notice says the record's gate parts
+          are ignored; when it carries stampProblem, one notice names the stamp and that `wairon
+          lock` replaces it. Else note when it is upgraded — the lock was taken under an earlier
+          gate identity. For a format-2 lock that is stale under its own algorithm, say that it
+          predates code linkage leaving the approval and something it covered moved since — the
+          design, or only code linkage, which can no longer be told apart — so it takes one re-lock,
+          after which linkage never drifts it again; for an earlier identity, say the identity
+          gained inputs — rather than implying the design moved. Then take the direct members
+          (parent = the root) whose pin moved, and those drifted or never approved. A moved pin is a
+          change this project must re-approve even when none of its OWN specs shifted; a drifted or
+          never-approved member is the member's to lock, named so the parent knows before it locks
         type: local
       - stepNumber: 6
         description: Compare the tree against what was approved
@@ -295,4 +297,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-09T00:18:31.394Z'
+updatedAt: '2026-10-15T16:03:34.795Z'

@@ -127,11 +127,13 @@ export {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  // readProjectSystem: the L0 an `alias::name` id names, or why none answers.
+  readProjectSystem,
   // spec_tree_portal inspectLock: the bound tree's write lock as its file
   // stands, for `wairon doctor`.
   inspectLock,
 } from './specs.js';
-export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile, PinnedSpecRead } from './specs.js';
+export type { LockStatus, SpecIndex, SpecScanOptions, LegacySpecFile, PinnedSpecRead, ProjectSystemRead } from './specs.js';
 export type { TreeLockState } from './spec-files.js';
 export type { SignatureFacts, SignatureResolution, SignatureSourceFact, StaleSignatureText } from './signature-sources.js';
 

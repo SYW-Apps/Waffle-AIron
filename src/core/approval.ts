@@ -3,7 +3,8 @@ import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, graph, scanAllSpecs } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
-import { approvalStamp, describeGateParts, type ProjectApproval, type SpecDigestReading } from '../models/lock.js';
+import { approvalStamp, describeGateParts, sameRulesNotice, type ProjectApproval, type SpecDigestReading } from '../models/lock.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 import { parseYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
@@ -569,7 +570,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
         : '';
       const ignored = own?.partsIgnored !== undefined ? ` Notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them.` : '';
       return {
-        text: `\nApproved: ${stamp} — no spec has changed since.${released}${owes}${ignored}${stampNotice(own)}${childNote}${carry}\n`,
+        text: `\nApproved: ${stamp} — no spec has changed since.${released}${sameRulesNotice(approval, own, WAIRON_VERSION)}${owes}${ignored}${stampNotice(own)}${childNote}${carry}\n`,
         drifted: pinDrift || own?.state === 'drifted',
       };
     }

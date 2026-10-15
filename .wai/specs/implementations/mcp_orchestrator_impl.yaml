@@ -408,7 +408,8 @@ methods:
           Refuse, naming the candidate kinds when several levels hold the id (pass kind to choose
           one) or saying that no level holds it — unless no level holds it and the id is an
           external's `alias::name`: then the pin's own kind answers (step 18), a contract entry or a
-          type, so a pinned read never needs a kind
+          type, so a pinned read never needs a kind; or the id is a MEMBER's `alias::system` (or
+          `alias::<its L0 name>`): then the system read of step 6 answers it
         type: return
         outcome: kind not inferable
       - stepNumber: 5
@@ -432,10 +433,17 @@ methods:
             step: 16
         defaultStep: 18
       - stepNumber: 6
-        description: Read the L0 system spec, the singleton whose load ignores the id
+        description: >-
+          Read the L0 the id names through the core client adapter — the one place that decides it:
+          this project's own L0 by one of its names (`system`, the L0's name, the project id),
+          joining the shared answer path; a MEMBER's own L0 from its root by `alias::system` (or
+          `alias::<its L0 name>`), answered at once with a read-only memberProject marker (alias,
+          project, root); or refused naming why none answers (a name the L0 does not go by, a part,
+          an external whose pin holds only its exports, an unknown prefix) — never one project's L0
+          relabelled under another's id
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: readProjectSystem
       - stepNumber: 7
         description: Join the shared answer path
         type: jump
@@ -954,4 +962,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-09T16:51:16.901Z'
+updatedAt: '2026-10-15T16:06:34.256Z'

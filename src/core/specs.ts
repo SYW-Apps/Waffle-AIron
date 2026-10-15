@@ -2346,6 +2346,29 @@ export interface PinnedSpecRead {
   carriedBy?: string[];
 }
 
+/**
+ * project_system_read — the L0 an `alias::name` id names, read for
+ * sdd_get_spec: a member project's own L0 as stored at its root, or the reason
+ * no L0 answers (a part, an external whose pin holds only its exports, a name
+ * the member's L0 does not go by, a prefix that is no alias). Read-only.
+ */
+export interface ProjectSystemRead {
+  /** The alias (or the project id) the read went through; '' for this project's own L0. */
+  alias: string;
+  /** The project the alias names; '' when it names none. */
+  project: string;
+  /** The member's root, or the external's pinned snapshot, relative to the bound project. */
+  root: string;
+  /** What the id names: this project's own L0, a member project, a part, an external, or nothing known. */
+  source: 'own' | 'member' | 'part' | 'external' | 'unknown';
+  /** The member's L0 exactly as stored; absent when no L0 answers. */
+  spec?: SystemSpec;
+  /** An external's exported public names, as its pin records them. */
+  exports?: string[];
+  /** Why no L0 answers; absent exactly when spec is set. */
+  problem?: string;
+}
+
 export interface SpecChangeReport {
   kind: WritableSpecKind;
   id: string;
@@ -4473,6 +4496,41 @@ export class SpecWorkspace {
   }
 
   /**
+   * A change report's values in the spelling the write STORES: each reference
+   * another project provides — compared on its bound form (`geo-sdk::distance_portal`)
+   * — echoed as the text the delta wrote, else the text the stored file holds
+   * (`geo::distance`), so the report never names an internal id the file does
+   * not carry. Changes naming no such reference come back as they were.
+   */
+  private echoAsAuthored(kind: WritableSpecKind, id: string, delta: Record<string, unknown>, changes: SpecChange[]): SpecChange[] {
+    if (kind === 'system') return changes;
+    const prefix = this.writePrefixFor(id);
+    const spelled = new Map<string, string>();
+    const learn = (doc: Record<string, unknown>): void => {
+      respellStoredReferences(kind, doc, (_position, value) => {
+        if (value.includes('::')) {
+          try {
+            const bound = this.bindReference(prefix, value);
+            if (bound !== value && !spelled.has(bound)) spelled.set(bound, value);
+          } catch { /* a text the binder cannot read is echoed as it is */ }
+        }
+        return value;
+      });
+    };
+    learn(JSON.parse(JSON.stringify(delta)) as Record<string, unknown>);
+    const file = this.storedFileOf(kind, id);
+    if (file && pathExists(file)) {
+      try { learn(JSON.parse(JSON.stringify(readSpecFile(file))) as Record<string, unknown>); } catch { /* unreadable: echo as compared */ }
+    }
+    if (spelled.size === 0) return changes;
+    const boundIds = [...spelled.keys()].sort((a, b) => b.length - a.length);
+    const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`);
+    const pattern = new RegExp(`(?<![A-Za-z0-9_:-])(?:${boundIds.map(escape).join('|')})(?![A-Za-z0-9_-]|::)`, 'g');
+    const echo = (text: string | undefined): string | undefined => (text === undefined ? text : text.replace(pattern, (bound) => spelled.get(bound) ?? bound));
+    return changes.map((c) => ({ ...c, ...(c.before !== undefined ? { before: echo(c.before) } : {}), ...(c.after !== undefined ? { after: echo(c.after) } : {}) }));
+  }
+
+  /**
    * spec_loader.readPinnedSpec — an EXTERNAL's spec read by `alias::name` from
    * the pinned snapshot the bound project holds of it: the contract entry (a
    * component or an interface asked for, or no kind) or the exported type (a
@@ -4489,6 +4547,84 @@ export class SpecWorkspace {
     if (entry) return { ...pin.base, kind: 'interface', id: name, spec: entry };
     const definition = kind === undefined || kind === 'type' ? pinnedTypeDefinition(pin.snapshot, name) : undefined;
     return definition ? { ...pin.base, kind: 'type', id: name, ...definition } : null;
+  }
+
+  /**
+   * spec_loader.readProjectSystem — the L0 a system id names, and the one
+   * place that decides it. A bare id names this project's own L0 when it is
+   * `system`, the L0's name or the project id. An `alias::name` (or
+   * `project-id::name`) id names a member project's own L0, read from its root
+   * as stored (its export table included), when the name is `system`, the
+   * member's L0 name or its project id. Otherwise it answers the reason no L0
+   * answers — a name the L0 does not go by, a part (whose subsystems are this
+   * project's own, under this project's L0), an external (its pin records the
+   * names it exports, never its L0), or a prefix that is no alias — and never
+   * one project's L0 under another's id. Read-only, never cached.
+   */
+  readProjectSystem(id: string): ProjectSystemRead {
+    this.scanAll();
+    const bound = this.cachedRawRoots[0];
+    const at = id.lastIndexOf('::');
+    if (at <= 0) return this.ownSystemRead(id, bound);
+    const head = id.slice(0, at);
+    const namespace = bound?.record.aliases.get(head) ?? head;
+    const root = this.listProjectRoots().find((r) => r.namespace !== '' && r.namespace === namespace);
+    if (root) return this.memberSystemRead(root, head, id.slice(at + 2), bound?.dir ?? this.rootDir);
+    return this.unreadSystem(head, id, bound);
+  }
+
+  /** The bound project's own L0, when the id is one of its names. */
+  private ownSystemRead(id: string, bound: RawRoot | undefined): ProjectSystemRead {
+    const system = this.loadSystemSpec();
+    const project = (bound ? idOf(bound) : undefined) ?? system?.name ?? '';
+    const base = { alias: '', project, root: '.', source: 'own' as const };
+    if (!system) return { ...base, problem: 'this project has no readable L0' };
+    const names = [...new Set(['system', system.name, ...(project ? [project] : [])])];
+    if (!names.includes(id)) {
+      return { ...base, problem: `no L0 is named "${id}": this project's L0 is read as ${names.map((n) => `"${n}"`).join(' or ')}, and a member project's as "<alias>::system"` };
+    }
+    return { ...base, spec: system };
+  }
+
+  /** A member project's own L0, read from its root as stored, when the name is one it goes by. */
+  private memberSystemRead(root: ScannedProjectRoot, head: string, name: string, boundDir: string): ProjectSystemRead {
+    const alias = root.mountAlias ?? head;
+    const project = root.namespace;
+    const rel = path.relative(boundDir, root.directory).split(path.sep).join('/') || '.';
+    const base = { alias, project, root: rel, source: 'member' as const };
+    const file = aiPathsAt(root.directory).specsSystem();
+    let system: SystemSpec | null = null;
+    try {
+      system = pathExists(file) ? SystemSpecSchema.parse(readSpecFile(file)) : null;
+    } catch (e) {
+      return { ...base, problem: `the member "${alias}" (project ${project}) has an L0 that cannot be read: ${String((e as Error)?.message ?? e).split('\n')[0]}` };
+    }
+    if (!system) return { ...base, problem: `the member "${alias}" (project ${project}) declares no L0 of its own` };
+    const names = [...new Set(['system', system.name, project])];
+    if (!names.includes(name)) {
+      return { ...base, problem: `"${head}::${name}" names no L0: the member "${alias}" (project ${project}) has its L0 read as ${names.map((n) => `"${head}::${n}"`).join(' or ')}` };
+    }
+    return { ...base, spec: system };
+  }
+
+  /** Why a prefix that names no followed member answers no L0: a part, an external, or nothing known. */
+  private unreadSystem(head: string, id: string, bound: RawRoot | undefined): ProjectSystemRead {
+    if (bound?.record.parts.some((p) => p.alias === head)) {
+      return { alias: head, project: idOf(bound) ?? '', root: '.', source: 'part', problem: `"${head}" is a part of this project: its subsystems are this project's own and it has no L0 of its own — read this project's L0 as "system"` };
+    }
+    const pin = this.pinnedSnapshotOf(head);
+    if (pin) {
+      const exports = [...pin.snapshot.interfaces.map((e) => e.id), ...(pin.snapshot.exportedTypes ?? []).map((x) => x.id)];
+      return {
+        alias: head, project: pin.base.project, root: pin.base.file, source: 'external', exports,
+        problem: `"${head}" is an external of this project: its L0 is not held here — the pin (${pin.base.file}) records only the names it exports${exports.length ? ` (${exports.join(', ')})` : ''}; read each as "${head}::<name>"`,
+      };
+    }
+    const declared = bound?.record.config ? declaredExternals(bound.record.config).find((d) => d.alias === head) : undefined;
+    if (declared) {
+      return { alias: head, project: declared.project, root: '.', source: 'external', problem: `"${head}" is an external of this project with no readable pin: its L0 is not held here, and its exported names are read once it is pinned (wairon externals pin ${head})` };
+    }
+    return { alias: head, project: '', root: '.', source: 'unknown', problem: `"${head}" is no member, part or external of this project, so "${id}" names no L0 — this project's own L0 is read as "system"` };
   }
 
   /** The pinned snapshot of the bound project's external `alias` — none for a member's alias, an undeclared one, or an absent or unreadable pin. */
@@ -6510,8 +6646,13 @@ export class SpecWorkspace {
           continue;
         }
         if (at >= 0) continue; // held already: restating a value never loses or duplicates it
+        // A requirement written as `{ description }` beside requirements that
+        // are all text is stored as text, the form its siblings take — never
+        // the one object in a list of strings. Anywhere else it stays as written.
+        const textOnly = stored.length > 0 && stored.every(isPlainValue);
         out.push(isValueMarker(deltaItem) ? (deltaItem as Record<string, unknown>).value
-          : isRequirementObject(field, deltaItem) ? { description: (deltaItem as Record<string, unknown>).description }
+          : isRequirementObject(field, deltaItem)
+            ? (textOnly ? (deltaItem as Record<string, unknown>).description : { description: (deltaItem as Record<string, unknown>).description })
             : deltaItem);
       }
       return out;
@@ -7226,7 +7367,10 @@ export class SpecWorkspace {
     };
     const canonicalStored = canonical(storedBefore);
     const canonicalMerged = canonical(mergedResult);
-    const changes = specChanges(canonicalStored, canonicalMerged);
+    // Compared on the bound form, echoed as STORED: a reference the delta or
+    // the file spells `alias::name` is reported as written, never as the
+    // producer's internal id it binds to — which is not what reaches disk.
+    const changes = this.echoAsAuthored(kind, id, mergeableDelta, specChanges(canonicalStored, canonicalMerged));
     // A reference the delta writes in another spelling of what the stored spec
     // already names (the public name for an internal id, `geo::distance` for
     // `geo::distance_portal`) binds to the same target, so the bound comparison
@@ -8322,6 +8466,11 @@ function pinnedTypeDefinition(snapshot: SurfaceSnapshot, name: string): { spec: 
 }
 
 /** spec_loader.readPinnedSpec — an external's spec read by `alias::name` from its pinned snapshot; null when none holds it. */
+/** spec_loader.readProjectSystem — the L0 a system id names (this project's, or a member's read from its root), or why none answers. */
+export function readProjectSystem(id: string): ProjectSystemRead {
+  return current().readProjectSystem(id);
+}
+
 export function readPinnedSpec(kind: string | undefined, id: string): PinnedSpecRead | null {
   return current().readPinnedSpec(kind, id);
 }

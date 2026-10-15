@@ -653,12 +653,8 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
         + `Adapt the uses${renamed ? ' (follow the rename)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
     }
     case 'drifted': {
-      // Step 8: a used verb whose route moved is named — a client spelling the route must follow.
-      const routes = status.uses.filter((u) => u.state === 'unchanged' && u.detail?.startsWith('endpoint moved: '));
-      const lead = routes.length
-        ? `The live producer of ${who} moved since it was pinned: the route of ${routes.map((u) => `${useName(u)} (${u.detail!.slice('endpoint moved: '.length).split(' — ')[0]})`).join(', ')} moved. The signatures this project uses are unchanged, but a client that spells the route (a hand-written HTTP client, a binding) must follow.`
-        : `The live producer of ${who} moved since it was pinned, but nothing this project uses changed.`;
-      return advisory(config, 'EXTERNAL_DRIFTED', `${lead}${staleTail(status)} Re-pin when convenient (${repin(status.alias)}).`);
+      // Step 8: nothing used moved — a used verb whose wire route moved is a break, judged above.
+      return advisory(config, 'EXTERNAL_DRIFTED', `The live producer of ${who} moved since it was pinned, but nothing this project uses changed.${staleTail(status)} Re-pin when convenient (${repin(status.alias)}).`);
     }
     case 'unavailable': {
       // Step 9b: a pinned external used beyond its pin, everything else

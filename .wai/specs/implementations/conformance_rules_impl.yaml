@@ -962,11 +962,14 @@ methods:
       - stepNumber: 8
         description: >-
           Add the file to blocked and report the problem its status names, spec'd to type.id:
-          SOURCE_PATH_ESCAPES_ROOT (error) when escaped; when missing, MISSING_SOURCE_FILE (error)
-          if the type's realization has begun (code.holdsAny(type.sourceFiles())) and otherwise
-          SOURCE_FILE_PLANNED (notice, or error naming rules.conformance.requireCode) — planned, not
-          written yet; CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the file and,
-          when it is a method's own file rather than the type's, the methods that name it
+          SOURCE_PATH_ESCAPES_ROOT (error) when escaped; when missing, SOURCE_FILE_PLANNED (notice,
+          or error naming rules.conformance.requireCode) — planned, not written yet — while the
+          type's realization has not begun (code.holdsAny(type.sourceFiles())), and for a file only
+          its METHODS name whether or not it has, as a component method's planned file is (the
+          methods are written after the fields, by whoever implements them); MISSING_SOURCE_FILE
+          (error) for the type's OWN file once a file its methods name exists, since its declaration
+          is what they build on; CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the
+          file and, when it is a method's own file rather than the type's, the methods that name it
         type: local
       - stepNumber: 9
         description: >-
@@ -2368,4 +2371,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-09T16:54:30.181Z'
+updatedAt: '2026-10-15T16:03:30.737Z'

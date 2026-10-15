@@ -536,9 +536,11 @@ methods:
       Rule type-realization. Code↔spec Level 1 for the data model: a type that names a sourcePath is
       claiming code. Until that claim has BEGUN (code_index.holdsAny over the type's own file and
       its methods' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a
-      notice; an error under rules.conformance.requireCode). Once it has begun, every file it names
-      must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error,
-      otherwise), its file must PUBLISH its declaration (an exported name at exact grade, the
+      notice; an error under rules.conformance.requireCode) — and a file only its METHODS name stays
+      planned once it has begun, as a component method's planned file does. Once it has begun, the
+      type's own file must resolve to a real, readable file inside the project root
+      (MISSING_SOURCE_FILE, an error, otherwise), and every file it names must stay inside the root
+      and be readable, its file must PUBLISH its declaration (an exported name at exact grade, the
       declaration tier below it, under its `symbol` when the code-level name differs from the type's
       name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never
       realized), and each of its pure methods must appear in its own file (the method's sourcePath,
@@ -572,8 +574,8 @@ methods:
       - code: MISSING_SOURCE_FILE
         severity: error
         summary: >-
-          A source file a type or one of its methods names does not resolve to a file on disk
-          although the type's realization has begun (another file it names exists)
+          The source file a type names for its own declaration does not resolve to a file on disk
+          although the type's realization has begun (a file its methods name exists)
       - code: SOURCE_PATH_ESCAPES_ROOT
         severity: error
         summary: >-
@@ -587,8 +589,9 @@ methods:
       - code: SOURCE_FILE_PLANNED
         severity: notice
         summary: >-
-          A source file a type names is not on disk and none of its named files is — planned, not
-          written yet; an error under rules.conformance.requireCode
+          A source file a type names is not on disk and none of its named files is — or a file only
+          its methods name is not on disk yet — planned, not written yet; an error under
+          rules.conformance.requireCode
       - code: MISSING_TYPE_SOURCE_PATH
         severity: notice
         summary: >-
@@ -1111,4 +1114,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-09T16:54:27.903Z'
+updatedAt: '2026-10-15T16:03:28.954Z'
