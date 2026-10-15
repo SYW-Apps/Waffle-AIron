@@ -493,7 +493,7 @@ describe('2. the `member promote` shape: a binding reached through this project\
     bind(shop);
     const drift = validateProject().issues.filter((i) => i.code === 'BINDING_DRIFT' || i.code === 'BINDING_UNREAD');
     // Round 9: uncompared until the member switched to the library — the planted field went unnoticed.
-    expect(drift.map((i) => `${i.code} ${i.message}`)).toEqual([expect.stringMatching(/BINDING_DRIFT[^\n]*"Money" no longer matches shared::money[^\n]*field "amountCents" is not in the pinned type/)]);
+    expect(drift.map((i) => `${i.code} ${i.message}`)).toEqual([expect.stringMatching(/BINDING_DRIFT[^\n]*"Money" no longer matches shared::money[^\n]*field "amountCents" is not in the member's type/)]);
   });
 });
 

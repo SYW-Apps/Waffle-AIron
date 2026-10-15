@@ -500,8 +500,10 @@ methods:
       Forward to spec_maintenance_portal.createMember: create a member at a source in the members
       grammar — a part by default, a project with `as: project` (stage 8; a project with the bound
       project's required packs, once) — and declare it in the bound project's `members`; answers
-      what was created.
-    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
+      what was created, or with `report` what would be (nothing written).
+    signature: >-
+      createMember(alias: string, source: string, description?: string, as?: string, report?: bool):
+      MemberCreation
     returns: MemberCreation
     params:
       - name: alias
@@ -517,6 +519,10 @@ methods:
       - name: as
         type: string
         description: project to create the project content; omitted creates a part
+        optional: true
+      - name: report
+        type: bool
+        description: Answer the plan and write nothing (`--report`)
         optional: true
   - name: loadTypeSpecs
     description: >-
@@ -677,6 +683,13 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: inspectLock
+    description: >-
+      Forward to spec_tree_portal.inspectLock: the bound project's spec-tree write lock as `wairon
+      doctor` reports it, or none
+    signature: 'inspectLock(): TreeLockState?'
+    returns: TreeLockState?
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T11:36:02.025Z'
+updatedAt: '2026-10-09T17:03:30.272Z'

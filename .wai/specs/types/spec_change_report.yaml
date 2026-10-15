@@ -93,7 +93,14 @@ fields:
       projects the removal breaks. Filled by the door that read the consumers; absent when none
       breaks.
     optional: true
+  - name: rerouted
+    type: bool
+    description: >-
+      True when published names the methods whose wire endpoint the write moved (sdd_set_endpoints),
+      not methods it removed: a client spelling the old route breaks until it follows. Filled by the
+      door that read the consumers
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-10-09T00:25:01.966Z'
+updatedAt: '2026-10-09T16:51:12.048Z'

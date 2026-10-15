@@ -200,6 +200,20 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: diffAgainstApproval
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: lockTree
+  - name: unlockTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: unlockTree
 status: complete
 createdAt: '2026-09-30T20:31:36.988Z'
-updatedAt: '2026-10-07T10:54:47.093Z'
+updatedAt: '2026-10-09T16:55:57.431Z'

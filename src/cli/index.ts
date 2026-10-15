@@ -917,8 +917,9 @@ memberCmd
   .description('Create a member at <source> — services/x (contained), ../x (a sibling checkout) or a git URL[#commit] — a PART by default (its subsystems are this project\'s own), or with --project an independent project')
   .option('--project', 'create an independent project (its id = <alias>, its own L0 and lock) instead of a part')
   .option('--description <text>', 'what the member is to this project (also a project\'s bootstrapped L0 vision)')
+  .option('--report', 'print what would be created — refused exactly as the write would be — and write nothing')
   .action(async (alias: string, source: string, opts) => {
-    await runMemberAdd(alias, source, { description: opts.description, project: opts.project });
+    await runMemberAdd(alias, source, { description: opts.description, project: opts.project, report: opts.report });
   });
 
 memberCmd

@@ -672,14 +672,16 @@ methods:
       which `symbol` cannot name because `symbol` names the function inside. A Portal
       implementation's `router` names the entry whatever serves the Portal calls to hand it its
       requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names,
-      which must export that name (a module named alone must be on disk). Both are declared
-      publication, and a declared handle the file does not actually export is itself a finding, so
-      naming one can never become a free-text suppression. Both questions are asked only of a file
-      read at exact grade, and a taker counts only when its own import specifier resolves to the
-      file it is accused of taking from: below that nothing separates an export from a mention, or a
-      shared word from a shared module. A taker inside the owns fence is no crossing: a pattern
-      constructs the blocks it owns, so the owner's file, or another member of the same pattern,
-      importing a member's class is the owns relation made real.
+      which must export that name (a module named alone must be on disk); an entry that is a class's
+      method is written `Class.method` (`<module>#Class.method` in another module), and the class is
+      then the export, which must hold the method. Both are declared publication, and a declared
+      handle the file does not actually export is itself a finding, so naming one can never become a
+      free-text suppression. Both questions are asked only of a file read at exact grade, and a
+      taker counts only when its own import specifier resolves to the file it is accused of taking
+      from: below that nothing separates an export from a mention, or a shared word from a shared
+      module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns,
+      so the owner's file, or another member of the same pattern, importing a member's class is the
+      owns relation made real.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -814,21 +816,34 @@ methods:
       fields but not all of them, or adding fields the record does not declare, is another shape;
       the finding names the fields missing and the fields added, so `planRoute(request: any)` and
       `planRoute(request: { stops: unknown[]; secret: string })` realizing `planRoute(request:
-      plan_request)` are never silent pairings. Where neither side settles a type and no handle name
-      speaks, nothing is said about the name. A parameter standing ahead of every kept pair under a
-      name transports give their handles (req, request, res, response, reply, url, ctx, context,
-      next, event, socket) is how a transport handle arrives, and the finding names the one green
-      path for it: the handle in `injectedParams`, the contract's own parameters after it in order,
-      the router unpacking the request into them — or, where the framework hands the function the
-      handles alone, the contract's parameters read off the injected request by their own names: a
-      contract parameter the code does not take but reads off an injected request handle (req,
-      request, ctx, context, event, url) by its own name is realized through that handle —
-      `req.params.code`, `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a
-      destructuring at any depth, a local the handle's value flows into (`const url = new
-      URL(req.url, base)`), and what a helper the handle is passed to reads off it or its result
-      yields, where the helper is written in the same file or in a file no implementation claims
-      (`const { orderId } = pathParams(req)`) — and the one RECORD parameter left unpaired is
-      realized by the request's body read whole (`req.body`). An injected name none of the
+      plan_request)` are never silent pairings. Where the contract's type is a scalar (a string, a
+      number, a boolean — an enum or a named scalar as what it holds — or a date, a datetime or a
+      duration, each as any value it is written as), a paired parameter whose type admits any value
+      — opaque as above — and whose body reads a member off it directly that no such value has
+      (`args.habitId`, where the contract declares the date `date`) is an object in the scalar's
+      place, PARAM_TYPE_MISMATCH too; one read only as the scalar it is (`date.length`,
+      `day.getTime()`) is not. Where neither side settles a type and no handle name speaks, nothing
+      is said about the name. A parameter standing ahead of every kept pair under a name transports
+      give their handles (req, request, res, response, reply, url, ctx, context, next, event,
+      socket) is how a transport handle arrives, and the finding names the one green path for it:
+      the handle in `injectedParams`, the contract's own parameters after it in order, the router
+      unpacking the request into them — or, where the framework hands the function the handles
+      alone, the contract's parameters read off the injected request by their own names: a contract
+      parameter the code does not take but reads off an injected request handle (req, request, ctx,
+      context, event, url) by its own name is realized through that handle — `req.params.code`,
+      `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a destructuring at any
+      depth, a local the handle's value flows into (`const url = new URL(req.url, base)`), and what
+      a helper the handle is passed to reads off it or its result yields, where the helper is
+      written in the same file or in a file no implementation claims (`const { orderId } =
+      pathParams(req)`) — and the one RECORD parameter left unpaired is realized by the request's
+      body read whole: `req.body`, or the request handed as the first argument to a function — any
+      function, an imported one included, but a collaborator's method (a callee reached through
+      `this.<field>` or through another of the handler's parameters) — whose result the handler
+      binds to a local and then uses whole, passing it on, returning it, placing it into an object
+      or a list, or assigning it (`const cart = await readJsonBody(req)`); a result only
+      destructured or only read for members is a set of named reads, never the body. A parameter
+      left unrealized because the implementation injects its own name is said so: the injection set
+      the code's parameter of that name aside as wiring. An injected name none of the
       implementation's realizing functions read in this run takes is said as a NOTICE
       (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and one nothing
       takes hides nothing, since no function takes a parameter it could set aside — so it never
@@ -873,10 +888,10 @@ methods:
       - code: PARAM_TYPE_MISMATCH
         severity: warning
         summary: >-
-          A contract parameter declared as a record is realized by a parameter whose type cannot
-          hold it — opaque (any, unknown, an index signature) or an object missing the record's
-          fields or adding its own — so what a caller hands over is never compared with what the
-          design declares
+          A contract parameter is realized by a parameter whose type cannot hold it — a record under
+          an opaque type (any, unknown, an index signature) or an object missing the record's fields
+          or adding its own, or a scalar under an opaque type the body reads as an object — so what
+          a caller hands over is never compared with what the design declares
   - name: routeCoverage
     description: >-
       Rule route-coverage. Code-to-contract for the ROUTES: does every route a router actually
@@ -884,9 +899,11 @@ methods:
       it? A portal's endpoints are what its contract promises; the router is what the code serves;
       nothing compared the two, so a route with no contract (including a write) could run for months
       without a single rule noticing. The Portal's own implementation names its router (`router`,
-      code linkage): an entry its own files export, an entry or route table another module exports
-      (`<module>#<name>`, a central routes.ts), or a module alone, every route-bearing export of
-      which is read as one router; the routes are read out of that entry and the functions of its
+      code linkage) — the table or function the server actually dispatches: an entry its own files
+      export, a class's method as `Class.method` (the class the export, the method's body inside
+      it), an entry or route table another module exports (`<module>#<name>`, or
+      `<module>#Class.method`, a central routes.ts), or a module alone, every route-bearing export
+      of which is read as one router; the routes are read out of that entry and the functions of its
       file it calls by name. A router several Portals name — the same entry or table in the same
       file, however each linkage spells it — is read once against them all: a route is declared when
       any of them declares it, and an endpoint is unrouted per Portal. Two idioms are read: guards
@@ -912,8 +929,17 @@ methods:
       idiom, or a linkage naming a declaration that holds neither a function body nor a route table
       this analysis reads, is reported as unread; and a Portal binding HTTP endpoints whose
       implementation names no router while its code is read at exact grade is said as a notice
-      (ROUTER_UNDECLARED) naming `router:` and the route-bearing names its files hold — a check that
-      cannot see a router must say so rather than stay quiet.
+      (ROUTER_UNDECLARED) naming `router:` and what its files hold, each spelled as the linkage
+      accepts it — an exported router or table by its name, a method of an exported class as
+      `Class.method`, an exported entry calling into a router of its file — with what reads as a
+      router or a table but is not exported named apart, to be exported before it can be named — a
+      check that cannot see a router must say so rather than stay quiet. A router naming a route
+      table that a sibling table — one spreading other tables of its module, written in that module
+      or in one importing them, `routes = [...ingestRoutes]` — leaves out, while no table of the
+      code spreads it and it spreads none itself, is said as a notice (ROUTER_NOT_DISPATCHED): if
+      the server dispatches the sibling, no route of the named table is served, while coverage
+      reading the named table reads its routes as served. A notice, because which process dispatches
+      which table is never read: a module may serve two aggregates to two servers.
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
     params:
@@ -941,6 +967,12 @@ methods:
         summary: >-
           A Portal binds HTTP endpoints but its implementation names no router (`router:`), so none
           of the routes its code serves were checked against its contract
+      - code: ROUTER_NOT_DISPATCHED
+        severity: notice
+        summary: >-
+          A Portal's router names a route table that a sibling table spreading its module's other
+          tables leaves out — if the server dispatches the sibling, none of the named table's routes
+          is served while coverage reads them as routed
   - name: portalImports
     description: >-
       Rule portal-imports. A runtime import that crosses a subsystem boundary must land on a file
@@ -1079,4 +1111,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-09T11:26:50.355Z'
+updatedAt: '2026-10-09T16:54:27.903Z'

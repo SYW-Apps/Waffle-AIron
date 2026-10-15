@@ -73,6 +73,7 @@ import {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  publishedUsesOf,
 } from './adapters/core.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
@@ -618,7 +619,7 @@ function renderChangeReport(report: SpecChangeReport): string {
   // is a field nobody reads, and the whole point is that the change which
   // creates the collision is the one that says so.
   lines.push(...renderRespellings(report.respellings));
-  lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun));
+  lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun, report.rerouted === true));
   lines.push(...renderTestsToRevisit(report.testsToRevisit));
   return lines.join('\n');
 }
@@ -628,9 +629,13 @@ function renderChangeReport(report: SpecChangeReport): string {
  * breaks there — the block a rename's dry run has always carried, for a delete
  * and a method removal alike.
  */
-function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray<ExternalConsumer>, dryRun: boolean): string[] {
+function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray<ExternalConsumer>, dryRun: boolean, rerouted = false): string[] {
   if (published.length === 0) return [];
-  const lines = ['', `PUBLISHED as: ${published.map((u) => `${u.publicName}${u.members.length ? ` (${u.members.join(', ')})` : ''}`).join('; ')} — a consumer of these ${dryRun ? 'would lose' : 'lost'} what goes.`];
+  // A route moved (sdd_set_endpoints) takes nothing away: a client spelling the old route breaks.
+  const loses = rerouted
+    ? `— the route of each ${dryRun ? 'would move' : 'moved'}: a consumer's client spelling the old route (a hand-written HTTP client, a binding) breaks until it follows`
+    : `— a consumer of these ${dryRun ? 'would lose' : 'lost'} what goes`;
+  const lines = ['', `PUBLISHED as: ${published.map((u) => `${u.publicName}${u.members.length ? ` (${u.members.join(', ')})` : ''}`).join('; ')} ${loses}.`];
   if (breaks.length === 0) {
     lines.push('No consumer in reach uses it (the family, and the searched folders when `search` names any).');
     return lines;
@@ -865,10 +870,13 @@ const specChangeReportOutput = {
     'Each implementation method entry removed with a contract method the delta removed, as `<implementation>.<method>` (on a dry run, would be).',
   ),
   published: z.array(exportUseOutput).optional().describe(
-    'Every public name a consumer reaches a removed contract method through. Absent when no removed method is published.',
+    'Every public name a consumer reaches a removed contract method through — or, with rerouted, a method whose wire endpoint moved. Absent when no such method is published.',
   ),
   breaks: z.array(breakingConsumerOutput).optional().describe(
-    'The consumers in reach whose specs call a removed method on a published name — the projects the removal breaks.',
+    'The consumers in reach whose specs call a removed (or rerouted) method on a published name — the projects the change breaks.',
+  ),
+  rerouted: z.boolean().optional().describe(
+    'True on sdd_set_endpoints when published names the methods whose route moved, not methods removed.',
   ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
@@ -2768,10 +2776,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   // concrete `endpoint`. This is what a Portal needs to satisfy the gate's
   // MISSING_ENDPOINT / ENDPOINT_TRANSPORT_MISMATCH rules. Run it after
   // sdd_define_interface (the methods must already exist).
-  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; status?: number; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }>; dryRun?: boolean }>(server,
+  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; status?: number; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }>; dryRun?: boolean; search?: string[] }>(server,
     'sdd_set_endpoints',
     {
-      description: 'Bind concrete wire endpoints to existing L3 interface methods, for a Portal whose transport requires them (every transport but InProcess and Custom). Pick the Portal\'s own `transport` and fill that transport\'s address fields — for HTTP the verb, the path and, optionally, the success `status` (a 2xx or 3xx code: 202 Accepted, a redirect, a 201 for a workflow verb) the operation answers with, which the OpenAPI export uses in place of its convention. A binding for an InProcess Portal is refused: its verbs are its contract methods. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence.',
+      description: 'Bind concrete wire endpoints to existing L3 interface methods, for a Portal whose transport requires them (every transport but InProcess and Custom). Pick the Portal\'s own `transport` and fill that transport\'s address fields — for HTTP the verb, the path and, optionally, the success `status` (a 2xx or 3xx code: 202 Accepted, a redirect, a 201 for a workflow verb) the operation answers with, which the OpenAPI export uses in place of its convention. A binding for an InProcess Portal is refused: its verbs are its contract methods. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence. A binding that MOVES a route a consumer reaches through an export names, as a rename or a removal does, the public names publishing it and the consumers it breaks (published, breaks, rerouted): a client that spells the old route breaks until it follows.',
       inputSchema: {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
@@ -2795,10 +2803,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           address: z.string().optional().describe('Custom: free-form address'),
         }).strict()).describe('One binding per method'),
         dryRun: z.boolean().optional().describe('Answer the change report the binding would give — the gate (a route another method binds is refused) and the writer\'s parse included — and write nothing'),
+        search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family, read when a binding moves a route: the move names the consumers it breaks, as a rename does'),
       },
       outputSchema: specChangeReportOutput,
     },
-    ({ interface: interfaceId, endpoints, dryRun }) => {
+    ({ interface: interfaceId, endpoints, dryRun, search }) => {
       try {
         // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
         const intf = loadInterfaceSpec(interfaceId);
@@ -2850,9 +2859,28 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           methods.push({ name: e.method, endpoint: parsed.data as Endpoint });
           bound.push(`${e.method}→${transport}`);
         }
-        // Step 3: one delta naming each method with its endpoint, through the
-        // authoring seam. Step 4: the change report.
+        // Step 4: the consumers, before anything moves — only when a binding
+        // replaces a route the contract already states.
+        const holdsRoute = (name: string): boolean => intf.methods.find((x) => x.name === name)?.endpoint !== undefined;
+        const consumers = methods.some((m) => holdsRoute(m.name)) ? externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d))) : [];
+        // Step 5: one delta naming each method with its endpoint, through the
+        // authoring seam.
         const report = updateSpecGated('interface', interfaceId, { methods }, dryRun, 'sdd_set_endpoints');
+        // Step 6: a route a published method held that the write moved breaks
+        // every consumer whose client spells it, as a rename does: the public
+        // names publishing it, and the consumers reaching it there.
+        const rerouted = methods.filter((m) => holdsRoute(m.name)
+          && report.changes.some((c) => c.path === `methods.${m.name}.endpoint` || c.path.startsWith(`methods.${m.name}.endpoint.`))).map((m) => m.name);
+        if (rerouted.length > 0) {
+          const published = publishedUsesOf([], rerouted.map((m) => `${interfaceId}.${m}`));
+          if (published.length > 0) {
+            report.published = published;
+            report.rerouted = true;
+            const breaks = consumers.map((c) => narrowedToUses(c, published)).filter((c): c is ExternalConsumer => c !== null);
+            if (breaks.length > 0) report.breaks = breaks;
+          }
+        }
+        // Step 7: the change report.
         return structured(
           `${dryRun ? 'Would bind' : 'Bound'} ${bound.length} endpoint(s) on "${interfaceId}": ${bound.join(', ')}.\n${renderChangeReport(report)}`,
           report,
@@ -3167,21 +3195,49 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // the pin this project holds of it — the pinned entry as the spec, the
         // pinnedSnapshot marker beside it. Read-only: never a spec of this tree.
         const pinnedAnswer = (asked: SpecKind | undefined): CallToolResult | null => {
-          if (!id.includes('::') || methods !== undefined) return null;
+          if (!id.includes('::')) return null;
+          // A contract entry answers to the kinds that hold one (a component, its
+          // interface) and a type to its own; no kind is the pin's own word.
+          if (asked !== undefined && asked !== 'component' && asked !== 'interface' && asked !== 'type') return null;
           const read = readPinnedSpec(asked, id);
           if (!read) return null;
+          // The kind answered is the one the pin holds: a type, or the contract entry under the kind asked (interface unless component was).
+          const kindRead: SpecKind = read.kind === 'type' ? 'type' : (asked === 'component' ? 'component' : 'interface');
+          const carried = read.carriedBy !== undefined
+            ? ` The producer exports no type "${read.id}" under its own name: it is carried by ${read.carriedBy.length ? read.carriedBy.map((n) => `"${n}"`).join(', ') : 'none of its exports'} — a spec of this project references it through what carries it, never as ${read.alias}::${read.id}.`
+            : '';
           const marker = {
             alias: read.alias,
             project: read.project,
             file: read.file,
             ...(read.stateId !== undefined ? { stateId: read.stateId } : {}),
             readOnly: true as const,
-            note: `"${read.alias}" is an external of this project: this is its pinned ${read.kind === 'type' ? 'type' : 'contract entry'} "${read.id}" as ${read.file} records it — written from ${read.project}'s own root, never here.`,
+            note: `"${read.alias}" is an external of this project: this is its pinned ${read.kind === 'type' ? 'type' : 'contract entry'} "${read.id}" as ${read.file} records it — written from ${read.project}'s own root, never here.${carried}`,
           };
-          return structured(JSON.stringify({ ...(read.spec as object), pinnedSnapshot: marker }, null, 2), {
-            kind: read.kind === 'type' ? 'type' : (asked ?? 'interface'),
+          let spec = read.spec as Record<string, unknown>;
+          let partial: { shown: string[]; omitted: number; warning: string } | undefined;
+          if (methods !== undefined) {
+            // The same filter a spec of this tree takes: a name the pinned entry does not hold is refused, a partial answer says so.
+            const declared = Array.isArray(spec.methods) ? (spec.methods as { name?: unknown }[]) : null;
+            if (!declared) return errText(`The pinned ${read.kind === 'type' ? 'type' : 'contract entry'} "${id}" declares no methods, so "methods" cannot filter it. Drop the argument to read it whole.`);
+            const names = declared.map((m) => String(m?.name));
+            const unknown = methods.filter((n) => !names.includes(n));
+            if (unknown.length > 0) {
+              return errText(`The pinned ${read.kind === 'type' ? 'type' : 'contract entry'} "${id}" does not declare ${unknown.map((n) => `"${n}"`).join(', ')}. It declares: ${names.join(', ')}. Nothing was returned, so a misspelled name never reads as a method with no content.`);
+            }
+            const kept = declared.filter((m) => methods.includes(String(m?.name)));
+            partial = {
+              shown: kept.map((m) => String(m?.name)),
+              omitted: names.length - kept.length,
+              warning: `PARTIAL: ${names.length - kept.length} of this entry's ${names.length} methods are not in this answer. It is the pin's record, never re-authored here.`,
+            };
+            spec = { ...spec, methods: kept };
+          }
+          return structured(JSON.stringify({ ...spec, ...(partial ? { partialResult: partial } : {}), pinnedSnapshot: marker }, null, 2), {
+            kind: kindRead,
             id,
-            spec: read.spec as Record<string, unknown>,
+            spec,
+            ...(partial ? { partialResult: partial } : {}),
             pinnedSnapshot: marker,
           });
         };

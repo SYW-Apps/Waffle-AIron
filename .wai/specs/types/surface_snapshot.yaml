@@ -255,6 +255,35 @@ methods:
       member digest exactly (the renames are the whole change). Empty when no field was renamed.
       What a changed use's detail says so the consumer follows the rename. Pure.
     sourcePath: src/models/surface-references.ts
+  - name: fieldChangesSince
+    signature: >-
+      fieldChangesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot, publicName: string, member:
+      string, pinnedDigest: string): FieldChangeReading
+    params:
+      - name: pinned
+        type: SurfaceSnapshot
+        description: The consumer's pinned snapshot
+      - name: live
+        type: SurfaceSnapshot
+        description: The producer's live projection
+      - name: publicName
+        type: string
+        description: The used public name
+      - name: member
+        type: string
+        description: The used member
+      - name: pinnedDigest
+        type: string
+        description: The member digest the lock records
+    returns: FieldChangeReading
+    description: >-
+      Every field change inside the live closure of one used member since the pinned snapshot: the
+      renames its trace records (as fieldRenamesSince reads them), and each field ADDED to or
+      REMOVED from a closure type of the member the pin held under the same id — so a consumer reads
+      a new field by name instead of "its shape changed" and never reads the producer's files for it
+      — and whether undoing them all gives back the pinned member digest exactly (the field changes
+      are the whole change). Empty when no field moved. What a changed use's detail says. Pure.
+    sourcePath: src/models/surface-references.ts
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-10-09T11:50:48.254Z'
+updatedAt: '2026-10-09T16:50:46.131Z'

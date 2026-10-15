@@ -19,6 +19,8 @@ export {
   crossProjectWriteRefusal,
   publishedUsesOf,
   moveSpec,
+  rehearsalCopy,
+  discardRehearsal,
 } from '../index.js';
 
 /**

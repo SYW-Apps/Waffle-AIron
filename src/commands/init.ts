@@ -439,6 +439,10 @@ async function executeInit(
   ensureDir(AI_PATHS.rulesDir());
   ensureDir(AI_PATHS.docsDir());
   ensureDir(AI_PATHS.generatedDir());
+  // The spec tree's write lock (.wai/.spec-write.lock) is a file of the moment,
+  // never of the design: ignored by .wai's own .gitignore, so a team that
+  // commits .wai/ wholesale never commits one a crashed session left behind.
+  ignoreWriteLock();
 
   // Complete only what is missing. runInit's early return looks for the spec
   // tree, so a half-finished init reaches here with its configuration in place;
@@ -561,6 +565,7 @@ async function executeInit(
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
   logger.info('  .wai/specs/         — SDD spec tree (L0 .index.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
+  logger.info('  .wai/.gitignore     — keeps the spec write lock (.spec-write.lock) out of git');
   if (hadConfig) logger.info('Kept .wai/project.yaml as it was (not recreated).');
   logger.blank();
   logger.info('Next steps:');
@@ -765,4 +770,23 @@ A new project initialized with Wairon.
 - Refrain from writing code implementation until specifications are approved.
 `;
   writeFile(AI_PATHS.contextProjectMd(), content);
+}
+
+/** The line .wai/.gitignore carries so the spec tree's write lock is never committed. */
+const WRITE_LOCK_IGNORE = '.spec-write.lock';
+
+/**
+ * Step 15 of runInit: .wai/.gitignore ignoring the spec tree's write lock —
+ * created when absent, the line added when the file lacks it, anything else
+ * in it kept. Inside .wai, so it covers the project whether or not it keeps a
+ * root .gitignore, and travels with .wai/ wherever that is committed.
+ */
+function ignoreWriteLock(): void {
+  const file = path.join(AI_PATHS.root(), '.gitignore');
+  const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === WRITE_LOCK_IGNORE)) return;
+  const body = held === null
+    ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n`
+    : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${WRITE_LOCK_IGNORE}\n`;
+  writeFile(file, body);
 }

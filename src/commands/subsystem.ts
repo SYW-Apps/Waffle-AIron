@@ -66,6 +66,8 @@ interface MemberAddOptions {
   description?: string;
   /** --project: create an independent project instead of a part (stage 8). */
   project?: boolean;
+  /** --report: print what would be created and write nothing. */
+  report?: boolean;
 }
 
 /** The initialized-project guard every member command opens with. */
@@ -105,8 +107,17 @@ export async function runMemberAdd(alias: string, source: string, options: Membe
   if (!source) {
     throw new WaironError('a source is required: wairon member add <alias> <path | ../path | git-url[#commit]>');
   }
-  // Step 4: create the member — a part, or with --project a project — and declare it.
-  const creation = createMember(alias, source, options.description, options.project ? 'project' : undefined);
+  // Step 4: create the member — a part, or with --project a project — and declare it;
+  // with --report, the plan, refused exactly as the write would be, nothing written.
+  const creation = createMember(alias, source, options.description, options.project ? 'project' : undefined, options.report === true);
+  if (creation.written === false) {
+    const where = creation.storage === 'git' ? `${source.split('#')[0]} at ${creation.commit}` : source;
+    logger.info(`Report only — this would create the ${creation.as} "${alias}" → ${where}:`);
+    for (const line of creation.creates ?? []) logger.info(`  + ${line}`);
+    if ((creation.creates ?? []).length === 0) logger.info('  nothing: it is already in place and declared');
+    logger.info('Nothing was written. Run without --report to create it.');
+    return;
+  }
   // Step 5: the confirmation, what was applied, and the growth path.
   const where = creation.storage === 'git' ? `${source.split('#')[0]} at ${creation.commit}` : source;
   logger.success(`Added the ${creation.as} "${alias}" → ${where} (declared in project.yaml \`members\`)`);

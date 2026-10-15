@@ -107,13 +107,17 @@ methods:
           property names a destructuring of such a read binds at any depth, and the same read off a
           local its value flows into (through `??`, `||`, `await`, `new URL(…)`, `new
           URLSearchParams(…)`, `JSON.parse(…)`) or off what a function of this file it is passed to
-          reads and returns (parameter_fact.reads), and whether it is PROVABLY unused: named, with
-          no identifier of that name in the body or in another parameter's default value and no read
-          of `arguments` (a shadowing local counts as a use, which can only keep a parameter judged)
-          — and the routes it serves, read two ways. The guard idiom: an `if` whose conditions,
-          together with every enclosing `if`'s, compare `<request>.method` with a string and
-          `parts[i]` / `parts.length` with literals, every compared value a string literal or one
-          this file's constants, concatenations and template literals settle; where the function
+          reads and returns (parameter_fact.reads), the member names the body reads directly off it,
+          the first link of every chain (parameter_fact.members), whether a request handle is handed
+          WHOLE — as a call's first argument, to any function but a collaborator's method (a callee
+          through `this.<field>` or another parameter) — whose result the body binds to a local and
+          then uses whole (parameter_fact.handedWhole), and whether it is PROVABLY unused: named,
+          with no identifier of that name in the body or in another parameter's default value and no
+          read of `arguments` (a shadowing local counts as a use, which can only keep a parameter
+          judged) — and the routes it serves, read two ways. The guard idiom: an `if` whose
+          conditions, together with every enclosing `if`'s, compare `<request>.method` with a string
+          and `parts[i]` / `parts.length` with literals, every compared value a string literal or
+          one this file's constants, concatenations and template literals settle; where the function
           strips a prefix before splitting the path (`.slice(BASE.length)`, `.slice('/v1'.length)`,
           `.substring(BASE.length)`, `.replace(BASE, '')`) and that prefix settles, its segments are
           folded in front of each route, marked fullPath. The table idiom: every entry of a route
@@ -132,7 +136,10 @@ methods:
           ONE prefix a function strips off a path anywhere in its body (`.slice(BASE.length)`,
           `.substring(…)`, `.substr(…)`, `.replace(BASE, '')`), where exactly one settles, is
           recorded by function name (source_file_facts.routePrefixes): what a route table read by
-          the same router is written under. A body that neither speaks of a method or a verb nor
+          the same router is written under. The names each top-level constant array or object
+          literal spreads into itself (`[...ingestRoutes, ...statsRoutes]`), as the code spells
+          them, are recorded by constant name (source_file_facts.tableSpreads): which table another
+          dispatches as a part of itself. A body that neither speaks of a method or a verb nor
           writes an HTTP verb out is no router. A table any of whose entries cannot be settled is
           read as no table at all, never as part of one: a route is never invented
         type: local
@@ -332,4 +339,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-09T11:27:00.937Z'
+updatedAt: '2026-10-09T16:54:32.341Z'

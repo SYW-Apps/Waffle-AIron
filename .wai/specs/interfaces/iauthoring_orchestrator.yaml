@@ -156,9 +156,13 @@ methods:
       (introducedFindings, the others moving beside it) — an edge the move turns into a
       cross-subsystem edge into a non-Portal, or a forbidden doctrine edge, refuses the move with
       the rule's own words, and a curable boundary finding (a direct cross-subsystem edge into a
-      Portal) rides along as a notice — then the move is written through the core adapter. A type is
-      moved without judgement: it carries no edges. A dry run answers the plan and the notices and
-      writes nothing.
+      Portal) rides along as a notice. Then every move — a component's or a type's — is REHEARSED in
+      a private copy of the tree, as the family migrations rehearse theirs: the move is written
+      there and the copy validated before and after, so the report names every file it writes and
+      every reference it re-points, and the design errors and warnings the result will have that the
+      tree does not report now; a new error refuses the move before anything is written. A dry run
+      answers that rehearsal and writes nothing; otherwise the move is written through the core
+      adapter.
     signature: >-
       moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
       list<string>): SpecMove
@@ -187,4 +191,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-09T11:30:44.099Z'
+updatedAt: '2026-10-09T17:09:42.401Z'

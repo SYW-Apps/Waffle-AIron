@@ -1119,6 +1119,136 @@ function sameFileHelpers(ts: TsModule, sf: import('typescript').SourceFile): Hel
 /** The handle names a request is handed by — the parameters whose reads realize a contract's parameters, and the only ones the checker re-reads. */
 const REQUEST_HANDLE_NAMES = new Set(['req', 'request', 'ctx', 'context', 'event', 'url']);
 
+// ---------------------------------------------------------------------------
+// A request handed WHOLE to a function (parameter_fact.handedWhole).
+//
+// Plain node:http has no `req.body`: a handler reads the body through a
+// helper of its own — `const cart = await readJsonBody(req)` — and the record
+// the contract declares IS that result. What is read is a fact of the code
+// alone, never of the helper: the request goes in as the call's first
+// argument, the result is bound to a local, and the local is then used WHOLE
+// — passed on, returned, placed into an object or a list, assigned — rather
+// than only picked apart. Any function counts, an imported one included, since
+// a body parser is as often a package's as the file's own; what does not count
+// is a call into a COLLABORATOR (`this.orders.place(req)`, `deps.parse(req)`):
+// handing the request to the domain is not reading its body. The result only
+// destructured (`const { id } = pathParams(req)`) or only read for members
+// (`params.id`) is a bag of named reads, which `reads` already says, never the
+// body whole.
+// ---------------------------------------------------------------------------
+
+/** What a value stands as once parentheses, casts, a non-null assertion, `satisfies` and `await` are seen through — and a `??` / `||` fallback it is the left side of. */
+function valueSite(ts: TsModule, node: TsNode): TsNode {
+  let at = node;
+  for (;;) {
+    const up = at.parent;
+    if (up && (ts.isParenthesizedExpression(up) || ts.isNonNullExpression(up) || ts.isAsExpression(up)
+      || ts.isTypeAssertionExpression(up) || ts.isAwaitExpression(up)
+      || (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(up)))) { at = up; continue; }
+    if (up && ts.isBinaryExpression(up) && up.left === at && (up.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
+      || up.operatorToken.kind === ts.SyntaxKind.BarBarToken)) { at = up; continue; }
+    return at;
+  }
+}
+
+/** Whether an identifier occurrence names a binding or a member rather than reading the value it holds. */
+function namesNotReads(ts: TsModule, node: import('typescript').Identifier): boolean {
+  const parent = node.parent;
+  return !!parent && (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node)
+    || (ts.isPropertyAssignment(parent) && parent.name === node)
+    || ((ts.isVariableDeclaration(parent) || ts.isParameter(parent) || ts.isBindingElement(parent)) && parent.name === node)
+    || (ts.isBindingElement(parent) && parent.propertyName === node));
+}
+
+/**
+ * Whether the local `name` is used WHOLE somewhere in `scope`: passed as an
+ * argument, returned, placed into an object or a list (or spread there),
+ * assigned, or copied into another local that is — never a use that only
+ * picks it apart (`local.items`) or tests it (`if (!local)`).
+ */
+function usedWhole(ts: TsModule, scope: TsNode, name: string, depth = 0): boolean {
+  let whole = false;
+  const visit = (node: TsNode): void => {
+    if (whole) return;
+    if (ts.isIdentifier(node) && node.text === name && !namesNotReads(ts, node)) {
+      const at = valueSite(ts, node);
+      const up = at.parent;
+      if (up && (ts.isCallExpression(up) || ts.isNewExpression(up)) && up.expression !== at
+        && ((up.arguments ?? []) as readonly TsNode[]).includes(at)) whole = true;
+      else if (up && (ts.isReturnStatement(up) || (ts.isArrowFunction(up) && up.body === at)
+        || ts.isShorthandPropertyAssignment(up) || (ts.isPropertyAssignment(up) && up.initializer === at)
+        || ts.isArrayLiteralExpression(up) || ts.isSpreadElement(up) || ts.isSpreadAssignment(up))) whole = true;
+      else if (up && ts.isBinaryExpression(up) && up.right === at && up.operatorToken.kind === ts.SyntaxKind.EqualsToken) whole = true;
+      else if (up && ts.isVariableDeclaration(up) && up.initializer === at && ts.isIdentifier(up.name)
+        && up.name.text !== name && depth < READS_DEPTH && usedWhole(ts, scope, up.name.text, depth + 1)) whole = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return whole;
+}
+
+/**
+ * Whether a function's body hands its parameter `name` WHOLE to a function —
+ * as the call's first argument — whose result it binds to a local and then
+ * uses whole (see the section above). A collaborator's method (a callee
+ * reached through `this.<field>` or through another of the function's own
+ * parameters) never counts, nor a callee that is itself one of them.
+ */
+function handsWhole(ts: TsModule, fn: TsNode, body: TsNode, name: string): boolean {
+  const own = new Set(((fn as import('typescript').SignatureDeclarationBase).parameters ?? [])
+    .flatMap(parameter => (ts.isIdentifier(parameter.name) ? [parameter.name.text] : [])));
+  const helper = (callee: TsExpression): boolean => {
+    if (ts.isIdentifier(callee)) return !own.has(callee.text);
+    if (!ts.isPropertyAccessExpression(callee)) return false;
+    const target = callee.expression;
+    return target.kind === ts.SyntaxKind.ThisKeyword || (ts.isIdentifier(target) && !own.has(target.text));
+  };
+  let found = false;
+  const visit = (node: TsNode): void => {
+    if (found) return;
+    if (ts.isIdentifier(node) && node.text === name && !namesNotReads(ts, node)) {
+      const at = valueSite(ts, node);
+      const call = at.parent;
+      if (call && ts.isCallExpression(call) && call.expression !== at && call.arguments[0] === at && helper(call.expression)) {
+        const result = valueSite(ts, call);
+        const bound = result.parent;
+        if (bound && ts.isVariableDeclaration(bound) && bound.initializer === result && ts.isIdentifier(bound.name)
+          && usedWhole(ts, body, bound.name.text)) found = true;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return found;
+}
+
+/**
+ * The member names a body reads DIRECTLY off each of the named parameters —
+ * `args.habitId` reads habitId, `args['date']` reads date: the first link of
+ * every chain, no flow followed — by parameter name, one walk for them all.
+ */
+function directMembers(ts: TsModule, body: TsNode, names: ReadonlySet<string>): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  const add = (name: string, member: string): void => {
+    const held = out.get(name) ?? new Set<string>();
+    if (held.size < READS_CAP) held.add(member);
+    out.set(name, held);
+  };
+  const visit = (node: TsNode): void => {
+    if (ts.isIdentifier(node) && names.has(node.text) && !namesNotReads(ts, node)) {
+      const at = valueSite(ts, node);
+      const up = at.parent;
+      if (up && ts.isPropertyAccessExpression(up) && up.expression === at) add(node.text, up.name.text);
+      else if (up && ts.isElementAccessExpression(up) && up.expression === at && ts.isStringLiteralLike(up.argumentExpression)) add(node.text, up.argumentExpression.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return out;
+}
+
 /** One parameter list as the walk read it, at the position of the function declaring it. */
 interface ParameterSite {
   pos: number;
@@ -1229,6 +1359,8 @@ interface ExactFacts {
   functionRoutes: Map<string, Map<string, RouteFact>>;
   /** The one prefix each named function strips off a path, by name (see SourceFileFacts.routePrefixes). */
   routePrefixes: Map<string, string>;
+  /** The names each top-level table spreads, by table name (see SourceFileFacts.tableSpreads). */
+  tableSpreads: Map<string, string[]>;
   /**
    * One entry per BODY that completes later — declared `async`, or annotated
    * to return a Promise — under its function's name, in the order the bodies
@@ -1742,6 +1874,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     const body = (fn as { body?: import('typescript').Node }).body;
     if (body) mentions(body);
     for (const parameter of parameters) if (parameter.initializer) mentions(parameter.initializer);
+    const named = new Set(parameters.flatMap(parameter => (ts.isIdentifier(parameter.name) && used.has(parameter.name.text) ? [parameter.name.text] : [])));
+    const membersOf = body && named.size > 0 ? directMembers(ts, body, named) : new Map<string, Set<string>>();
     return parameters.map((parameter) => {
       const fact: ParameterFact = {
         optional: !!parameter.questionToken || !!parameter.initializer || !!parameter.dotDotDotToken,
@@ -1752,6 +1886,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         else if (body) {
           const read = readsOff(body, fact.name);
           if (read.length > 0) fact.reads = read;
+          const members = membersOf.get(fact.name);
+          if (members && members.size > 0) fact.members = [...members].sort();
+          if (REQUEST_HANDLE_NAMES.has(fact.name.replace(/^_+/, '').toLowerCase()) && handsWhole(ts, fn, body, fact.name)) fact.handedWhole = true;
         }
       }
       // A platform transport class named outright — resolved or not — is a
@@ -2206,6 +2343,23 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     const table = tableRoutes(ts, initializer, fileValues, undefined);
     if (table.length > 0) functionRoutes.set(name, new Map(table.map(route => [routeKey(route), route])));
   }
+  // The tables each top-level table spreads, by the name it spells them
+  // with (`[...ingestRoutes, ...statsRoutes]`): which table another one
+  // dispatches as a part of itself, read whatever the parts settle on.
+  const tableSpreads = new Map<string, string[]>();
+  const spreadName = (expression: TsExpression): string[] => {
+    const bare = bareExpression(ts, expression);
+    return ts.isIdentifier(bare) ? [bare.text] : [];
+  };
+  for (const [name, initializer] of constants) {
+    const literal = bareExpression(ts, initializer);
+    const parts = ts.isArrayLiteralExpression(literal)
+      ? literal.elements.flatMap(element => (ts.isSpreadElement(element) ? spreadName(element.expression) : []))
+      : ts.isObjectLiteralExpression(literal)
+        ? literal.properties.flatMap(property => (ts.isSpreadAssignment(property) ? spreadName(property.expression) : []))
+        : [];
+    if (parts.length > 0) tableSpreads.set(name, [...new Set(parts)]);
+  }
 
   // The members a schema expression composes, read off this file alone: the
   // base `.object({…})` call's keys, or — when the chain is built on another
@@ -2306,7 +2460,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -3943,6 +4097,7 @@ export function buildCodeModel(
             functionParams: Object.fromEntries(facts.functionParams),
             functionRoutes: Object.fromEntries([...facts.functionRoutes].map(([k, v]) => [k, [...v.values()]])),
             ...(facts.routePrefixes.size > 0 ? { routePrefixes: Object.fromEntries(facts.routePrefixes) } : {}),
+            ...(facts.tableSpreads.size > 0 ? { tableSpreads: Object.fromEntries(facts.tableSpreads) } : {}),
             asyncFunctions: [...facts.asyncFunctions],
             enumValues: Object.fromEntries(facts.enumValues),
             aliasTypes: Object.fromEntries(facts.aliasTypes),

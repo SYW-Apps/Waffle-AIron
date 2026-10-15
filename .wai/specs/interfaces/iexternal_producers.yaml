@@ -96,10 +96,17 @@ methods:
       approval the bound project's lock records for it (its composition subject), else the member's
       own last committed approval. A member in no git work tree, or whose approval no commit holds,
       comes back with no revision. Never on a hosted request (answers none). No network.
-    signature: 'memberRevisions(): list<member_revision>'
+    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
     returns: list<member_revision>
-    params: []
+    params:
+      - name: recordedIn
+        type: string
+        description: >-
+          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
+          whose lock records the member approvals to read instead of the bound root's — surface
+          diff's baseline reads each member as THAT approval recorded it
+        optional: true
     effect: io
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-09T11:37:49.469Z'
+updatedAt: '2026-10-09T16:50:49.318Z'

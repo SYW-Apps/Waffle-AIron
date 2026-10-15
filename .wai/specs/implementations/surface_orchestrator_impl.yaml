@@ -380,33 +380,41 @@ methods:
           when it is at hand (and the content digest drift is judged against likewise), so a digest
           an older release recorded for the same pinned snapshot never reads as a producer's change
           — and a changed one whose closure holds a field the producer renamed with a trace says so
-          in its detail, naming each field with its new name (SurfaceSnapshot.fieldRenamesSince
-          against the pinned snapshot) and whether the renames are the whole change, so the consumer
-          reads "follow the rename" rather than an anonymous signature change; one absent under its
-          name is RENAMED when a live entry's `formerly` (the producer's rename trace) names it —
-          renamedTo is that entry's public name (and member), and its signature is still compared so
-          the detail says whether it also changed and how: each parameter renamed per its trace
-          (`parameter "code" renamed to "shortCode"`, which a digest that ignores parameter names
-          cannot see), each field of its closure renamed per its trace, and whether anything beyond
-          the renames moved (its answer or parameter types) — never "unchanged" beside a parameter
-          or answer that moved — and removed otherwise, the detail naming the source's rename when
-          the live snapshot lists the name among its unresolved re-exports; a name or member used
-          now but not in the lock is compared live too: gone from the live table it is renamed or
-          removed (a break the live producer already proves, pinned or not), present it is unlocked
-          (not in the lock — re-pin), named member by member as `wairon lock` names what it refuses;
-          a used contract method's wire endpoint (an HTTP verb, path or stated status, another
-          transport's address) is compared with the pinned snapshot's too — the endpoint is what a
-          consumer's hand-written client spells, and no digest reads it: a route that MOVED leaves
-          the use unchanged in signature but says so in its detail (`endpoint moved: GET
-          /stats/{code} → GET /v2/stats/{code}`) and drifts the external (a carried fact), and a
-          route REMOVED (the method no longer bound to one) makes the use changed — a break; an
-          unexported reference of a family producer is unavailable — and a name already answered as
-          renamed or removed (under any member, a type's `type` included) is answered once, never a
-          second time for its unexported references. Stale when a used member changed, was renamed
-          or went away; drifted when the live content digest differs from the pinned one, or when
-          the pinned snapshot carries facts the live one no longer says (staleFacts =
-          SurfaceSnapshot.carriedFactChanges of the pinned snapshot against the live one) — so
-          `drifted` and the health agree on every surface — and a stale snapshot is never ok
+          in its detail, naming each field with its new name, and each field ADDED to or REMOVED
+          from a closure type the pin held by its name (SurfaceSnapshot.fieldChangesSince against
+          the pinned snapshot), and whether those field changes are the whole change, so the
+          consumer reads "follow the rename" or the new field rather than an anonymous signature
+          change; one absent under its name is RENAMED when a live entry's `formerly` (the
+          producer's rename trace) names it — renamedTo is that entry's public name (and member),
+          and its signature is still compared so the detail says whether it also changed and how:
+          each parameter renamed per its trace (`parameter "code" renamed to "shortCode"`, which a
+          digest that ignores parameter names cannot see), each field of its closure renamed per its
+          trace, and whether anything beyond the renames moved (its answer or parameter types) —
+          never "unchanged" beside a parameter or answer that moved — and removed otherwise, the
+          detail naming the source's rename when the live snapshot lists the name among its
+          unresolved re-exports; a name or member used now but not in the lock is compared live too:
+          gone from the live table it is renamed or removed (a break the live producer already
+          proves, pinned or not), present it is unlocked (not in the lock — re-pin), named member by
+          member as `wairon lock` names what it refuses; a used contract method's wire endpoint (an
+          HTTP verb, path or stated status, another transport's address) is compared with the pinned
+          snapshot's too — the endpoint is what a consumer's hand-written client spells, and no
+          digest reads it: a route that MOVED leaves the use unchanged in signature but says so in
+          its detail (`endpoint moved: GET /stats/{code} → GET /v2/stats/{code}`) and drifts the
+          external (a carried fact), and a route REMOVED (the method no longer bound to one) makes
+          the use changed — a break; an unexported reference of a family producer is unavailable —
+          and a name already answered as renamed or removed (under any member, a type's `type`
+          included) is answered once, never a second time for its unexported references. Stale when
+          a used member changed, was renamed or went away; drifted when the live content digest
+          differs from the pinned one, or when the pinned snapshot carries facts the live one no
+          longer says (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot
+          against the live one) — so `drifted` and the health agree on every surface — and a stale
+          snapshot is never ok A contract the lock records as used WHOLE (a bare dependency, no
+          member named) stands for every method the pinned snapshot's entry holds — whatever reaches
+          it through that dependency (its binding, its client) may call any of them, as
+          external_consumer.narrowedToUses reads such a use — so each is compared like a named
+          member: one removed, renamed (with its new name) or whose route moved or went is said by
+          name and judged as above, and only a contract whose every method held answers one
+          unchanged row.
         type: local
       - stepNumber: 10
         description: Next external
@@ -784,7 +792,7 @@ methods:
       - stepNumber: 4
         description: Compare with it
         type: jump
-        toStep: 7
+        toStep: 8
       - stepNumber: 5
         label: revision
         description: The bound project's tree at the revision, materialized read-only in the fetch cache
@@ -793,13 +801,27 @@ methods:
         targetMethod: approvedRevision
       - stepNumber: 6
         description: >-
+          Each live member of the bound project as the baseline knew it: one stored inside the bound
+          project's tree as the revision's tree holds it; one stored outside it (a `../` sibling,
+          which the revision's tree does not hold) at the approval the BASELINE's lock records for
+          it (recordedIn: the revision's tree) — its own last committed approval when that lock
+          records none — each projected at its own root, live only when no revision of it can be
+          read: read where the revision's tree locates it, a sibling would expand nothing, and every
+          verb naming one of its types would read "a type it names changed shape" on a tree that did
+          not move
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: memberRevisions
+      - stepNumber: 7
+        description: >-
           Project that tree's surface, its root bound for the projection and the caller's binding
           restored, as the baseline, projected the same way (its own HTTP Portals, the types it
-          names from other projects expanded from the pins and members of that tree)
+          names from other projects expanded from the pins of that tree and the member surfaces read
+          at the step before)
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
-      - stepNumber: 7
+      - stepNumber: 8
         label: compare
         description: >-
           Compare the baseline with the surface now: surface_snapshot.changesSince (added, removed,
@@ -810,7 +832,7 @@ methods:
           nothing and why, so a table that went from empty to an entry resolving to nothing never
           reads as no change
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: Answer the project, what it was compared with, and the changes
         type: return
         outcome: surface_diff
@@ -931,4 +953,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-09T12:02:18.789Z'
+updatedAt: '2026-10-09T17:15:02.443Z'

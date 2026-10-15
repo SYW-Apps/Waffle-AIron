@@ -61,6 +61,8 @@ export {
   getStatusReport,
   approvalVerdict,
   findLegacySpecFiles,
+  // `wairon doctor`: the bound tree's write lock as its file stands.
+  inspectLock,
   findChainingSubprojectsMissingConfig,
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,

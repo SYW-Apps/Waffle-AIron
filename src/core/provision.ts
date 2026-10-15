@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import type { ExternalConsumer } from '../models/project-family.js';
 import {
@@ -54,7 +55,7 @@ import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
 import * as gitSource from './adapters/git-source.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
-import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
@@ -376,6 +377,10 @@ export interface MemberCreation {
   storage: MemberStorage;
   /** git: the commit the member was pinned at. */
   commit?: string;
+  /** False on a report: what is answered is the plan, and nothing was written. */
+  written?: boolean;
+  /** A report's plan: every file or folder the member's creation would write, each named with where it lies. */
+  creates?: string[];
 }
 
 /** True for a source a fresh machine or CI runner could fetch. */
@@ -420,9 +425,13 @@ function scaffoldRequirements(requirements: PackRequirement[], installed: Instal
  * project content, each piece only when absent, with the bound project's
  * required packs written once. A git member is never scaffolded: it is pinned
  * at a commit and its content decides what it is. Then it is declared in
- * `members` by the shorthand.
+ * `members` by the shorthand. A path member lives inside the project or is a
+ * sibling checkout ONE level up (`../<name>`): any deeper climb is refused, so
+ * a mistyped `../` never scaffolds a .wai outside the family. With `report`,
+ * every refusal is made exactly as the write would make it and the plan is
+ * answered — the files it would create — with nothing written.
  */
-export function createMember(alias: string, source: string, description?: string, as?: string): MemberCreation {
+export function createMember(alias: string, source: string, description?: string, as?: string, report?: boolean): MemberCreation {
   // Steps 1-2: guard the alias and the source.
   const written = typeof source === 'string' ? source.trim() : '';
   if (!EXTERNAL_ALIAS_RE.test(alias)) {
@@ -439,7 +448,7 @@ export function createMember(alias: string, source: string, description?: string
     throw new WaironError(`Refusing to create the member "${alias}" at "${written}": a hosted record is made by hosted project creation, never here.`);
   }
   // Steps 6-9: a git member is only declared, at a commit.
-  if (parsed.storage === 'git') return createGitMember(alias, parsed.source, description, as);
+  if (parsed.storage === 'git') return createGitMember(alias, parsed.source, description, as, report === true);
   if (parsed.problem) throw new WaironError(`Refusing to create the member "${alias}": ${parsed.problem}.`);
   // Step 3: the member directory, from the bound project root. Stored with
   // forward slashes so the configuration stays portable across platforms.
@@ -449,20 +458,100 @@ export function createMember(alias: string, source: string, description?: string
   // scaffolded; a leading `../` is the explicit way out.
   const root = getProjectRoot();
   const memberDir = parsed.storage === 'contained' ? assertContainedProjectPath(root, relPath) : path.resolve(root, relPath);
+  // Steps 6-7: a `../` source is a sibling checkout one level up — never a
+  // folder further out, where a mistyped depth would scaffold a .wai outside
+  // the family, and never the project's own folder or one holding it.
+  if (parsed.storage === 'path') {
+    const refusal = siblingProblem(relPath, root, memberDir);
+    if (refusal !== null) throw new WaironError(`Refusing to create the member "${alias}" at "${written}": ${refusal}. Nothing was written.`);
+  }
   // The project's own .wai holds its spec tree and configuration: never a member.
   const fromWai = path.relative(aiPathsAt(root).root(), memberDir);
   if (!fromWai.startsWith('..') && !path.isAbsolute(fromWai)) {
     throw new WaironError(`Refusing to create the member "${alias}" at "${written}": that is ${fromWai === '' ? 'the project\'s own .wai directory' : 'inside the project\'s own .wai directory'}, which holds its spec tree and configuration — choose a folder outside it. Nothing was written.`);
   }
-  // Step 10: a part (the default) or a project?
+  // Step 8: an alias declared otherwise is refused before anything is scaffolded.
+  const declaration = { source: relPath, ...(description !== undefined ? { description } : {}) };
+  assertDeclarable(alias, declaration);
+  // Steps 9-10: a report answers the plan, refused exactly as the write would be.
+  if (report === true) return plannedMember(alias, root, relPath, memberDir, as === 'project' ? 'project' : 'part', parsed.storage);
+  // Step 11: a part (the default) or a project?
   const created = as === 'project'
     ? { ...scaffoldMemberProject(alias, memberDir, description), as: 'project' as const }
     : { ...scaffoldPart(alias, memberDir, parsed.storage === 'contained'), as: 'part' as const };
   // Step 23: declare it by the shorthand — the long form only for a description.
-  projectConfigRepository.declareMember(alias, { source: relPath, ...(description !== undefined ? { description } : {}) });
+  projectConfigRepository.declareMember(alias, declaration);
   invalidateSpecCache();
   // Step 24.
   return { ...created, storage: parsed.storage };
+}
+
+/**
+ * Steps 6-7 of createMember: why a `../` source is no sibling checkout one
+ * level up — it climbs further, or lands on the project's own folder or one
+ * holding it — or null when it is one.
+ */
+function siblingProblem(relPath: string, root: string, memberDir: string): string | null {
+  const segments = relPath.split('/').filter((s) => s !== '' && s !== '.');
+  let up = 0;
+  while (segments[up] === '..') up++;
+  if (up > 1) {
+    return `it climbs ${up} folders out of the project, to ${memberDir}. A member is created inside this project (\`services/<name>\`) `
+      + 'or as a sibling checkout one level up (`../<name>`); a folder further out is no part of this family. A project that already '
+      + 'lives there is declared with `wairon member attach` or `wairon externals add`, never scaffolded';
+  }
+  if (!path.relative(memberDir, root).startsWith('..')) {
+    return `it names ${memberDir}, which is this project's own folder or holds it, never a member of it`;
+  }
+  return null;
+}
+
+/**
+ * Step 8 of createMember: refuse, before anything is scaffolded, an alias the
+ * configuration already declares otherwise — an external of that alias, or a
+ * member at another source (an equal declaration is a re-run completing a
+ * partial scaffold, and passes).
+ */
+function assertDeclarable(alias: string, declaration: { source: string; description?: string }): void {
+  const config = projectConfigRepository.load();
+  if (ownGet(config?.externals, alias) !== undefined) {
+    throw new WaironError(`Refusing to create the member "${alias}": \`externals\` already declares "${alias}", and one alias names one project. Nothing was written.`);
+  }
+  const existing = ownGet(config?.members, alias);
+  if (existing === undefined) return;
+  const held = memberLocationOf(existing);
+  if (held !== undefined && toPosixPath(held) === declaration.source) return;
+  throw new WaironError(`Refusing to create the member "${alias}" at "${declaration.source}": it is already declared as ${JSON.stringify(existing)}, and a declaration a person wrote is never overwritten. Nothing was written.`);
+}
+
+/**
+ * Steps 9-10 of createMember: the report — what creating the member would
+ * write, each file named with where it lies, refused exactly as the write
+ * would be (a part over a folder that holds a project, a part outside the
+ * project while it has no id). Writes nothing.
+ */
+function plannedMember(alias: string, root: string, relPath: string, memberDir: string, as: MemberKind, storage: MemberStorage): MemberCreation {
+  const shown = (p: string): string => toPosixPath(path.relative(root, p)) || '.';
+  const creates: string[] = [];
+  const paths = aiPathsAt(memberDir);
+  if (as === 'part') {
+    if (holdsProjectContent(memberDir)) {
+      throw new WaironError(`Refusing to create the part "${alias}": ${memberDir} already holds a project (an id, an L0 or a lock) — declare it with \`wairon member attach\`, or pass --project.`);
+    }
+    if (!fs.existsSync(paths.specsDir())) creates.push(`${shown(paths.specsDir())}/ — the part's specs folder`);
+    if (storage !== 'contained') {
+      const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
+      if (parentId === null) throw new WaironError(`Refusing to create the part "${alias}" outside this project: it must name what it is a part of, and this project has no id. Declare one first (\`wairon id set\`).`);
+      const config = path.join(paths.root(), 'project.yaml');
+      if (!fs.existsSync(config)) creates.push(`${shown(config)} — its configuration, holding only partOf: ${parentId}`);
+    }
+  } else {
+    if (!fs.existsSync(path.join(paths.root(), 'project.yaml'))) creates.push(`${shown(path.join(paths.root(), 'project.yaml'))} — its configuration, id "${alias}"`);
+    if (!fs.existsSync(paths.specsSystem())) creates.push(`${shown(paths.specsSystem())} — its L0`);
+  }
+  const declared = ownGet(projectConfigRepository.load()?.members, alias) !== undefined;
+  if (!declared) creates.push(`.wai/project.yaml — members: ${alias}: ${relPath}`);
+  return { configCreated: false, adopted: [], unadopted: [], as, storage, written: false, creates };
 }
 
 /** Whether a root holds a project's content: an id, an L0 or a lock (stage 8). */
@@ -501,7 +590,7 @@ function scaffoldPart(alias: string, memberDir: string, contained: boolean): Omi
  * else the remote's default branch head, is resolved and fetched, and its
  * content decides what it is; `as` only asserts (a contradiction refuses).
  */
-function createGitMember(alias: string, source: ExternalSource, description: string | undefined, as: string | undefined): MemberCreation {
+function createGitMember(alias: string, source: ExternalSource, description: string | undefined, as: string | undefined, report: boolean): MemberCreation {
   const url = source.git!;
   // Step 7: the commit — given, else the default branch head now.
   const commit = source.commit ?? gitSource.resolve(url, source.ref);
@@ -518,6 +607,14 @@ function createGitMember(alias: string, source: ExternalSource, description: str
   if (kind === 'project') {
     const refusal = audienceRefusal(dir, 'instance');
     if (refusal) throw new WaironError(`Refusing to add the git member "${alias}": ${refusal}. Nothing was written.`);
+  }
+  // A report: the declaration it would write, nothing written.
+  if (report) {
+    const declared = ownGet(projectConfigRepository.load()?.members, alias) !== undefined;
+    return {
+      configCreated: false, adopted: [], unadopted: [], as: kind, storage: 'git', commit, written: false,
+      creates: declared ? [] : [`.wai/project.yaml — members: ${alias}: ${url}#${commit}`],
+    };
   }
   // Step 23: declared at the commit.
   projectConfigRepository.declareMember(alias, {
@@ -688,7 +785,7 @@ export function moveMember(alias: string, newPath: string): void {
       throw new WaironError(`Target directory already exists: ${newDir}`);
     }
     ensureDir(path.dirname(newDir));
-    fs.renameSync(oldDir, newDir);
+    renamePath(oldDir, newDir);
   }
   // Step 10: point the `members` entry at the new path.
   projectConfigRepository.setMemberPath(alias, nextPath);
@@ -715,7 +812,7 @@ function moveSibling(alias: string, currentPath: string, newPath: string, isPart
   if (fs.statSync(oldDir).dev !== fs.statSync(path.dirname(newDir)).dev) {
     throw new WaironError(`Refusing to move the member "${alias}" to ${newDir}: it lies on another volume, and a rename across volumes is not atomic.`);
   }
-  fs.renameSync(oldDir, newDir);
+  renamePath(oldDir, newDir);
   if (isPart) {
     const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
     if (parentId !== null) runWithProjectRoot(newDir, () => projectConfigRepository.setPartOf({ project: parentId, path: toPosixPath(path.relative(newDir, root)) || '.' }));
@@ -843,13 +940,13 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   const moved: string[] = [];
   if (owned.home !== undefined) {
     ensureDir(path.dirname(targetDir));
-    fs.renameSync(owned.home, targetDir);
+    renamePath(owned.home, targetDir);
     moved.push(...specFilesUnder(targetDir));
   }
   for (const file of strays) {
     const to = destinationOf(file);
     ensureDir(path.dirname(to));
-    fs.renameSync(file, to);
+    renamePath(file, to);
     moved.push(to);
     removeEmptyDirsUpTo(path.dirname(file), parentSpecsDir);
   }
@@ -2002,6 +2099,9 @@ const MEMBER_WAI_GROUPS: ReadonlyMap<string, string> = new Map([
   ['topology.yaml', 'derived outputs'],
   ['mcp', 'derived outputs'],
   ['phased_design.md', 'design workbook'],
+  // `wairon init` writes it to keep the spec write lock out of git; it ends with the .wai it ignores for.
+  ['.gitignore', 'derived outputs'],
+  ['.spec-write.lock', 'derived outputs'],
   ['git.json', 'host and producer bindings'],
   ['remote.json', 'host and producer bindings'],
   ['producers.json', 'host and producer bindings'],
@@ -2961,7 +3061,7 @@ function moveTreeInto(src: string, dst: string, skip: ReadonlySet<string>): stri
   }
   files.forEach((file, i) => {
     ensureDir(path.dirname(targets[i]));
-    fs.renameSync(file, targets[i]);
+    renamePath(file, targets[i]);
   });
   return targets;
 }
@@ -3350,7 +3450,7 @@ function moveRenamedSpecs(
     // of. That file is cleared first: the loader refuses to write over another id.
     const oldFile = getImplementationPath(movedImplementation.id);
     if (path.resolve(getImplementationPath(implementationId, movedImplementation.contract)) === path.resolve(oldFile)) {
-      fs.unlinkSync(oldFile);
+      removeFile(oldFile);
     }
     saveImplementationSpec({ ...movedImplementation, id: implementationId, previousIds: traced(movedImplementation.previousIds, movedImplementation.id) });
   }
@@ -3392,13 +3492,13 @@ function moveRenamedSpecs(
 function relocateSpec(kind: 'interface' | 'implementation', spec: InterfaceSpec | ImplementationSpec, file: string, fromDir: string): void {
   if (!fs.existsSync(file) || path.dirname(path.resolve(file)) !== fromDir) return;
   const backup = fs.readFileSync(file);
-  fs.unlinkSync(file);
+  removeFile(file);
   invalidateSpecCache();
   try {
     if (kind === 'interface') saveInterfaceSpec(spec as InterfaceSpec);
     else saveImplementationSpec(spec as ImplementationSpec);
   } catch (e) {
-    fs.writeFileSync(file, backup);
+    restoreFile(file, backup);
     invalidateSpecCache();
     throw e;
   }
@@ -3485,7 +3585,7 @@ function removeSpecFile(file: string, id: string): void {
   } catch {
     return;
   }
-  fs.unlinkSync(file);
+  removeFile(file);
   const specsRoot = path.resolve(aiPathsAt(getProjectRoot()).specsDir());
   for (let dir = path.dirname(path.resolve(file)); dir !== specsRoot && isWithinDir(specsRoot, dir); dir = path.dirname(dir)) {
     if (fs.readdirSync(dir).length > 0) break;
@@ -3531,6 +3631,12 @@ export interface SpecMove {
   rewritten: string[];
   /** What the authoring gate said of the moved specs: a curable boundary finding the move introduces. */
   notices: string[];
+  /** Every file the move writes, relative to the project root: a moved file as `old → new`. */
+  files?: string[];
+  /** Every reference the move respells or re-points. */
+  references?: string[];
+  /** The design errors and warnings the result reports that the tree does not now (the authoring gate's rehearsal). */
+  findings?: string[];
   /** True when this report is a dry run: nothing was written. */
   dryRun?: boolean;
 }
@@ -3590,12 +3696,12 @@ export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, 
   if (kind === 'interface') {
     const current = loadInterfaceSpec(id) ?? (spec as InterfaceSpec);
     const next: InterfaceSpec = { ...current, id: newId, previousIds: traced(current.previousIds, id) };
-    if (path.resolve(getInterfacePath(newId, current.component)) === path.resolve(oldFile)) fs.unlinkSync(oldFile);
+    if (path.resolve(getInterfacePath(newId, current.component)) === path.resolve(oldFile)) removeFile(oldFile);
     saveInterfaceSpec(next);
   } else {
     const current = loadImplementationSpec(id) ?? (spec as ImplementationSpec);
     const next: ImplementationSpec = { ...current, id: newId, previousIds: traced(current.previousIds, id) };
-    if (path.resolve(getImplementationPath(newId, current.contract)) === path.resolve(oldFile)) fs.unlinkSync(oldFile);
+    if (path.resolve(getImplementationPath(newId, current.contract)) === path.resolve(oldFile)) removeFile(oldFile);
     saveImplementationSpec(next);
   }
   invalidateSpecCache();
@@ -3664,11 +3770,14 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
   const fromSpec = subsystems.find((s) => s.id === from);
   const toSpec = subsystems.find((s) => s.id === target)!;
   const names = (ref: string | undefined): boolean => ref !== undefined && movingIds.includes(ref);
-  const exportsMoving = (fromSpec?.publicInterfaces ?? []).filter((e) => names(e.component));
+  // An entry names a moved component by its id, or by one of its contracts alone.
+  const contractIds = contracts.map((i) => i.id);
+  const namesMoved = (e: { component?: string; interface?: string }): boolean => names(e.component) || (e.component === undefined && e.interface !== undefined && contractIds.includes(e.interface));
+  const exportsMoving = (fromSpec?.publicInterfaces ?? []).filter((e) => namesMoved(e));
   const lifecycleMoving = (fromSpec?.lifecycle ?? []).filter((e) => names(e.component));
   const system = loadSystemSpec();
   const l0 = (system?.publicInterfaces ?? []) as unknown as Record<string, any>[];
-  const repointed = l0.filter((e) => e.from === from && names(e.component));
+  const repointed = l0.filter((e) => e.from === from && namesMoved(e));
   // A whole-subsystem re-export of the old subsystem (from alone) no longer reaches a moved export: it is re-exported by item.
   const whole = l0.filter((e) => e.from === from && e.component === undefined && e.typeDef === undefined && e.interface === undefined);
   const added = whole.length > 0 ? exportsMoving.map((e) => ({
@@ -3700,6 +3809,11 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
     saveSystemSpec({ ...system, publicInterfaces: [...l0.map((e) => (repointed.includes(e) ? { ...e, from: target } : e)), ...added] } as unknown as SystemSpec);
   }
   invalidateSpecCache();
+  // Where each moved spec's file lies before the move, for the report.
+  const root = getProjectRoot();
+  const shown = (file: string): string => toPosixPath(path.relative(root, file));
+  const fileOf = (ref: SpecRef): string | undefined => (ref.kind === 'component' ? getComponentPath(ref.id) : ref.kind === 'interface' ? getInterfacePath(ref.id) : getImplementationPath(ref.id));
+  const before = moved.map((ref) => fileOf(ref));
   // An owner before its members: the nested layout moves a pattern's folder with its members inside.
   for (const cid of movingIds) {
     const current = loadComponentSpec(cid);
@@ -3708,12 +3822,57 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
   }
   // Steps 22-23.
   invalidateSpecCache();
-  return report;
+  const files = [
+    ...moved.flatMap((ref, i) => { const was = before[i]; const now = fileOf(ref); return was && now ? [was === now ? shown(now) : `${shown(was)} → ${shown(now)}`] : []; }),
+    ...(exportsMoving.length + lifecycleMoving.length > 0 ? [getSubsystemPath(from), getSubsystemPath(target)].map(shown) : []),
+    ...(repointed.length + added.length > 0 ? [shown(aiPathsAt(root).specsSystem())] : []),
+  ];
+  const references = [
+    ...exportsMoving.map((e) => `${from}: L1 export ${e.as ?? e.interface ?? e.component} → moved to ${target}`),
+    ...lifecycleMoving.map((e) => `${from}: lifecycle entrypoint ${e.component} → moved to ${target}`),
+    ...repointed.map((e) => `system: L0 export ${e.as ?? e.id ?? e.interface ?? e.component} from ${from} → ${target}`),
+    ...added.map((e) => `system: L0 export ${e.as ?? e.component} added from ${target} (the whole-subsystem re-export of ${from} no longer reaches it)`),
+  ];
+  return { ...report, files: [...new Set(files)], references };
 }
 
-/** Steps 14-23 of moveSpec: a type, its export entries and every reference qualified by its subsystem. */
+/** What a rehearsal copy never carries: generated outputs, derived context, an unfinished transaction, the write lock. */
+const REHEARSAL_SKIPS: ReadonlySet<string> = new Set(['generated', 'docs', 'context', 'transactions', '.spec-write.lock']);
+
+/**
+ * core_orchestrator.rehearsalCopy — a private copy of the bound project's
+ * tree in a temporary folder, for a write to be rehearsed on and judged: its
+ * .wai without what no judgement reads, and a specs folder configured
+ * outside .wai at the same place relative to the copy.
+ */
+export function rehearsalCopy(): string {
+  const root = getProjectRoot();
+  const paths = aiPathsAt(root);
+  // Step 1.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rehearsal-'));
+  const wai = paths.root();
+  fs.cpSync(wai, path.join(dir, path.relative(root, wai)), {
+    recursive: true,
+    filter: (src) => !REHEARSAL_SKIPS.has(path.relative(wai, src).split(path.sep)[0]),
+  });
+  const specs = paths.specsDir();
+  const rel = path.relative(root, specs);
+  if (!isWithinDir(wai, specs) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) && fs.existsSync(specs)) {
+    fs.cpSync(specs, path.join(dir, rel), { recursive: true });
+  }
+  // Step 2.
+  return dir;
+}
+
+/** core_orchestrator.discardRehearsal — remove a copy rehearsalCopy made. */
+export function discardRehearsal(directory: string): void {
+  // Step 1.
+  fs.rmSync(directory, { recursive: true, force: true });
+}
+
+/** Steps 14-24 of moveSpec: a type, its export entries and every reference qualified by its subsystem. */
 function moveTypeSpec(id: string, target: string | undefined, subsystems: SubsystemSpec[], dryRun: boolean): SpecMove {
-  // Step 14: every type.
+  // Step 15: every type.
   const types = loadTypeSpecs();
   const cut = id.lastIndexOf('::');
   const qualifier = cut >= 0 ? id.slice(0, cut) : undefined;
@@ -3722,7 +3881,7 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   }
   const bare = cut >= 0 ? id.slice(cut + 2) : id;
   const matching = types.filter((t) => t.id === bare && (qualifier === undefined || t.subsystem === qualifier));
-  // Steps 15-16: it can move there.
+  // Steps 16-17: it can move there.
   if (matching.length === 0) throw new WaironError(`spec-missing: no type has the id "${id}" (a type is addressed by its bare id, or as <subsystem>::<id>).`);
   if (matching.length > 1) throw new WaironError(`ambiguous: ${matching.length} types have the id "${bare}" — address it as <subsystem>::${bare} (${matching.map((t) => qualifiedTypeId(t)).join(', ')}).`);
   const type = matching[0];
@@ -3731,20 +3890,18 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   if (types.some((t) => t !== type && t.id === bare && (t.subsystem ?? '') === (target ?? ''))) {
     throw new WaironError(`id-taken: ${target ? `subsystem "${target}"` : 'the system level'} already holds a type with the id "${bare}".`);
   }
-  const fromSpec = subsystems.find((s) => s.id === from);
-  const names = (ref: string | undefined): boolean => ref !== undefined && (ref === bare || ref === `${from}::${bare}`);
-  const exportsMoving = (fromSpec?.publicInterfaces ?? []).filter((e) => e.component === undefined && names(e.typeDef));
-  const system = loadSystemSpec();
-  const l0 = (system?.publicInterfaces ?? []) as unknown as Record<string, any>[];
-  const repointed = l0.filter((e) => from !== '' && e.from === from && names(e.typeDef));
-  if (target === undefined && exportsMoving.length + repointed.length > 0) {
-    throw new WaironError(`exported: subsystem "${from}" exports type "${bare}" (${exportsMoving.length + repointed.length} entr${exportsMoving.length + repointed.length === 1 ? 'y' : 'ies'}), and a system-level type is published by the L0 alone — move its export entries to the L0 first, or move the type to another subsystem.`);
-  }
-  // Step 17: the rewrites — a type reference naming the type through the old
-  // subsystem names the new one, in whichever spelling it was written.
+  // Step 18: the rewrites — a type reference naming the type through the old
+  // subsystem names the new one, in whichever spelling it was written; and
+  // the export tables follow, raw, so every touched spec keeps its stamp.
+  const root = getProjectRoot();
+  const shown = (file: string): string => toPosixPath(path.relative(root, file));
+  const names = (ref: unknown): boolean => typeof ref === 'string' && (ref === bare || ref === `${from}::${bare}`);
+  const typeEntry = (e: any): boolean => e && typeof e === 'object' && e.component === undefined && e.interface === undefined && names(e.typeDef);
   const ownId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
   const moveToken = movedTypeToken(from, bare, target, ownId);
-  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const specsDir = aiPathsAt(root).specsDir();
+  const references: string[] = [];
+  const files: string[] = [];
   const rewriteAll = (write: boolean): RewrittenSpec[] => {
     if (from === '') return [];
     const out: RewrittenSpec[] = [];
@@ -3756,55 +3913,121 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
         continue;
       }
       const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
-      if (!kind || !respellTypeTokens(raw, moveToken)) continue;
-      if (write) writeYamlFile(file, raw);
-      out.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
+      if (!kind) continue;
+      const respelled: string[] = [];
+      const recordingToken = (token: string): string => {
+        const next = moveToken(token);
+        if (next !== token) respelled.push(`${token} → ${next}`);
+        return next;
+      };
+      if (!respellTypeTokens(raw, recordingToken)) continue;
+      const specId = kind === 'system' ? 'system' : String(raw.id);
+      if (write) {
+        writeYamlFile(file, raw);
+        if (!(kind === 'type' && raw.id === bare)) {
+          references.push(`${specId}: type reference ${[...new Set(respelled)].join(', ')}`);
+          files.push(shown(file));
+        }
+      }
+      out.push({ kind, id: specId });
     }
     return out;
   };
-  const would = rewriteAll(false);
+  // The export tables as their files hold them.
+  const fromFile = from !== '' ? getSubsystemPath(from) : null;
+  const toFile = target !== undefined ? getSubsystemPath(target) : null;
+  const l0File = aiPathsAt(root).specsSystem();
+  const rawOf = (file: string | null): any => (file && fs.existsSync(file) ? readYamlFile(file) : null);
+  const fromDoc = rawOf(fromFile);
+  const l0Doc = rawOf(l0File);
+  const l1Entries = (doc: any): any[] => (Array.isArray(doc?.publicInterfaces) ? doc.publicInterfaces : []);
+  const exportsMoving = l1Entries(fromDoc).filter(typeEntry);
+  const repointed = l0Doc ? l1Entries(l0Doc).filter((e) => from !== '' && e?.from === from && typeEntry(e)) : [];
+  const ownPublished = l0Doc ? l1Entries(l0Doc).filter((e) => from === '' && e?.from === undefined && typeEntry(e)) : [];
   const rewritten = [...new Set([
-    ...would.filter((s) => !(s.kind === 'type' && s.id === bare)).map((s) => s.id),
-    ...(exportsMoving.length > 0 && target !== undefined ? [from, target] : []),
-    ...(repointed.length > 0 ? ['system'] : []),
+    ...rewriteAll(false).filter((s) => !(s.kind === 'type' && s.id === bare)).map((s) => s.id),
+    ...(exportsMoving.length > 0 ? [from] : []),
+    ...(target !== undefined && (exportsMoving.length > 0 || ownPublished.length > 0) ? [target] : []),
+    ...(repointed.length + ownPublished.length > 0 ? ['system'] : []),
   ])];
-  assertSpecsInReach([{ kind: 'type', id: qualifiedTypeId(type) }, ...would], `moving type "${id}"`);
+  assertSpecsInReach([{ kind: 'type', id: qualifiedTypeId(type) }, ...rewritten.map((s) => (s === 'system' ? { kind: 'system', id: 'system' } : { kind: 'subsystem', id: s }))], `moving type "${id}"`);
   const report: SpecMove = { kind: 'type', id: bare, from, to: target ?? '', moved: [{ kind: 'type', id: qualifiedTypeId(type) }], rewritten, notices: [] };
-  // Steps 18-19: a dry run stops here.
+  // Steps 19-20: a dry run stops here.
   if (dryRun) return { ...report, dryRun: true };
-  // Step 20: the references and the export entries.
+  // Step 21: the references, then the export tables — L1 entries moved,
+  // dropped or added, L0 entries re-pointed — each file keeping its stamp.
   rewriteAll(true);
-  invalidateSpecCache();
-  if (exportsMoving.length > 0 && fromSpec && target !== undefined) {
-    const stated = loadSubsystemSpecs().find((s) => s.id === from) ?? fromSpec;
-    saveSpec('subsystem', { ...stated, publicInterfaces: (stated.publicInterfaces ?? []).filter((e) => !(e.component === undefined && names(e.typeDef))) } as SubsystemSpec);
-    invalidateSpecCache();
-    const toSpec = loadSubsystemSpecs().find((s) => s.id === target)!;
-    saveSpec('subsystem', { ...toSpec, publicInterfaces: [...(toSpec.publicInterfaces ?? []), ...exportsMoving.map((e) => ({ ...e, typeDef: bare }))] } as SubsystemSpec);
+  const exportName = (e: any): string => String(e.as ?? e.id ?? bare);
+  if (fromDoc && fromFile && exportsMoving.length > 0) {
+    fromDoc.publicInterfaces = l1Entries(fromDoc).filter((e) => !exportsMoving.includes(e));
+    writeYamlFile(fromFile, fromDoc);
+    files.push(shown(fromFile));
+    for (const e of exportsMoving) references.push(`${from}: L1 export of type ${exportName(e)} dropped${target !== undefined ? ` → moved to ${target}` : ' (a system-level type is published by the L0 alone)'}`);
   }
-  if (system && repointed.length > 0) {
-    const stated = loadSystemSpec() ?? system;
-    const current = (stated.publicInterfaces ?? []) as unknown as Record<string, any>[];
-    saveSystemSpec({ ...stated, publicInterfaces: current.map((e) => (e.from === from && names(e.typeDef) ? { ...e, from: target } : e)) } as unknown as SystemSpec);
+  if (toFile && target !== undefined) {
+    const toDoc = rawOf(toFile);
+    const held = l1Entries(toDoc).some((e) => e?.component === undefined && e?.interface === undefined && (e?.typeDef === bare || e?.typeDef === `${target}::${bare}`));
+    const adding = held ? [] : exportsMoving.length > 0
+      ? exportsMoving.map((e: any) => ({ ...e, typeDef: bare }))
+      : ownPublished.length > 0 ? [{ typeDef: bare }] : [];
+    if (toDoc && adding.length > 0) {
+      toDoc.publicInterfaces = [...l1Entries(toDoc), ...adding];
+      writeYamlFile(toFile, toDoc);
+      files.push(shown(toFile));
+      references.push(`${target}: L1 export of type ${bare} added`);
+    }
+  }
+  if (l0Doc && repointed.length + ownPublished.length > 0) {
+    for (const e of [...repointed, ...ownPublished]) {
+      const before = e.from ?? '(none)';
+      if (target !== undefined) {
+        e.from = target;
+      } else {
+        // Published by the L0 directly now: the public name its L1 entry gave is kept.
+        const l1 = exportsMoving.find((x: any) => x.as !== undefined);
+        if (e.as === undefined && e.id === undefined && l1 && l1.as !== bare) e.as = l1.as;
+        delete e.from;
+      }
+      references.push(`system: L0 export ${exportName(e)} from ${before} → ${e.from ?? '(none)'}`);
+    }
+    writeYamlFile(l0File, l0Doc);
+    files.push(shown(l0File));
   }
   invalidateSpecCache();
-  // Step 21: the type under its new owner, and the file it left.
+  // Step 22: the type under its new owner, its stamp kept, the file it left
+  // removed first (and each folder that leaves empty), restored on a failure.
   const current = loadTypeSpecs().find((t) => t.id === bare && (t.subsystem ?? '') === from) ?? type;
   const oldFile = typeFileOf(bare, current);
   const backup = fs.existsSync(oldFile) ? fs.readFileSync(oldFile) : null;
-  if (backup) fs.unlinkSync(oldFile);
+  if (backup) removeSpecFile(oldFile, bare);
   invalidateSpecCache();
   try {
     const { subsystem: _old, ...rest } = current;
     saveSpec('type', (target !== undefined ? { ...rest, subsystem: target } : rest) as TypeSpec);
   } catch (e) {
-    if (backup) fs.writeFileSync(oldFile, backup);
+    if (backup) restoreFile(oldFile, backup);
     invalidateSpecCache();
     throw e;
   }
-  // Steps 22-23.
+  // Step 23: a move is placement, not an edit — the stamp it had is kept.
   invalidateSpecCache();
-  return report;
+  const newFile = typeFileOf(bare, { ...current, ...(target !== undefined ? { subsystem: target } : { subsystem: undefined }) } as TypeSpec);
+  const written = fs.existsSync(newFile) ? (readYamlFile(newFile) as any) : null;
+  if (written && current.updatedAt && written.updatedAt !== current.updatedAt) {
+    written.updatedAt = current.updatedAt;
+    writeYamlFile(newFile, written);
+  }
+  // The file keeps the line endings it had where it was, as any re-save does.
+  if (backup && fs.existsSync(newFile)) {
+    const crlf = backup.includes('\r\n');
+    const text = fs.readFileSync(newFile, 'utf8');
+    const spelled = crlf ? text.replace(/\r?\n/g, '\r\n') : text.replace(/\r\n/g, '\n');
+    if (spelled !== text) restoreFile(newFile, Buffer.from(spelled, 'utf8'));
+  }
+  invalidateSpecCache();
+  files.unshift(path.resolve(oldFile) === path.resolve(newFile) ? shown(newFile) : `${shown(oldFile)} → ${shown(newFile)}`);
+  // Step 24.
+  return { ...report, files: [...new Set(files)], references };
 }
 
 /** The type-position keys a qualified type reference is respelled in; prose and rename traces never are. */

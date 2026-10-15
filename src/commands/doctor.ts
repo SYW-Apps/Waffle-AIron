@@ -33,6 +33,8 @@ import {
   // The filename migration, the chained-subproject repair and the pack
   // diagnosis are sdd_core's too, and reach it the same way.
   findLegacySpecFiles,
+  // The spec tree's write lock as its file stands — reported when present.
+  inspectLock,
   findChainingSubprojectsMissingConfig,
   backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
@@ -67,7 +69,7 @@ import type { FamilyMigrationReport, MigrationPlan, RecoveredTransaction } from 
 // The stage-4 upgrade report: what the owner's gate changed in each verdict.
 import * as verdictChanges from './verdict-changes.js';
 import type { UpgradeReport } from './verdict-changes.js';
-import type { ReachabilityMigrationPlan, ReachRewrite } from '../core/index.js';
+import type { ReachabilityMigrationPlan, ReachRewrite, TreeLockState } from '../core/index.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -197,6 +199,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // Transactions: each unfinished family migration under this root, as an
   // error pointing at --fix; silent when there is none.
   reportPendingTransactions(tally);
+
+  // Write lock: a .wai/.spec-write.lock that is present, with its holder;
+  // silent when there is none.
+  reportTreeLock(tally);
 
   const hasSystemSpec = pathExists(AI_PATHS.specsSystem());
   if (hasSystemSpec) {
@@ -1255,6 +1261,27 @@ function reportPendingTransactions(tally: Tally): void {
   for (const t of pending) {
     line(tally, 'error', `Unfinished family migration ${t.id} (${t.verb}, coordinator phase ${t.phase}; owners: ${t.owners.map((o) => path.relative(getProjectRoot(), o) || '.').join(', ')}) — run \`wairon doctor --fix\` to roll it back`);
   }
+}
+
+/** Plain doctor: the spec tree's write lock, when its file is present — who holds it, and whether the next write waits or breaks it. */
+function reportTreeLock(tally: Tally): void {
+  let lock: TreeLockState | null;
+  try {
+    lock = inspectLock();
+  } catch {
+    return;
+  }
+  if (!lock) return;
+  const rel = path.relative(getProjectRoot(), lock.file).split(path.sep).join('/');
+  const age = `${Math.round(lock.ageMs / 1000)}s old`;
+  if (lock.holder === 'live' && !lock.breaks) {
+    line(tally, 'warn', `${rel} is held by process ${lock.pid} (${age}): a spec write is under way, and every other write waits for it. Run doctor again once it finishes.`);
+    return;
+  }
+  const why = lock.holder === 'unreadable'
+    ? 'no holder can be read from it (a foreign or truncated file)'
+    : lock.holder === 'gone' ? `the process it names (${lock.pid}) is gone` : `process ${lock.pid} has held it longer than any write takes`;
+  line(tally, 'warn', `${rel} is present (${age}) and ${why}: ${lock.breaks ? 'the next spec write breaks it and goes ahead' : 'the next spec write breaks it once it is 10s old'}. Nothing is lost — it is a lock, not a spec; deleting it by hand is safe when no wairon session is writing.`);
 }
 
 /** Step 19: the person's answer — --yes, a terminal prompt, or no when there is no terminal to ask. */

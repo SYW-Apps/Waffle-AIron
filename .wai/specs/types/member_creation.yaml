@@ -47,8 +47,19 @@ fields:
     type: string
     description: 'git: the commit the member was pinned at (the source''s ref head when it was created).'
     optional: true
+  - name: written
+    type: bool
+    description: 'False on a report: what is answered is the plan, and nothing was written.'
+    optional: true
+  - name: creates
+    type: list<string>
+    description: >-
+      A report's plan: every file or folder creating the member would write — its specs folder, its
+      configuration, its L0, the declaration in this project's members — each named with where it
+      lies; empty when it is already in place and declared.
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 symbol: MemberCreation
 createdAt: '2026-09-29T15:51:12.579Z'
-updatedAt: '2026-10-04T23:39:05.418Z'
+updatedAt: '2026-10-09T17:03:32.274Z'

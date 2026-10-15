@@ -67,7 +67,10 @@ methods:
         label: release-carry
         description: >-
           Refresh the record's release stamp when the own approval carried a change of the release
-          over (cli_lock_adapter.restampRelease) — no review is asked for
+          over and every direct member stands as the record pinned it
+          (cli_lock_adapter.restampRelease, given the members and the gate) — no review is asked
+          for; a member that moved at its own root since the record falls through to the ordinary
+          summary below, which reports it
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: restampRelease
@@ -713,31 +716,47 @@ methods:
           lock unscoped?
         type: branch
         condition: the own entry carries a carried release verdict and no --subsystem was given
-        onFalseStep: 6
+        onFalseStep: 7
       - stepNumber: 2
+        description: >-
+          Is every direct member judged now exactly as the record pinned it — its state, subject,
+          kind, project id and (for a part) content digest, the commit it was read at aside? A
+          member drifted at its own root since the record (an edit nobody locked there) leaves the
+          member's own subject — and so the gate identity — unchanged, so the release verdict alone
+          cannot see it: the restamp would record the member approved while it is drifted. Then no
+          restamp: the ordinary path judges it, reports it drifted with the bottom-up warning, and
+          records it as it stands
+        type: branch
+        condition: a direct member's pin as judged now differs from the one on record
+        onTrueStep: 7
+        onFalseStep: 3
+      - stepNumber: 3
         description: Read the record on file
         type: call
         targetComponent: approval_portal
         targetMethod: readLockRecord
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Refresh its release stamp WITHOUT a re-approval: stateId = the captured identity,
           gateParts = its parts, validatorVersion = this release and `restamped: {at, fromVersion,
           toVersion, by: wairon lock, subject}`, where subject is the approval subject the record
           had (lock_record.approvalSubject: an earlier restamp's subject, else its stateId) — what a
-          parent keeps pinning, so the restamp never reads as a re-approval one level up; lockedAt,
-          lockedBy, specs, members and results kept — the approval stays the approver's
+          parent keeps pinning, so the restamp never reads as a re-approval one level up; the
+          evidence recorded BESIDE the approval refreshed from the gate just run — its code results
+          (analyzer included) and its design counts — so the record never tells one story for the
+          stamp and another for the code; lockedAt, lockedBy, specs and members kept — the approval
+          stays the approver's
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Persist the refreshed record — the only file this writes — and say so in one line
         type: call
         targetComponent: approval_portal
         targetMethod: writeLockRecord
-      - stepNumber: 5
+      - stepNumber: 6
         description: Answer the refreshed record
         type: return
         outcome: LockRecord
-      - stepNumber: 6
+      - stepNumber: 7
         description: Nothing to refresh
         type: return
         outcome: none
@@ -791,4 +810,4 @@ methods:
         outcome: ok
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-09T00:32:57.300Z'
+updatedAt: '2026-10-09T17:36:15.300Z'

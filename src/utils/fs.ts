@@ -14,6 +14,40 @@ export function ensureDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+// ---------------------------------------------------------------------------
+// The tree write guard — the one seam every write into a project's .wai tree
+// passes, whichever command, tool, migration or server makes it.
+//
+// The spec store installs it (src/core/spec-files.ts): before a file inside a
+// .wai tree is written, renamed or removed it takes that tree's cross-process
+// write lock (unless this process already holds it) and refuses a spec
+// document that changed on disk since this process read it; after a read or a
+// write it is told what the file held. These helpers know nothing of specs —
+// they only call the guard, so no writer can step around it by writing YAML
+// through the shared helper instead of the store.
+// ---------------------------------------------------------------------------
+
+let treeFileGuard: {
+  enter(file: string): () => void;
+  noteRead(file: string, text: string): void;
+  noteWritten(file: string, text: string | null): void;
+} | null = null;
+
+/** Install (or, with null, remove) the guard the spec store keeps over every .wai write. */
+export function installTreeFileGuard(guard: typeof treeFileGuard): void {
+  treeFileGuard = guard;
+}
+
+/** Run one mutation of `files` under the guard, released whatever the mutation does. */
+function guarded(files: string[], mutate: () => void): void {
+  const leave = files.map((f) => treeFileGuard?.enter(f));
+  try {
+    mutate();
+  } finally {
+    for (const release of leave.reverse()) release?.();
+  }
+}
+
 /**
  * Write a file, ensuring the parent directory exists first. The text keeps the
  * file's line endings (see withLineEndings): CRLF stays CRLF, and a new file
@@ -21,7 +55,11 @@ export function ensureDir(dirPath: string): void {
  */
 export function writeFile(filePath: string, content: string): void {
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, withLineEndings(filePath, content), 'utf-8');
+  const text = withLineEndings(filePath, content);
+  guarded([filePath], () => {
+    fs.writeFileSync(filePath, text, 'utf-8');
+    treeFileGuard?.noteWritten(filePath, text);
+  });
 }
 
 /**
@@ -37,8 +75,41 @@ export function writeFileIfChanged(filePath: string, content: string): boolean {
     if (existing === text) return false;
   }
   ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, text, 'utf-8');
+  guarded([filePath], () => {
+    fs.writeFileSync(filePath, text, 'utf-8');
+    treeFileGuard?.noteWritten(filePath, text);
+  });
   return true;
+}
+
+/** Rename a file or a folder, under the guard of both places. */
+export function renamePath(from: string, to: string): void {
+  guarded([from, to], () => {
+    fs.renameSync(from, to);
+    treeFileGuard?.noteWritten(from, null);
+    treeFileGuard?.noteWritten(to, null);
+  });
+}
+
+/** Delete a file, under the guard of its tree; absent is no error. */
+export function removeFile(filePath: string): void {
+  guarded([filePath], () => {
+    try {
+      fs.unlinkSync(filePath);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+    }
+    treeFileGuard?.noteWritten(filePath, null);
+  });
+}
+
+/** Write raw bytes back to a file (a restore), under the guard of its tree. */
+export function restoreFile(filePath: string, bytes: Buffer): void {
+  ensureDir(path.dirname(filePath));
+  guarded([filePath], () => {
+    fs.writeFileSync(filePath, bytes);
+    treeFileGuard?.noteWritten(filePath, bytes.toString('utf-8'));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -187,11 +258,14 @@ export function withLineEndings(filePath: string, content: string): string {
  * Read a file as a string, or return null if it doesn't exist.
  */
 export function readFileOrNull(filePath: string): string | null {
+  let text: string;
   try {
-    return fs.readFileSync(filePath, 'utf-8');
+    text = fs.readFileSync(filePath, 'utf-8');
   } catch {
     return null;
   }
+  treeFileGuard?.noteRead(filePath, text);
+  return text;
 }
 
 /**

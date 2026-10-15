@@ -36,6 +36,20 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: introducedFindings
+  - name: validateProject
+    narrative:
+      - stepNumber: 1
+        description: Call validateProject on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateProject
+  - name: listRules
+    narrative:
+      - stepNumber: 1
+        description: Call listRules on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: listRules
 status: complete
 createdAt: '2026-09-18T21:13:03.714Z'
-updatedAt: '2026-10-08T18:50:39.927Z'
+updatedAt: '2026-10-09T17:09:39.031Z'

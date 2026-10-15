@@ -1,4 +1,6 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
 // spec_validator: the owner's gate every selected project runs, and the gate
@@ -1009,9 +1011,16 @@ export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVer
     // Steps 9-10: stale with the one sentence, never re-validated.
     return { from, to: WAIRON_VERSION, carried: false, reason: unprovenReason(record, stamp, problem) };
   }
-  // Steps 11-12: decided once per record and identity in a process.
+  // Steps 11-12: decided once per record and identity — in this process, or
+  // by an earlier command, whose verdict the user cache keeps.
   const key = `${root}|${record.stateId.digest}|${current.digest}`;
   if (releaseVerdicts.has(key)) return releaseVerdicts.get(key) ?? undefined;
+  const diskKey = verdictCacheKey(root, record, current);
+  const remembered = readCachedVerdict(root, diskKey);
+  if (remembered !== null) {
+    releaseVerdicts.set(key, remembered);
+    return remembered;
+  }
   if (revalidating.has(root)) return undefined;
   revalidating.add(root);
   try {
@@ -1028,10 +1037,71 @@ export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVer
         findings: blocking.slice(0, 5).map((i) => `${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.replace(/\.\s*$/, '')}`),
       };
     releaseVerdicts.set(key, verdict);
+    writeCachedVerdict(root, diskKey, verdict);
     return verdict;
   } finally {
     revalidating.delete(root);
   }
+}
+
+// ---------------------------------------------------------------------------
+// The release verdict kept across commands. Re-validation is a whole owner's
+// gate run (a second code-model build included), and every status, validate
+// and lock-check of an upgraded project asked for it again for as long as the
+// approval carried the older stamp. One small file per project root in
+// wairon's user cache (WAIRON_CACHE_DIR, else the OS user cache) — never in
+// the tree, so nothing to ignore or commit — holds the last verdict with the
+// key it answers: the root, the record's identity, stamp and gate parts, the
+// running release and build, and the current gate identity, which covers the
+// design and every input the verdict reads. Any of them moving misses.
+// ---------------------------------------------------------------------------
+
+/** This build's own stamp — the entry script this process runs, which a rebuild writes anew — so a rebuilt wairon of one version never reads an older build's verdict. */
+const BUILD_STAMP: string = (() => {
+  try {
+    return String(fs.statSync(process.argv[1] ?? '').mtimeMs);
+  } catch {
+    return 'unknown';
+  }
+})();
+
+/** The key a cached verdict answers. */
+function verdictCacheKey(root: string, record: LockRecord, current: StateId): string {
+  return crypto.createHash('sha256').update(JSON.stringify([
+    root, record.stateId.algorithm, record.stateId.digest, record.validatorVersion ?? null, record.gateParts ?? null,
+    WAIRON_VERSION, BUILD_STAMP, current.algorithm, current.digest,
+  ])).digest('hex');
+}
+
+/** The cache file of one project root. */
+function verdictCacheFile(root: string): string {
+  const setting = process.env.WAIRON_CACHE_DIR ?? '';
+  const base = setting !== ''
+    ? path.resolve(setting)
+    : path.join(process.platform === 'win32'
+      ? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')
+      : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Caches') : process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'), 'wairon');
+  const name = crypto.createHash('sha256').update(root.toLowerCase()).digest('hex').slice(0, 32);
+  return path.join(base, 'release-verdicts', `${name}.json`);
+}
+
+/** The verdict an earlier command recorded under exactly this key, or null. Never fails: a missing or unreadable cache is a miss. */
+function readCachedVerdict(root: string, key: string): ReleaseVerdict | null {
+  try {
+    const held = JSON.parse(fs.readFileSync(verdictCacheFile(root), 'utf8')) as { key?: unknown; verdict?: ReleaseVerdict };
+    return held.key === key && held.verdict && typeof held.verdict.carried === 'boolean' ? held.verdict : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Record the verdict for the next command. Never fails: a cache that cannot be written only costs a re-validation. */
+function writeCachedVerdict(root: string, key: string, verdict: ReleaseVerdict): void {
+  try {
+    const file = verdictCacheFile(root);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ key, verdict }));
+  } catch { /* the next command re-validates */ }
 }
 
 /** Step 5: why a newer or invalid release stamp is no change of the release this wairon may judge. */

@@ -1103,11 +1103,17 @@ methods:
       - stepNumber: 11
         label: cached
         description: >-
-          Was this record already judged against this identity in this process? Re-validation is a
-          whole owner's gate run, and a status, a lock-check or a validate asks for the same entry
-          more than once
+          Was this record already judged against this identity — in this process, or by an earlier
+          command? Re-validation is a whole owner's gate run (a second code-model build included),
+          and every status, validate and lock-check of an upgraded project asks for the same entry
+          for as long as the approval carries the older stamp. The verdict is kept in memory and in
+          one small file per project root in wairon's user cache (WAIRON_CACHE_DIR, else the OS user
+          cache — never in the tree, so nothing to ignore or commit), keyed by the root, the
+          record's identity, stamp and gate parts, the running release and build, and the current
+          gate identity, which covers the design and every input the verdict reads: any of them
+          moving misses, and a missing or unreadable cache is a miss
         type: branch
-        condition: a verdict is cached for this root, record identity and current identity
+        condition: a verdict is kept for this root, record identity and current identity
         onFalseStep: 13
       - stepNumber: 12
         description: Answer the cached verdict
@@ -1140,8 +1146,8 @@ methods:
       - stepNumber: 17
         description: >-
           Carried: {from: the record's validatorVersion, to: this release, carried: true} — approved
-          under the old release, re-validated under this one: still approved. Nothing is written;
-          cached
+          under the old release, re-validated under this one: still approved. Nothing is written
+          into the project; kept in memory and in the user cache
         type: return
         outcome: carried
       - stepNumber: 18
@@ -1158,4 +1164,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-09T11:39:17.465Z'
+updatedAt: '2026-10-09T17:38:41.497Z'

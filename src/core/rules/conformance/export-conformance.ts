@@ -1,5 +1,10 @@
-import { importBindingOf, pathKey, resolveImport, routerLinkage } from '../../../models/index.js';
+import { importBindingOf, pathKey, resolveImport, routerLinkage, type FunctionBodyFact, type SourceFileFacts } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+
+/** The bodies a file holds under a name, each with the class or object literal it is a member of. */
+function ownBodies(facts: SourceFileFacts, name: string): FunctionBodyFact[] {
+  return facts.functionBodies && Object.prototype.hasOwnProperty.call(facts.functionBodies, name) ? facts.functionBodies[name] : [];
+}
 
 // ---------------------------------------------------------------------------
 // Code↔spec for the SURFACE: what does a file publish that nobody promised?
@@ -110,7 +115,7 @@ export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
   judges: 'code',
   description:
-    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk). Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real.",
+    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real.",
   codes: [
     {
       code: 'UNDECLARED_EXPORT',
@@ -213,17 +218,26 @@ export const exportConformanceRule: SddRule = {
       // module alone) is published by THAT module: the name must be one of its
       // exports, and a module named alone must be there to read.
       const linkage = routerLinkage(handle);
+      // A class's method (`Class.method`) is reached through the class it is
+      // a member of: the class is the export, and it must hold the method.
+      const exported = linkage.owner ?? linkage.name;
+      const publishes = (facts: SourceFileFacts): boolean => exported !== undefined && facts.exportedNames.includes(exported)
+        && (linkage.owner === undefined || ownBodies(facts, linkage.name as string).some(body => body.container === linkage.owner));
+      const entryTold = linkage.owner !== undefined ? `a class "${linkage.owner}" with a method "${linkage.name}"` : `"${linkage.name}"`;
       if (linkage.file) {
         const file = pathKey(linkage.file);
         const facts = code.factsAt(file);
         const missing = !facts || facts.status === 'missing';
         const exactHere = !!facts && facts.status === 'analyzed' && facts.analysisGrade === 'exact';
-        if (!missing && (!exactHere || linkage.name === undefined || facts!.exportedNames.includes(linkage.name))) continue;
+        if (!missing && (!exactHere || linkage.name === undefined || publishes(facts!))) continue;
         ctx.addIssue(
           'warning',
           'UNREALIZED_EXPORT_HANDLE',
           `Portal "${portal.id}" names its router "${handle}" (implementation "${implementation.id}"), but `
-          + (missing ? `"${file}" is not on disk.` : `"${file}" exports no "${linkage.name}".`)
+          + (missing ? `"${file}" is not on disk.` : `"${file}" exports no ${entryTold}.`)
+          + (missing && /^[A-Z][A-Za-z0-9_$]*$/.test(file) && linkage.name !== undefined && linkage.owner === undefined
+            ? ` A class's method is written with a dot, not a \`#\`: \`${file}.${linkage.name}\` (and \`<module>#${file}.${linkage.name}\` in another module).`
+            : '')
           + ' A `router` names the entry or the route table whatever serves the Portal hands its requests to, so one '
           + 'nobody can import promises a route nobody can reach, and it allows nothing either. Name an export the '
           + 'module actually has, or drop `router` if the Portal is served method by method.',
@@ -237,18 +251,28 @@ export const exportConformanceRule: SddRule = {
         const facts = code.factsAt(file);
         return !!facts && facts.status === 'analyzed' && facts.analysisGrade === 'exact';
       });
-      const exporters = exact.filter(file => code.factsAt(file)!.exportedNames.includes(handle));
-      for (const file of exporters) promise(file, handle);
+      const exporters = exact.filter(file => publishes(code.factsAt(file)!));
+      for (const file of exporters) promise(file, exported);
       if (exporters.length > 0 || exact.length === 0 || exact.length < files.length) continue;
+      // What the name IS in those files, where it is there at all: a method
+      // of an exported class (named `Class.method`), or a declaration no
+      // export publishes (export it first).
+      const plain = linkage.owner === undefined ? linkage.name as string : undefined;
+      const classes = plain === undefined ? [] : [...new Set(exact.flatMap(file => ownBodies(code.factsAt(file)!, plain)
+        .flatMap(body => (body.container !== undefined && !body.nested && code.factsAt(file)!.exportedNames.includes(body.container) ? [`${body.container}.${plain}`] : []))))].sort();
+      const declaredHere = plain !== undefined && classes.length === 0 && exact.some(file => code.declarationsAt(file).has(plain));
+      const hint = classes.length > 0
+        ? ` "${plain}" is a method of an exported class there: name it ${classes.map(spelling => `\`${spelling}\``).join(' or ')}.`
+        : declaredHere ? ` "${plain}" is declared there but not exported: export it to name it.` : '';
       ctx.addIssue(
         'warning',
         'UNREALIZED_EXPORT_HANDLE',
         `Portal "${portal.id}" names its router "${handle}" (implementation "${implementation.id}"), but `
-        + `${files.map(f => `"${f}"`).join(', ')} — the file(s) realizing "${portal.id}" — export no such name. A `
+        + `${files.map(f => `"${f}"`).join(', ')} — the file(s) realizing "${portal.id}" — export no ${linkage.owner !== undefined ? entryTold : 'such name'}.${hint} A `
         + '`router` names the entry whatever serves the Portal calls to hand it its requests, published by the '
         + 'portal\'s own files, so one they do not publish promises a route nobody can import. It allows nothing '
         + 'either: every export of those files is still read against the contracts. Name the entry the portal\'s '
-        + 'file actually exports, export it, or drop `router` if the Portal is served method by method.',
+        + 'file actually exports (a class\'s method as `Class.method`), export it, or drop `router` if the Portal is served method by method.',
         implementation.id,
         ctx.isImplementationDraft(implementation) || ctx.isComponentDraft(portal.id),
       );

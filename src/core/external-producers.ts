@@ -459,9 +459,12 @@ function recordedMemberSubjects(root: string): Map<string, string> {
  * pinned) with its root, the bound project's usage of it, and its tree at the
  * approval it is judged against: the commit that introduced the member
  * approval the bound project's lock records for it, else the member's own last
- * committed approval. Never on a hosted request. No network.
+ * committed approval. `recordedIn` names another tree of the bound project
+ * whose lock is read for those records instead — its tree at an earlier
+ * revision (`surface diff`'s baseline), so a member is read as THAT approval
+ * recorded it. Never on a hosted request. No network.
  */
-export function memberRevisions(): MemberRevision[] {
+export function memberRevisions(recordedIn?: string): MemberRevision[] {
   // Steps 1-2: a hosted request reads no folder outside its own records.
   if (getHostedLookup() !== null) return [];
   const bound = path.resolve(getProjectRoot());
@@ -469,8 +472,8 @@ export function memberRevisions(): MemberRevision[] {
   const family = graph();
   const own = consumerNode(family, bound);
   if (!own) return [];
-  // Step 4: the subjects its lock records.
-  const subjects = recordedMemberSubjects(bound);
+  // Step 4: the subjects its lock records — or the lock of the tree named.
+  const subjects = recordedMemberSubjects(recordedIn ?? bound);
   const out: MemberRevision[] = [];
   // Steps 5-10: each live member.
   for (const node of family.nodes) {

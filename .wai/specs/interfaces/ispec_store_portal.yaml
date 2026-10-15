@@ -117,6 +117,21 @@ methods:
         type: bool
         description: Answer the plan and write nothing
         optional: true
+  - name: rehearsalCopy
+    description: >-
+      Forward to core_orchestrator.rehearsalCopy: a private copy of the bound project's tree to
+      rehearse a write on
+    signature: 'rehearsalCopy(): string'
+    returns: string
+    params: []
+  - name: discardRehearsal
+    description: 'Forward to core_orchestrator.discardRehearsal: remove a rehearsal copy'
+    signature: 'discardRehearsal(directory: string): void'
+    returns: void
+    params:
+      - name: directory
+        type: string
+        description: The copy's root
 status: complete
 createdAt: '2026-09-25T17:33:00.554Z'
-updatedAt: '2026-10-09T00:26:37.983Z'
+updatedAt: '2026-10-09T17:09:29.029Z'

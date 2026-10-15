@@ -453,10 +453,24 @@ methods:
       Each live member of the bound project with its root, the bound project's usage of it and its
       tree at the approval it is judged against (the one the bound project's lock records, else the
       member's own last), materialized read-only. Dispatched to the external-producers workflow.
-    signature: 'memberRevisions(): list<member_revision>'
+    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
     returns: list<member_revision>
-    params: []
+    params:
+      - name: recordedIn
+        type: string
+        description: >-
+          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
+          whose lock records the member approvals to read instead of the bound root's — surface
+          diff's baseline reads each member as THAT approval recorded it
+        optional: true
     effect: io
+  - name: inspectLock
+    description: >-
+      Forward to spec_loader.inspectLock: the bound project's spec-tree write lock as its file
+      stands — holder, age, whether it is live and whether the next write breaks it — or none
+    signature: 'inspectLock(): TreeLockState?'
+    returns: TreeLockState?
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T12:16:39.551Z'
+updatedAt: '2026-10-09T16:55:48.192Z'

@@ -203,8 +203,8 @@ methods:
       method the contract does not declare, or an endpoint the schema rejects — each before anything
       is saved.
     signature: >-
-      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool):
-      SpecChangeReport
+      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool, search?:
+      list<string>): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: interfaceId
@@ -220,6 +220,12 @@ methods:
         description: >-
           Answer the change report the binding would give — the gate and the writer's parse included
           — and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, read when a binding moves a
+          route: the move names the consumers it breaks, as a rename does
         optional: true
   - name: setPublicInterfaces
     description: >-
@@ -551,4 +557,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-09T11:36:10.504Z'
+updatedAt: '2026-10-09T16:51:02.091Z'

@@ -318,6 +318,14 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
+          When a binding replaces a route the contract already states, read the projects that
+          consume the bound project before anything moves — the family in reach and the searched
+          folders — each with what its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 5
+        description: >-
           Bind them through the authoring client adapter as one delta naming each method with its
           endpoint, forwarding the caller's dry run and answering for sdd_set_endpoints, so the
           write is judged and reported like any other and a contract of another project is refused
@@ -325,7 +333,23 @@ methods:
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: updateSpecGated
-      - stepNumber: 5
+      - stepNumber: 6
+        description: >-
+          When the write moved a route a method already had (a change under its endpoint), read the
+          public names publishing those methods — the route a consumer's client spells moved under
+          each
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: publishedUsesOf
+      - stepNumber: 7
+        description: >-
+          Name the consumers the move breaks, as a rename names them: each consumer read above
+          narrowed to the published names and methods it reaches (external_consumer.narrowedToUses),
+          a contract it depends on as a whole included — carried on the report as published, breaks
+          and rerouted, so the text says the route moved (a client spelling the old route breaks
+          until it follows), never that something was removed
+        type: local
+      - stepNumber: 8
         description: >-
           Answer with the change report: every binding the write set or changed, and that nothing
           changed when every binding already held
@@ -382,7 +406,9 @@ methods:
       - stepNumber: 4
         description: >-
           Refuse, naming the candidate kinds when several levels hold the id (pass kind to choose
-          one) or saying that no level holds it
+          one) or saying that no level holds it — unless no level holds it and the id is an
+          external's `alias::name`: then the pin's own kind answers (step 18), a contract entry or a
+          type, so a pinned read never needs a kind
         type: return
         outcome: kind not inferable
       - stepNumber: 5
@@ -470,7 +496,9 @@ methods:
         description: >-
           No spec of this tree holds it: when the id is `alias::name` and the alias names an
           external of this project, read the spec from the pinned snapshot this project holds of it
-          — the contract entry for a component or an interface, the exported type for a type
+          — the contract entry for a component, an interface or no kind, the type for a type (the
+          exported one, else one the pinned shapes carry, with the public names carrying it named in
+          the marker)
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: readPinnedSpec
@@ -478,8 +506,9 @@ methods:
         description: >-
           Answer the pinned read when the pin holds the name — the pinned entry as the spec, the
           pinnedSnapshot marker beside it (alias, producer, snapshot file, StateId), read-only: an
-          external is written from its own root — else refuse a read of a spec that does not exist,
-          naming the kind and the id asked for
+          external is written from its own root; narrowed to named methods as a spec of this tree is
+          (step 20: a name the entry does not hold refused, a partial-result marker) — else refuse a
+          read of a spec that does not exist, naming the kind and the id asked for
         type: return
       - stepNumber: 20
         description: >-
@@ -925,4 +954,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-09T11:34:04.166Z'
+updatedAt: '2026-10-09T16:51:16.901Z'

@@ -17,16 +17,16 @@ import {
   type ExternalSource,
   type NetworkDeclaration,
 } from '../models/project.js';
-import { ensureDir, listFiles, pathExists, getProjectRoot, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
+import { ensureDir, listFiles, pathExists, getProjectRoot, renamePath, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, writeLockRecord as persistLockRecord, type LockRecord } from './lockfile.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { listSpecFiles, lockTree as lockTreeFile, readSpecFile, removeSpecFile, unlockTree as unlockTreeFile, writeSpecFile } from './spec-files.js';
+import { inspectLock as inspectLockFile, listSpecFiles, lockTree as lockTreeFile, readSpecFile, removeSpecFile, unlockTree as unlockTreeFile, writeSpecFile, type TreeLockState } from './spec-files.js';
 // git_source_adapter: a git part is read from the content-addressed fetch cache at its pinned commit (stage 8).
 import * as gitSource from './adapters/git-source.js';
 import * as crypto from 'crypto';
-import { WaironError } from '../utils/errors.js';
+import { SpecWriteConflictError, WaironError } from '../utils/errors.js';
 // TYPE-ONLY, and it has to be: the report NAMES the tests a write invalidated,
 // while the search that finds them belongs to the validator. A runtime import
 // here would be the store reaching into the rule engine that already reads it
@@ -2066,7 +2066,7 @@ function moveComponentFolder(fromDir: string, toDir: string): boolean {
   if (path.normalize(fromDir) === path.normalize(toDir)) return false;
   if (!fs.existsSync(fromDir) || fs.existsSync(toDir)) return false; // don't clobber
   ensureDir(path.dirname(toDir));
-  fs.renameSync(fromDir, toDir);
+  renamePath(fromDir, toDir);
   return true;
 }
 
@@ -2339,6 +2339,11 @@ export interface PinnedSpecRead {
   stateId?: string;
   /** The snapshot's entry exactly as pinned. */
   spec: unknown;
+  /**
+   * Set for a type the producer does not export under its own name, read from
+   * the closure its pinned shapes carry: the public names whose shapes reach it.
+   */
+  carriedBy?: string[];
 }
 
 export interface SpecChangeReport {
@@ -2404,6 +2409,12 @@ export interface SpecChangeReport {
   published?: ExportUse[];
   /** The consumers whose specs call a removed method on a published name. Filled by the door that read them. */
   breaks?: ExternalConsumer[];
+  /**
+   * True when `published` names the methods whose wire endpoint the write
+   * moved (sdd_set_endpoints), not methods it removed: a client spelling the
+   * old route breaks until it follows. Filled by the door that read them.
+   */
+  rerouted?: boolean;
 }
 
 /**
@@ -4240,7 +4251,14 @@ export class SpecWorkspace {
   private writeHome(file: string, document: unknown, kind: SpecDocumentKind): void {
     this.assertHomeWritable(file);
     this.assertHomeInReach(file, kind, document);
-    writeSpecFile(file, document);
+    try {
+      writeSpecFile(file, document);
+    } catch (e) {
+      // Another session wrote the file since this one read it: drop every
+      // cached read, so the next attempt starts from the tree as it stands.
+      if (e instanceof SpecWriteConflictError) registryInvalidateCache();
+      throw e;
+    }
   }
 
   /** The file store's delete, pruning up to the specs folder the file lives in (its part's, for a part's file). */
@@ -4269,6 +4287,19 @@ export class SpecWorkspace {
       if (deepest === null || root.namespace.length > deepest.length) deepest = root.namespace;
     }
     return deepest;
+  }
+
+  /**
+   * Whether a stored key may answer a path built for `id`: it is in the same
+   * project (the same deepest member key, '' for the bound project's own), or
+   * — the deprecated form only — `id` is bare and the key is a legacy L1
+   * mount's, whose cross-tree writes are kept until `doctor --fix` rewrites it.
+   */
+  private inHomeOf(key: string, id: string): boolean {
+    const home = this.getSubprojectPrefix(key) ?? '';
+    const wanted = this.getSubprojectPrefix(id) ?? '';
+    if (home === wanted) return true;
+    return wanted === '' && this.rootCovering(home)?.legacyMount != null;
   }
 
   /** The member root whose key is the namespace, or its longest prefix. */
@@ -4457,7 +4488,7 @@ export class SpecWorkspace {
     const entry = kind === 'type' ? undefined : pin.snapshot.interfaces.find((e) => e.id === name);
     if (entry) return { ...pin.base, kind: 'interface', id: name, spec: entry };
     const definition = kind === undefined || kind === 'type' ? pinnedTypeDefinition(pin.snapshot, name) : undefined;
-    return definition ? { ...pin.base, kind: 'type', id: name, spec: definition } : null;
+    return definition ? { ...pin.base, kind: 'type', id: name, ...definition } : null;
   }
 
   /** The pinned snapshot of the bound project's external `alias` — none for a member's alias, an undeclared one, or an absent or unreadable pin. */
@@ -4506,9 +4537,11 @@ export class SpecWorkspace {
       }
     }
 
-    // Suffix match for bare IDs matching a unique qualified subsystem
+    // A bare id is the bound project's own: ids are per project, so one a
+    // member also holds names a NEW local subsystem, never the member's file.
+    // Only a legacy L1 mount (deprecated) still answers a bare id by suffix.
     const suffix = `::${id}`;
-    const matches = Object.keys(index.paths.subsystem).filter(key => key.endsWith(suffix));
+    const matches = Object.keys(index.paths.subsystem).filter(key => key.endsWith(suffix) && this.inHomeOf(key, id));
     if (matches.length === 1) {
       return index.paths.subsystem[matches[0]];
     }
@@ -4538,8 +4571,10 @@ export class SpecWorkspace {
     }
 
     // Owned members nest one level deep inside their owning pattern's folder
-    // (patterns never own patterns, so it is exactly one level).
-    const owner = findOwner(id, index.components);
+    // (patterns never own patterns, so it is exactly one level). The owner is
+    // one of the id's own project: a member's Repository owning a component
+    // of the same local id is another project's, and its folder is not a home.
+    const owner = findOwner(id, index.components.filter((c) => this.inHomeOf(c.id, id)));
     if (owner) {
       const ownerPath = index.paths.component[owner.id];
       if (ownerPath && ownerPath.endsWith('.index.yaml')) {
@@ -5079,7 +5114,7 @@ export class SpecWorkspace {
     // tells the agent the two sanctioned paths and pre-empts the forbidden
     // third one (folding the state into a consumer).
     if (!existing && spec.componentType === 'Store'
-      && !findOwner(spec.id, this.scanAll().components)) {
+      && !findOwner(spec.id, this.scanAll().components.filter((c) => this.inHomeOf(c.id, spec.id)))) {
       notices.push(
         `Store "${spec.id}" has no owning pattern yet. Recommended: create the Repository that owns it `
         + `(plus its Registry and Index) and point consumers at the facade. For genuinely simple held state, `
@@ -5133,7 +5168,9 @@ export class SpecWorkspace {
     // A git part's layout is its repository's: its files are never moved here.
     if (this.partHolding(currentPath)?.part.storage === 'git') return null;
 
-    const owner = findOwner(comp.id, index.components);
+    // Only an owner of the component's own project: a member's pattern owning
+    // a component of the same local id never draws a local folder into it.
+    const owner = findOwner(comp.id, index.components.filter((c) => this.inHomeOf(c.id, comp.id)));
     if (owner) {
       const ownerPath = index.paths.component[owner.id];
       if (ownerPath && ownerPath.endsWith('.index.yaml')) {
@@ -5808,8 +5845,15 @@ export class SpecWorkspace {
       const comp = intf ? components.find((c) => c.id === intf.component) : null;
       if (comp && inScope(comp.subsystem)) add(index.paths.implementation[m.id]);
     }
-    // An unscoped call also covers the L0 and every type, which belong to no
-    // subsystem — a whole-tree approval must approve them too.
+    // A type the subsystem owns (its `subsystem` field names it) is the
+    // subsystem's own, wherever the layout stores its file.
+    if (scopeSubsystem) {
+      for (const t of index.types) {
+        if (inScope(t.subsystem)) add(index.paths.type[t.id]);
+      }
+    }
+    // An unscoped call also covers the L0 and every type, the project-level
+    // ones included — a whole-tree approval must approve them too.
     if (!scopeSubsystem) {
       add(this.paths.specsSystem());
       for (const p of Object.values(index.paths.type)) add(p);
@@ -8240,9 +8284,41 @@ export function lockTree(): void {
 }
 
 /** The definition a pinned snapshot holds for the type it exports under `name`, from its type closure. */
-function pinnedTypeDefinition(snapshot: SurfaceSnapshot, name: string): unknown {
+function pinnedTypeDefinition(snapshot: SurfaceSnapshot, name: string): { spec: unknown; carriedBy?: string[] } | undefined {
+  // An exported type by its public name.
   const exported = (snapshot.exportedTypes ?? []).find((t) => t.id === name);
-  return exported ? snapshot.types.find((t) => t.id === exported.type) : undefined;
+  if (exported) {
+    const def = snapshot.types.find((t) => t.id === exported.type);
+    return def ? { spec: def } : undefined;
+  }
+  // Else a type the pinned shapes carry (a record a contract answers with): by
+  // its closure id, or by the local segment of exactly one closure id — the
+  // pin holds it, so a reader is given it, with the names that carry it.
+  const segment = (id: string): string => (id.includes('::') ? id.slice(id.lastIndexOf('::') + 2) : id);
+  const bySegment = snapshot.types.filter((t) => segment(t.id) === name);
+  const def = snapshot.types.find((t) => t.id === name) ?? (bySegment.length === 1 ? bySegment[0] : undefined);
+  if (!def) return undefined;
+  const byId = new Map(snapshot.types.map((d) => [d.id, d] as const));
+  const tokens = (text: string | undefined): string[] => (text ?? '').match(/[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_-]+)*/g) ?? [];
+  const reaches = (start: string[]): boolean => {
+    const seen = new Set<string>();
+    const queue = [...start];
+    while (queue.length > 0) {
+      const next = byId.get(queue.shift()!);
+      if (!next || seen.has(next.id)) continue;
+      if (next.id === def.id) return true;
+      seen.add(next.id);
+      for (const f of next.fields) queue.push(...tokens(f.type));
+      for (const p of next.params ?? []) queue.push(...tokens(p.type));
+      queue.push(...tokens(next.returns));
+    }
+    return false;
+  };
+  const carriedBy = [
+    ...snapshot.interfaces.filter((e) => reaches(e.methods.flatMap((m) => [...(m.params ?? []).map((p) => p.type), m.returns ?? ''].flatMap(tokens)))).map((e) => e.id),
+    ...(snapshot.exportedTypes ?? []).filter((t) => reaches([t.type])).map((t) => t.id),
+  ];
+  return { spec: def, carriedBy };
 }
 
 /** spec_loader.readPinnedSpec — an external's spec read by `alias::name` from its pinned snapshot; null when none holds it. */
@@ -8253,6 +8329,11 @@ export function readPinnedSpec(kind: string | undefined, id: string): PinnedSpec
 /** spec_loader.unlockTree — release the bound project's tree write lock. */
 export function unlockTree(): void {
   unlockTreeFile(getProjectRoot());
+}
+
+/** spec_loader.inspectLock — the bound project's tree write lock as its file stands, or null. */
+export function inspectLock(): TreeLockState | null {
+  return inspectLockFile(getProjectRoot());
 }
 
 export function getLoaderIssues(): ValidationIssue[] {

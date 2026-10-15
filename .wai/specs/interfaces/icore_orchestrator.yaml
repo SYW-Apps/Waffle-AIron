@@ -89,14 +89,22 @@ methods:
       the bound project's `members` under the alias as the shorthand `alias: <source>` (the long
       form only for a description). A contained source must resolve strictly within the owning
       project root (absolute, inner-`..` and link-escaping paths are rejected — leaving the root is
-      only ever a leading `../`). A git source is NOT scaffolded — the repository must already hold
-      the member, whose content decides what it is — and is pinned at the given commit or its
-      default branch's head (resolved and fetched through the git source adapter), the commit
-      written as `#<commit>`. Writes no L1 spec. Throws for an alias outside [a-z0-9-_]+, a source
-      none of the grammar's forms parses, an escaping path, a hosted source, a git source that
-      cannot be resolved or fetched, `as: part` on a directory that already holds a project (that is
-      `member attach`), or an alias already declaring a different member.
-    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
+      only ever a leading `../`), and a `../` source is a sibling checkout ONE level up
+      (`../<name>`, folders below it allowed): a deeper climb, or a path naming the project's own
+      folder or one holding it, is refused with the accepted forms, so a mistyped depth never
+      scaffolds a .wai outside the family. A git source is NOT scaffolded — the repository must
+      already hold the member, whose content decides what it is — and is pinned at the given commit
+      or its default branch's head (resolved and fetched through the git source adapter), the commit
+      written as `#<commit>`. Writes no L1 spec. With `report`, every refusal is made exactly as the
+      write would make it and the plan is answered — the files and folders it would create, each
+      named with where it lies, and the declaration — with nothing written. Throws for an alias
+      outside [a-z0-9-_]+, a source none of the grammar's forms parses, an escaping path, a hosted
+      source, a git source that cannot be resolved or fetched, `as: part` on a directory that
+      already holds a project (that is `member attach`), or an alias already declaring a different
+      member or an external — the last two before anything is scaffolded.
+    signature: >-
+      createMember(alias: string, source: string, description?: string, as?: string, report?: bool):
+      MemberCreation
     returns: MemberCreation
     params:
       - name: alias
@@ -117,6 +125,12 @@ methods:
       - name: as
         type: string
         description: project (`--project`) to create the project content; omitted creates a part
+        optional: true
+      - name: report
+        type: bool
+        description: >-
+          Answer the plan — refused exactly as the write would be — and write nothing (`wairon
+          member add --report`)
         optional: true
   - name: moveMember
     description: >-
@@ -1449,15 +1463,22 @@ methods:
       one it left is removed. Ids do not change, so references by id stay; what names the OLD
       subsystem follows: the old subsystem's export entries for a moved component move to the new
       subsystem's publicInterfaces, its lifecycle entrypoints naming one move too, and an L0
-      re-export from the old subsystem that names a moved component or type is re-pointed at the new
-      one. A type takes its file, its L1 export entries and every type reference qualified by its
-      old subsystem, in either spelling and wherever it stands in a type expression (`old::type`
-      becomes `new::type`, `list<old.type>` becomes `list<new.type>`); a type moves to system level
-      (no subsystem) or from it. Refuses, before the first write: a kind other than component or
-      type, a spec that does not exist, one in another project, a target subsystem the bound tree
-      does not have or the one it already lives in, a component another pattern owns (move its
-      owner), and a type id the target already holds. A dry run answers the plan and writes nothing.
-      The caller's gate judges the moved components before this runs.
+      re-export from the old subsystem that names a moved component — by its component or its
+      contract — or type is re-pointed at the new one. A type takes its file, its L1 export entries
+      and every type reference qualified by its old subsystem, in either spelling and wherever it
+      stands in a type expression (`old::type` becomes `new::type`, `list<old.type>` becomes
+      `list<new.type>`); a type moves to system level (no subsystem) or from it, and the L0 export
+      table follows: an entry publishing a project-level type (no `from`) moved into a subsystem
+      re-exports it `from` that subsystem, whose L1 gains the type's export entry; a type made
+      system-level is published by the L0 directly — its entries lose `from` (keeping the public
+      name) and its L1 entries go. A type's move is placement, not an edit: every file it touches
+      keeps its updatedAt, and a folder the moved file leaves empty is pruned, so moving it back
+      leaves the tree byte-identical. The report names the files written and the references
+      respelled or re-pointed. Refuses, before the first write: a kind other than component or type,
+      a spec that does not exist, one in another project, a target subsystem the bound tree does not
+      have or the one it already lives in, a component another pattern owns (move its owner), and a
+      type id the target already holds. A dry run answers the plan and writes nothing. The caller's
+      gate judges the moved components before this runs.
     signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
     returns: SpecMove
     params:
@@ -1475,6 +1496,25 @@ methods:
         type: bool
         description: Answer what the move would do and write nothing
         optional: true
+  - name: rehearsalCopy
+    description: >-
+      A private copy of the bound project's tree in a temporary folder — its .wai (the specs, the
+      configuration, the lock record and pins, the rules; never the generated outputs, the context,
+      a transaction or the write lock) and a specs folder configured outside it — for a write to be
+      rehearsed on, its result judged, and the copy discarded. Answers the copy's root.
+    signature: 'rehearsalCopy(): string'
+    returns: string
+    params: []
+    effect: write
+  - name: discardRehearsal
+    description: Remove a copy rehearsalCopy made, whatever the rehearsal did in it. Nothing else is touched.
+    signature: 'discardRehearsal(directory: string): void'
+    returns: void
+    params:
+      - name: directory
+        type: string
+        description: The copy's root, as rehearsalCopy answered it
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T11:35:57.366Z'
+updatedAt: '2026-10-09T17:09:21.005Z'
