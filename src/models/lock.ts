@@ -284,6 +284,26 @@ export function releaseStampProblem(record: { validatorVersion?: unknown }, runn
 }
 
 /**
+ * lock_record.carriedNotice — the notice beside an approval an OLDER wairon
+ * release recorded while the running release judges the design by the same
+ * rules (no release verdict: the release gate part did not move, so nothing
+ * was re-validated or restamped). Said once, so a team that just upgraded
+ * reads which release took the record and that it still holds. Empty when the
+ * stamp is not older than `running`, when the project's own approval is not
+ * holding, or when a release verdict or a stamp problem already speaks for
+ * the release. Pure.
+ */
+export function sameRulesNotice(
+  record: { validatorVersion?: unknown },
+  own: Pick<ProjectApproval, 'state' | 'release' | 'stampProblem'> | undefined,
+  running: string,
+): string {
+  if (!own || own.state !== 'approved' || own.release || own.stampProblem !== undefined) return '';
+  if (releaseStampAgainst(record, running) !== 'older') return '';
+  return ` Notice: approved under wairon ${String(record.validatorVersion)}; this release (${running}) judges the design by the same rules, so the approval carries over as it is.`;
+}
+
+/**
  * lock_record.missingTreeSentence — the sentence for a record that approved
  * spec files while the tree it approved is gone (no L0, no spec file below
  * it), or null when it records none. A project with an approval on record has

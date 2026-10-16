@@ -304,6 +304,23 @@ methods:
     returns: TreeLockState?
     params: []
     effect: read
+  - name: readProjectSystem
+    description: >-
+      Read the L0 a system id names — the one place that decides it. A bare id names this project's
+      own L0 when it is `system`, the L0's name or the project id. An `alias::name` (or
+      `project-id::name`) id names a MEMBER project's own L0, read from its root as stored, when the
+      name is `system`, the member's L0 name or its project id. Otherwise the answer carries the
+      reason no L0 answers — a name the L0 does not go by, a part (no L0 of its own: its subsystems
+      are this project's), an external (its pin records only the names it exports, which are named),
+      or a prefix that is no member, part or external — so no read ever answers one project's L0
+      under another's id. Read-only.
+    signature: 'readProjectSystem(id: string): ProjectSystemRead'
+    returns: ProjectSystemRead
+    params:
+      - name: id
+        type: string
+        description: 'The system id asked for: a name of this L0, or `alias::name`'
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T16:55:44.429Z'
+updatedAt: '2026-10-15T16:06:23.764Z'

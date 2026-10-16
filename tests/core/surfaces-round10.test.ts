@@ -120,13 +120,13 @@ describe('1. a contract used as a whole: every method it holds is compared live 
     expect(relationHealth(status)).toBe('incompatible');
   });
 
-  it('an endpoint MOVED drifts the external and names the route on the member', () => {
+  it('an endpoint MOVED breaks the use and names the route on the member (round 11: no longer a drift)', () => {
     const { producer, consumer } = pinnedPair();
     republish(producer, [{ name: 'checkIn', path: '/habits/{habitId}/done' }, { name: 'getHabit', path: '/habits/{habitId}' }]);
     bind(consumer);
     const [status] = getExternalsStatus();
-    expect(status.uses).toEqual([{ publicName: 'habit_portal', member: 'checkIn', state: 'unchanged', detail: expect.stringContaining('endpoint moved: PUT /habits/{habitId}/check-ins → PUT /habits/{habitId}/done') }]);
-    expect(relationHealth(status)).toBe('drifted');
+    expect(status.uses).toEqual([{ publicName: 'habit_portal', member: 'checkIn', state: 'changed', detail: expect.stringContaining('endpoint moved: PUT /habits/{habitId}/check-ins → PUT /habits/{habitId}/done') }]);
+    expect(relationHealth(status)).toBe('incompatible');
   });
 });
 

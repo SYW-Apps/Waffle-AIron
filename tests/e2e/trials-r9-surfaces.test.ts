@@ -150,7 +150,8 @@ describe('1. a used verb\'s route moving reaches the consumer (tinkerer top-1)',
     expect(s.uses[0].detail).toContain('endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}');
 
     const validate = await sb.run(['validate'], consumer);
-    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_DRIFTED\][^\n]*the route of "stats_portal\.getStats" \(GET \/stats\/\{shortCode\} → GET \/v2\/stats\/\{shortCode\}\) moved/);
+    // Round 11: a moved route is a break for the client calling it, no longer a drift.
+    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\][^\n]*"stats_portal\.getStats" changed since it was pinned: endpoint moved: GET \/stats\/\{shortCode\} → GET \/v2\/stats\/\{shortCode\}/);
 
     // Round 9: the re-pin rewrote the path "without a word".
     const repin = await sb.run(['externals', 'pin'], consumer);

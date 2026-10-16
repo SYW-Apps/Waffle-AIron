@@ -35,7 +35,7 @@ import { LockRecordUnreadableError, WaironError } from '../utils/errors.js';
 import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
 import {
   approvalStamp, approvalSubject, describeApprover, describeGateParts, designOnly, gatePartsProblem, missingTreeSentence, movedGateParts, memberPinOf,
-  releaseStampProblem, stampRecordsGateParts, usableGateParts, GATE_PARTS_SINCE,
+  releaseStampProblem, sameRulesNotice, stampRecordsGateParts, usableGateParts, GATE_PARTS_SINCE,
   type CodeAnalysis, type ProjectApproval, type ReleaseVerdict,
 } from '../models/lock.js';
 import { ownGet } from '../utils/own.js';
@@ -263,7 +263,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
         state: 'locked',
         approved: true,
         message: (never.length > 0 ? 'This project\'s own design is the approved design — ' : 'The design in this tree is the approved design — ')
-          + `approved ${approvalStamp(record!)}.${release?.carried ? ` ${carriedLine(release)}` : ''}${family}${carry}`
+          + `approved ${approvalStamp(record!)}.${release?.carried ? ` ${carriedLine(release)}` : sameRulesNotice(record!, ownEntry, WAIRON_VERSION)}${family}${carry}`
           + (ownEntry?.partsIgnored !== undefined
             ? ` Notice: the record's gate parts are ignored — ${ownEntry.partsIgnored}; the identity alone decided this, and \`wairon lock\` rewrites them.`
             : '')
@@ -801,7 +801,7 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
       if (previous && !sameApprover(previous.lockedBy, me)) {
         logger.info(`Nothing has changed since the last approval (${approvalStamp(previous)}), but you (${describeApprover(me)}) are not its approver: this records YOUR approval of the unchanged design, with a new lockedAt, and refreshes the generated outputs of this project (guides, skills, and agent files when materialized).`);
       } else {
-        const refreshed = previous ? evidenceRefresh(previous, gate, captured) : null;
+        const refreshed = previous ? evidenceRefresh(previous, gate, captured, memberPins(members)) : null;
         logger.info('Nothing has changed since the last approval — the approval on record stays as it is: its lockedAt and any restamp trace are kept, and '
           + (refreshed
             ? `only the evidence recorded beside it is refreshed (${refreshed.what.join('; ')}) — no re-approval. `
@@ -1126,7 +1126,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     // and restamp trace. Only the evidence beside it that moved (the code
     // results, the design counts, gate parts that are missing or do not break
     // down the identity it still matches) is refreshed; nothing moved, nothing written.
-    const refreshed = evidenceRefresh(onFile, gate, captured);
+    const refreshed = evidenceRefresh(onFile, gate, captured, record.members);
     if (!refreshed) return onFile;
     writeLockRecord(refreshed.record);
     return refreshed.record;
@@ -1138,9 +1138,10 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
 
 /**
  * Whether two lock records are one APPROVAL: the same identity, specs and
- * reading, format, members, project id and approver. lockedAt,
- * validatorVersion, gateParts, validationResult, code and a restamp trace are
- * the evidence recorded beside the approval, not the approval.
+ * reading, format, member pins, project id and approver. lockedAt,
+ * validatorVersion, gateParts, validationResult, code, a restamp trace and
+ * each member's recorded state (approved, drifted — recorded, never hashed)
+ * are the evidence recorded beside the approval, not the approval.
  */
 function sameApproval(a: LockRecord, b: LockRecord): boolean {
   const approval = (r: LockRecord): string => canonicalize({
@@ -1148,7 +1149,7 @@ function sameApproval(a: LockRecord, b: LockRecord): boolean {
     specs: r.specs ?? null,
     specsReading: r.specsReading ?? null,
     format: r.format ?? null,
-    members: r.members ?? null,
+    members: r.members ? membersWithoutState(r.members) : null,
     projectId: r.projectId ?? null,
     lockedBy: r.lockedBy ?? null,
   });
@@ -1157,14 +1158,27 @@ function sameApproval(a: LockRecord, b: LockRecord): boolean {
 
 /**
  * The record on file with the evidence recorded BESIDE its approval brought
- * up to date — the code results, the design counts, and gate parts that are
- * missing or do not break down the identity it still matches — every other
- * field kept (lockedAt, lockedBy, validatorVersion, a restamp trace), with
- * what was refreshed named; null when nothing beside the approval moved.
+ * up to date — the code results, the design counts, gate parts that are
+ * missing or do not break down the identity it still matches, and each
+ * member's state as it stands now (its pin unchanged) — every other field kept
+ * (lockedAt, lockedBy, validatorVersion, a restamp trace), with what was
+ * refreshed named; null when nothing beside the approval moved.
  */
-function evidenceRefresh(onFile: LockRecord, gate: ValidationResult, captured: StateId): { record: LockRecord; what: string[] } | null {
+function evidenceRefresh(onFile: LockRecord, gate: ValidationResult, captured: StateId, members?: Record<string, MemberPin>): { record: LockRecord; what: string[] } | null {
   const what: string[] = [];
   let record: LockRecord = { ...onFile };
+  // A member whose pin is unchanged but whose own verdict moved (it drifted
+  // at its own root, or was re-approved to the same subject): the state is
+  // recorded beside the pin, never hashed, so it is evidence, refreshed here.
+  if (members && onFile.members) {
+    const moved = Object.entries(members)
+      .filter(([alias, pin]) => onFile.members![alias] !== undefined && onFile.members![alias].state !== pin.state)
+      .map(([alias, pin]) => `${alias}: ${onFile.members![alias].state} → ${pin.state}`);
+    if (moved.length > 0) {
+      record = { ...record, members };
+      what.push(`the member state(s) recorded beside their unchanged pins (${moved.join('; ')})`);
+    }
+  }
   const code = gate.analysis ? withoutCodes(gate.analysis) : undefined;
   if (code && canonicalize(code) !== canonicalize(onFile.code ?? null)) {
     record = { ...record, code };
@@ -1191,6 +1205,16 @@ function evidenceRefresh(onFile: LockRecord, gate: ValidationResult, captured: S
     what.push(`its release stamp (${stamp}), replaced with ${WAIRON_VERSION}`);
   }
   return what.length > 0 ? { record, what } : null;
+}
+
+/** The member pins without the state each was recorded in: what the approval pins, not what was seen beside it. */
+function membersWithoutState(members: Record<string, MemberPin>): Record<string, Omit<MemberPin, 'state'>> {
+  const out: Record<string, Omit<MemberPin, 'state'>> = {};
+  for (const [alias, pin] of Object.entries(members)) {
+    const { state: _state, ...rest } = pin;
+    out[alias] = rest;
+  }
+  return out;
 }
 
 /** Whether two approvers are one identity. */

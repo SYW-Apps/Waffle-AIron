@@ -386,7 +386,8 @@ export default [
 
   // -------------------------------------------------------------------------
   // Planned code on a type (type-realization): SOURCE_FILE_PLANNED until any
-  // file the type names exists, MISSING_SOURCE_FILE once one does
+  // file the type names exists, and for a file only its methods name always;
+  // MISSING_SOURCE_FILE for the type's own file once a methods file exists
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'SOURCE_FILE_PLANNED',
@@ -409,11 +410,11 @@ export default [
   }),
   defineRuleFixture({
     code: 'SOURCE_FILE_PLANNED',
-    expectFire: false,
-    reason:
-      'The type\'s own module exists, so its realization has begun: a method module that is missing is a broken link (MISSING_SOURCE_FILE), never planned.',
+    severity: 'notice',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
     scenario:
-      'The shipment manifest entity\'s module is committed, but its totalWeight method names a helper module that was never committed.',
+      'The shipment manifest entity\'s module is committed, and its totalWeight method names the helper module it will live in, which nobody has written yet — the methods are written after the fields, as a component method\'s planned file is.',
     tree: {
       ...pickingSpecs,
       types: [{
@@ -431,12 +432,12 @@ export default [
     },
   }),
   defineRuleFixture({
-    code: 'MISSING_SOURCE_FILE',
-    severity: 'error',
-    anchoredTo: 'shipment-manifest',
-    expectFire: true,
+    code: 'SOURCE_FILE_PLANNED',
+    expectFire: false,
+    reason:
+      'Both modules the type names are committed, so nothing it names is planned any more.',
     scenario:
-      'The shipment manifest entity\'s module is committed, but its totalWeight method names a helper module that was never committed — the type\'s realization has begun, so the claim is a broken link.',
+      'The shipment manifest entity\'s module and the helper module its totalWeight method lives in are both committed.',
     tree: {
       ...pickingSpecs,
       types: [{
@@ -450,6 +451,30 @@ export default [
       files: {
         'src/warehouse/picking.ts': PICKING_MODULE,
         'src/warehouse/manifest.ts': 'export interface ShipmentManifest { id: string; }\n',
+        'src/warehouse/manifest-weight.ts': 'export function totalWeight(): number { return 0; }\n',
+      },
+    },
+  }),
+  defineRuleFixture({
+    code: 'MISSING_SOURCE_FILE',
+    severity: 'error',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
+    scenario:
+      'The shipment manifest entity\'s totalWeight helper module is committed, but the entity\'s own module it builds on never was — the type\'s realization has begun, so the claim on its declaration is a broken link.',
+    tree: {
+      ...pickingSpecs,
+      types: [{
+        id: 'shipment-manifest',
+        name: 'ShipmentManifest',
+        subsystem: 'warehouse',
+        sourcePath: 'src/warehouse/manifest.ts',
+        fields: [{ name: 'id', type: 'string', key: 'primary' }],
+        methods: [{ name: 'totalWeight', signature: 'totalWeight(): float', returns: 'float', sourcePath: 'src/warehouse/manifest-weight.ts' }],
+      }],
+      files: {
+        'src/warehouse/picking.ts': PICKING_MODULE,
+        'src/warehouse/manifest-weight.ts': 'export function totalWeight(): number { return 0; }\n',
       },
     },
   }),

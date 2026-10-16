@@ -113,9 +113,10 @@ methods:
           a count of the rest and `--all`, which lists every one); when no own spec moved, either
           "nothing has changed" — the approval on record stays as it is, its lockedAt kept, and
           .wai/lock.json left untouched by this run unless evidence beside the approval is refreshed
-          (named: the code results, the design counts, gate parts, a release stamp that is missing,
-          no version or newer than this release, which is replaced with this release) — unless
-          another approver is locking (then their approval is recorded anew, said so) — or, when the
+          (named: the code results, the design counts, gate parts, a member's state that moved
+          beside its unchanged pin — `geo: approved → drifted` — a release stamp that is missing, no
+          version or newer than this release, which is replaced with this release) — unless another
+          approver is locking (then their approval is recorded anew, said so) — or, when the
           identity or the project id moved, "no spec changed, but what the design is approved under
           did", naming it (a record without gate parts says it cannot tell which input moved and
           that this re-approval records them); whenever this lock records the project's own inputs
@@ -212,9 +213,10 @@ methods:
       - stepNumber: 22
         description: >-
           Is the assembled record the same APPROVAL as the record on file — the same identity, specs
-          and reading, format, members, project id and approver? The evidence recorded beside it
-          (lockedAt, validatorVersion, gateParts, validationResult, code, a `restamped` trace) is
-          not the approval: when the approval is the same, nothing was approved anew
+          and reading, format, member pins, project id and approver? The evidence recorded beside it
+          (lockedAt, validatorVersion, gateParts, validationResult, code, a `restamped` trace, and
+          each member's recorded state — approved or drifted, recorded and never hashed) is not the
+          approval: when the approval is the same, nothing was approved anew
         type: branch
         condition: a record is on file and is the same approval as the assembled one
         onFalseStep: 24
@@ -223,11 +225,12 @@ methods:
           Keep the record on file — its lockedAt and `restamped` trace included — and return it, so
           the generated outputs are still refreshed. Write nothing unless evidence recorded beside
           the approval moved: the code results, the design counts, gate parts that are missing or do
-          not break down the identity it still matches (rewritten from the identity), or a release
-          stamp that is missing, no wairon version or newer than this release
-          (lock_record.stampProblem: replaced with this release, which just verified the unchanged
-          approval) — each said, every other field kept; with none, `.wai/lock.json` is left
-          untouched by this run, as the summary said
+          not break down the identity it still matches (rewritten from the identity), a member's
+          state that moved while its pin did not (the member drifted at its own root: recorded, so
+          the record and the run's word agree), or a release stamp that is missing, no wairon
+          version or newer than this release (lock_record.stampProblem: replaced with this release,
+          which just verified the unchanged approval) — each said, every other field kept; with
+          none, `.wai/lock.json` is left untouched by this run, as the summary said
         type: return
         outcome: LockRecord
       - stepNumber: 24
@@ -382,14 +385,16 @@ methods:
           (lock_record.approvalStamp — never `undefined by unknown`) so the log carries the
           evidence, and — when it carried over a release change — `approved under <old>,
           re-validated under <new>: still approved` (`wairon lock` refreshes the record's release
-          stamp without a re-approval); and how many member projects are approved at their own
-          roots. A member that was never approved is named as NOT gated (only --strict fails it), so
-          the verdict never calls the family approved while one of its projects was never approved.
-          When the record's gateParts do not break down its identity, or are missing (the own
-          entry's partsIgnored), one notice says they are ignored and that `wairon lock` rewrites
-          them; when its release stamp is missing, no version or newer than this release (the own
-          entry's stampProblem), one notice names it and that `wairon lock` replaces it — the
-          identity alone decided the pass.
+          stamp without a re-approval) — or, when an older release took the record and this release
+          judges the design by the same rules (no release verdict), one notice saying so
+          (lock_record.carriedNotice); and how many member projects are approved at their own roots.
+          A member that was never approved is named as NOT gated (only --strict fails it), so the
+          verdict never calls the family approved while one of its projects was never approved. When
+          the record's gateParts do not break down its identity, or are missing (the own entry's
+          partsIgnored), one notice says they are ignored and that `wairon lock` rewrites them; when
+          its release stamp is missing, no version or newer than this release (the own entry's
+          stampProblem), one notice names it and that `wairon lock` replaces it — the identity alone
+          decided the pass.
         type: return
         outcome: locked
       - stepNumber: 17
@@ -810,4 +815,4 @@ methods:
         outcome: ok
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-09T17:36:15.300Z'
+updatedAt: '2026-10-15T16:03:32.544Z'

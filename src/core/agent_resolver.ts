@@ -704,7 +704,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     const sharedSection = sharedPaths.length > 0
       ? `\nShared, owned by no single agent — create or extend these only for what this component needs (an import, a wiring line, a module setting), and name each one you touch in your report. A shared type file is created at its planned home exactly as its spec declares it, never redeclared in your own file. A module root listed here (\`mod.rs\`, \`index.ts\`, \`__init__.py\`) may be another agent's file: add only the line that declares or re-exports your module:\n\n${sharedPaths.map(shown).join('\n')}\n`
       : '';
-    const rule = '\nA file no spec names — a shared helper, the composition root, test setup, a module manifest beside your code — may be created or extended the same way, for this component\'s needs only. If a shared or unnamed file would need a responsibility of its own (domain logic, held state, a decision the design does not make), that is a design change: stop and report it instead of writing it.\n';
+    const rule = '\nA file no spec names — a shared helper, the composition root, test setup, a module manifest beside your code — may be created or extended the same way, for this component\'s needs only. If a shared or unnamed file would need a responsibility of its own (domain logic, held state, a decision the design does not make), that is a design change: stop and report it instead of writing it. Never delete or move a file or folder outside the files this brief fences — an ignored or scratch-looking folder of the project included — and never use an existing project folder as scratch space: keep scratch work in a temporary directory outside the repository.\n';
     instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${ownSection}${sharedSection}${rule}`;
     instructions = `${instructions.trimEnd()}\n\n${linkageSection(record)}`;
   }
@@ -846,9 +846,42 @@ function componentClaims(
   }
   for (const type of types) {
     const owners = type.componentClass ? [type.componentClass] : [...(users.get(type.id) ?? [])];
-    for (const file of typeSourceFiles(type)) for (const owner of owners) claim(file, owner);
+    for (const file of typeSourceFiles(type)) {
+      // A file only the type's METHODS name holds their pure logic, and the
+      // component whose narratives call those methods implements them: it
+      // alone claims the file, so one brief fences it instead of every
+      // contract that merely names the type listing it as shared.
+      const caller = type.componentClass ? undefined : methodFileCaller(type, file, implementations, contractOwner);
+      for (const owner of caller ? [caller] : owners) claim(file, owner);
+    }
   }
   return claims;
+}
+
+/**
+ * The one component whose implementations' narratives (or intents) call a
+ * method of the type that lives in `file` — a file the type's METHODS name
+ * and its own declaration does not. Undefined when the file is the type's own,
+ * when no component calls one of its methods, or when several do.
+ */
+function methodFileCaller(
+  type: TypeSpec,
+  file: string,
+  implementations: ImplementationSpec[],
+  contractOwner: Map<string, string>,
+): string | undefined {
+  if (type.sourcePath === file) return undefined;
+  // Method names are identifiers; one that is not names no call to match.
+  const names = (type.methods ?? []).filter((m) => m.sourcePath === file).map((m) => m.name).filter((n) => /^\w+$/.test(n));
+  if (names.length === 0) return undefined;
+  const called = new RegExp(`\\b(?:${names.join('|')})\\s*\\(`);
+  const callers = new Set<string>();
+  for (const impl of implementations) {
+    const owner = contractOwner.get(impl.contract);
+    if (!owner) continue;
+    if (impl.methods.some((m) => called.test(JSON.stringify([m.narrative ?? [], m.intent ?? ''])))) callers.add(owner);
+  }
+  return callers.size === 1 ? [...callers][0] : undefined;
 }
 
 /**

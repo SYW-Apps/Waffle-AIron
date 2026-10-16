@@ -9,7 +9,8 @@ import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecF
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
-import { isCiDraftWaivable as waivable, missingTreeSentence } from '../models/lock.js';
+import { isCiDraftWaivable as waivable, missingTreeSentence, sameRulesNotice } from '../models/lock.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 import {
   validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
   adviseExternals as adviseLive,
@@ -486,7 +487,14 @@ function approvalReleaseLine(): string | null {
   const stamp = own?.stampProblem !== undefined
     ? `Approval notice: ${own.stampProblem} — \`wairon lock\` replaces the stamp with this release.`
     : null;
-  if (!release) return stamp === null ? null : chalk.blue(stamp);
+  if (!release) {
+    if (stamp !== null) return chalk.blue(stamp);
+    // An approval an older release took, carried over with no rule moved: said once, as a notice.
+    let record;
+    try { record = readLockRecord(); } catch { record = null; }
+    const carried = record ? sameRulesNotice(record, own, WAIRON_VERSION).trim().replace(/^Notice: /, '') : '';
+    return carried ? chalk.blue(`Approval notice: ${carried}`) : null;
+  }
   return release.carried
     ? chalk.green(`Approval: approved under wairon ${release.from}, re-validated under ${release.to}: still approved. (\`wairon lock\` refreshes the record's release stamp without a re-approval.)`)
     : release.reason

@@ -258,14 +258,17 @@ methods:
       bound project's alias table exactly as a write resolves it: a member's spec by its key, and an
       EXTERNAL's from the pinned snapshot this project holds of it — answered with the pinned entry
       as the spec and the pinnedSnapshot marker beside it (read-only: written from the producer's
-      own root). A contract's methods are answered in their stored form
-      (method_signature.storedForm), so a sourced method shows its signatureFrom and not the params
-      the loader resolved into it; those come back beside the spec as the derived resolvedSignatures
-      marker, one entry per sourced method, never inside it. A methods filter that names something
-      the spec does not declare returns nothing and says what it does declare, so a misspelling
-      never reads as a method with no content; a narrowed answer carries the partial-result marker,
-      because the write tools REPLACE a method list and re-authoring from a partial read would
-      delete every method left out.
+      own root). A system read by `alias::system` (or `alias::<its L0 name>`) answers that MEMBER
+      project's own L0 with a read-only memberProject marker, and is refused — naming why — for a
+      part, an external (naming the names its pin exports) or an unknown prefix; a bare id the L0
+      does not go by is refused too, so no read ever answers this project's L0 under another id. A
+      contract's methods are answered in their stored form (method_signature.storedForm), so a
+      sourced method shows its signatureFrom and not the params the loader resolved into it; those
+      come back beside the spec as the derived resolvedSignatures marker, one entry per sourced
+      method, never inside it. A methods filter that names something the spec does not declare
+      returns nothing and says what it does declare, so a misspelling never reads as a method with
+      no content; a narrowed answer carries the partial-result marker, because the write tools
+      REPLACE a method list and re-authoring from a partial read would delete every method left out.
     signature: 'getSpec(kind?: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
     returns: SpecReadResult
     params:
@@ -557,4 +560,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-09T16:51:02.091Z'
+updatedAt: '2026-10-15T16:03:23.142Z'

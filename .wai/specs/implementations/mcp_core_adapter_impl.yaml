@@ -239,7 +239,14 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: publishedUsesOf
+  - name: readProjectSystem
+    narrative:
+      - stepNumber: 1
+        description: Call readProjectSystem on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: readProjectSystem
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T16:51:09.155Z'
+updatedAt: '2026-10-15T16:03:16.679Z'

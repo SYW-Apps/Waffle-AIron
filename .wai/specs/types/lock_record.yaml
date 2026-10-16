@@ -236,6 +236,26 @@ methods:
       .wai/lock.json in the same change). Null when the record records no spec file. Pure.
     sourcePath: src/models/lock.ts
     symbol: missingTreeSentence
+  - name: carriedNotice
+    signature: 'carriedNotice(own: ProjectApproval?, running: string): string'
+    params:
+      - name: own
+        type: ProjectApproval?
+        description: The bound project's own approval entry
+      - name: running
+        type: string
+        description: The running wairon release
+    returns: string
+    description: >-
+      The notice beside an approval an OLDER wairon release recorded while the running release
+      judges the design by the same rules — no release verdict, because the release gate part did
+      not move, so nothing was re-validated or restamped: `approved under wairon <old>; this release
+      (<running>) judges the design by the same rules, so the approval carries over as it is`. Said
+      once, at notice level, so a team that just upgraded reads which release took the record. Empty
+      when the stamp is not older than the running release, when the own approval is not holding, or
+      when a release verdict or a stamp problem already speaks for the release. Pure.
+    sourcePath: src/models/lock.ts
+    symbol: sameRulesNotice
 componentClass: lock_store
 invariants:
   - id: single-record-per-project
@@ -245,4 +265,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-09T00:16:43.452Z'
+updatedAt: '2026-10-15T16:03:38.302Z'

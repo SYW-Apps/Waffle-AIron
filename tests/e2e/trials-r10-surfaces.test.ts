@@ -126,12 +126,13 @@ describe('1. a contract used whole: the live gate sees a verb removed, renamed o
     expect(s.uses).toEqual([expect.objectContaining({ member: 'checkIn', state: 'renamed', renamedTo: 'habit_portal.markDone' })]);
   });
 
-  it('a moved route: drifted, the verb and its route named', async () => {
+  it('a moved route: incompatible (round 11), the verb and its route named', async () => {
     const { producer, consumer } = await pinnedPair('whole-moved');
     editContract(producer, (text) => text.split('path: /habits/{habitId}/check-ins').join('path: /habits/{habitId}/done'));
     const status = await sb.run(['externals', 'status'], consumer);
-    expect(status.all, transcript(status)).toContain('habit_portal.checkIn: unchanged — endpoint moved: PUT /habits/{habitId}/check-ins → PUT /habits/{habitId}/done');
-    expect(status.all).toContain('drifted');
+    expect(status.all, transcript(status)).toContain('habit_portal.checkIn: changed — endpoint moved: PUT /habits/{habitId}/check-ins → PUT /habits/{habitId}/done');
+    expect(status.all).toContain('incompatible');
+    expect(status.code).toBe(1);
   });
 });
 
