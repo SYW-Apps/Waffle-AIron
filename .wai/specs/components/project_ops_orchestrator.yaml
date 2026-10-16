@@ -20,7 +20,14 @@ dependsOn:
   - exposure_policy_orchestrator
   - git_backing_orchestrator
 lint:
-  allow: []
+  allow:
+    - code: REMOVABLE_FORWARDER
+      reason: >-
+        Deliberate seam: the one list of control-plane project operations that BOTH entry paths
+        expose, the web portal (browser session) and the MCP data plane through
+        host_request_orchestrator (bearer token). One Orchestrator keeps the two surfaces identical
+        and both callers lean; the owning orchestrators still authorize every call, and
+        per-entry-path translation goes here when it is needed.
 status: complete
 createdAt: '2026-07-16T15:29:55.392Z'
-updatedAt: '2026-09-18T16:55:38.063Z'
+updatedAt: '2026-10-16T17:24:46.477Z'

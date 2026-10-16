@@ -268,6 +268,37 @@ methods:
         summary: >-
           A Repository facade's methods restate exactly the owned member methods they forward to and
           could name them as their signatureFrom
+  - name: removableForwarder
+    description: >-
+      Rule removable-forwarder. An Orchestrator whose every narrated method is a single hand-off
+      (one call or dispatch step, and a return) is a forwarder. Doctrine often requires one — a
+      Portal never depends on an Adapter, so the Orchestrator between them is where the two shapes
+      are translated — and such a forwarder is never reported. When every modelled caller could
+      legally call the forwarded target directly, though, the hop adds nothing doctrine asks for:
+      reported as a warning, to remove the hop or keep it deliberately with a reasoned lint.allow.
+      Legal means the doctrine family's own verdict on the edge the caller would need — the
+      entry-point, data-layer, dependency-class, subsystem-boundary and member-visibility
+      judgements, the Portal write shortcut and the Supervisor shared-data bound on the forwarded
+      method (each with its own reading of an untagged method), a pack profile's allowedEdges, and
+      pack forbid-edge assertions — so one caller that could not make that edge makes the forwarder
+      required. Silent on a forwarder no modelled caller reaches (the unused rules own that), on one
+      a register step, an invokedBy or a subsystem lifecycle entry reaches (callers outside the
+      narratives cannot be judged), and on one a caller reaches through a method that carries no
+      narrative.
+    signature: 'removableForwarder(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: REMOVABLE_FORWARDER
+        severity: warning
+        summary: >-
+          Orchestrator only forwards, and every caller could legally call the target directly —
+          remove the hop, or keep it deliberately with a lint.allow reason
+    previousNames:
+      - iheuristic_rules.removableForwarders
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-09T11:26:54.444Z'
+updatedAt: '2026-10-16T17:39:28.575Z'

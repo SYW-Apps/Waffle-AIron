@@ -1,5 +1,6 @@
-import { SddRule } from '../types.js';
-import { isRetired } from '../../../models/index.js';
+import { SddRule, type OwnershipIndex, type RuleContext } from '../types.js';
+import { isRetired, type ComponentSpec } from '../../../models/index.js';
+import type { EdgeFinding } from './stereotype-terms.js';
 
 /**
  * Private members stay private. A component may depend on a block inside its
@@ -28,19 +29,35 @@ export const memberVisibilityRule: SddRule = {
     for (const comp of ctx.components) {
       if (isRetired(comp)) continue;
       for (const depId of comp.dependsOn) {
-        const owner = ownership.ownerOf(depId);
-        if (!owner) continue;                                  // dep is a facade or standalone block — fine
-        if (owner === comp.id) continue;                       // the owning pattern depending on its own member — fine
-        if (ownership.ownerOf(comp.id) === owner) continue;    // a sibling member of the same group — fine
-        const isDraftCtx = ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId);
-        // A Supervisor's supervision state is private to it: the dependant is
-        // the intruder, and the finding is reported on it.
-        if (ctx.componentMap.get(owner)?.componentType === 'Supervisor') {
-          ctx.addIssue('error', 'SUPERVISION_STATE_INTRUSION', `"${comp.id}" depends on "${depId}", which Supervisor "${owner}" owns as its supervision state. Supervision state is private to its Supervisor — nobody else depends on it. If "${comp.id}" needs this data it is shared data: move "${depId}" out of "${owner}"'s owns into a data component both depend on (the Supervisor keeping it through read and lifecycle calls), or reach what "${comp.id}" needs through "${owner}".`, comp.id, isDraftCtx);
-          continue;
-        }
-        ctx.addIssue('error', 'VISIBILITY_VIOLATION', `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.`, comp.id, isDraftCtx);
+        const finding = visibilityEdgeFinding(ctx, ownership, comp, depId);
+        if (!finding) continue;
+        ctx.addIssue(finding.severity, finding.code, finding.message, comp.id, ctx.isComponentDraft(comp.id) || ctx.isComponentDraft(depId));
       }
     }
   },
 };
+
+/**
+ * What this rule reports on one dependency id of `comp`, judged against the
+ * tree's ownership: nothing for a facade, a standalone block, the owner's own
+ * member or a sibling's. The rule reports it on every dependsOn id;
+ * directEdgeRefusals asks the same question of an edge a forwarder's caller
+ * would need.
+ */
+export function visibilityEdgeFinding(
+  ctx: RuleContext,
+  ownership: OwnershipIndex,
+  comp: ComponentSpec,
+  depId: string,
+): EdgeFinding | undefined {
+  const owner = ownership.ownerOf(depId);
+  if (!owner) return undefined;                               // dep is a facade or standalone block — fine
+  if (owner === comp.id) return undefined;                    // the owning pattern depending on its own member — fine
+  if (ownership.ownerOf(comp.id) === owner) return undefined; // a sibling member of the same group — fine
+  // A Supervisor's supervision state is private to it: the dependant is
+  // the intruder, and the finding is reported on it.
+  if (ctx.componentMap.get(owner)?.componentType === 'Supervisor') {
+    return { severity: 'error', code: 'SUPERVISION_STATE_INTRUSION', message: `"${comp.id}" depends on "${depId}", which Supervisor "${owner}" owns as its supervision state. Supervision state is private to its Supervisor — nobody else depends on it. If "${comp.id}" needs this data it is shared data: move "${depId}" out of "${owner}"'s owns into a data component both depend on (the Supervisor keeping it through read and lifecycle calls), or reach what "${comp.id}" needs through "${owner}".` };
+  }
+  return { severity: 'error', code: 'VISIBILITY_VIOLATION', message: `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.` };
+}

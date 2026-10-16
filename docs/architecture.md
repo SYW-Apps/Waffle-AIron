@@ -65,6 +65,13 @@ to the artifacts the host AI tool consumes:
   plus composition and the family checks), reused by both the `validate`
   command and the `sdd_validate_tree` MCP tool.
   `validateAsComplete` runs the same gate at full strictness for `lock`.
+- **One verdict on what is legal.** The doctrine rules compute their findings on
+  a dependsOn edge from its two ends, and `directEdgeRefusals`
+  (`core/rules/doctrine/direct-edge.ts`) composes those same judgements to ask
+  whether an edge that does not exist yet would be legal. `REMOVABLE_FORWARDER`
+  uses it to tell a forwarder doctrine requires (Portal → Orchestrator →
+  Adapter, the seam where the two shapes are translated) from one every caller
+  could skip, so the warning and the errors cannot drift apart.
 - **Optionally hosted.** `wairon serve` (the `sdd_host` subsystem, in `server/`)
   serves the `sdd_*` tools over streamable HTTP for many fully-isolated projects,
   binding each request to its authenticated project via `AsyncLocalStorage`

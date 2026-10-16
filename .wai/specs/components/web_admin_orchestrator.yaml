@@ -19,7 +19,13 @@ dependsOn:
   - identity_orchestrator
   - permission_admin_orchestrator
 lint:
-  allow: []
+  allow:
+    - code: REMOVABLE_FORWARDER
+      reason: >-
+        Deliberate seam: the one place the public data plane's web UI crosses into the control-plane
+        admin orchestrators (identity, permission admin). The web portal depends only on its web_*
+        bridges, never on a control-plane orchestrator, and this bridge is where reshaping a
+        control-plane answer for the browser goes when it is needed.
 status: complete
 createdAt: '2026-07-13T18:27:33.510Z'
-updatedAt: '2026-09-18T16:57:58.477Z'
+updatedAt: '2026-10-16T17:24:42.429Z'

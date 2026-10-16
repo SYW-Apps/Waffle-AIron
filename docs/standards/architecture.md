@@ -193,6 +193,39 @@ standard.
 - The narrative `call` graph and the `dependsOn` graph must both be **DAGs** (no
   cycles), and every narrative `call` must target a method on a declared dependency.
 
+### Forwarders: required or removable
+
+A **forwarder** is an Orchestrator whose every narrated method is one hand-off:
+a single `call` or `dispatch` step, then the `return`. Forwarders are allowed,
+and the rules above often require one:
+
+- **Required.** A Portal never depends on an Adapter, so Portal → Orchestrator →
+  Adapter is the canonical shape even when the Orchestrator only passes the call
+  on. That Orchestrator is the seam where the Portal's shape is translated into
+  the Adapter's and back, and where later work goes, so the Portal and the
+  Adapter each stay simple and change on their own. The same holds whenever a
+  caller could not make the call itself: a Portal in front of a `write`- or
+  `lifecycle`-effect facade method (`PORTAL_WRITE_SHORTCUT`), an Observer in
+  front of a Repository, pure logic in front of anything that is not pure, a
+  caller in another subsystem in front of a component that subsystem does not
+  publish.
+- **Removable.** When **every** modelled caller could legally depend on and call
+  the forwarded target itself, the hop adds nothing the rules require. It is
+  reported as `REMOVABLE_FORWARDER` (a warning). "Legally" is the dependency
+  rules' own verdict on the edge each caller would need, including a pack
+  profile's `allowedEdges` and its `forbid-edge` assertions, so the warning never
+  disagrees with the errors. One caller that could not make the call keeps the
+  forwarder.
+- **Kept on purpose.** A removable forwarder may still be the right design: the
+  place where transformation will go, or one list of operations that several
+  entry paths share. Keep it, and say why with a `lint.allow` for
+  `REMOVABLE_FORWARDER` and a reason. Otherwise remove the hop and let the
+  callers call the target directly.
+
+A forwarder reached only from outside the narratives (a `register` step, an
+`invokedBy`, a subsystem lifecycle entry) is never judged, and one no caller
+reaches is the unused rules' finding, not this one.
+
 ### The Orchestrator, precisely
 
 An Orchestrator is **logic as a flowchart**: ordered steps, conditions, branches,
@@ -1002,7 +1035,10 @@ tell apart components that share a noun, and it matches the block:
    supervision state (its own Stores and Registries), private to it.
 4. `owns` ≠ `dependsOn`; cross-group access is via facades only.
 5. A Repository facade forwards 1:1 with no logic (single-`call`-to-owned-member
-   narratives; enforced as `FACADE_FORWARDING`).
+   narratives; enforced as `FACADE_FORWARDING`). A forwarding Orchestrator is
+   required where a caller could not make the call itself (Portal → Orchestrator
+   → Adapter), and removable where every caller could (`REMOVABLE_FORWARDER`,
+   kept on purpose with a reasoned `lint.allow`).
 6. State-owners (Store/Index for domain state; Supervisor/Actor for runtime state) ≠
    components holding only collaborators (Orchestrator/Registry/Query/Portal/Observer).
 7. All logic is a flowchart: an Orchestrator's methods, or an Actor's or

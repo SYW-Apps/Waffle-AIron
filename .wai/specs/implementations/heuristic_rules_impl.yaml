@@ -1056,6 +1056,78 @@ methods:
     detail: full
     symbol: check
     exportedVia: signatureSourceSuggestionsRule
+  - name: removableForwarder
+    sourcePath: src/core/rules/heuristic/removable-forwarder.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          forwarders = the components of pureForwarderComponents(ctx) that are Orchestrators, not
+          retired and not in a contained member: every narrated method across every implementation
+          realizing them is a single call or dispatch step and a return, and at least one is
+          narrated. Return early when there are none.
+        type: local
+      - stepNumber: 2
+        description: >-
+          callers = for each forwarder, the modelled calls into it: every call step of any
+          implementation that targets it (the caller being that implementation's component, never
+          the forwarder itself), every declared `calls` entry naming it (parseDeclaredCall), and
+          every Portal dispatch binding routed to it. reachedFromOutside = the forwarders a register
+          step targets, a subsystem lifecycle entry names, or whose contract declares an invokedBy
+          on any method — callers outside the narratives, which cannot be judged.
+        type: local
+      - stepNumber: 3
+        label: forwarderLoop
+        description: Judge each forwarder.
+        type: loop
+        loopKind: forEach
+        over: forwarders
+        endStep: 9
+      - stepNumber: 4
+        description: >-
+          Does at least one modelled caller reach it, and nothing from outside the narratives? When
+          not, the unused rules or an outside caller own it: continue with the next forwarder.
+        type: branch
+        condition: callers of the forwarder is non-empty and the forwarder is not in reachedFromOutside
+        onFalseStep: 3
+      - stepNumber: 5
+        description: >-
+          handOffs = for each method of the forwarder's implementations, what its single hand-off
+          reaches: a call step's targetComponent and targetMethod, or for a dispatch step the Portal
+          it routes through (the caller would dispatch through the same Portal).
+        type: local
+      - stepNumber: 6
+        label: callerLoop
+        description: Ask, for every caller, whether it could make the call itself.
+        type: loop
+        loopKind: forEach
+        over: the forwarder's callers
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          refusals = the doctrine family's own verdict on the edge this caller would need: the
+          caller, the hand-off target of the method it calls, and the target method. A caller
+          reaching a method with no narrated hand-off is not asked: the forwarder is then
+          unjudgeable.
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: directEdgeRefusals
+      - stepNumber: 8
+        description: >-
+          Record the caller with the target it could call itself and its first route as an example
+          when refusals is empty; any refusal, or an unjudgeable caller, makes the forwarder
+          required and ends this forwarder's judgement.
+        type: local
+      - stepNumber: 9
+        description: >-
+          When every caller could make the call itself, ctx.addIssue('warning',
+          'REMOVABLE_FORWARDER', naming the forwarder, each caller with the targets it may call
+          directly and one example route, and the two ways out: remove the hop and let the callers
+          call the target directly, or keep it on purpose as the place for future transformation and
+          say so with a lint.allow for REMOVABLE_FORWARDER and a reason), anchored on the
+          forwarder's id and carrying ctx.isComponentDraft(forwarder.id).
+        type: local
+    symbol: check
+    exportedVia: removableForwarderRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-09T11:26:58.366Z'
+updatedAt: '2026-10-16T17:41:18.166Z'

@@ -691,37 +691,58 @@ export function buildDependencyEdges(ctx: RuleContext): DependencyEdges {
         all.push(offTreeEdge(ctx, from, ref, fromDraft));
         continue;
       }
-      // A library call: the target is an InProcess Portal of ANOTHER project
-      // (a contained member). Classified once, here, so no boundary or matrix
-      // rule needs its own exemption; library-calls judges it alone.
-      if (isLibraryTarget(to) && ctx.projectOf(to.id) !== ctx.projectOf(from.id)) {
-        const resolution = ctx.resolveCrossProject(from.id, 'dependsOn', ref);
-        all.push({
-          from, ref, to, reach: 'library',
-          ...(resolution ? { resolution } : {}),
-          retired: isRetired(from),
-          draftContext: fromDraft || ctx.isComponentDraft(to.id),
-          licensed: false,
-        });
-        continue;
-      }
-      const edge = {
-        from,
-        ref,
-        to,
-        reach: (to.subsystem === from.subsystem ? 'internal' : 'cross-subsystem') as EdgeReachResolved,
-        retired: isRetired(from) || isRetired(to),
-        draftContext: fromDraft || ctx.isComponentDraft(to.id),
-        licensed: profile?.allowedEdges?.some(
-          e => e.from.includes(from.componentType) && e.to.includes(to.componentType),
-        ) ?? false,
-      };
+      const edge = resolvedEdge(ctx, from, ref, to, fromDraft, profile);
       all.push(edge);
       if (edge.reach === 'internal' && !edge.retired && !edge.licensed) matrix.push(edge);
     }
   }
 
   return { all, matrix };
+}
+
+/**
+ * One edge whose ref names a component of this tree, classified exactly as the
+ * tree's own edges are: a library call, an intra-subsystem edge or a boundary
+ * crossing, with its retirement, draft context and pack licence.
+ *
+ * Exported because the same reading answers a HYPOTHETICAL edge — the one a
+ * forwarder's caller would need to reach the target directly — and a second
+ * classification for that question would be the drift this one exists to
+ * prevent. The governing profile may be handed in when the caller already
+ * read it; it is read from the source component otherwise.
+ */
+export function resolvedEdge(
+  ctx: RuleContext,
+  from: ComponentSpec,
+  ref: string,
+  to: ComponentSpec,
+  fromDraft: boolean = ctx.isComponentDraft(from.id),
+  profile: RuleContext['ext']['profiles'][string] | undefined = ctx.ext.profiles[ctx.getComponentProfile(from.id)],
+): DependencyEdge & { to: ComponentSpec } {
+  // A library call: the target is an InProcess Portal of ANOTHER project
+  // (a contained member). Classified once, here, so no boundary or matrix
+  // rule needs its own exemption; library-calls judges it alone.
+  if (isLibraryTarget(to) && ctx.projectOf(to.id) !== ctx.projectOf(from.id)) {
+    const resolution = ctx.resolveCrossProject(from.id, 'dependsOn', ref);
+    return {
+      from, ref, to, reach: 'library',
+      ...(resolution ? { resolution } : {}),
+      retired: isRetired(from),
+      draftContext: fromDraft || ctx.isComponentDraft(to.id),
+      licensed: false,
+    };
+  }
+  return {
+    from,
+    ref,
+    to,
+    reach: (to.subsystem === from.subsystem ? 'internal' : 'cross-subsystem') as EdgeReachResolved,
+    retired: isRetired(from) || isRetired(to),
+    draftContext: fromDraft || ctx.isComponentDraft(to.id),
+    licensed: profile?.allowedEdges?.some(
+      e => e.from.includes(from.componentType) && e.to.includes(to.componentType),
+    ) ?? false,
+  };
 }
 
 /**

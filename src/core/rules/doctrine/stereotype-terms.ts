@@ -36,3 +36,16 @@ export const isReadLogic = (comp: ComponentSpec): boolean =>
 /** A component as a finding names it: its stereotype, with its dependencyClass when it declares one. */
 export const stereotypeOf = (comp: ComponentSpec): string =>
   comp.dependencyClass ? `${comp.componentType} (dependencyClass ${comp.dependencyClass})` : comp.componentType;
+
+/**
+ * One finding a doctrine rule would report on a dependsOn edge, before it is
+ * anchored: its severity, its code and its message. The edge rules compute
+ * these from the two ends alone and report them on the source component, and
+ * the same judgement answers whether an edge that does NOT exist yet would be
+ * legal (directEdgeRefusals), so the question is asked one way only.
+ */
+export interface EdgeFinding {
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+}
