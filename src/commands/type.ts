@@ -37,6 +37,7 @@ export async function runTypeRenameField(typeId: string, field: string, newName:
   }
   logger.success(`${result.dryRun ? 'Dry run: renaming' : 'Renamed'} field "${result.from}" of type "${result.type}" to "${result.to}" — "${result.from}" joins its rename trace (previousNames; \`formerly\` in the design export).`);
   if (result.rewritten.length > 0) logger.info(`References ${result.dryRun ? 'it would respell' : 'respelled'} in: ${result.rewritten.join(', ')}`);
+  if (result.mentions.length > 0) logger.info(`Left alone (prose still names "${result.from}" — a rename never edits prose; respell it where it means this field): ${result.mentions.join(', ')}.`);
   reportBreaks(result.publishedIn.map((u) => u.publicName), breaks, `read "${result.type}"`, options);
   if (result.dryRun) logger.info('Nothing was written.');
   else logger.info('The approval reads the type as changed until the next `wairon lock`, as with any design edit.');

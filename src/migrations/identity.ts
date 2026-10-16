@@ -5,7 +5,7 @@ import * as surfaces from './adapters/surfaces.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { aliasGrammarProblem, EXTERNAL_ALIAS_RE, PROJECT_ID_RE, type ProjectConfig } from '../models/project.js';
 import { identifierProblem } from '../models/identifiers.js';
-import { familyNode, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
+import { familyNode, type AuthoredReference, type ExternalConsumer, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import { rehearsalRoot, type MigrationPlan, type MigrationRequest, type PlannedEdit, type PlannedEditKind, type PlannedWrite, type Rehearsal } from './types.js';
 import { ownGet } from '../utils/own.js';
 
@@ -150,7 +150,10 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   // Step 7: the target's own id, and the notes.
   edit(plan, target.namespace, 'id', `${oldId} → ${newId} (${oldId} kept in previousIds)`, { root: target.directory, call: 'renameId', args: [oldId, newId] });
   for (const h of holders.filter((x) => x.external)) planPin(plan, h, oldId, newId);
-  plan.notes.push(`Consumers outside the family that name "${oldId}" by path are not found by a rename: each must rewrite its own external (its next gate reports the id change).`);
+  // Steps 8-9: the consumers a family read at the top never holds — a parent composing the
+  // target as a `../` sibling member, a sibling declaring it as an external — named, never written.
+  plan.notes.push(...outsideConsumers(family, target, newId));
+  plan.notes.push(`Consumers outside the family that name "${oldId}" by path from a folder not beside this project are not found by a rename: each must rewrite its own external (its next gate reports the id change); \`wairon externals consumers --search <dir>\` lists them.`);
   // The member's key follows the id when its alias was the old id: the deployment side names it by that key.
   if (target.namespace !== '' && target.mountAlias === oldId) {
     const oldKey = target.namespace;
@@ -162,6 +165,33 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   }
   // Step 8: every project written is re-locked, the renamed one first (the orchestrator lists them).
   return plan;
+}
+
+/**
+ * Steps 8-9 of planRename: when the target is the top of the family read, each consumer of it
+ * the plan writes nothing in — read from the target's own root, so a parent composing it as a `../` sibling member is found as
+ * `wairon externals consumers` finds it — as a note naming its project, folder, alias and section,
+ * and what it owes once the rename is applied. Never fails the plan: an unreadable read names none.
+ */
+function outsideConsumers(family: ProjectFamily, target: ProjectNode, newId: string): string[] {
+  // A member of the family read is declared by its parent inside it, which the
+  // plan already writes: only the top can have a parent the read never holds.
+  if (target.namespace !== '') return [];
+  let consumers: ExternalConsumer[];
+  try {
+    consumers = runWithProjectRoot(target.directory, () => surfaces.listConsumers());
+  } catch {
+    return [];
+  }
+  const inFamily = new Set(family.nodes.map((n) => path.resolve(n.directory).toLowerCase()));
+  return consumers
+    .filter((c) => !inFamily.has(path.resolve(c.directory).toLowerCase()))
+    .map((c) => {
+      const where = path.relative(target.directory, c.directory) || '.';
+      return c.section === 'members'
+        ? `Outside this family: ${c.project} (${where}) declares this project as its member "${c.alias}" — nothing there is written. Once this project is re-locked as "${newId}", run \`wairon lock\` in ${where} to pin its new approval.`
+        : `Outside this family: ${c.project} (${where}) declares this project as its external "${c.alias}" — nothing there is written. It must rewrite that external's project to "${newId}" and re-pin it (\`wairon externals pin ${c.alias}\` there; its next gate reports the id change).`;
+    });
 }
 
 /** One holder of a project's id: a family project whose alias table names it, under an alias. */

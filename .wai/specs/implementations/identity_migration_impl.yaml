@@ -52,14 +52,32 @@ methods:
       - stepNumber: 7
         description: >-
           Plan the target's own edit: its id moved, the old one appended to previousIds; add the
-          notes — consumers outside the family are not discovered and must rewrite their own
-          externals; and, when the member's key follows the id (its alias was the old id), the
+          notes — consumers outside the family that the consumer read below does not reach (no
+          folder beside the target or its top holds them) are not discovered and must rewrite their
+          own externals; and, when the member's key follows the id (its alias was the old id), the
           deployment-side names the key change: the bindings keys and observed-flow names written as
           the old key or `<old key>::…` (its default workload name and its subsystems' and Portals'
           keys) are to be renamed to the new key, which the network commands meanwhile resolve
           through previousIds, each such use reported
         type: local
       - stepNumber: 8
+        description: >-
+          When the target is the top of the family read (a project bound at its own root), read its
+          consumers from its own root — the family in reach and a parent that composes it as a `../`
+          sibling member, which the family read at the target never holds; a member of the family
+          read is declared by its parent inside it, which the plan already writes
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 9
+        description: >-
+          Name each consumer outside the projects the plan writes in a note: its project, its
+          folder, and the alias and section it declares the target under; nothing in it is written.
+          A parent declaring it as a member is to re-lock there once the target is re-locked, to pin
+          its new approval; a project declaring it as an external is to rewrite its own external
+          (its next gate reports the id change)
+        type: local
+      - stepNumber: 10
         description: Answer the plan, every written project to re-lock, the target first
         type: return
         outcome: the rename plan
@@ -151,4 +169,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-10-07T21:46:51.029Z'
+updatedAt: '2026-10-16T19:12:16.731Z'

@@ -2921,7 +2921,7 @@ methods:
         condition: >-
           the field exists, the new name is an identifier the target language allows, and it is
           neither taken nor retired on the type
-        onFalseStep: 11
+        onFalseStep: 12
       - stepNumber: 4
         description: >-
           Collect, without writing, every other type whose foreign key `references: <type>.<field>`
@@ -2939,32 +2939,42 @@ methods:
           writing a name an earlier rename retired is named among the breaks
         type: local
       - stepNumber: 6
+        description: >-
+          Collect the mentions left alone: the specs whose prose (descriptions, intents, narrative
+          step text) names the old field as a whole identifier, among the renamed type and the specs
+          that reach a type carrying it — naming one of those types by id, name or symbol, a
+          contract naming one in a param or returns, or an implementation of such a contract — so a
+          field name common elsewhere in the tree is not reported where the type is never in view
+        type: local
+      - stepNumber: 7
         label: fieldDryRun
         description: A dry run stops here, refused exactly as the real rename above
         type: branch
         condition: dryRun is set
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           Answer the FieldRename the rename would produce: the type, from, to, the ids it would
-          respell and publishedIn, marked dryRun; nothing was written
+          respell, publishedIn and the mentions, marked dryRun; nothing was written
         type: return
         outcome: FieldRename (dry run)
-      - stepNumber: 8
+      - stepNumber: 9
         description: Respell each such reference in place to `<type>.<newName>`
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Save the type with the field renamed and its old name appended to the field's
           previousNames
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 10
-        description: 'Answer the FieldRename: the type, from, to, the ids of the specs respelled and publishedIn'
+      - stepNumber: 11
+        description: >-
+          Answer the FieldRename: the type, from, to, the ids of the specs respelled, publishedIn
+          and the mentions left alone
         type: return
         outcome: FieldRename
-      - stepNumber: 11
+      - stepNumber: 12
         label: refuse
         description: >-
           Refuse with the reason that applies, naming what holds or retired the name; nothing was
@@ -3539,4 +3549,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-16T12:02:54.863Z'
+updatedAt: '2026-10-16T18:31:39.244Z'

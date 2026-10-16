@@ -4014,10 +4014,10 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Print the move (or what would move), the specs rewritten, the public names carrying the
-          field and each consumer it breaks with its section and alias — or that none in reach uses
-          it, naming --search; a dry run ends with "Nothing was written", a real one with the
-          re-lock the rename owes
+          Print the move (or what would move), the specs rewritten, the specs whose prose still
+          names the old field (left alone), the public names carrying the field and each consumer it
+          breaks with its section and alias — or that none in reach uses it, naming --search; a dry
+          run ends with "Nothing was written", a real one with the re-lock the rename owes
         type: return
   - name: runMethodRenameParam
     sourcePath: src/commands/method.ts
@@ -4122,4 +4122,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-15T16:16:55.340Z'
+updatedAt: '2026-10-16T18:32:52.771Z'

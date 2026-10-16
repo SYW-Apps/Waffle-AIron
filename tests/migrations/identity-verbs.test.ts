@@ -11,7 +11,7 @@ import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as migrations from '../../src/migrations/index.js';
-import { buildContractFamily, buildReferenceFamily, type ContractFamily } from '../helpers/reference-family.js';
+import { buildContractFamily, buildPathExternalPair, buildReferenceFamily, type ContractFamily } from '../helpers/reference-family.js';
 import { at, dirHash, familyFindings, familyLines, migrate, newFindings, pinAt, plan, waiState } from '../helpers/family-verbs.js';
 
 // ---------------------------------------------------------------------------
@@ -124,6 +124,30 @@ describe('stage 6 — the identity verbs', () => {
     expect(configOf(f.billing).externals).toEqual({ ledger: { project: 'acme.ledger' } });
     expect(pinsOf(f.billing).ledger.project).toBe('acme.ledger');
     expect(at(f.billing, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code)).toEqual([]);
+  });
+
+  it("rename from a member's own root names the `../` sibling parent declaring it, and writes nothing there (round 11)", () => {
+    const pair = buildPathExternalPair();
+    try {
+      pair.setBillingConfig(['id: billing', 'name: Billing', 'members:', '  ledger: ../ledger']);
+      const before = dirHash(pair.billing);
+      const planned = plan(pair.ledger, { verb: 'rename', newId: 'acme-ledger' });
+      expect(planned.refusals).toEqual([]);
+      // Round 11: the plan named the renamed project alone and never the parent.
+      expect(planned.notes).toContain(`Outside this family: billing (${path.join('..', 'billing')}) declares this project as its member "ledger" — nothing there is written. Once this project is re-locked as "acme-ledger", run \`wairon lock\` in ${path.join('..', 'billing')} to pin its new approval.`);
+      expect(planned.changes.every((c) => path.resolve(c.project) === path.resolve(pair.ledger))).toBe(true);
+      migrations.discard(planned);
+      expect(dirHash(pair.billing)).toEqual(before);
+    } finally {
+      pair.cleanup();
+    }
+  });
+
+  it('a consumer inside the family the rename writes is never noted as outside it', () => {
+    const f = family();
+    const planned = plan(f.top, { verb: 'rename', project: 'ledger', newId: 'acme.ledger' });
+    expect(planned.notes.some((n) => n.startsWith('Outside this family'))).toBe(false);
+    migrations.discard(planned);
   });
 
   it('rename refuses — each writing nothing: not-a-member, member-absent, id-collision (taken), id-invalid (malformed — not mislabelled a collision, round-4 trial), family-partial', () => {

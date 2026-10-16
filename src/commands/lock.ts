@@ -176,6 +176,25 @@ export function treeVerdict(strict: boolean): ApprovalCheck | null {
   };
 }
 
+/**
+ * The sentence lock-check says about this project's OWN approval beside a
+ * member that carries unapproved changes. "Stale too" read as if this
+ * project's design had changed when nothing of its own had: the sentence names
+ * what this approval no longer covers — its own specs, a member's pin, what it
+ * owes, or the inputs that moved — read from the same entry status reads.
+ */
+function ownApprovalBeside(state: string, own: ProjectApproval | undefined, members: ProjectApproval[]): string {
+  if (state === 'locked' || own?.state === 'approved') return 'This project\'s own approval still covers its design.';
+  const after = ' — run `wairon lock` here after the member(s).';
+  if (own?.owed !== undefined) return `This project's own approval does not cover it either: ${own.owed}${after}`;
+  const inputs = own?.inputsMoved ?? [];
+  if (inputs.includes('design')) return `This project's own specs changed since its approval too${after}`;
+  const pins = members.filter((m) => m.parent === '' && m.pinned === 'moved').map((m) => m.alias ?? m.key);
+  const pinNote = inputs.includes('members') && pins.length > 0 ? ` (this approval still pins ${pins.join(', ')} at an earlier approval)` : '';
+  if (inputs.length > 0) return `None of this project's own specs changed, but its approval does not cover it either: ${describeGateParts(inputs)} moved since it was taken${pinNote}${after}`;
+  return `This project's own approval does not cover it either (what it was approved under moved since it was taken)${after}`;
+}
+
 export function checkApproval(strict: boolean): ApprovalCheck {
   // Steps 1-3: no L0 — no tree, or a tree whose root is gone.
   const tree = treeVerdict(strict);
@@ -198,11 +217,9 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   // Steps 7-9: a member with unapproved changes refuses at every strictness.
   if (drifted.length > 0) {
     const where = memberFolders();
-    const own = lock.state === 'locked'
-      ? 'This project\'s own approval still covers its design.'
-      : lock.state === 'stale'
-        ? 'This project\'s own approval is stale too — run `wairon lock` here afterwards.'
-        : 'This project itself has no approval on record.';
+    const own = lock.state === 'unlocked'
+      ? 'This project itself has no approval on record.'
+      : ownApprovalBeside(lock.state, ownEntry, members);
     // Said in each member's own terms: "spec changes nobody approved" only
     // when a member's specs may have moved — an approval that merely predates
     // recorded inputs is no unreviewed change, and a reviewer must not go

@@ -570,7 +570,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
         : '';
       const ignored = own?.partsIgnored !== undefined ? ` Notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them.` : '';
       return {
-        text: `\nApproved: ${stamp} — no spec has changed since.${released}${sameRulesNotice(approval, own, WAIRON_VERSION)}${owes}${ignored}${stampNotice(own)}${childNote}${carry}\n`,
+        text: `\nApproved: ${stamp} — ${notes.pinsMoved ? 'none of this project\'s own specs has changed since; what moved is a member\'s approval.' : 'no spec has changed since.'}${released}${sameRulesNotice(approval, own, WAIRON_VERSION)}${owes}${ignored}${stampNotice(own)}${childNote}${carry}\n`,
         drifted: pinDrift || own?.state === 'drifted',
       };
     }
@@ -671,7 +671,7 @@ export const GATE_MOVED_NOTE =
  * this project's drift only: an upgrade or a moved pin — a member that is
  * merely unapproved is the member's to lock.
  */
-function memberNotes(approvals: ProjectApproval[], record?: LockRecord | null, diff?: ApprovalDiff | null): { text: string; drift: boolean } {
+function memberNotes(approvals: ProjectApproval[], record?: LockRecord | null, diff?: ApprovalDiff | null): { text: string; drift: boolean; pinsMoved: boolean } {
   const own = approvals.find((a) => a.key === '');
   // A part has no approval of its own (stage 8): this project's is its approval.
   const direct = approvals.filter((a) => a.parent === '' && a.as !== 'part');
@@ -689,7 +689,13 @@ function memberNotes(approvals: ProjectApproval[], record?: LockRecord | null, d
         : `This approval was taken under an earlier gate identity — ${GATE_UPGRADE_NOTE}. Re-lock once.`);
   }
   if (moved.length) {
-    lines.push(`${moved.length} member pin(s) moved since approval: ${moved.map((a) => a.alias ?? a.key).join(', ')} — re-lock to approve them.`);
+    // Say what moved and why, never just "drifted": the member's own approver
+    // signed its new design off at its own root, and this approval still pins
+    // the earlier one — the fix is a lock here, not a design review here.
+    const names = moved.map((a) => a.alias ?? a.key).join(', ');
+    lines.push(moved.length === 1
+      ? `Member pin moved since approval: ${names} was re-approved at its own root after this approval, which still pins its earlier approval. Run \`wairon lock\` here to pin the new one (\`wairon validate\` first shows what ${names}'s change means for this project).`
+      : `Member pins moved since approval: ${names} were re-approved at their own roots after this approval, which still pins their earlier approvals. Run \`wairon lock\` here to pin the new ones (\`wairon validate\` first shows what their changes mean for this project).`);
   }
   if (unapproved.length) {
     lines.push(`Member(s) not approved at their own root: ${unapproved.map((a) => `${a.alias ?? a.key} (${a.state}${a.upgraded ? ', re-lock once' : ''})`).join(', ')}.`);
@@ -697,5 +703,6 @@ function memberNotes(approvals: ProjectApproval[], record?: LockRecord | null, d
   return {
     text: lines.map((l) => `\n${l}`).join(''),
     drift: !!own?.upgraded || moved.length > 0,
+    pinsMoved: moved.length > 0,
   };
 }

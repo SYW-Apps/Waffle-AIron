@@ -418,7 +418,10 @@ describe('the approval', () => {
 
     const verdict = approvalVerdict([own({ state: 'drifted' }), member({ pinned: 'moved' })]);
     expect(verdict.drifted).toBe(true);
-    expect(verdict.text).toContain('member pin(s) moved since approval: billing');
+    // Round 11: "no spec has changed since" beside the drift, and "re-lock to approve them".
+    expect(verdict.text).toContain("none of this project's own specs has changed since; what moved is a member's approval.");
+    expect(verdict.text).toContain('Member pin moved since approval: billing was re-approved at its own root after this approval, which still pins its earlier approval. Run `wairon lock` here to pin the new one');
+    expect(verdict.text).not.toContain('no spec has changed since.');
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
   });
 

@@ -1049,7 +1049,11 @@ key `references: <type>.<field>` naming it, the type's own included. The field
 keeps its place, type and description; its old name joins the field's rename
 trace (`previousNames`), which `wairon export` shows as `formerly`, so a
 consumer holding the old name reads a rename, not a removal and an addition.
-Traces and prose are never rewritten. It refuses, writing nothing, a type or
+Traces and prose are never rewritten: the specs whose prose still spells the
+old field — the type itself, and every spec with the type in view (naming a
+type that carries the field, a contract naming one, or an implementation of
+such a contract) — are listed as mentions to respell by hand, as the method
+rename lists its own. It refuses, writing nothing, a type or
 field that does not exist, a name that is not an identifier or that the target
 language reserves for a field (`fn` in Rust), and a name another field of the
 type holds or retired. It names every export a consumer reaches the field
@@ -1262,7 +1266,7 @@ widen it (`EXPORT_WIDENS_AUDIENCE`).
 | `wairon member adopt <alias>` | Make this project's external found by path a member again — detach's inverse. Its source reads as `member attach` reads a location: inside this project, or a sibling with a leading `../` (a sibling member is composed live like a contained one, never pinned) |
 | `wairon member rename-alias <old> <new>` | Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes |
 | `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop] [--export <name>…]` | Fold a member into this project's own specs folder. A **part** is a storage move: its subsystems move in and nothing else changes. A **project** is demoted first — its own metadata goes to a home (its L0 vision onto the `--into` subsystem, its boundaries, requirements and databases into this L0, its language, profile and depth onto the moved subsystems, its members and externals into this configuration, its packs adopted or dropped), what has no home (its lock, pins, derived outputs) is deleted and listed, and every family project that consumed it is re-pointed here |
-| `wairon project rename <new-id> [--project <alias path>]` | Move a project's id — this project's, or a member's named by its alias path — and every reference to the old id family-wide; the old id is kept in `previousIds`. Lists every project it writes to re-lock |
+| `wairon project rename <new-id> [--project <alias path>]` | Move a project's id — this project's, or a member's named by its alias path — and every reference to the old id family-wide; the old id is kept in `previousIds`. Lists every project it writes to re-lock, and names each consumer outside the family it writes nothing in — a parent declaring it as a `../` sibling member, re-locked there once this project is |
 | `wairon subsystem externalize <id> --path <dir> [--as part\|project]` | Move an internal subsystem's specs into a **part** at `<dir>` (a new one, declared under the subsystem id, or the existing part there) — a storage move: no reference, export or pin changes, the same verdict. With `--as project` the move is followed by a promote, family-wide: references across the new boundary become `alias::name`, what crosses it is exported and imported, and every other family project's names are checked to keep resolving. You move the source code |
 
 On a hosted instance a project member is a project record of its own and

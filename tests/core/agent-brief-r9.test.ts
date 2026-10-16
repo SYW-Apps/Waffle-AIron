@@ -176,5 +176,8 @@ describe('live briefs, round 9', () => {
     expect(brief.instructions).toContain('read live and never pinned');
     expect(brief.instructions).toContain('keep them exactly as the member\'s live L0 export table names them now');
     expect(brief.instructions).not.toContain('as the pin has them');
+    // Round 11: no tag convention was named, so an assistant invented its own section headers.
+    expect(brief.instructions).toContain('Tag each declaration in a binding that mirrors a producer name with a doc comment naming it — `/** geo::<public name> */` above an interface, a class or a type, `/** geo::<public name>.<method> */` above a free function');
+    expect(brief.instructions).toContain("one nothing matches is read as the binding's own plumbing and never judged");
   });
 });
