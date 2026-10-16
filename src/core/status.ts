@@ -32,7 +32,7 @@ import {
 import { implementationSourceFiles, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
-import type { ProjectApproval } from '../models/lock.js';
+import { describeGateParts, type ProjectApproval } from '../models/lock.js';
 
 /**
  * The completeness report, and whether it could be produced at all. Two parts
@@ -103,6 +103,25 @@ const OWN_APPROVAL_WORDS: Record<ProjectApproval['state'], string> = {
   drifted: 'drifted — its approval no longer covers this tree (`wairon lock` re-approves)',
   never: 'never approved (`wairon lock` approves the design)',
 };
+
+/**
+ * The root's own state when what moved is a direct member's pin and not its own
+ * design: "drifted" alone read as if this project's design changed, beside a
+ * verdict that says no own spec did. Names the member(s) and the fix; null
+ * when the own design (or nothing named) moved, so the plain words stand.
+ */
+function pinMovedWords(own: ProjectApproval, approvals: ProjectApproval[]): string | null {
+  if (own.state !== 'drifted' || own.upgraded || own.owed !== undefined) return null;
+  const inputs = own.inputsMoved;
+  if (!inputs || !inputs.includes('members') || inputs.includes('design')) return null;
+  const moved = approvals.filter((a) => a.parent === '' && a.as !== 'part' && a.pinned === 'moved').map((a) => a.alias ?? a.key);
+  if (moved.length === 0) return null;
+  const others = inputs.filter((p) => p !== 'members');
+  const also = others.length > 0 ? `; ${describeGateParts(others)} moved too` : '';
+  return moved.length === 1
+    ? `not covered by its approval: none of its own specs changed, but member ${moved[0]} was re-approved at its own root since, and this approval still pins its earlier approval${also} (\`wairon lock\` here pins the new one)`
+    : `not covered by its approval: none of its own specs changed, but members ${moved.join(', ')} were re-approved at their own roots since, and this approval still pins their earlier approvals${also} (\`wairon lock\` here pins the new ones)`;
+}
 
 /**
  * How a caller wants the report marked up, named by what each part MEANS
@@ -510,7 +529,7 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
       : '';
     const ignored = own.partsIgnored !== undefined ? ` (notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them)` : '';
     const stamp = own.stampProblem !== undefined ? ` (notice: ${own.stampProblem}; \`wairon lock\` replaces the stamp)` : '';
-    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}${ignored}${stamp}\n`;
+    output += `${mark.layer('system', 'Approval:')} this project is ${pinMovedWords(own, options.approvals ?? []) ?? OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}${ignored}${stamp}\n`;
   }
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

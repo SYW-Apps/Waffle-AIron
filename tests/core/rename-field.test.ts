@@ -53,11 +53,27 @@ describe('renameField', () => {
   it('moves the field, keeps its trace and respells every foreign key naming it', () => {
     root = project();
     const result = renameField('invoice', 'id', 'number');
-    expect(result).toEqual({ type: 'billing::invoice', from: 'id', to: 'number', rewritten: ['line'], publishedIn: [] });
+    expect(result).toEqual({ type: 'billing::invoice', from: 'id', to: 'number', rewritten: ['line'], mentions: [], publishedIn: [] });
     const invoice = loadTypeSpec('invoice')!;
     expect(invoice.fields.map((f) => f.name)).toEqual(['number', 'total']);
     expect(invoice.fields[0]).toMatchObject({ type: 'string', key: 'primary', previousNames: ['id'] });
     expect(loadTypeSpec('line')!.fields[0].references).toBe('invoice.number');
+  });
+
+  it('names the prose still spelling the old field among the specs with the type in view, and rewrites none of it', () => {
+    root = project();
+    const invoice = loadTypeSpec('invoice')!;
+    saveSpec('type', { ...invoice, description: 'An invoice: its id and its total.' } as TypeSpec);
+    const line = loadTypeSpec('line')!;
+    saveSpec('type', { ...line, description: 'One line of an Invoice, keyed by the invoice id.' } as TypeSpec);
+    // A spec that never has the type in view is not reported for a common word.
+    saveSpec('type', { kind: 'value-object', id: 'receipt', name: 'Receipt', subsystem: 'billing', description: 'A receipt has an id of its own.', fields: [{ name: 'code', type: 'string', optional: false }], methods: [], createdAt: now, updatedAt: now } as TypeSpec);
+    invalidateSpecCache();
+    const dry = renameField('invoice', 'id', 'number', true);
+    expect(dry.mentions).toEqual(['invoice', 'line']);
+    const real = renameField('invoice', 'id', 'number');
+    expect(real.mentions).toEqual(['invoice', 'line']);
+    expect(loadTypeSpec('invoice')!.description).toBe('An invoice: its id and its total.');
   });
 
   it('the design export shows the trace as `formerly`, and only on a renamed field', () => {

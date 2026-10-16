@@ -4813,6 +4813,12 @@ export interface FieldRename {
   /** Ids of the other specs whose references to the field were respelled. */
   rewritten: string[];
   /**
+   * Ids of the specs whose prose still names the old field: the renamed type,
+   * and the specs that reach a type carrying it (see fieldMentions). Nothing
+   * here was rewritten — a rename never edits prose.
+   */
+  mentions: string[];
+  /**
    * Every public name a consumer reaches the field through, with the members
    * carrying it: an exported type that is, or embeds, the renamed type (member
    * `type`), and an exported contract whose methods name such a type.
@@ -4869,7 +4875,7 @@ export function renameField(typeId: string, field: string, newName: string, dryR
     const own = retired === moving ? '; a field renamed back to a name it had would list its own name in its trace' : '';
     throw new WaironError(`name-retired: field "${retired.name}" of type "${type.id}" lists "${newName}" in its previousNames — the name is retired on this type${own}. Unsetting that previousNames releases it.`);
   }
-  if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
+  if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [], mentions: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
 
   // Step 4: every foreign key naming the field, collected without writing.
   const others = all.filter((t) => t !== type);
@@ -4913,14 +4919,16 @@ export function renameField(typeId: string, field: string, newName: string, dryR
   assertSpecsInReach([{ kind: 'type', id: type.id }, ...wouldRespell], `renaming field "${field}" of type "${typeId}"`, false);
   // Where a consumer reaches the field: every export carrying the type.
   const publishedIn = publishedCarriers(type);
+  // Step 6: the prose still naming the old field, left alone.
+  const mentions = fieldMentions(specsDir, type, field);
   // A dry run stops here, refused exactly as the real rename above.
   if (dryRun) {
-    return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: wouldRespell.map((spec) => spec.id), publishedIn, dryRun: true };
+    return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: wouldRespell.map((spec) => spec.id), mentions, publishedIn, dryRun: true };
   }
-  // Step 5: the references.
+  // Step 9: the references.
   const rewritten = respell(false).map((spec) => spec.id);
   invalidateSpecCache();
-  // Step 6: the field under its new name, its old one traced; a self-reference moves with it.
+  // Step 10: the field under its new name, its old one traced; a self-reference moves with it.
   const stored = loadTypeSpecs().find((t) => t.id === type.id && (t.subsystem ?? '') === (type.subsystem ?? '')) ?? type;
   const renamed = (stored.fields ?? []).map((f) => {
     const self = namesField(f.references, type.subsystem)
@@ -4932,18 +4940,63 @@ export function renameField(typeId: string, field: string, newName: string, dryR
   });
   saveSpec('type', { ...stored, fields: renamed } as TypeSpec);
   invalidateSpecCache();
-  // Step 7.
-  return { type: qualifiedTypeId(type), from: field, to: newName, rewritten, publishedIn };
+  // Step 11.
+  return { type: qualifiedTypeId(type), from: field, to: newName, rewritten, mentions, publishedIn };
 }
 
 /**
- * Every public name of the bound project's L1 and L0 export tables a consumer
- * reaches a type through, with the members carrying it: the type and every type
- * embedding it (a field, param or returns naming a carrying type, transitively)
- * exported as a type (member `type`), and every exported contract whose
- * methods name a carrying type in a param or returns (those methods).
+ * Step 6 of renameField: the specs whose prose still names `field` as a whole
+ * identifier, among those that have the type in view — the type itself, a
+ * spec naming a type carrying the field (by id, name or symbol), a contract
+ * naming one in a param or returns, and an implementation of such a contract.
+ * A field name is often an ordinary word ("kind", "id"), so a spec that never
+ * reaches the type is not reported for it. Nothing is rewritten.
  */
-function publishedCarriers(type: TypeSpec): ExportUse[] {
+function fieldMentions(specsDir: string, type: TypeSpec, field: string): string[] {
+  const carrying = carryingTypes(type);
+  const named = identifierPattern(field);
+  const typeWords = [...new Set(carrying.flatMap((t) => [t.id, t.id.split('::').pop()!, t.name, t.symbol]
+    .filter((w): w is string => typeof w === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(w))))]
+    .map((w) => identifierPattern(w));
+  const refsCarrying = (exprs: string[]): boolean => exprs.some((expr) => extractTypeIdentifiers(expr).some((token) => carrying.some((t) => typeMatchesRef(t, token))));
+  const contracts = new Set(loadInterfaceSpecs().filter((i) => i.methods.some((m) => refsCarrying(methodTypeRefs(m)))).map((i) => i.id));
+  /** Whether a prose field this value nests passes `test`. */
+  const inProse = (value: unknown, test: (text: string) => boolean): boolean => {
+    if (Array.isArray(value)) return value.some((v) => inProse(v, test));
+    if (!value || typeof value !== 'object') return false;
+    return Object.entries(value as Record<string, unknown>).some(([key, nested]) => (typeof nested === 'string'
+      ? PROSE_FIELDS.has(key) && test(nested)
+      : inProse(nested, test)));
+  };
+  /** Whether any string this value nests names one of the carrying types. */
+  const namesType = (value: unknown): boolean => {
+    if (typeof value === 'string') return typeWords.some((w) => w.test(value));
+    if (Array.isArray(value)) return value.some(namesType);
+    return !!value && typeof value === 'object' && Object.values(value as Record<string, unknown>).some(namesType);
+  };
+  const mentions = new Set<string>();
+  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    let raw: any;
+    try {
+      raw = readYamlFile(file);
+    } catch {
+      continue;
+    }
+    if (!raw || typeof raw !== 'object') continue;
+    const kind = specKind(raw);
+    if (!kind || !inProse(raw, (text) => named.test(text))) continue;
+    const own = kind === 'type' && raw.id === type.id && (raw.subsystem ?? '') === (type.subsystem ?? '');
+    const inView = own
+      || (kind === 'interface' && contracts.has(String(raw.id)))
+      || (kind === 'implementation' && contracts.has(String(raw.contract)))
+      || namesType(raw);
+    if (inView) mentions.add(kind === 'system' ? 'system' : String(raw.id));
+  }
+  return [...mentions].sort();
+}
+
+/** The types that carry `type`'s fields: the type and every type whose fields, params or returns name a carrying type, transitively. */
+function carryingTypes(type: TypeSpec): TypeSpec[] {
   const all = loadTypeSpecs();
   const carrying: TypeSpec[] = [type];
   const names = (exprs: string[]): boolean => exprs.some((expr) => extractTypeIdentifiers(expr).some((token) => carrying.some((t) => typeMatchesRef(t, token))));
@@ -4957,6 +5010,19 @@ function publishedCarriers(type: TypeSpec): ExportUse[] {
       grew = true;
     }
   }
+  return carrying;
+}
+
+/**
+ * Every public name of the bound project's L1 and L0 export tables a consumer
+ * reaches a type through, with the members carrying it: the type and every type
+ * embedding it (a field, param or returns naming a carrying type, transitively)
+ * exported as a type (member `type`), and every exported contract whose
+ * methods name a carrying type in a param or returns (those methods).
+ */
+function publishedCarriers(type: TypeSpec): ExportUse[] {
+  const carrying = carryingTypes(type);
+  const names = (exprs: string[]): boolean => exprs.some((expr) => extractTypeIdentifiers(expr).some((token) => carrying.some((t) => typeMatchesRef(t, token))));
   const carries = (typeDef: string): boolean => carrying.some((t) => t.id === typeDef || qualifiedTypeId(t) === typeDef || typeMatchesRef(t, typeDef));
   const contracts = loadInterfaceSpecs();
   const out = new Map<string, ExportUse>();

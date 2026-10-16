@@ -741,9 +741,14 @@ export function composeAgentBrief(agentId: string): AgentBrief {
       ? 'the member\'s live L0 export table names them now'
       : pinsOnly ? 'the pin has them' : 'the pin has them (for a member, as its live L0 export table names them now)';
     const comparedWith = membersOnly ? 'that table' : pinsOnly ? 'the pin' : 'the pin or the table';
+    // The tag convention: a doc comment naming the export ties a declaration to it, so a verb the
+    // producer no longer holds is named; untagged, a declaration nothing matches by name is the
+    // binding's own plumbing and never judged. Spelled with an alias these components really use.
+    const tagAlias = externals[0].alias;
+    const tagNote = ` Tag each declaration in a binding that mirrors a producer name with a doc comment naming it — \`/** ${tagAlias}::<public name> */\` above an interface, a class or a type, \`/** ${tagAlias}::<public name>.<method> */\` above a free function — so \`validate\` compares it with that export alone and names a verb the producer no longer holds; an untagged declaration is matched by name, and one nothing matches is read as the binding's own plumbing and never judged.`;
     const bindingNote = bindings.length > 0
-      ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as ${source} (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.\n`
-      : `\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as \`bindings\` — code linkage, no re-lock — so \`validate\` compares it with ${comparedWith}.\n`;
+      ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as ${source} (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.${tagNote}\n`
+      : `\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as \`bindings\` — code linkage, no re-lock — so \`validate\` compares it with ${comparedWith}.${tagNote}\n`;
     instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot (for a member project, its live L0 export table), never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
     readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
   }

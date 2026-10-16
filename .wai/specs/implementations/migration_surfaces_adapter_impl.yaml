@@ -53,6 +53,13 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: getExternalsStatus
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listConsumers
 status: complete
 createdAt: '2026-09-30T20:31:58.977Z'
-updatedAt: '2026-10-05T23:35:16.994Z'
+updatedAt: '2026-10-16T18:29:21.435Z'

@@ -481,6 +481,22 @@ describe('gate truth — the root lock-check judges every member project, and pl
     }
   });
 
+  it('beside a dirty member, names what this approval no longer covers — a member pin that moved — never "stale too"', async () => {
+    fam = buildApprovalFamily();
+    await lockAll(fam);
+    // The member re-approved at its own root, then edited again: this
+    // project's own specs never moved, only its pin of the member did.
+    fam.touch(fam.sib, 'edited');
+    await lockAt(fam.sib);
+    fam.touch(fam.sib, 'edited again');
+    bind(fam.top);
+    const check = checkApproval(false);
+    expect(check.approved).toBe(false);
+    expect(check.message).toContain('carry spec changes nobody approved');
+    expect(check.message).not.toContain('stale too');
+    expect(check.message).toContain("None of this project's own specs changed, but its approval does not cover it either: a member's approval moved since it was taken (this approval still pins sib at an earlier approval) — run `wairon lock` here after the member(s).");
+  });
+
   it('never calls the family approved while a member was never approved: --strict refuses, plain passes naming it NOT gated', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.leaf);

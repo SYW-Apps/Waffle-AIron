@@ -281,21 +281,25 @@ methods:
           take, each used name spelled by its PUBLIC name in that table (the internal id the loader
           resolved a reference to is mapped back through the table's entries) — and the binding
           modules its implementations name, which spell the producer's names exactly as the pin does
-          (for a member, as its live export table names them). The code linkage the implementer
-          owns: a record whose components include a Portal gets a '## Handler shape' section — each
-          verb's function takes the contract's own parameters in order under the contract's names;
-          the handles its framework hands it (a request, a response, a context, next) are wiring,
-          named in the implementation's injectedParams at the start or the end of the list; where
-          the framework hands the function the request alone, each contract parameter is read off it
-          by its own name (the request's params, query or body, or a URL's searchParams); the router
-          linkage names the entry its file exports or a central route table; and the conformance
-          dial `off` is for generated or vendored code only and never switches the doctrine off.
-          Every record with a fence is told that injectedParams are code linkage the implementer
-          declares once its code takes such a parameter (sdd_write_narrative injectedParams, or
-          sdd_update_spec — no re-lock), never guessed at design time, and the ones its
-          implementations already declare are listed as possibly design-time guesses, to be removed
-          when the code does not take them (UNUSED_INJECTED_PARAM). An agent that implements nothing
-          gets none of these
+          (for a member, as its live export table names them), each declaration in them that mirrors
+          a producer name tagged with a doc comment naming it (`/** alias::name */` above an
+          interface, a class or a type, `/** alias::name.method */` above a free function), so
+          validate compares it with that export alone and names a verb the producer no longer holds,
+          where an untagged declaration nothing matches by name reads as the binding's own plumbing
+          and is never judged. The code linkage the implementer owns: a record whose components
+          include a Portal gets a '## Handler shape' section — each verb's function takes the
+          contract's own parameters in order under the contract's names; the handles its framework
+          hands it (a request, a response, a context, next) are wiring, named in the
+          implementation's injectedParams at the start or the end of the list; where the framework
+          hands the function the request alone, each contract parameter is read off it by its own
+          name (the request's params, query or body, or a URL's searchParams); the router linkage
+          names the entry its file exports or a central route table; and the conformance dial `off`
+          is for generated or vendored code only and never switches the doctrine off. Every record
+          with a fence is told that injectedParams are code linkage the implementer declares once
+          its code takes such a parameter (sdd_write_narrative injectedParams, or sdd_update_spec —
+          no re-lock), never guessed at design time, and the ones its implementations already
+          declare are listed as possibly design-time guesses, to be removed when the code does not
+          take them (UNUSED_INJECTED_PARAM). An agent that implements nothing gets none of these
         type: local
       - stepNumber: 14
         description: >-
@@ -320,4 +324,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-15T16:03:25.126Z'
+updatedAt: '2026-10-16T18:35:39.542Z'
