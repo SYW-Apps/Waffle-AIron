@@ -1,6 +1,6 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { isRetired } from '../../../models/index.js';
-import { isPureLogic, stereotypeOf, storeResolutionHint } from './stereotype-terms.js';
+import { isRetired, type ComponentSpec } from '../../../models/index.js';
+import { isPureLogic, stereotypeOf, storeResolutionHint, type EdgeFinding } from './stereotype-terms.js';
 
 /**
  * The Registries each Supervisor maintains: the ones it owns as its
@@ -8,7 +8,7 @@ import { isPureLogic, stereotypeOf, storeResolutionHint } from './stereotype-ter
  * (registering and unregistering what exists). A live Actor's callers look it
  * up by id through such a Registry — the hop the code really takes.
  */
-function maintainedRegistries(ctx: RuleContext): Map<string, string[]> {
+export function maintainedRegistries(ctx: RuleContext): Map<string, string[]> {
   const maintained = new Map<string, Set<string>>();
   const add = (supervisorId: string, registryId: string): void => {
     let set = maintained.get(supervisorId);
@@ -60,104 +60,117 @@ export const entrypointDepsRule: SddRule = {
   check(ctx) {
     const lookups = maintainedRegistries(ctx);
     for (const edge of ctx.dependencyEdges().matrix) {
-      const comp = edge.from;
-      const depComp = edge.to;
-      const storeHint = depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : '';
-
-      // Portal/Observer dependency boundary: components cannot depend on
-      // Portals or Observers. That is the edge's one finding — neither the
-      // checks below nor the other matrix rules report the same edge again.
-      if (depComp.componentType === 'Portal' || depComp.componentType === 'Observer') {
-        ctx.addIssue(
-          'error',
-          'ARCHITECTURE_VIOLATION_PORTAL_DEP',
-          `Architectural violation: Component "${comp.id}" cannot depend on ${depComp.componentType} component "${depComp.id}". ${depComp.componentType}s are top-level entry points/subscribers and cannot be dependencies.`,
-          comp.id,
-          edge.draftContext,
-        );
-        continue;
-      }
-
-      // Portal dispatches to Orchestrators, and may READ through Indexes and
-      // Repository facades (the per-entity empty-Orchestrator ceremony is
-      // not required for passthrough reads) — but its WRITES always route
-      // through the workflow layer (portal-write-shortcut), and the raw data
-      // blocks (Store/Registry/Query) plus Adapters stay out of reach.
-      // Observer forwards to one Orchestrator/Supervisor and may use a
-      // message-bus Adapter to subscribe.
-      if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
-        const forbiddenTypes = comp.componentType === 'Portal'
-          ? ['Store', 'Registry', 'Adapter', 'Query']
-          : ['Store', 'Registry', 'Repository', 'Index', 'Query'];
-        if (forbiddenTypes.includes(depComp.componentType)) {
-          ctx.addIssue(
-            'error',
-            'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
-            `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${comp.componentType}s coordinate through Orchestrators (and Supervisors); they do not reach the data layer directly.`
-            + storeHint,
-            comp.id,
-            edge.draftContext,
-          );
-        }
-      }
-
-      // View rule: a passive presenter. Decoupled from persistence and
-      // boundary blocks, it uses pure logic at most.
-      if (comp.componentType === 'View'
-        && (['Store', 'Registry', 'Index', 'Query', 'Adapter', 'Repository'].includes(depComp.componentType)
-          || (depComp.componentType === 'Orchestrator' && !isPureLogic(depComp)))) {
-        ctx.addIssue(
-          'error',
-          'ARCHITECTURE_VIOLATION_VIEW_DEP',
-          `Architectural violation: View component "${comp.id}" cannot depend on ${stereotypeOf(depComp)} component "${depComp.id}". Views must remain passive UI blocks that use pure logic at most.`
-          + storeHint,
-          comp.id,
-          edge.draftContext,
-        );
-      }
-
-      // Supervisor rule: a Supervisor manages live processes and stays out of
-      // presentation. The data blocks it reaches are judged per call
-      // (supervisor-shared-data), what it owns by the ownership rules; a
-      // Portal or Observer target was reported above, once.
-      if (comp.componentType === 'Supervisor'
-        && ['View', 'FeatureComponent', 'RouterComponent'].includes(depComp.componentType)) {
-        ctx.addIssue(
-          'error',
-          'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP',
-          `Architectural violation: Supervisor "${comp.id}" cannot depend on ${stereotypeOf(depComp)} "${depComp.id}". A Supervisor manages live processes and stays out of presentation — the UI reaches the system through its Portals and workflows, never through a Supervisor's dependencies.`,
-          comp.id,
-          edge.draftContext,
-        );
-      }
-
-      // A live Actor is reached through its supervision: a Supervisor
-      // depending on the Actor supervises it, and any other component reaches
-      // it through such a Supervisor or through a Registry one maintains —
-      // the lookup hop a caller really takes to find a live process by id.
-      if (depComp.componentType === 'Actor' && comp.componentType !== 'Supervisor') {
-        const supervisors = ctx.components.filter(c => c.componentType === 'Supervisor' && c.dependsOn.includes(depComp.id));
-        const registries = supervisors.flatMap(s => (lookups.get(s.id) ?? []).map(registry => ({ registry, supervisor: s.id })));
-        const reached = supervisors.some(s => comp.dependsOn.includes(s.id))
-          || registries.some(r => comp.dependsOn.includes(r.registry));
-        if (!reached) {
-          let remedy: string;
-          if (registries.length > 0) {
-            remedy = `depend on ${registries.length === 1 ? 'the Registry' : 'one of the Registries'} its Supervisor maintains (${registries.map(r => `"${r.registry}", kept by "${r.supervisor}"`).join('; ')}) and look the Actor up by id there`;
-          } else if (supervisors.length > 0) {
-            remedy = `${supervisors.length === 1 ? 'its Supervisor' : 'its Supervisors'} (${supervisors.map(s => `"${s.id}"`).join(', ')}) maintain no Registry of its live handles yet: model that lookup as a Registry the Supervisor keeps through lifecycle-effect methods (registering and unregistering a live handle), and depend on that Registry`;
-          } else {
-            remedy = `no Supervisor depends on "${depComp.id}" yet: give it a Supervisor that depends on it and maintains a Registry of its live handles through lifecycle-effect methods, and depend on that Registry`;
-          }
-          ctx.addIssue(
-            'error',
-            'ACTOR_REACHED_WITHOUT_SUPERVISOR',
-            `Architectural violation: ${stereotypeOf(comp)} "${comp.id}" depends on the live Actor "${depComp.id}" without reaching it through its supervision. A live Actor is found by id through a Registry its Supervisor maintains, or messaged through that Supervisor — ${remedy}.`,
-            comp.id,
-            edge.draftContext,
-          );
-        }
+      for (const finding of entrypointEdgeFindings(ctx, edge.from, edge.to, lookups)) {
+        ctx.addIssue(finding.severity, finding.code, finding.message, edge.from.id, edge.draftContext);
       }
     }
   },
 };
+
+/**
+ * What this rule reports on one intra-subsystem edge from `comp` to `depComp`,
+ * judged from the two ends alone (and the Registries each Supervisor
+ * maintains). The rule reports these on every matrix edge; directEdgeRefusals
+ * asks the same question of an edge a forwarder's caller would need, so the
+ * two readings are one.
+ */
+export function entrypointEdgeFindings(
+  ctx: RuleContext,
+  comp: ComponentSpec,
+  depComp: ComponentSpec,
+  lookups: Map<string, string[]>,
+): EdgeFinding[] {
+  const findings: EdgeFinding[] = [];
+  const storeHint = depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : '';
+
+  // Portal/Observer dependency boundary: components cannot depend on
+  // Portals or Observers. That is the edge's one finding — neither the
+  // checks below nor the other matrix rules report the same edge again.
+  if (depComp.componentType === 'Portal' || depComp.componentType === 'Observer') {
+    return [{
+      severity: 'error',
+      code: 'ARCHITECTURE_VIOLATION_PORTAL_DEP',
+      message: `Architectural violation: Component "${comp.id}" cannot depend on ${depComp.componentType} component "${depComp.id}". ${depComp.componentType}s are top-level entry points/subscribers and cannot be dependencies.`,
+    }];
+  }
+
+  // Portal dispatches to Orchestrators, and may READ through Indexes and
+  // Repository facades (the per-entity empty-Orchestrator ceremony is
+  // not required for passthrough reads) — but its WRITES always route
+  // through the workflow layer (portal-write-shortcut), and the raw data
+  // blocks (Store/Registry/Query) plus Adapters stay out of reach.
+  // Observer forwards to one Orchestrator/Supervisor and may use a
+  // message-bus Adapter to subscribe.
+  if (comp.componentType === 'Portal' || comp.componentType === 'Observer') {
+    const forbiddenTypes = comp.componentType === 'Portal'
+      ? ['Store', 'Registry', 'Adapter', 'Query']
+      : ['Store', 'Registry', 'Repository', 'Index', 'Query'];
+    if (forbiddenTypes.includes(depComp.componentType)) {
+      // An Adapter is not the data layer: it is the far side of a boundary,
+      // with a shape of its own. The Orchestrator a Portal goes through is
+      // where the two shapes are translated, so each side stays simple.
+      const why = comp.componentType === 'Portal' && depComp.componentType === 'Adapter'
+        ? 'A Portal goes through an Orchestrator to reach an Adapter: the Orchestrator is where the Portal\'s shape is translated into the Adapter\'s and back, so the Portal and the Adapter each stay simple and can change on their own.'
+        : `${comp.componentType}s coordinate through Orchestrators (and Supervisors); they do not reach the data layer directly.`;
+      findings.push({
+        severity: 'error',
+        code: 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
+        message: `Architectural violation: ${comp.componentType} component "${comp.id}" cannot depend directly on "${depComp.componentType}" component "${depComp.id}". ${why}`
+          + storeHint,
+      });
+    }
+  }
+
+  // View rule: a passive presenter. Decoupled from persistence and
+  // boundary blocks, it uses pure logic at most.
+  if (comp.componentType === 'View'
+    && (['Store', 'Registry', 'Index', 'Query', 'Adapter', 'Repository'].includes(depComp.componentType)
+      || (depComp.componentType === 'Orchestrator' && !isPureLogic(depComp)))) {
+    findings.push({
+      severity: 'error',
+      code: 'ARCHITECTURE_VIOLATION_VIEW_DEP',
+      message: `Architectural violation: View component "${comp.id}" cannot depend on ${stereotypeOf(depComp)} component "${depComp.id}". Views must remain passive UI blocks that use pure logic at most.`
+        + storeHint,
+    });
+  }
+
+  // Supervisor rule: a Supervisor manages live processes and stays out of
+  // presentation. The data blocks it reaches are judged per call
+  // (supervisor-shared-data), what it owns by the ownership rules; a
+  // Portal or Observer target was reported above, once.
+  if (comp.componentType === 'Supervisor'
+    && ['View', 'FeatureComponent', 'RouterComponent'].includes(depComp.componentType)) {
+    findings.push({
+      severity: 'error',
+      code: 'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP',
+      message: `Architectural violation: Supervisor "${comp.id}" cannot depend on ${stereotypeOf(depComp)} "${depComp.id}". A Supervisor manages live processes and stays out of presentation — the UI reaches the system through its Portals and workflows, never through a Supervisor's dependencies.`,
+    });
+  }
+
+  // A live Actor is reached through its supervision: a Supervisor
+  // depending on the Actor supervises it, and any other component reaches
+  // it through such a Supervisor or through a Registry one maintains —
+  // the lookup hop a caller really takes to find a live process by id.
+  if (depComp.componentType === 'Actor' && comp.componentType !== 'Supervisor') {
+    const supervisors = ctx.components.filter(c => c.componentType === 'Supervisor' && c.dependsOn.includes(depComp.id));
+    const registries = supervisors.flatMap(s => (lookups.get(s.id) ?? []).map(registry => ({ registry, supervisor: s.id })));
+    const reached = supervisors.some(s => comp.dependsOn.includes(s.id))
+      || registries.some(r => comp.dependsOn.includes(r.registry));
+    if (!reached) {
+      let remedy: string;
+      if (registries.length > 0) {
+        remedy = `depend on ${registries.length === 1 ? 'the Registry' : 'one of the Registries'} its Supervisor maintains (${registries.map(r => `"${r.registry}", kept by "${r.supervisor}"`).join('; ')}) and look the Actor up by id there`;
+      } else if (supervisors.length > 0) {
+        remedy = `${supervisors.length === 1 ? 'its Supervisor' : 'its Supervisors'} (${supervisors.map(s => `"${s.id}"`).join(', ')}) maintain no Registry of its live handles yet: model that lookup as a Registry the Supervisor keeps through lifecycle-effect methods (registering and unregistering a live handle), and depend on that Registry`;
+      } else {
+        remedy = `no Supervisor depends on "${depComp.id}" yet: give it a Supervisor that depends on it and maintains a Registry of its live handles through lifecycle-effect methods, and depend on that Registry`;
+      }
+      findings.push({
+        severity: 'error',
+        code: 'ACTOR_REACHED_WITHOUT_SUPERVISOR',
+        message: `Architectural violation: ${stereotypeOf(comp)} "${comp.id}" depends on the live Actor "${depComp.id}" without reaching it through its supervision. A live Actor is found by id through a Registry its Supervisor maintains, or messaged through that Supervisor — ${remedy}.`,
+      });
+    }
+  }
+  return findings;
+}

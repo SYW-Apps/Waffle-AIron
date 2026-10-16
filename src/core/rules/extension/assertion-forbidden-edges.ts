@@ -1,5 +1,5 @@
 import type { SddRule } from '../types.js';
-import { assertionsOfKind, matchesSelector, reportAssertion } from './declared-assertion.js';
+import { assertionsOfKind, forbidsEdge, matchesSelector, reportAssertion } from './declared-assertion.js';
 
 // ---------------------------------------------------------------------------
 // The `forbid-edge` assertion kind: a pack names a source selector, a target
@@ -26,7 +26,7 @@ export const assertionForbiddenEdgesRule: SddRule = {
         );
         for (const { relation, targetId } of edges) {
           const target = ctx.componentMap.get(targetId);
-          if (!target || !matchesSelector(a.to, target, ctx)) continue;
+          if (!target || !forbidsEdge(a, relation, comp, target, ctx)) continue;
           reportAssertion(
             ctx,
             a,

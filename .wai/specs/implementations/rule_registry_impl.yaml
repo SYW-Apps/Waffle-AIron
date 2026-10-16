@@ -580,49 +580,54 @@ methods:
         targetComponent: heuristic_rules
         targetMethod: methodCohesion
       - stepNumber: 115
+        description: Register removable-forwarder
+        type: register
+        targetComponent: heuristic_rules
+        targetMethod: removableForwarder
+      - stepNumber: 116
         description: Register signature-source-suggestions
         type: register
         targetComponent: heuristic_rules
         targetMethod: signatureSourceSuggestions
-      - stepNumber: 116
+      - stepNumber: 117
         description: Register pack-resolution
         type: register
         targetComponent: extension_rules
         targetMethod: packResolution
-      - stepNumber: 117
+      - stepNumber: 118
         description: Register pack-reproducibility
         type: register
         targetComponent: extension_rules
         targetMethod: packReproducibility
-      - stepNumber: 118
+      - stepNumber: 119
         description: Register pack-requirements
         type: register
         targetComponent: extension_rules
         targetMethod: packRequirements
-      - stepNumber: 119
+      - stepNumber: 120
         description: Register pack-deprecations
         type: register
         targetComponent: extension_rules
         targetMethod: packDeprecations
-      - stepNumber: 120
+      - stepNumber: 121
         description: >-
           Register carried-debt (the rule index later moves it, with lint-allows, after any pack
           rules)
         type: register
         targetComponent: conformance_rules
         targetMethod: carriedDebt
-      - stepNumber: 121
+      - stepNumber: 122
         description: Register lint-allows (the rule index later moves it after any pack rules)
         type: register
         targetComponent: integrity_rules
         targetMethod: lintAllows
-      - stepNumber: 122
+      - stepNumber: 123
         description: For each registered built-in rule, in that order
         type: loop
         loopKind: forEach
         over: the registered built-in rules
-        endStep: 123
-      - stepNumber: 123
+        endStep: 124
+      - stepNumber: 124
         label: append-builtin
         description: Append the rule to the store
         type: call
@@ -663,4 +668,4 @@ lint:
         ruleSequence reads. A new rule adds one step here, which is the point.
 status: complete
 createdAt: '2026-07-14T19:17:45.532Z'
-updatedAt: '2026-10-08T08:22:56.481Z'
+updatedAt: '2026-10-16T17:24:22.804Z'

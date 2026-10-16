@@ -1,5 +1,5 @@
 import { SddRule, type DependencyEdge, type RuleContext } from '../types.js';
-import { parseDeclaredCall, type MethodEffect } from '../../../models/index.js';
+import { parseDeclaredCall, type ComponentSpec, type MethodEffect } from '../../../models/index.js';
 
 /**
  * Library calls: an edge from any component to an exported InProcess Portal of
@@ -32,7 +32,7 @@ export const libraryCallsRule: SddRule = {
       // Steps 3-4: a native-ABI library called across languages needs a binding.
       const callerLanguage = normalizeLanguage(ctx.targetLanguageFor(comp.subsystem));
       const producerLanguage = normalizeLanguage(library.targetLanguage);
-      if (library.abi === undefined && producerLanguage !== undefined && callerLanguage !== undefined && producerLanguage !== callerLanguage) {
+      if (bridgeMissing(ctx, comp, library)) {
         ctx.addIssue(
           'error',
           'LANGUAGE_BRIDGE_MISSING',
@@ -50,8 +50,7 @@ export const libraryCallsRule: SddRule = {
       // Steps 6-8: each call of the caller's implementations into the library's verbs.
       for (const call of callsInto(ctx, edge)) {
         const effect = library.effectOf(call.verb);
-        const reachable = effect === 'none' || (dependencyClass === 'read' && effect === 'read');
-        if (reachable) continue;
+        if (verbReachable(comp, effect)) continue;
         ctx.addIssue(
           'error',
           'LIBRARY_CALL_IMPURE',
@@ -67,14 +66,14 @@ export const libraryCallsRule: SddRule = {
 };
 
 /** What a library edge resolved to: its abi, its producer's language, and each verb's declared effect. */
-interface Library {
+export interface Library {
   abi?: string;
   targetLanguage?: string;
   effectOf(verb: string): MethodEffect | undefined;
 }
 
 /** The library a library edge lands on: a contained member's Portal, or a pinned or foreign contract entry. */
-function libraryOf(ctx: RuleContext, edge: DependencyEdge): Library | undefined {
+export function libraryOf(ctx: RuleContext, edge: DependencyEdge): Library | undefined {
   if (edge.to) {
     const to = edge.to;
     return {
@@ -133,4 +132,27 @@ function normalizeLanguage(language: string | undefined): string | undefined {
     'c#': 'csharp', cs: 'csharp', dotnet: 'csharp', golang: 'go',
   };
   return aliases[l] ?? l;
+}
+
+/**
+ * Whether a library is a native API the caller cannot link: no abi, and a
+ * producer language other than the caller's (both known). The rule asks it of
+ * every library edge; directEdgeRefusals asks it of the edge a forwarder's
+ * caller would need.
+ */
+export function bridgeMissing(ctx: RuleContext, comp: ComponentSpec, library: Library): boolean {
+  const callerLanguage = normalizeLanguage(ctx.targetLanguageFor(comp.subsystem));
+  const producerLanguage = normalizeLanguage(library.targetLanguage);
+  return library.abi === undefined && producerLanguage !== undefined && callerLanguage !== undefined && producerLanguage !== callerLanguage;
+}
+
+/**
+ * Whether a caller may call a library verb of this declared effect: anything
+ * goes for a component without a purity bound, pure logic reaches effect none
+ * only, and read logic effect none or read.
+ */
+export function verbReachable(comp: ComponentSpec, effect: MethodEffect | undefined): boolean {
+  const dependencyClass = comp.componentType === 'Orchestrator' ? comp.dependencyClass : undefined;
+  if (dependencyClass !== 'pure' && dependencyClass !== 'read') return true;
+  return effect === 'none' || (dependencyClass === 'read' && effect === 'read');
 }

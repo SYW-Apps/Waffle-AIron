@@ -476,9 +476,11 @@ methods:
       - stepNumber: 8
         description: >-
           Report ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP (error, on edge.from.id; draft context
-          edge.draftContext) naming both components and stereotypes: they coordinate through
-          Orchestrators and Supervisors, and do not reach the data layer directly. The message ends
-          with storeHint
+          edge.draftContext) naming both components and stereotypes. For a Portal reaching an
+          Adapter the message says the Portal goes through an Orchestrator, which is where the
+          Portal's shape is translated into the Adapter's and back, so each side stays simple and
+          changes on its own; for every other pair, that they coordinate through Orchestrators and
+          Supervisors and do not reach the data layer directly. The message ends with storeHint
         type: local
       - stepNumber: 9
         label: viewDep
@@ -1624,4 +1626,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-09T12:02:20.301Z'
+updatedAt: '2026-10-16T17:40:37.695Z'

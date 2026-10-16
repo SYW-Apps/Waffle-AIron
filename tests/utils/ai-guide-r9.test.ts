@@ -61,7 +61,10 @@ describe('the MCP server instructions and the skills, round 9', () => {
     const architect = fs.readFileSync(path.join(templates, 'sdd-architect.md'), 'utf8');
     expect(architect).toContain('**`injectedParams` are NOT design-time**');
     expect(architect).toContain('Plan type files per owner, not one file for all');
-    expect(architect).toContain('never a new Orchestrator whose only job is to forward one call');
+    // Forwarders: the one between a Portal and an Adapter is required, a
+    // removable one is warned and kept only with a reasoned lint.allow.
+    expect(architect).toContain('Portal → Orchestrator → Adapter is the canonical case');
+    expect(architect).toContain('record that with a `lint.allow` for `REMOVABLE_FORWARDER` and a real reason');
   });
 
   it('the implement skill says when and how the implementer sets injectedParams, and that guesses are removed', () => {

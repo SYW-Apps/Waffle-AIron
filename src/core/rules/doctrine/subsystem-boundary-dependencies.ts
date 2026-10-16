@@ -1,5 +1,6 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { ambiguityMessage, isOwnComponentEntry } from '../../../models/index.js';
+import { ambiguityMessage, isOwnComponentEntry, type ComponentSpec } from '../../../models/index.js';
+import type { EdgeFinding } from './stereotype-terms.js';
 
 /**
  * The bounded-context boundary: what a dependsOn id may reach once it leaves
@@ -95,73 +96,79 @@ export const subsystemBoundaryDepsRule: SddRule = {
           continue;
       }
 
-      const depComp = edge.to!;
-
-      // "Always an Adapter": only a (local) client Adapter may reach another
-      // subsystem; an Orchestrator/etc. must depend on a local Adapter that
-      // abstracts the hop (in-process forwarding, REST, gRPC, IPC).
-      // EXCEPTION: the SOURCE subsystem may license a direct in-process
-      // edge by declaring a trustedLink to the target — the reviewable-
-      // exception mechanism instead of a forwarding shim per hop. The
-      // published-Portal target requirements below apply regardless, so
-      // the distribution seam stays intact at the receiving end.
-      const sourceSub = ctx.subsystems.find(s => s.id === comp.subsystem);
-      const licensed = sourceSub?.trustedLinks?.some(t => t.subsystem === depComp.subsystem) ?? false;
-      if (comp.componentType !== 'Adapter' && !licensed) {
-        ctx.addIssue(
-          'error',
-          'CROSS_SUBSYSTEM_NON_ADAPTER',
-          `Boundary violation: ${comp.componentType} "${comp.id}" (subsystem "${comp.subsystem}") depends directly on "${depComp.id}" in subsystem "${depComp.subsystem}". Only a local client Adapter may cross a subsystem boundary — route this hop through an Adapter that calls "${depComp.subsystem}"'s public interface, or declare a trustedLink on "${comp.subsystem}" (with the reason) to license a direct in-process edge to that peer's published Portal.`,
-          comp.id,
-          edge.draftContext,
-        );
-      }
-
-      // The target must be part of the other subsystem's published public surface,
-      // AND that surface must be the subsystem's inbound Portal (its front door) — not
-      // a published internal Orchestrator/Store. The hop is always: client Adapter →
-      // remote Portal → Portal dispatches inward. Allowing a non-Portal target leaks
-      // the boundary and breaks the adapter→network→remote-Portal seam.
-      const targetIsPublic = ctx.publicSet.get(depComp.subsystem)?.has(depComp.id) ?? false;
-      if (!targetIsPublic) {
-        ctx.addIssue(
-          'error',
-          'CROSS_SUBSYSTEM_PRIVATE_ACCESS',
-          `Boundary violation: "${comp.id}" depends on "${depComp.id}", which is not part of subsystem "${depComp.subsystem}"'s published public surface. Depend on one of its publicInterfaces components instead.`,
-          comp.id,
-          edge.draftContext,
-        );
-      } else if (depComp.componentType !== 'Portal') {
-        // Name the crosser as what it is: the sanctioned client Adapter, or
-        // any other stereotype — a trustedLink licenses its crossing, never
-        // this target requirement, and an unlicensed one reaches here too.
-        const crosser = comp.componentType === 'Adapter' ? 'client Adapter' : comp.componentType;
-        ctx.addIssue(
-          'error',
-          'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
-          `Boundary violation: ${crosser} "${comp.id}" enters subsystem "${depComp.subsystem}" through "${depComp.id}" (${depComp.componentType}), not its inbound Portal. A cross-subsystem hop must target the remote subsystem's Portal (its front door), which dispatches inward — publishing/depending on an internal ${depComp.componentType} leaks the boundary and breaks the distribution seam. Expose a Portal for "${depComp.subsystem}" and point "${comp.id}" at it.`,
-          comp.id,
-          edge.draftContext,
-        );
-      }
-
-      // The consumer check runs whatever the portal check said: a surface
-      // published to a named set of subsystems may be depended on only from
-      // those — it is how a provider keeps a surface (the raw spec writes)
-      // away from a door that must not reach it.
-      const publishedTo = restrictedConsumers(ctx, depComp.subsystem, depComp.id);
-      if (publishedTo && !publishedTo.includes(comp.subsystem)) {
-        ctx.addIssue(
-          'error',
-          'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
-          `Boundary violation: "${comp.id}" (subsystem "${comp.subsystem}") depends on "${depComp.id}", which subsystem "${depComp.subsystem}" publishes only to ${publishedTo.map((s) => `"${s}"`).join(', ')}. Depend on a surface published to "${comp.subsystem}" instead, or — when "${comp.subsystem}" really is a caller the provider meant to serve — add it to the entry's consumers.`,
-          comp.id,
-          edge.draftContext,
-        );
+      for (const finding of crossSubsystemEdgeFindings(ctx, comp, edge.to!)) {
+        ctx.addIssue(finding.severity, finding.code, finding.message, comp.id, edge.draftContext);
       }
     }
   },
 };
+
+/**
+ * What this rule reports on one edge from `comp` into ANOTHER subsystem's
+ * `depComp`: the crossing's shape (a client Adapter, or a trustedLink), the
+ * published surface it must land on, and the consumers that surface names.
+ * The rule reports these on every cross-subsystem edge; directEdgeRefusals
+ * asks the same question of an edge a forwarder's caller would need.
+ */
+export function crossSubsystemEdgeFindings(ctx: RuleContext, comp: ComponentSpec, depComp: ComponentSpec): EdgeFinding[] {
+  const findings: EdgeFinding[] = [];
+
+  // "Always an Adapter": only a (local) client Adapter may reach another
+  // subsystem; an Orchestrator/etc. must depend on a local Adapter that
+  // abstracts the hop (in-process forwarding, REST, gRPC, IPC).
+  // EXCEPTION: the SOURCE subsystem may license a direct in-process
+  // edge by declaring a trustedLink to the target — the reviewable-
+  // exception mechanism instead of a forwarding shim per hop. The
+  // published-Portal target requirements below apply regardless, so
+  // the distribution seam stays intact at the receiving end.
+  const sourceSub = ctx.subsystems.find(s => s.id === comp.subsystem);
+  const licensed = sourceSub?.trustedLinks?.some(t => t.subsystem === depComp.subsystem) ?? false;
+  if (comp.componentType !== 'Adapter' && !licensed) {
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_NON_ADAPTER',
+      message: `Boundary violation: ${comp.componentType} "${comp.id}" (subsystem "${comp.subsystem}") depends directly on "${depComp.id}" in subsystem "${depComp.subsystem}". Only a local client Adapter may cross a subsystem boundary — route this hop through an Adapter that calls "${depComp.subsystem}"'s public interface, or declare a trustedLink on "${comp.subsystem}" (with the reason) to license a direct in-process edge to that peer's published Portal.`,
+    });
+  }
+
+  // The target must be part of the other subsystem's published public surface,
+  // AND that surface must be the subsystem's inbound Portal (its front door) — not
+  // a published internal Orchestrator/Store. The hop is always: client Adapter →
+  // remote Portal → Portal dispatches inward. Allowing a non-Portal target leaks
+  // the boundary and breaks the adapter→network→remote-Portal seam.
+  const targetIsPublic = ctx.publicSet.get(depComp.subsystem)?.has(depComp.id) ?? false;
+  if (!targetIsPublic) {
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS',
+      message: `Boundary violation: "${comp.id}" depends on "${depComp.id}", which is not part of subsystem "${depComp.subsystem}"'s published public surface. Depend on one of its publicInterfaces components instead.`,
+    });
+  } else if (depComp.componentType !== 'Portal') {
+    // Name the crosser as what it is: the sanctioned client Adapter, or
+    // any other stereotype — a trustedLink licenses its crossing, never
+    // this target requirement, and an unlicensed one reaches here too.
+    const crosser = comp.componentType === 'Adapter' ? 'client Adapter' : comp.componentType;
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
+      message: `Boundary violation: ${crosser} "${comp.id}" enters subsystem "${depComp.subsystem}" through "${depComp.id}" (${depComp.componentType}), not its inbound Portal. A cross-subsystem hop must target the remote subsystem's Portal (its front door), which dispatches inward — publishing/depending on an internal ${depComp.componentType} leaks the boundary and breaks the distribution seam. Expose a Portal for "${depComp.subsystem}" and point "${comp.id}" at it.`,
+    });
+  }
+
+  // The consumer check runs whatever the portal check said: a surface
+  // published to a named set of subsystems may be depended on only from
+  // those — it is how a provider keeps a surface (the raw spec writes)
+  // away from a door that must not reach it.
+  const publishedTo = restrictedConsumers(ctx, depComp.subsystem, depComp.id);
+  if (publishedTo && !publishedTo.includes(comp.subsystem)) {
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+      message: `Boundary violation: "${comp.id}" (subsystem "${comp.subsystem}") depends on "${depComp.id}", which subsystem "${depComp.subsystem}" publishes only to ${publishedTo.map((s) => `"${s}"`).join(', ')}. Depend on a surface published to "${comp.subsystem}" instead, or — when "${comp.subsystem}" really is a caller the provider meant to serve — add it to the entry's consumers.`,
+    });
+  }
+  return findings;
+}
 
 /**
  * Who a published component may be depended on by, or null when anyone may.

@@ -39,6 +39,25 @@ export function matchesSelector(sel: AssertionSelector, comp: ComponentSpec, ctx
   return true;
 }
 
+/** The forbid-edge assertions, one loaded kind of them. */
+export type ForbidEdgeAssertion = Extract<LoadedAssertion, { kind: 'forbid-edge' }>;
+
+/**
+ * Whether one forbid-edge assertion forbids an edge of this relation from
+ * `from` to `to`: the relation is one it closes, and both ends match its
+ * selectors. assertion-forbidden-edges asks it of every edge in the tree, and
+ * directEdgeRefusals of the edge a forwarder's caller would need.
+ */
+export function forbidsEdge(
+  a: ForbidEdgeAssertion,
+  relation: 'dependsOn' | 'owns',
+  from: ComponentSpec,
+  to: ComponentSpec,
+  ctx: RuleContext,
+): boolean {
+  return a.relation.includes(relation) && matchesSelector(a.from, from, ctx) && matchesSelector(a.to, to, ctx);
+}
+
 /**
  * Report a violation under the assertion's namespaced pack code, carrying the
  * pack's stated reason. Pack severity is the default; drafts soften errors

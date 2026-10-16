@@ -462,6 +462,23 @@ and rewritten by `wairon doctor --fix`:
 
 ### New
 
+**Forwarders: required or removable.**
+
+- New warning `REMOVABLE_FORWARDER`. An Orchestrator whose every narrated method
+  only passes the call on is reported when every modelled caller could legally
+  call the forwarded target itself. Legal is the doctrine rules' own verdict on
+  that edge, including a pack profile's `allowedEdges` and `forbid-edge`
+  assertions, so a forwarder doctrine requires is never reported: Portal →
+  Orchestrator → Adapter, or a Portal in front of a write.
+- **This can fail `validate --ci` on an existing project** that has such a
+  forwarder. Two ways out: keep it on purpose with a `lint.allow` for
+  `REMOVABLE_FORWARDER` and a reason on the component, or set
+  `rules.sddRuleSeverity.REMOVABLE_FORWARDER` in `project.yaml` (`notice` keeps it
+  visible without failing CI). Or remove the hop.
+- `ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP` on a Portal → Adapter edge now says
+  why: the Portal goes through an Orchestrator, which is where the two shapes are
+  translated. The wording for the other targets is unchanged.
+
 **Reachability, networks and libraries.**
 
 - Every Portal verb is reached by a modelled caller or declared an entry, and the

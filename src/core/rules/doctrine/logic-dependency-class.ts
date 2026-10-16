@@ -1,5 +1,6 @@
 import { SddRule } from '../types.js';
-import { isPureLogic, isReadLogic, stereotypeOf, storeResolutionHint } from './stereotype-terms.js';
+import type { ComponentSpec } from '../../../models/index.js';
+import { isPureLogic, isReadLogic, stereotypeOf, storeResolutionHint, type EdgeFinding } from './stereotype-terms.js';
 
 /**
  * Logic is an Orchestrator, and its dependencyClass bounds what it may depend
@@ -18,38 +19,45 @@ export const logicDependencyClassRule: SddRule = {
   ],
   check(ctx) {
     for (const edge of ctx.dependencyEdges().matrix) {
-      const comp = edge.from;
-      const depComp = edge.to;
-
-      // A Portal or Observer target is entrypoint-dependencies' one finding on
-      // that edge (ARCHITECTURE_VIOLATION_PORTAL_DEP): no consumer-side matrix
-      // check reports the same edge again.
-      if (depComp.componentType === 'Portal' || depComp.componentType === 'Observer') continue;
-
-      const depPure = isPureLogic(depComp);
-      const storeHint = depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : '';
-
-      if (isPureLogic(comp) && !depPure) {
-        ctx.addIssue(
-          'error',
-          'DEPENDENCY_CLASS_VIOLATION',
-          `Architectural violation: Orchestrator "${comp.id}" (dependencyClass pure) cannot depend on ${stereotypeOf(depComp)} "${depComp.id}". Pure logic depends only on pure Orchestrators — move that dependency to the workflow that calls "${comp.id}", or declare "${comp.id}" read when it reads through read logic, a Repository, an Index or an Adapter.`
-          + storeHint,
-          comp.id,
-          edge.draftContext,
-        );
-      }
-      if (isReadLogic(comp) && !depPure && !isReadLogic(depComp)
-        && !['Repository', 'Index', 'Adapter'].includes(depComp.componentType)) {
-        ctx.addIssue(
-          'error',
-          'DEPENDENCY_CLASS_VIOLATION',
-          `Architectural violation: Orchestrator "${comp.id}" (dependencyClass read) cannot depend on ${stereotypeOf(depComp)} "${depComp.id}". Read logic depends only on pure or read Orchestrators, Repositories, Indexes and Adapters — move that dependency to the workflow that calls "${comp.id}", or unset the dependencyClass of "${comp.id}" when it is itself a workflow.`
-          + storeHint,
-          comp.id,
-          edge.draftContext,
-        );
+      for (const finding of logicClassEdgeFindings(edge.from, edge.to)) {
+        ctx.addIssue(finding.severity, finding.code, finding.message, edge.from.id, edge.draftContext);
       }
     }
   },
 };
+
+/**
+ * What this rule reports on one intra-subsystem edge from `comp` to `depComp`,
+ * judged from the two ends alone. The rule reports these on every matrix
+ * edge; directEdgeRefusals asks the same question of an edge a forwarder's
+ * caller would need.
+ */
+export function logicClassEdgeFindings(comp: ComponentSpec, depComp: ComponentSpec): EdgeFinding[] {
+  // A Portal or Observer target is entrypoint-dependencies' one finding on
+  // that edge (ARCHITECTURE_VIOLATION_PORTAL_DEP): no consumer-side matrix
+  // check reports the same edge again.
+  if (depComp.componentType === 'Portal' || depComp.componentType === 'Observer') return [];
+
+  const findings: EdgeFinding[] = [];
+  const depPure = isPureLogic(depComp);
+  const storeHint = depComp.componentType === 'Store' ? storeResolutionHint(comp.componentType, depComp.id) : '';
+
+  if (isPureLogic(comp) && !depPure) {
+    findings.push({
+      severity: 'error',
+      code: 'DEPENDENCY_CLASS_VIOLATION',
+      message: `Architectural violation: Orchestrator "${comp.id}" (dependencyClass pure) cannot depend on ${stereotypeOf(depComp)} "${depComp.id}". Pure logic depends only on pure Orchestrators — move that dependency to the workflow that calls "${comp.id}", or declare "${comp.id}" read when it reads through read logic, a Repository, an Index or an Adapter.`
+        + storeHint,
+    });
+  }
+  if (isReadLogic(comp) && !depPure && !isReadLogic(depComp)
+    && !['Repository', 'Index', 'Adapter'].includes(depComp.componentType)) {
+    findings.push({
+      severity: 'error',
+      code: 'DEPENDENCY_CLASS_VIOLATION',
+      message: `Architectural violation: Orchestrator "${comp.id}" (dependencyClass read) cannot depend on ${stereotypeOf(depComp)} "${depComp.id}". Read logic depends only on pure or read Orchestrators, Repositories, Indexes and Adapters — move that dependency to the workflow that calls "${comp.id}", or unset the dependencyClass of "${comp.id}" when it is itself a workflow.`
+        + storeHint,
+    });
+  }
+  return findings;
+}

@@ -1,4 +1,5 @@
-import { SddRule } from '../types.js';
+import { SddRule, type RuleContext } from '../types.js';
+import type { ComponentSpec, MethodSignature } from '../../../models/index.js';
 
 /**
  * The Portal read-face guard. A Portal may reach a Repository facade or an
@@ -27,10 +28,8 @@ export const portalWriteShortcutRule: SddRule = {
         for (const step of implMethod.narrative) {
           if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
           const target = ctx.componentMap.get(step.targetComponent);
-          if (!target || (target.componentType !== 'Repository' && target.componentType !== 'Index')) continue;
-          const targetMethod = ctx.interfaceMethodsOf(target.id)
-            .find(m => m.name === step.targetMethod);
-          if (targetMethod?.effect !== 'write' && targetMethod?.effect !== 'lifecycle') continue;
+          const targetMethod = target ? portalShortcutMethod(ctx, target, step.targetMethod) : undefined;
+          if (!target || !targetMethod) continue;
           ctx.addIssue(
             'error',
             'PORTAL_WRITE_SHORTCUT',
@@ -53,10 +52,8 @@ export const portalWriteShortcutRule: SddRule = {
 
       for (const binding of comp.dispatch) {
         const target = ctx.componentMap.get(binding.component);
-        if (!target || (target.componentType !== 'Repository' && target.componentType !== 'Index')) continue;
-        const targetMethod = ctx.interfaceMethodsOf(target.id)
-          .find(m => m.name === binding.method);
-        if (targetMethod?.effect !== 'write' && targetMethod?.effect !== 'lifecycle') continue;
+        const targetMethod = target ? portalShortcutMethod(ctx, target, binding.method) : undefined;
+        if (!target || !targetMethod) continue;
         ctx.addIssue(
           'error',
           'PORTAL_WRITE_SHORTCUT',
@@ -68,3 +65,18 @@ export const portalWriteShortcutRule: SddRule = {
     }
   },
 };
+
+/**
+ * The method a Portal's direct call would mutate through, when it is one: a
+ * write- or lifecycle-effect method of a Repository or an Index. Anything else
+ * — another stereotype, a read, or a method that carries no effect tag — is
+ * not this rule's to judge, and answers undefined. The rule asks it of every
+ * call step and binding; directEdgeRefusals asks it of the call a forwarder's
+ * Portal caller would make instead, so a forwarder in front of a write is
+ * required exactly when this rule would refuse the shortcut.
+ */
+export function portalShortcutMethod(ctx: RuleContext, target: ComponentSpec, methodName: string): MethodSignature | undefined {
+  if (target.componentType !== 'Repository' && target.componentType !== 'Index') return undefined;
+  const targetMethod = ctx.interfaceMethodsOf(target.id).find(m => m.name === methodName);
+  return targetMethod?.effect === 'write' || targetMethod?.effect === 'lifecycle' ? targetMethod : undefined;
+}

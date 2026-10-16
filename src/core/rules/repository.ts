@@ -119,6 +119,7 @@ import { complexityRule } from './heuristic/complexity-and-metadata.js';
 import { narrativeComplexityRule } from './heuristic/narrative-complexity.js';
 import { namingDisciplineRule } from './heuristic/naming-discipline.js';
 import { methodCohesionRule } from './heuristic/method-cohesion.js';
+import { removableForwarderRule } from './heuristic/removable-forwarder.js';
 import { signatureSourceSuggestionsRule } from './heuristic/signature-source-suggestions.js';
 
 // ---------------------------------------------------------------------------
@@ -364,6 +365,7 @@ export const SDD_RULES: SddRule[] = [
   narrativeComplexityRule,
   namingDisciplineRule,
   methodCohesionRule,
+  removableForwarderRule,
   signatureSourceSuggestionsRule,
   // Pack resolution and reproducibility run late: they are about project
   // CONFIGURATION (does the declared pack set resolve, and can it be reproduced

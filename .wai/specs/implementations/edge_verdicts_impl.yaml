@@ -1,0 +1,82 @@
+id: edge_verdicts_impl
+name: Edge Verdicts Implementation
+description: >-
+  The doctrine family's verdict on an undeclared edge, composed in
+  src/core/rules/doctrine/direct-edge.ts from the edge judgements the doctrine rules export from
+  their own files and report with.
+contract: iedge_verdicts
+sourcePath: src/core/rules/doctrine/direct-edge.ts
+methods:
+  - name: directEdgeRefusals
+    narrative:
+      - stepNumber: 1
+        description: Is the edge one to the caller itself? That is never a shortcut.
+        type: branch
+        condition: caller.id equals target.id
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse it as SELF_EDGE.
+        type: return
+        outcome: '[''SELF_EDGE'']'
+      - stepNumber: 3
+        description: >-
+          edge = resolvedEdge(ctx, caller, target.id, target) — the read model's own classification
+          of a declared edge: library (another project's InProcess Portal), internal or
+          cross-subsystem, whether either end is retired, and whether the governing pack profile's
+          allowedEdges licenses the stereotype pair.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Does the edge have a retired end? Retired-stereotypes owns that component and its
+          migration decides the edge, so it is never a legal shortcut.
+        type: branch
+        condition: edge.retired
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse it as RETIRED_STEREOTYPE.
+        type: return
+        outcome: '[''RETIRED_STEREOTYPE'']'
+      - stepNumber: 6
+        description: >-
+          codes = []. A library edge is judged as library-calls judges one: libraryOf(ctx, edge) is
+          what it lands on; bridgeMissing(ctx, caller, library) adds LANGUAGE_BRIDGE_MISSING, and
+          with a method given, verbReachable(caller, library.effectOf(method)) false adds
+          LIBRARY_CALL_IMPURE.
+        type: local
+      - stepNumber: 7
+        description: >-
+          A cross-subsystem edge adds the codes of crossSubsystemEdgeFindings(ctx, caller, target) —
+          subsystem-boundary-dependencies' judgement of the crossing's shape, the published front
+          door and its listed consumers.
+        type: local
+      - stepNumber: 8
+        description: >-
+          An internal edge the pack profile does not license adds the codes of the stereotype
+          matrix, exactly the three judgements its rules report with: entrypointEdgeFindings(ctx,
+          caller, target, lookups) — lookups being maintainedRegistries(ctx), read once per run —
+          then dataBlockEdgeFindings(ctx, caller, target) and logicClassEdgeFindings(caller,
+          target). A licensed pair skips them, as a declared licensed edge does.
+        type: local
+      - stepNumber: 9
+        description: >-
+          Whatever the reach: visibilityEdgeFinding(ctx, ctx.ownershipIndex(), caller, target.id)
+          adds its code when the target is a block another pattern or a Supervisor owns privately,
+          and every loaded forbid-edge assertion for which forbidsEdge(a, 'dependsOn', caller,
+          target, ctx) holds adds its namespaced fullCode.
+        type: local
+      - stepNumber: 10
+        description: >-
+          With a method given, the call itself: a Portal caller adds PORTAL_WRITE_SHORTCUT when
+          portalShortcutMethod(ctx, target, method) names a write- or lifecycle-effect Repository or
+          Index method (an untagged method is not judged, as that rule does not judge one), and a
+          Supervisor caller adds SUPERVISOR_WRITE_SHORTCUT when sharedDataWrite(ctx, ownership,
+          caller, target, method) names a method of a data component it does not own whose effect is
+          neither read nor lifecycle (an untagged one included, as that rule includes it).
+        type: local
+      - stepNumber: 11
+        description: Return the codes; empty means doctrine allows the edge and the call.
+        type: return
+        outcome: codes
+status: complete
+createdAt: '2026-10-16T17:41:15.281Z'
+updatedAt: '2026-10-16T17:41:16.362Z'
