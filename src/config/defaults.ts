@@ -30,7 +30,7 @@ export function defaultTargetConfig(type: 'claude' | 'gemini' | 'agy' | 'cursor'
 // waffle-airon CLI version embedded at build time
 // ---------------------------------------------------------------------------
 
-export const WAIRON_VERSION = '5.1.1-dev.117';
+export const WAIRON_VERSION = '5.1.1-dev.118';
 
 // ---------------------------------------------------------------------------
 // GitHub repository (owner/repo) — used by the update command
