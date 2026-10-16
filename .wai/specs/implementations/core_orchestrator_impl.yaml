@@ -1055,18 +1055,21 @@ methods:
         targetMethod: loadComponentSpec
       - stepNumber: 2
         description: >-
-          Guard: the component must exist — asked after the project boundary of step 4 for an id
-          carrying `::`, so a member's or an external's component, by its key or through an
-          `alias::name` the bound project's alias table resolves, is refused with the boundary's
-          sentence and never reported missing
+          Guard: the component must exist and be the bound project's own — the project boundary
+          every write asks (crossProjectWriteRefusal, asked to exist) before the read is trusted, so
+          a member's or an external's component — by its key, through an `alias::name`, or a bare id
+          only a member holds — is refused as living in another project, and an id no project holds
+          as missing, in the one sentence every write tool answers with
         type: branch
         condition: the component does not exist
         onFalseStep: 4
       - stepNumber: 3
-        label: component-missing
-        description: Refuse a component that does not exist
+        label: spec-missing
+        description: >-
+          Refuse a component no project in reach holds, with the one sentence every write tool
+          answers with
         type: throw
-        error: 'component-missing: no component has this id'
+        error: 'spec-missing: this project has no component with this id'
       - stepNumber: 4
         description: >-
           Guard: the component must belong to the bound project itself — the project boundary every
@@ -1075,17 +1078,18 @@ methods:
         condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
         onFalseStep: 6
       - stepNumber: 5
-        label: chained-component
+        label: chained-spec
         description: >-
-          Refuse a component inside another project: a member project is written from its own root,
-          never through its parent's tree. The refusal names the exact way — the member's folder,
-          and the same rename run there (its own MCP server: open a session in that folder, which
-          `wairon init` or the promote that made it gave a guide and .mcp.json; or `wairon generate`
-          and `wairon mcp install --backend claude` there first)
+          Refuse a component inside another project with the one sentence every write tool answers
+          with: a member project is written from its own root, never through its parent's tree, so
+          the refusal names the member's folder and the same rename run there (its own MCP server:
+          open a session in that folder, which `wairon init` or the promote that made it gave a
+          guide and .mcp.json; or `wairon generate` and `wairon mcp install --backend claude` there
+          first); an external's is read-only here
         type: throw
         error: >-
-          chained-component: the component lives in another project; rename it from that project's
-          own root, naming its folder and the session to open there
+          chained-spec: the component lives in another project, naming which one and how it is
+          changed there
       - stepNumber: 6
         description: 'Guard: the new id must be a plain lowercase identifier'
         type: branch
@@ -1227,23 +1231,24 @@ methods:
         targetMethod: loadComponentSpec
       - stepNumber: 2
         description: >-
-          Guard: the component must belong to the bound project itself — the project boundary every
-          write asks (crossProjectWriteRefusal), asked FIRST for an id carrying `::`, so a member's
-          or an external's component named through its alias is refused with the boundary's sentence
-          rather than reported missing — and exist
+          Guard: the component must exist and belong to the bound project itself — the project
+          boundary every write asks (crossProjectWriteRefusal, asked to exist) FIRST, so a member's
+          or an external's component — through its alias, or a bare id only a member holds — is
+          refused as living in another project and an id no project holds as missing, in the one
+          sentence every write tool answers with
         type: branch
         condition: >-
           the component does not exist, or componentId is namespaced into a chained mount (it
           carries the :: separator)
         onFalseStep: 4
       - stepNumber: 3
-        label: component-missing
+        label: spec-missing
         description: >-
-          Refuse, writing nothing: a component that does not exist (component-missing), or one
-          inside another project (chained-component) — the refusal names that project's folder and
-          the session to open there
+          Refuse, writing nothing, with the one sentence every write tool answers with: a component
+          in another project (chained-spec — naming that project's folder and the session to open
+          there) or one no project holds (spec-missing)
         type: throw
-        error: component-missing or chained-component
+        error: spec-missing or chained-spec
       - stepNumber: 4
         description: >-
           Guard: the new name must be an identifier (identifier.problemAs method: at most 64
@@ -1536,9 +1541,12 @@ methods:
         onFalseStep: 4
       - stepNumber: 3
         label: spec-missing
-        description: Refuse an update to a spec that has not been defined
+        description: >-
+          Refuse an update to a spec the bound tree does not hold, with the project boundary's
+          sentence (crossProjectWriteRefusal, asked to exist): another project's when only a member
+          holds that bare id, else the one sentence every write tool answers with for a missing spec
         type: throw
-        error: 'spec-missing: no spec of that kind holds that id'
+        error: 'spec-missing: this project has no spec of that kind under that id'
       - stepNumber: 4
         description: >-
           Guard: a spec of a member project (its key lives in a chained subproject of the bound
@@ -2735,16 +2743,21 @@ methods:
         targetMethod: loadTypeSpec
       - stepNumber: 2
         description: >-
-          Guard: the type must exist — asked after the project boundary of step 4 for an id carrying
-          an `alias::` qualifier, so another project's type is refused with the boundary's sentence
+          Guard: the type must exist — asked after the project boundary of step 4 for an id whose
+          qualifier names no own subsystem, and through that same boundary (asked to exist) for one
+          the bound tree does not hold, so another project's type — through its alias, or a bare id
+          only a member holds — is refused as living in another project and an id no project holds
+          as missing, in the one sentence every write tool answers with
         type: branch
         condition: the type does not exist
         onFalseStep: 4
       - stepNumber: 3
-        label: type-missing
-        description: Refuse a type that does not exist
+        label: spec-missing
+        description: >-
+          Refuse a type no project in reach holds, with the one sentence every write tool answers
+          with
         type: throw
-        error: 'type-missing: no type has this id'
+        error: 'spec-missing: this project has no type with this id'
       - stepNumber: 4
         description: >-
           Guard: the type must belong to the bound project itself — the project boundary every write
@@ -2755,17 +2768,17 @@ methods:
         condition: 'typeId is namespaced into a member project (it carries an alias:: prefix)'
         onFalseStep: 6
       - stepNumber: 5
-        label: chained-type
+        label: chained-spec
         description: >-
-          Refuse a type inside another project: a member project is written from its own root, never
-          through its parent's tree (the doctrine: a project member is designed from its own root).
-          The refusal names the exact way — the member's folder and `sdd_rename_type <local id> <new
-          id>` from a session opened there — and that an exported type keeps its public name through
-          `as`, so this project's references do not break
+          Refuse a type inside another project with the one sentence every write tool answers with:
+          a member project is written from its own root, never through its parent's tree (the
+          doctrine: a project member is designed from its own root), so the refusal names the
+          member's folder and `sdd_rename_type <local id> <new id>` from a session opened there; an
+          external's is read-only here
         type: throw
         error: >-
-          chained-type: the type lives in another project; rename it from that project's own root,
-          naming its folder and the session to open there
+          chained-spec: the type lives in another project, naming which one and how it is changed
+          there
       - stepNumber: 6
         description: 'Guard: the new id must be a plain lowercase identifier'
         type: branch
@@ -2894,7 +2907,9 @@ methods:
         description: >-
           Resolve the type: an `alias::` qualifier naming no own subsystem is another project's,
           refused with the project boundary every write asks (crossProjectWriteRefusal); a
-          subsystem-qualified id names the type within that owner; none found is type-missing
+          subsystem-qualified id names the type within that owner; none found is refused by that
+          same boundary, asked to exist — another project's when only a member holds that bare id,
+          else spec-missing — in the one sentence every write tool answers with
         type: local
       - stepNumber: 3
         description: >-
@@ -2967,8 +2982,9 @@ methods:
       - stepNumber: 2
         description: >-
           A component of another project — asked first through the project boundary every write asks
-          (crossProjectWriteRefusal), so an alias-named one is refused with its sentence — or one
-          that does not exist, is refused before anything is read further
+          (crossProjectWriteRefusal, asked to exist), so one named through its alias or a bare id
+          only a member holds is refused as living in another project — or one no project holds, is
+          refused before anything is read further, in the one sentence every write tool answers with
         type: branch
         condition: the component exists and is not inside a chained subproject
         onFalseStep: 20
@@ -3094,7 +3110,7 @@ methods:
       - stepNumber: 20
         label: refuse
         description: >-
-          Refuse with the reason that applies (component-missing, chained-component, method-missing,
+          Refuse with the reason that applies (spec-missing, chained-spec, method-missing,
           param-missing, invalid-name, name-taken, name-retired), naming what holds or retired the
           name; nothing was written
         type: throw
@@ -3124,15 +3140,14 @@ methods:
         type: loop
         loopKind: forEach
         over: the targets
-        endStep: 6
+        endStep: 11
       - stepNumber: 2
         description: >-
-          A target that is the L0, or whose id carries no namespace separator, is the bound
-          project's own
+          A target that is the L0 is the bound project's own; one whose id carries no namespace
+          separator is judged only by whether it must exist
         type: branch
-        condition: 'the target is the L0, or its id carries no ::'
-        onTrueStep: 6
-        onFalseStep: 3
+        condition: 'the target is no L0 and its id carries ::'
+        onFalseStep: 6
       - stepNumber: 3
         description: >-
           Read the key the target lives under: the stored spec's own key when the scan holds it,
@@ -3152,15 +3167,55 @@ methods:
       - stepNumber: 5
         label: chained-spec
         description: >-
-          Answer the refusal: the target lives in another project, which writes its own specs; it
-          names the member and its folder relative to the bound root, the session to open there (its
-          own guide and .mcp.json, or `wairon generate` and `wairon mcp install --backend claude`
-          there first) and the same tool call with the target's local id — or, for an external, that
-          this project only reads it through its pin. Nothing was written
+          Answer the one sentence every write tool answers with for another project's spec: it lives
+          in another project, and a project's specs are changed only from its own root — a member
+          named with its folder relative to the bound root, the session to open there (its own guide
+          and .mcp.json, or `wairon generate` and `wairon mcp install --backend claude` there first)
+          and the call to make there (the caller's exact call, else the tool with the target's kind
+          and local id); an external as read-only here, this project reading it only through its
+          pin, changed by its owner from its own root. Nothing was written
         type: return
         outcome: refusal
       - stepNumber: 6
-        description: 'Every target is the bound project''s own: answer undefined'
+        label: must-exist
+        description: >-
+          Decide whether the write needs the target and the bound tree does not hold it — a type
+          also held as <its subsystem>::<id>
+        type: branch
+        condition: existing is asked and the bound tree holds no spec of the kind under the id
+        onFalseStep: 11
+      - stepNumber: 7
+        description: >-
+          Read the member projects holding a spec of that kind under that bare id (none for a
+          qualified id; a legacy mount's specs are this tree's own and never counted)
+        type: local
+      - stepNumber: 8
+        description: Does a member hold it?
+        type: branch
+        condition: a member project holds the bare id
+        onFalseStep: 10
+      - stepNumber: 9
+        label: held-elsewhere
+        description: >-
+          Answer the one sentence every write tool answers with for another project's spec, naming
+          each member holding it and its folder, and that a bare id always names this project's own
+          spec — the sentence says where the spec lives, the write never goes there. Nothing was
+          written
+        type: return
+        outcome: refusal
+      - stepNumber: 10
+        label: missing
+        description: >-
+          Answer the one missing sentence every write tool shares: spec-missing: this project has no
+          <kind> "<id>". Nothing was written
+        type: return
+        outcome: missing
+      - stepNumber: 11
+        label: pass
+        description: 'The target passes: the bound project''s own, or one the write does not need to exist'
+        type: local
+      - stepNumber: 12
+        description: 'Every target passed: answer undefined'
         type: return
         outcome: undefined
   - name: publishedUsesOf
@@ -3484,4 +3539,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-15T16:27:47.147Z'
+updatedAt: '2026-10-16T12:02:54.863Z'

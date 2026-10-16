@@ -6284,49 +6284,130 @@ export class SpecWorkspace {
   }
 
   /**
-   * core_orchestrator.crossProjectWriteRefusal — the sentence refusing a write
-   * any of whose targets lives in another project, or undefined when every one
-   * is the bound project's own. A target lives elsewhere when its key carries a
-   * member project's prefix (a stored spec read through this tree, or an
+   * core_orchestrator.crossProjectWriteRefusal — the project boundary of every
+   * authored write, and the one sentence a write refusing an id it cannot
+   * write answers with. A target lives in another project when its key carries
+   * a member project's prefix (a stored spec read through this tree, or an
    * `alias::name` the bound alias table binds to a member), or when its first
-   * segment is an external's alias. A legacy L1 mount keeps its old cross-tree
-   * writes. Reads only.
+   * segment is an external's alias: refused as living in another project,
+   * naming which one and how it is changed there. With `existing`, a target
+   * the write needs to exist is also refused when the bound project does not
+   * hold it — as living in another project when only a member holds that bare
+   * id (a bare id stays the bound project's own; the sentence only says where
+   * it lives), else as missing. Undefined when every target passes. A legacy
+   * L1 mount keeps its old cross-tree writes. Reads only.
    */
-  crossProjectWriteRefusal(targets: ReadonlyArray<{ kind: string; id: string }>, tool: string): string | undefined {
-    const verb = tool.replace(/^sdd_/, '').split('_')[0] || 'write';
+  crossProjectWriteRefusal(
+    targets: ReadonlyArray<{ kind: string; id: string }>,
+    tool: string,
+    call?: string,
+    existing?: boolean,
+  ): string | undefined {
+    const localOf = (id: string): string => (id.includes('::') ? id.slice(id.lastIndexOf('::') + 2) : id);
+    const callFor = (kind: string, id: string): string => call ?? `${tool} ${kind} ${localOf(id)}`;
     for (const target of targets) {
-      // Steps 1-2: the L0 and a bare id are the bound project's own.
-      if (target.kind === 'system' || typeof target.id !== 'string' || !target.id.includes('::')) continue;
-      // Step 3: the key it lives under, and the member covering it.
+      // Steps 1-2: the L0 is the bound project's own.
+      if (target.kind === 'system' || typeof target.id !== 'string') continue;
       const writable = ['subsystem', 'component', 'interface', 'implementation', 'type'].includes(target.kind);
-      const stored = writable ? (this.load(target.kind as WritableSpecKind, target.id) as { id?: string } | null)?.id : undefined;
-      const key = stored ?? this.bindReference('', target.id);
-      const alias = target.id.slice(0, target.id.indexOf('::'));
-      const aliased = this.cachedRawRoots[0]?.record.aliases.get(alias);
-      const member = this.getSubprojectPrefix(key) ?? this.getSubprojectPrefix(target.id)
-        ?? (aliased !== undefined && this.rootCovering(aliased) !== null ? aliased : null);
-      // Step 4: a member project — a legacy mount keeps its cross-tree writes.
-      if (member !== null) {
-        const root = this.rootCovering(member);
-        if (root?.legacyMount) continue;
-        const qualified = stored ?? target.id;
-        const local = qualified.includes('::') ? qualified.slice(qualified.lastIndexOf('::') + 2) : qualified;
-        const dir = this.resolveSubprojectForNamespace(member);
-        const folder = dir ? path.relative(this.rootDir, dir).split(path.sep).join('/') || '.' : undefined;
-        // Step 5.
-        return `chained-spec: "${qualified}" lives in another project; ${verb} it from that project's own root. It belongs to the member project "${member}"${folder ? ` at ${folder}` : ''}: `
-          + `open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) `
-          + `and call ${tool} ${target.kind} ${local} there. Nothing was written.`;
+      if (target.id.includes('::')) {
+        // Step 3: the key it lives under, and the member covering it.
+        const stored = writable ? (this.load(target.kind as WritableSpecKind, target.id) as { id?: string } | null)?.id : undefined;
+        const key = stored ?? this.bindReference('', target.id);
+        const alias = target.id.slice(0, target.id.indexOf('::'));
+        const aliased = this.cachedRawRoots[0]?.record.aliases.get(alias);
+        const member = this.getSubprojectPrefix(key) ?? this.getSubprojectPrefix(target.id)
+          ?? (aliased !== undefined && this.rootCovering(aliased) !== null ? aliased : null);
+        // Step 4: a member project — a legacy mount keeps its cross-tree writes.
+        if (member !== null) {
+          if (this.rootCovering(member)?.legacyMount) continue;
+          const qualified = stored ?? target.id;
+          // Step 5.
+          return this.foreignSpecSentence(qualified, [member], callFor(target.kind, qualified));
+        }
+        // Step 6: an external's alias names a project this one only reads through its pin.
+        const externals = this.cachedRawRoots[0]?.record.config?.externals ?? {};
+        if (Object.prototype.hasOwnProperty.call(externals, alias)) {
+          const producer = (externals as Record<string, { project?: string } | null>)[alias]?.project ?? alias;
+          return this.foreignSpecSentence(target.id, [], callFor(target.kind, target.id), { alias, producer });
+        }
       }
-      // An external's alias names a project this one only reads through its pin.
-      const externals = this.cachedRawRoots[0]?.record.config?.externals ?? {};
-      if (Object.prototype.hasOwnProperty.call(externals, alias)) {
-        const producer = (externals as Record<string, { project?: string }>)[alias]?.project ?? alias;
-        return `chained-spec: "${target.id}" names a spec of "${producer}", a project this one declares as the external "${alias}": a project's specs are written from its own root, and this project only reads them through its pin. Open a session in that project's folder and call ${tool} there. Nothing was written.`;
+      // Steps 7-9: a target the write needs that the bound project does not hold.
+      if (!existing || !writable || this.holds(target.kind as WritableSpecKind, target.id)) continue;
+      const holders = target.id.includes('::') ? [] : this.membersHolding(target.kind as WritableSpecKind, target.id);
+      if (holders.length > 0) {
+        return this.foreignSpecSentence(target.id, holders, callFor(target.kind, target.id), undefined,
+          ` This project has no ${target.kind} "${target.id}" of its own: a bare id always names this project's own spec.`);
       }
+      return missingSpecSentence(target.kind, target.id);
     }
-    // Step 6.
+    // Step 10.
     return undefined;
+  }
+
+  /**
+   * The boundary's sentence for a qualified id the boundary passed but a write
+   * still cannot take — a legacy L1 mount's spec, which a rename never writes
+   * across: the member covering it (else its first segment) as the project.
+   */
+  foreignSpecRefusal(id: string, call: string): string {
+    return this.foreignSpecSentence(id, [this.getSubprojectPrefix(id) ?? id.slice(0, Math.max(0, id.indexOf('::')))], call);
+  }
+
+  /** Whether the bound tree holds the spec — a type also as <its subsystem>::<id>. */
+  private holds(kind: WritableSpecKind, id: string): boolean {
+    if (this.load(kind, id) !== null) return true;
+    if (kind !== 'type' || !id.includes('::')) return false;
+    const cut = id.lastIndexOf('::');
+    return this.scanAll().types.some((t) => t.id === id.slice(cut + 2) && t.subsystem === id.slice(0, cut));
+  }
+
+  /**
+   * The member projects (by key) that hold a spec of this kind under a bare
+   * id — a legacy L1 mount's specs are this tree's own and never counted.
+   */
+  private membersHolding(kind: WritableSpecKind, id: string): string[] {
+    if (kind === 'system') return [];
+    const index = this.scanAll();
+    const listed: { id: string }[] = kind === 'subsystem' ? index.subsystems
+      : kind === 'component' ? index.components
+        : kind === 'interface' ? index.interfaces
+          : kind === 'implementation' ? index.implementations
+            : index.types;
+    const holders = new Set<string>();
+    for (const spec of listed) {
+      const member = this.getSubprojectPrefix(spec.id);
+      if (member === null || this.rootCovering(member)?.legacyMount) continue;
+      const rest = spec.id.slice(member.length + 2);
+      if (rest === id || (kind === 'type' && rest.endsWith(`::${id}`) && !rest.slice(0, -(id.length + 2)).includes('::'))) holders.add(member);
+    }
+    return [...holders].sort();
+  }
+
+  /**
+   * The one sentence a write answers for a spec another project holds: that
+   * it lives in another project, which one, and how it is changed there — a
+   * member from a session opened in its own folder, with the exact call; an
+   * external is read-only here, changed by its producer from its own root.
+   */
+  private foreignSpecSentence(
+    id: string,
+    members: string[],
+    call: string,
+    external?: { alias: string; producer: string },
+    note = '',
+  ): string {
+    const open = `open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
+    const placed = (member: string): string => {
+      const dir = this.resolveSubprojectForNamespace(member);
+      const folder = dir ? path.relative(this.rootDir, dir).split(path.sep).join('/') || '.' : undefined;
+      return `"${member}"${folder ? ` at ${folder}` : ''}`;
+    };
+    const where = external
+      ? `It belongs to "${external.producer}", the project this one declares as the external "${external.alias}": it is read-only here — this project reads it only through its pin — and its owner changes it from that project's own root with ${call}.`
+      : members.length === 1
+        ? `It belongs to the member project ${placed(members[0])}: ${open}`
+        : `It belongs to the member projects ${members.map(placed).join(' and ')}: for the one you mean, ${open}`;
+    return `chained-spec: "${id}" lives in another project, and a project's specs are changed only from its own root. ${where}${note} Nothing was written.`;
   }
 
   updateSpec(
@@ -6344,7 +6425,9 @@ export class SpecWorkspace {
     const result = storedFormOf(kind, this.load(kind, id));
 
     if (!result) {
-      throw new Error(`Spec of kind "${kind}" with ID "${id}" does not exist. Define it first.`);
+      // The boundary's sentence: another project's when only a member holds the id, else missing.
+      throw new Error((kind === 'system' ? undefined : this.crossProjectWriteRefusal([{ kind, id }], 'sdd_update_spec', undefined, true))
+        ?? missingSpecSentence(kind, id, kind === 'system' ? 'Initialize it with sdd_initialize_system first.' : undefined));
     }
 
     // A spec of a member project is written from that project's own root, as
@@ -9108,14 +9191,31 @@ export function rewriteReferences(kind: WritableSpecKind, id: string, edits: Ref
  * (the debt register). Outside a hosted request nothing is judged.
  */
 /**
+ * The one sentence a write answers for an id no project in reach holds — the
+ * missing half of core_orchestrator.crossProjectWriteRefusal, shared by every
+ * write tool so a missing spec reads the same whichever tool was asked. A
+ * hint, when given, follows the sentence.
+ */
+export function missingSpecSentence(kind: string, id: string, hint?: string): string {
+  return `spec-missing: this project has no ${kind} "${id}".${hint ? ` ${hint}` : ''} Nothing was written.`;
+}
+
+/**
  * core_orchestrator.crossProjectWriteRefusal — the project boundary of every
  * authored write: the sentence refusing a write any of whose targets lives in
  * another project (a member's spec, or one named through an external's alias),
- * naming that project's folder and the call to make in a session there; or
- * undefined when every target is the bound project's own. Reads only.
+ * naming that project's folder and the call to make in a session there; with
+ * `existing`, also a target the bound project does not hold (another project's
+ * when only a member holds that bare id, else missing); or undefined when
+ * every target passes. Reads only.
  */
-export function crossProjectWriteRefusal(targets: { kind: string; id: string }[], tool: string): string | undefined {
-  return current().crossProjectWriteRefusal(targets, tool);
+export function crossProjectWriteRefusal(targets: { kind: string; id: string }[], tool: string, call?: string, existing?: boolean): string | undefined {
+  return current().crossProjectWriteRefusal(targets, tool, call, existing);
+}
+
+/** core_orchestrator.crossProjectWriteRefusal's sentence for a qualified id a write cannot take across (a legacy L1 mount's). */
+export function foreignSpecRefusal(id: string, call: string): string {
+  return current().foreignSpecRefusal(id, call);
 }
 
 export function assertSpecsInReach(targets: { kind: string; id: string }[], what: string, projectRung = false): void {

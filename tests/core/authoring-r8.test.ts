@@ -123,7 +123,7 @@ describe('BLOCKER: every authored write refuses a spec of another project, the d
     const before = files(member);
     for (const dryRun of [true, false]) {
       expect(() => deleteSpec('component', `${key}::payment_store`, dryRun))
-        .toThrow(/chained-spec: ".*payment_store" lives in another project; delete it from that project's own root.*services\/payments.*sdd_delete_spec component payment_store there\. Nothing was written/s);
+        .toThrow(/chained-spec: ".*payment_store" lives in another project, and a project's specs are changed only from its own root\..*services\/payments.*sdd_delete_spec component payment_store there\. Nothing was written/s);
     }
     expect(files(member)).toEqual(before);
   });
@@ -151,7 +151,7 @@ describe('BLOCKER: every authored write refuses a spec of another project, the d
       spec: { id: 'intruder', name: 'I', description: 'i', subsystem: `${key}::payments`, componentType: 'Orchestrator', owns: [], dependsOn: [] } as never,
       fields: ['id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn'],
     })).toThrow(/chained-spec:.*sdd_add_component/s);
-    expect(() => updateSpecGated('component', `${key}::payment_store`, { description: 'x' }, true)).toThrow(/chained-spec:.*update it from/s);
+    expect(() => updateSpecGated('component', `${key}::payment_store`, { description: 'x' }, true)).toThrow(/chained-spec:.*lives in another project.*sdd_update_spec component payment_store there/s);
     expect(() => moveMethods('order_flow', `${key}::payment_store`, ['run'])).toThrow(/chained-spec:.*sdd_move_methods/s);
     expect(() => moveSpec('component', `${key}::payment_store`, 'orders', true)).toThrow(/chained-spec/);
     expect(() => renameSpecId('interface', `${key}::ipayment_store`, 'ipay')).toThrow(/chained-spec/);
@@ -162,8 +162,8 @@ describe('BLOCKER: every authored write refuses a spec of another project, the d
 describe('a delete of an id nothing holds says what it might have meant', () => {
   it('names the kind that holds it, the subsystem::id form of a type, and the ids of the kind', () => {
     family();
-    expect(() => deleteSpec('component', 'orders')).toThrow(/spec-missing: no component has the id "orders" — nothing was deleted\. "orders" is a subsystem — pass kind "subsystem".*Its components: order_flow/s);
-    expect(() => deleteSpec('component', 'nope', true)).toThrow(/spec-missing: no component has the id "nope"/);
+    expect(() => deleteSpec('component', 'orders')).toThrow(/spec-missing: this project has no component "orders"\. Nothing was written\. "orders" is a subsystem — pass kind "subsystem".*Its components: order_flow/s);
+    expect(() => deleteSpec('component', 'nope', true)).toThrow(/spec-missing: this project has no component "nope"\. Nothing was written\./);
     saveSpec('type', { kind: 'value-object', id: 'principal', name: 'P', subsystem: 'orders', fields: [], methods: [], createdAt: now, updatedAt: now } as never);
     invalidateSpecCache();
     expect(() => deleteSpec('type', 'orders.principal')).toThrow(/"principal" or "orders::principal"/);

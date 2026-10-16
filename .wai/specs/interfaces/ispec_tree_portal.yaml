@@ -399,9 +399,12 @@ methods:
     effect: io
   - name: crossProjectWriteRefusal
     description: >-
-      Forward to core_orchestrator.crossProjectWriteRefusal: the sentence refusing a write that
-      lands in another project, or undefined
-    signature: 'crossProjectWriteRefusal(targets: list<SpecRef>, tool: string): string?'
+      Forward to core_orchestrator.crossProjectWriteRefusal: the one sentence refusing a write that
+      lands in another project, or — asked to exist — names a spec the bound project does not hold;
+      or undefined
+    signature: >-
+      crossProjectWriteRefusal(targets: list<SpecRef>, tool: string, call?: string, existing?:
+      bool): string?
     returns: string?
     params:
       - name: targets
@@ -410,6 +413,18 @@ methods:
       - name: tool
         type: string
         description: The tool the caller answers for
+      - name: call
+        type: string
+        description: >-
+          The exact call to make at the owning project's root, when the caller can spell it (a
+          rename with its arguments); absent, the tool with the target's kind and local id
+        optional: true
+      - name: existing
+        type: bool
+        description: >-
+          Whether the targets must exist: one the bound project does not hold is refused, as another
+          project's when only a member holds that bare id, else as missing
+        optional: true
   - name: publishedUsesOf
     description: >-
       Forward to core_orchestrator.publishedUsesOf: the public names a removal takes something away
@@ -484,4 +499,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-15T16:06:27.396Z'
+updatedAt: '2026-10-16T12:01:38.259Z'

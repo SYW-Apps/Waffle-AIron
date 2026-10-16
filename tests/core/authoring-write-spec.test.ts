@@ -262,7 +262,7 @@ describe('writeSpec — a subsystem', () => {
 describe('writeSpec — a component', () => {
   it('refuses a missing subsystem with the sentence the tool gave', () => {
     project();
-    expect(() => writeSpec(component({ subsystem: 'nowhere' }))).toThrow('Parent subsystem "nowhere" does not exist.');
+    expect(() => writeSpec(component({ subsystem: 'nowhere' }))).toThrow('spec-missing: this project has no subsystem "nowhere". Nothing was written.');
   });
 
   it('refuses an intrinsic error and writes nothing', () => {
@@ -311,7 +311,7 @@ describe('writeSpec — an interface', () => {
   it('refuses a missing component with the sentence the tool gave', () => {
     project();
     expect(() => writeSpec({ ...checkoutContract([]), spec: { id: 'ix', name: 'IX', description: 'd', component: 'nowhere', methods: [] } as unknown as InterfaceSpec }))
-      .toThrow('Component "nowhere" does not exist.');
+      .toThrow('spec-missing: this project has no component "nowhere". Nothing was written.');
   });
 
   it('carries a method\'s endpoint binding and names the method a restatement removed', () => {
@@ -383,7 +383,7 @@ describe('writeSpec — an implementation', () => {
 
   it('refuses a missing contract with the sentence the tool gave', () => {
     project();
-    expect(() => writeSpec(impl([]))).toThrow('Interface contract "icheckout" does not exist.');
+    expect(() => writeSpec(impl([]))).toThrow('spec-missing: this project has no interface "icheckout". Nothing was written.');
   });
 
   it('resolves narrative labels to step numbers before the write', () => {
@@ -452,7 +452,7 @@ describe('writeSpec — a type', () => {
   it('refuses an owning subsystem the tree does not have, before anything reaches disk (F81)', () => {
     project();
     expect(() => writeSpec(type({ kind: 'entity', subsystem: 'warehouse' })))
-      .toThrow('Owning subsystem "warehouse" does not exist');
+      .toThrow('spec-missing: this project has no subsystem "warehouse". Nothing was written.');
     invalidateSpecCache();
     expect(loadTypeSpec('money')).toBeNull();
   });
@@ -497,7 +497,7 @@ describe('deleteSpec — the delete names the tests of the methods it took away'
 
   it('refuses an id no spec holds, saying what it might have meant (r8: never "may not exist")', () => {
     project({ testRoots: ['tests'] });
-    expect(() => deleteSpec('interface', 'inowhere')).toThrow(/spec-missing: no interface has the id "inowhere" — nothing was deleted\./);
+    expect(() => deleteSpec('interface', 'inowhere')).toThrow(/spec-missing: this project has no interface "inowhere"\. Nothing was written\./);
   });
 
   it('reports nothing for a spec without methods', () => {

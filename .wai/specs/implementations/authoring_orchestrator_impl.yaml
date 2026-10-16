@@ -25,9 +25,11 @@ methods:
       - stepNumber: 2
         description: >-
           Ask the core adapter whether the spec lives in another project — a member's spec read
-          through this tree, or one named through an external's alias — answering for the tool the
-          caller names (sdd_set_endpoints, sdd_set_public_interfaces), sdd_update_spec when it names
-          none, so the refusal names the call to make in that project's session
+          through this tree, or one named through an external's alias — or, asked to exist, is one
+          the bound project does not hold (another project's when only a member holds that bare id,
+          else missing), answering for the tool the caller names (sdd_set_endpoints,
+          sdd_set_public_interfaces), sdd_update_spec when it names none, so the refusal names the
+          call to make in that project's session
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: crossProjectWriteRefusal
@@ -183,7 +185,10 @@ methods:
   - name: moveMethods
     narrative:
       - stepNumber: 1
-        description: Ask the core adapter whether either component lives in another project
+        description: >-
+          Ask the core adapter whether either component lives in another project or, asked to exist,
+          is one the bound project does not hold — answering with the exact move to make at the
+          owning project's root
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: crossProjectWriteRefusal
@@ -229,8 +234,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Ask the core adapter whether the spec, every spec moving together with it, or the
-          subsystem they move to, lives in another project
+          Ask the core adapter whether the spec, or any spec moving together with it, lives in
+          another project or, asked to exist, is one the bound project does not hold; then whether
+          the subsystem they move to lives in another project
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: crossProjectWriteRefusal
@@ -433,7 +439,10 @@ methods:
       - stepNumber: 5
         description: >-
           Read the parent the restatement names (spec_restatement.parent) through the core client
-          adapter, when it names one; an absent parent is the restatement's to refuse, below
+          adapter, when it names one; a parent the bound project does not hold is refused with the
+          core's boundary sentence, asked to exist — another project's when only a member holds that
+          bare id, else the one sentence every write tool answers with for a missing spec — and only
+          an absent L0 is the restatement's to refuse, below
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
@@ -658,11 +667,13 @@ methods:
       - stepNumber: 12
         label: spec-missing
         description: >-
-          Refuse, nothing deleted, with what the id might have meant: the kind of spec that does
-          hold it, a type addressed by its bare id or as subsystem::id, and the ids the kind does
-          hold
+          Refuse, nothing deleted, with the core's boundary sentence asked to exist: another
+          project's when only a member holds that bare id; else the one sentence every write tool
+          answers with for a missing spec, followed by what the id might have meant — the kind of
+          spec that does hold it, a type addressed by its bare id or as subsystem::id, and the ids
+          the kind does hold
         type: throw
-        error: 'spec-missing: no spec of the kind holds the id'
+        error: 'spec-missing: this project has no spec of the kind under the id'
       - stepNumber: 13
         description: >-
           Ask the index which references specs outside that set still hold to it
@@ -745,4 +756,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-09T17:09:45.387Z'
+updatedAt: '2026-10-16T12:02:59.983Z'

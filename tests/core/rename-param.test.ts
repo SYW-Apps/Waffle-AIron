@@ -101,7 +101,7 @@ describe('renameParam', () => {
 
   it('refuses, writing nothing', () => {
     project();
-    expect(() => renameParam('nope', 'create', 'frequency', 'x')).toThrow(/component-missing/);
+    expect(() => renameParam('nope', 'create', 'frequency', 'x')).toThrow(/spec-missing/);
     expect(() => renameParam('habit-api', 'nope', 'frequency', 'x')).toThrow(/method-missing/);
     expect(() => renameParam('habit-api', 'create', 'nope', 'x')).toThrow(/param-missing/);
     expect(() => renameParam('habit-api', 'create', 'frequency', 'habitId')).toThrow(/name-taken/);

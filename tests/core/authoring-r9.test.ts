@@ -170,7 +170,7 @@ describe('item 3 (tinkerer, EDGE): a path-shaped name never writes outside the t
       expect(() => component(bad), bad).toThrow(/not-an-id/);
     }
     // Another case is no id this tree holds, though a case-insensitive filesystem finds its file.
-    expect(() => component('Links')).toThrow(/does not exist/);
+    expect(() => component('Links')).toThrow(/spec-missing: this project has no subsystem "Links"/);
     expect(() => writeSpec({
       kind: 'type',
       spec: { id: 'bt', name: 'Bt', kind: 'value-object', subsystem: 'links/../analytics', fields: [{ name: 'v', type: 'string' }], methods: [] } as never,
@@ -291,7 +291,7 @@ describe('item 10: the rename tools give the project boundary\'s refusal and nam
     const { app } = routePlanner(scratch('wording'));
     bind(app);
     expect(() => renameType('geo::point', 'pt')).toThrow(/member project "geo-lib"/);
-    expect(() => renameMethod('geo::distance_portal', 'between', 'span')).toThrow(/chained-component:.*member project "geo-lib" at libs\/geo/s);
+    expect(() => renameMethod('geo::distance_portal', 'between', 'span')).toThrow(/chained-spec:.*member project "geo-lib" at libs\/geo/s);
   });
 
   it('rename_method pins no symbol when no code exists, and pins when the file is there', () => {

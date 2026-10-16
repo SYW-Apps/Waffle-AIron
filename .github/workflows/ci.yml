@@ -43,13 +43,10 @@ jobs:
       - name: Run tests
         run: npm test
 
-      # Black-box agent journeys against the BUILT artifact: spawns
-      # `node dist/cli/index.js mcp serve` as a real subprocess, speaks MCP
-      # stdio, and asserts tool results + the YAML on disk. This is the tier
-      # that catches the stale-server / stale-binary incident class the
-      # src-importing unit tests cannot see. Requires the Build step above.
-      - name: Run e2e journeys (built artifact)
-        run: npm run test:e2e
+      # The e2e journeys run in their own parallel job (`e2e` below), not here:
+      # they are the slowest tier and need only the build, not the typecheck or
+      # the unit suite, so running them alongside this job cuts CI wall-clock
+      # without dropping a check.
 
       # Dogfood the approval gate too — the thing .github/workflows/lock-check.yml
       # offers to other repositories, run here against the CLI THIS commit builds
@@ -75,6 +72,36 @@ jobs:
       # run (ENTRY_UNPROVEN, networks, gateways). --ci treats warnings as errors.
       - name: Architecture conformance gate (family root)
         run: node dist/cli/index.js validate --ci
+
+  # Black-box agent journeys against the BUILT artifact: spawns
+  # `node dist/cli/index.js mcp serve` as a real subprocess, speaks MCP stdio,
+  # and asserts tool results + the YAML on disk. This is the tier that catches
+  # the stale-server / stale-binary incident class the src-importing unit tests
+  # cannot see. Split out of `check` so it runs in parallel with it; it needs
+  # only `npm ci` + `npm run build` (dist/ plus the @wairon/sdk workspace the
+  # prebuild script builds), which it does itself. The unit config
+  # (vitest.config.ts) excludes tests/e2e/**, so nothing runs twice.
+  e2e:
+    name: E2E journeys (built artifact)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run e2e journeys (built artifact)
+        run: npm run test:e2e
 
   docker-build:
     name: Build Docker image (no push)

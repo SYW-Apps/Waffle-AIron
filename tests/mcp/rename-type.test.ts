@@ -109,6 +109,6 @@ describe('sdd_rename_type', () => {
     client = await connect(createMcpServer());
     const result = await call({ id: 'nope', newId: 'posting' });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/type-missing/);
+    expect(textOf(result)).toMatch(/spec-missing/);
   });
 });

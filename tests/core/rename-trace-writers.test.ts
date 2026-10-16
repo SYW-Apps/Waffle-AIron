@@ -213,10 +213,11 @@ describe('renameType', () => {
 
   it('refuses a missing type, a bad id, a taken id and a retired id, writing nothing', () => {
     shop();
-    expect(() => renameType('nothing', 'x')).toThrow(/type-missing/);
+    expect(() => renameType('nothing', 'x')).toThrow(/spec-missing/);
     expect(() => renameType('order', 'Not An Id')).toThrow(/invalid-id/);
     expect(() => renameType('order', 'receipt')).toThrow(/id-taken/);
-    expect(() => renameType('other::order', 'x')).toThrow(/chained-type/);
+    // `other` names no subsystem, member or external: missing, in the one shared wording.
+    expect(() => renameType('other::order', 'x')).toThrow(/spec-missing: this project has no type "other::order"/);
     renameType('order', 'purchase');
     expect(() => renameType('receipt', 'order')).toThrow(/id-retired/);
     expect(loadTypeSpecs().map((t) => t.id).sort()).toEqual(['purchase', 'receipt']);

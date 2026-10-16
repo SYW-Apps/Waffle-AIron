@@ -74,7 +74,7 @@ describe('renameField', () => {
     expect(() => renameField('invoice', 'nope', 'x')).toThrow(/field-missing/);
     expect(() => renameField('invoice', 'id', 'total')).toThrow(/name-taken/);
     expect(() => renameField('invoice', 'id', 'not a name')).toThrow(/invalid-name/);
-    expect(() => renameField('nowhere', 'id', 'x')).toThrow(/type-missing/);
+    expect(() => renameField('nowhere', 'id', 'x')).toThrow(/spec-missing/);
     renameField('invoice', 'id', 'number');
     expect(() => renameField('invoice', 'total', 'id')).toThrow(/name-retired/);
     expect(loadTypeSpec('invoice')!.fields.map((f) => f.name)).toEqual(['number', 'total']);

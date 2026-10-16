@@ -449,8 +449,7 @@ function refuseUnknownOwner(kind: WritableSpecKind, merged: { subsystem?: string
   const owner = merged.subsystem;
   if (!owner || owner === storedOwner) return;
   if (loadSpec('subsystem', owner)) return;
-  const sentence = MISSING_PARENT[kind]!(owner);
-  throw new Error(`${sentence} Nothing was written.`);
+  throw new Error(crossProjectWriteRefusal([{ kind: 'subsystem', id: owner }], 'sdd_update_spec', undefined, true) ?? `${MISSING_PARENT[kind]!(owner)} Nothing was written.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -968,10 +967,10 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   const id = restatement.kind === 'system' ? 'system' : (restatement.spec as { id: string }).id;
   const parentRef = restatementParent(restatement);
   // Steps 2-4: a spec, or a parent, of another project is that project's to write.
-  const foreign = crossProjectWriteRefusal(
-    [{ kind: restatement.kind, id }, ...(parentRef && typeof parentRef.id === 'string' ? [{ kind: parentRef.kind, id: parentRef.id }] : [])],
-    CREATE_TOOL[restatement.kind],
-  );
+  const localOf = (ref: string): string => (ref.includes('::') ? ref.slice(ref.lastIndexOf('::') + 2) : ref);
+  const namedParent = parentRef && typeof parentRef.id === 'string' && parentRef.kind !== 'system' ? { kind: parentRef.kind, id: parentRef.id } : null;
+  const call = `${CREATE_TOOL[restatement.kind]} ${localOf(id)}${namedParent ? ` (${namedParent.kind} ${localOf(namedParent.id)})` : ''}`;
+  const foreign = crossProjectWriteRefusal([{ kind: restatement.kind, id }, ...(namedParent ? [namedParent] : [])], CREATE_TOOL[restatement.kind], call);
   if (foreign !== undefined) throw new Error(foreign);
   // ...and every name it turns into a path is an id, before any path is built.
   const pathNames = pathBoundNames(restatement, id, parentRef);
@@ -983,8 +982,14 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
       + 'each is a plain id (letters, digits, "-" and "_", qualified by "::"), never a path. Nothing was written.',
     );
   }
-  // Step 5: the parent the restatement cannot be written without.
+  // Step 5: the parent the restatement cannot be written without — one the
+  // bound project does not hold is refused with the boundary's sentence:
+  // another project's when only a member holds that bare id, else missing.
   const parent = parentRef ? loadSpec(parentRef.kind, parentRef.id) : null;
+  if (namedParent && !parent) {
+    const absent = crossProjectWriteRefusal([namedParent], CREATE_TOOL[restatement.kind], call, true);
+    if (absent !== undefined) throw new Error(absent);
+  }
   // Step 6: the spec this restatement re-authors, if one holds the id.
   const existing = loadSpec(restatement.kind, id);
   // Steps 7-9: an id given to a NEW spec must not be one a renamed spec of
@@ -1303,7 +1308,7 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
   // single-document delete it always had: its subtree is not this project's to plan.
   if (kind !== 'type' && id.includes('::')) {
     const deleted = dryRun ? loadSpec(kind, id) !== null : coreDeleteSpec(kind, id);
-    if (!deleted && loadSpec(kind, id) === null) throw new Error(`spec-missing: no ${kind} has the id "${id}" — nothing was deleted.`);
+    if (!deleted && loadSpec(kind, id) === null) throw new Error(crossProjectWriteRefusal([{ kind, id }], 'sdd_delete_spec', undefined, true) ?? missingRefusal(kind, id, scanAllSpecs({ memberDepth: 0 }), undefined));
     return { kind, id, deleted: deleted && !dryRun, dryRun: dryRun === true, removed: [{ kind, id }], references: [], testsToRevisit: [], published: [] };
   }
   // Step 7: the test roots the report searches.
@@ -1313,7 +1318,11 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
   const system = loadSpec('system', 'system') as SystemSpec | null;
   // Steps 10-12: what the deletion takes; an id nothing holds is refused with what it might have meant.
   const removed = specIndexSubtreeOf(index, kind, id);
-  if (removed.length === 0) throw new Error(missingRefusal(kind, id, index));
+  if (removed.length === 0) {
+    // Another project's when only a member holds that bare id; else missing, with what it might have meant.
+    const absent = crossProjectWriteRefusal([{ kind, id }], 'sdd_delete_spec', undefined, true);
+    throw new Error(absent !== undefined && !absent.startsWith('spec-missing:') ? absent : missingRefusal(kind, id, index, absent));
+  }
   // Step 13: what stays behind still naming it.
   const references = specIndexReferencesTo(index, removed, system);
   // Step 14: every public name a consumer reaches what goes through, read before anything goes.
@@ -1337,11 +1346,12 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
 }
 
 /**
- * The refusal of a deletion whose id no spec of the kind holds, with what the
- * id might have meant: the kind of spec that does hold it, the subsystem::id
- * form of a type written with a dot, and the ids the kind does hold.
+ * The refusal of a deletion whose id no spec of the kind holds: the boundary's
+ * shared missing sentence, then what the id might have meant — the kind of
+ * spec that does hold it, the subsystem::id form of a type written with a dot,
+ * and the ids the kind does hold.
  */
-function missingRefusal(kind: WritableSpecKind, id: string, index: SpecIndex): string {
+function missingRefusal(kind: WritableSpecKind, id: string, index: SpecIndex, sentence: string | undefined): string {
   const pools: Record<string, ReadonlyArray<{ id: string; subsystem?: string }>> = {
     subsystem: index.subsystems, component: index.components, interface: index.interfaces,
     implementation: index.implementations, type: index.types,
@@ -1356,7 +1366,8 @@ function missingRefusal(kind: WritableSpecKind, id: string, index: SpecIndex): s
   const known = pools[kind].map((s) => (kind === 'type' ? qualifiedTypeId(s as TypeSpec) : s.id)).sort();
   const listed = known.length === 0 ? `This project has no ${kind} at all.`
     : `Its ${kind}s: ${known.slice(0, 12).join(', ')}${known.length > 12 ? `, … (${known.length} in all)` : ''}.`;
-  return `spec-missing: no ${kind} has the id "${id}" — nothing was deleted.${hints.length > 0 ? ` ${hints.join('; ')}.` : ''} ${listed}`;
+  const missing = sentence ?? `spec-missing: this project has no ${kind} "${id}". Nothing was written.`;
+  return `${missing}${hints.length > 0 ? ` ${hints.join('; ')}.` : ''} ${listed}`;
 }
 
 /** The stored spec a SpecRef names in the index; null when none does. */
@@ -1408,7 +1419,8 @@ export function updateSpecGated(
   // that has none is judged on the defaults and searches nothing.
   const bound = candidateOptions();
   // Steps 2-4: a spec of another project is updated from that project's own root.
-  const foreign = crossProjectWriteRefusal([{ kind, id }], tool);
+  // — and one it does not hold is refused with the boundary's sentence too.
+  const foreign = crossProjectWriteRefusal([{ kind, id }], tool, undefined, true);
   if (foreign !== undefined) throw new Error(foreign);
   // Step 5: the spec as it stands — the owner the judgement compares against,
   // the contract methods a delta may remove, and, when a test search may
@@ -1601,7 +1613,12 @@ export function moveMethods(
   dryRun?: boolean,
 ): MethodMoveReport {
   // Steps 1-3: a component of another project is that project's to change.
-  const foreign = crossProjectWriteRefusal([{ kind: 'component', id: from }, { kind: 'component', id: to }], 'sdd_move_methods');
+  const foreign = crossProjectWriteRefusal(
+    [{ kind: 'component', id: from }, { kind: 'component', id: to }],
+    'sdd_move_methods',
+    `sdd_move_methods ${from.split('::').pop()} ${to.split('::').pop()} [${methods.join(', ')}]`,
+    true,
+  );
   if (foreign !== undefined) throw new Error(foreign);
   // Steps 4-7: the judgement as a hook, the move through the core adapter.
   return coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun);
@@ -1625,10 +1642,10 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   // The addressed spec first, then each one moving with it, once each.
   const ids = [...new Set([id, ...(together ?? [])])];
   // Steps 1-3: every spec, and the subsystem they move to, are the bound project's own.
-  const foreign = crossProjectWriteRefusal(
-    [...ids.map((sid) => ({ kind, id: sid })), ...(subsystem ? [{ kind: 'subsystem' as const, id: subsystem }] : [])],
-    'sdd_move_spec',
-  );
+  // A moved spec the bound project does not hold is refused with the
+  // boundary's sentence; the destination subsystem is judged by the move.
+  const foreign = crossProjectWriteRefusal(ids.map((sid) => ({ kind, id: sid })), 'sdd_move_spec', undefined, true)
+    ?? crossProjectWriteRefusal(subsystem ? [{ kind: 'subsystem', id: subsystem }] : [], 'sdd_move_spec');
   if (foreign !== undefined) throw new Error(foreign);
   // Steps 4 and 12: types carry no edges — each is planned first, so one refused type refuses them all.
   if (kind !== 'component') {

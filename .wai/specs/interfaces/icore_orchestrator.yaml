@@ -1290,16 +1290,17 @@ methods:
       <type>.<field>` naming it from any type. Rename traces are never rewritten, and prose is never
       rewritten. The report names every public name a consumer reaches the field through
       (publishedIn): an exported type that is, or embeds transitively, the renamed type, and an
-      exported contract whose methods name such a type. Refuses, writing nothing: a type that does
-      not exist (type-missing), one in another project (chained-type), a field the type does not
-      declare (field-missing), a new name that is not an identifier (invalid-name), and a name
-      another field of the type holds (name-taken), or any field of the type — the renamed one
-      included — retired in its trace (name-retired): renaming back to a former name is refused as a
-      method rename refuses it, since the trace would list the field's own name. With dryRun it
-      answers what it would respell and where the field is published, refusing exactly as the real
-      rename would, and writes nothing. A lock goes stale as with any edit. Inside a hosted request
-      every spec it would write is judged against the request's write reach before the first write
-      (SubsystemWriteDenied).
+      exported contract whose methods name such a type. Refuses, writing nothing: a type no project
+      in reach holds (spec-missing), one another project holds (chained-spec — named through its
+      alias, or a bare id only a member holds: the sentence every write tool answers with, naming
+      that project and how it is changed there), a field the type does not declare (field-missing),
+      a new name that is not an identifier (invalid-name), and a name another field of the type
+      holds (name-taken), or any field of the type — the renamed one included — retired in its trace
+      (name-retired): renaming back to a former name is refused as a method rename refuses it, since
+      the trace would list the field's own name. With dryRun it answers what it would respell and
+      where the field is published, refusing exactly as the real rename would, and writes nothing. A
+      lock goes stale as with any edit. Inside a hosted request every spec it would write is judged
+      against the request's write reach before the first write (SubsystemWriteDenied).
     signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
     returns: FieldRename
     params:
@@ -1335,21 +1336,23 @@ methods:
       (routedFrom). The report names the export entries publishing the method and every follower's
       verb (publishedIn), method-granular with their former names (published), so a consumer calling
       a published Portal verb that forwards the method is named among the breaks. Prose is never
-      rewritten. Refuses, writing nothing: a component that does not exist (component-missing), one
-      inside a chained subproject (chained-component), a method no contract of the component
-      declares (method-missing), a parameter the method does not declare, or one it takes from
-      another project's method or a signature type — the refusal names the source and says a rename
-      made there reaches this method (param-missing), a new name that is not an identifier — or,
-      when rules.naming.variables is set and no contract of the component implements another
-      project's extension point, not in that casing (invalid-name) — a name another parameter of the
-      method holds (name-taken), and a name any parameter of the method retired in its trace — its
-      own included, so renaming back to a former name is refused as a method rename refuses it,
-      since the trace would then list the parameter's own name (RENAME_TRACE_CONFLICT) and a
-      consumer holding the old key could not tell the two apart; unsetting that previousNames
-      releases it (name-retired). With dryRun it answers what it would move and respell, refusing
-      exactly as the real rename would, and writes nothing. A lock goes stale as with any edit.
-      Inside a hosted request every spec it would write — the moving contracts and every follower's
-      — is judged against the request's write reach before the first write (SubsystemWriteDenied).
+      rewritten. Refuses, writing nothing: a component no project in reach holds (spec-missing), one
+      another project holds (chained-spec — named through its alias, or a bare id only a member
+      holds: the sentence every write tool answers with, naming that project and how it is changed
+      there), a method no contract of the component declares (method-missing), a parameter the
+      method does not declare, or one it takes from another project's method or a signature type —
+      the refusal names the source and says a rename made there reaches this method (param-missing),
+      a new name that is not an identifier — or, when rules.naming.variables is set and no contract
+      of the component implements another project's extension point, not in that casing
+      (invalid-name) — a name another parameter of the method holds (name-taken), and a name any
+      parameter of the method retired in its trace — its own included, so renaming back to a former
+      name is refused as a method rename refuses it, since the trace would then list the parameter's
+      own name (RENAME_TRACE_CONFLICT) and a consumer holding the old key could not tell the two
+      apart; unsetting that previousNames releases it (name-retired). With dryRun it answers what it
+      would move and respell, refusing exactly as the real rename would, and writes nothing. A lock
+      goes stale as with any edit. Inside a hosted request every spec it would write — the moving
+      contracts and every follower's — is judged against the request's write reach before the first
+      write (SubsystemWriteDenied).
     signature: >-
       renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
       bool): ParamRename
@@ -1384,15 +1387,22 @@ methods:
     effect: read
   - name: crossProjectWriteRefusal
     description: >-
-      The project boundary of every authored write: the sentence refusing a write any of whose
-      targets lives in another project — a spec of a member project read through this tree (its key
-      carries the member's prefix, or an `alias::name` the bound project's alias table binds to a
-      member), or one named through an external's alias — or undefined when every target is the
-      bound project's own. A member's specs are written by a session opened in that member's folder,
-      so the sentence names the member, its folder, the session to open there and the same tool call
-      to make there. A legacy L1 mount keeps its old cross-tree writes and is never refused here. A
-      read: writes nothing.
-    signature: 'crossProjectWriteRefusal(targets: list<SpecRef>, tool: string): string?'
+      The project boundary of every authored write, and the one sentence a write refusing an id it
+      cannot write answers with. A target lives in another project when its key carries a member
+      project's prefix (a stored spec read through this tree, or an `alias::name` the bound
+      project's alias table binds to a member) or its first segment is an external's alias: it is
+      refused as living in another project — a member named with its folder relative to the bound
+      root, the session to open there and the call to make there; an external as read-only here,
+      changed by its owner from its own root. With existing, a target the write needs that the bound
+      project does not hold is refused too: as living in another project when only a member holds
+      that bare id (a bare id stays the bound project's own — the sentence says where the spec
+      lives, it never writes there), else with the one missing sentence every write tool shares
+      (spec-missing: this project has no <kind> "<id>"). Undefined when every target passes. A
+      legacy L1 mount keeps its old cross-tree writes and is never refused here. A read: writes
+      nothing.
+    signature: >-
+      crossProjectWriteRefusal(targets: list<SpecRef>, tool: string, call?: string, existing?:
+      bool): string?
     returns: string?
     params:
       - name: targets
@@ -1404,7 +1414,19 @@ methods:
         type: string
         description: >-
           The tool the caller is answering for (sdd_delete_spec, sdd_define_interface, ...): the
-          call the sentence tells the caller to make at the member's root
+          call the sentence tells the caller to make at the owning project's root when it names none
+      - name: call
+        type: string
+        description: >-
+          The exact call to make at the owning project's root, when the caller can spell it (a
+          rename with its arguments); absent, the tool with the target's kind and local id
+        optional: true
+      - name: existing
+        type: bool
+        description: >-
+          Whether the targets must exist: one the bound project does not hold is refused, as another
+          project's when only a member holds that bare id, else as missing
+        optional: true
   - name: publishedUsesOf
     description: >-
       Every public name of the bound project's L1 and L0 export tables a consumer reaches something
@@ -1517,4 +1539,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T17:09:21.005Z'
+updatedAt: '2026-10-16T12:01:25.891Z'

@@ -129,7 +129,7 @@ describe('sdd_rename_component', () => {
     for (const id of ['widget', 'ext::widget']) {
       const result = await call({ id, newId: 'gadget' });
       expect(result.isError, id).toBe(true);
-      expect(textOf(result), id).toMatch(/chained-component/);
+      expect(textOf(result), id).toMatch(/chained-spec/);
       expect(textOf(result), id).toContain('ext::widget');
     }
   });
@@ -139,7 +139,7 @@ describe('sdd_rename_component', () => {
     client = await connect(createMcpServer());
 
     for (const [args, label] of [
-      [{ id: 'nope', newId: 'journal' }, /component-missing/],
+      [{ id: 'nope', newId: 'journal' }, /spec-missing/],
       [{ id: 'ledger', newId: 'Journal' }, /invalid-id/],
       [{ id: 'ledger', newId: 'books_orch' }, /id-taken/],
     ] as const) {

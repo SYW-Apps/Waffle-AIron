@@ -281,7 +281,7 @@ describe('journey: a root session cannot write a MEMBER project\'s spec (platfor
     for (const dryRun of [true, false]) {
       const r = await callTool(client, 'sdd_delete_spec', { kind: 'component', id: 'payments_svc::payment_store', dryRun });
       expect(r.ok, r.text).toBe(false);
-      expect(r.text).toMatch(/chained-spec: "payments_svc::payment_store" lives in another project; delete it from that project's own root.*services\/payments.*sdd_delete_spec component payment_store there/s);
+      expect(r.text).toMatch(/chained-spec: "payments_svc::payment_store" lives in another project, and a project's specs are changed only from its own root\. It belongs to the member project "payments_svc" at services\/payments.*sdd_delete_spec component payment_store there/s);
     }
     expect(authoringSpecFiles(member)).toEqual(before);
   });
