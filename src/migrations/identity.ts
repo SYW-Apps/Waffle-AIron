@@ -153,7 +153,7 @@ export function planRename(family: ProjectFamily, bound: string, request: Migrat
   // Steps 8-9: the consumers a family read at the top never holds — a parent composing the
   // target as a `../` sibling member, a sibling declaring it as an external — named, never written.
   plan.notes.push(...outsideConsumers(family, target, newId));
-  plan.notes.push(`Consumers outside the family that name "${oldId}" by path from a folder not beside this project are not found by a rename: each must rewrite its own external (its next gate reports the id change); \`wairon externals consumers --search <dir>\` lists them.`);
+  plan.notes.push(`A project outside this family that declares "${oldId}" as an external is not looked for by a rename (only a parent composing it as a member is): each must rewrite its own external (its next gate reports the id change); \`wairon externals consumers --search <dir>\` lists them.`);
   // The member's key follows the id when its alias was the old id: the deployment side names it by that key.
   if (target.namespace !== '' && target.mountAlias === oldId) {
     const oldKey = target.namespace;

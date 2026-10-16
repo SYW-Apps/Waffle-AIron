@@ -52,13 +52,14 @@ methods:
       - stepNumber: 7
         description: >-
           Plan the target's own edit: its id moved, the old one appended to previousIds; add the
-          notes — consumers outside the family that the consumer read below does not reach (no
-          folder beside the target or its top holds them) are not discovered and must rewrite their
-          own externals; and, when the member's key follows the id (its alias was the old id), the
-          deployment-side names the key change: the bindings keys and observed-flow names written as
-          the old key or `<old key>::…` (its default workload name and its subsystems' and Portals'
-          keys) are to be renamed to the new key, which the network commands meanwhile resolve
-          through previousIds, each such use reported
+          notes — a project outside the family that declares the target as an external is not looked
+          for by a rename (only a parent composing it as a member is, below): each must rewrite its
+          own external, its next gate reporting the id change, and `wairon externals consumers
+          --search <dir>` lists them; and, when the member's key follows the id (its alias was the
+          old id), the deployment-side names the key change: the bindings keys and observed-flow
+          names written as the old key or `<old key>::…` (its default workload name and its
+          subsystems' and Portals' keys) are to be renamed to the new key, which the network
+          commands meanwhile resolve through previousIds, each such use reported
         type: local
       - stepNumber: 8
         description: >-
@@ -169,4 +170,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-10-16T19:12:16.731Z'
+updatedAt: '2026-10-16T22:52:16.861Z'
