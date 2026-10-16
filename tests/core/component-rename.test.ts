@@ -407,8 +407,8 @@ describe('renameComponent', () => {
 
   describe('refuses, changing no file', () => {
     const refusals: [string, string, string, RegExp][] = [
-      ['a component that does not exist', 'nope', 'journal', /component-missing/],
-      ['a component inside a chained subproject', 'ext::widget', 'gadget', /chained-component/],
+      ['a component that does not exist', 'nope', 'journal', /spec-missing/],
+      ['a component inside a chained subproject', 'ext::widget', 'gadget', /chained-spec/],
       ['a new id with an uppercase letter', 'ledger', 'Journal', /invalid-id/],
       ['a new id carrying a namespace separator', 'ledger', 'ext::journal', /invalid-id/],
       ['a new id with a space', 'ledger', 'the journal', /invalid-id/],
@@ -416,8 +416,8 @@ describe('renameComponent', () => {
       ['a new id whose interface id is taken', 'ledger', 'archive', /id-taken/],
       ['a new id whose implementation id is taken', 'ledger', 'vault', /id-taken/],
       // The refusals are checked in order: existence, then chaining, then the grammar, then the ids taken.
-      ['a missing component before the new id', 'nope', 'Not An Id', /component-missing/],
-      ['a chained component before the new id', 'ext::widget', 'books_orch', /chained-component/],
+      ['a missing component before the new id', 'nope', 'Not An Id', /spec-missing/],
+      ['a chained component before the new id', 'ext::widget', 'books_orch', /chained-spec/],
       ['a new id outside the grammar before the ids taken', 'ledger', 'Books_orch', /invalid-id/],
     ];
 

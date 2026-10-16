@@ -142,7 +142,7 @@ describe('item 10: refusal wording names the tool and the project', () => {
     const r = await call(client, 'sdd_rename_method', { id: 'ext::cal_portal', method: 'next', newName: 'following' });
     expect(r.isError).toBe(true);
     expect(r.text).not.toMatch(/component-missing/);
-    expect(r.text).toMatch(/external "cal-lib".*only reads through its pin/s);
+    expect(r.text).toMatch(/lives in another project.*"cal-lib", the project this one declares as the external "ext": it is read-only here/s);
   });
 
   it('sdd_add_member says so when it creates a folder outside the project', async () => {

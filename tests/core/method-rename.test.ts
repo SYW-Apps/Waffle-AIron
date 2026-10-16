@@ -317,8 +317,8 @@ describe('renameMethod', () => {
 
   describe('refuses, changing no file', () => {
     const refusals: [string, string, string, string, RegExp][] = [
-      ['a component that does not exist', 'nope', 'post', 'append', /component-missing/],
-      ['a component inside a chained subproject', 'ext::widget', 'post', 'append', /chained-component/],
+      ['a component that does not exist', 'nope', 'post', 'append', /spec-missing/],
+      ['a component inside a chained subproject', 'ext::widget', 'post', 'append', /chained-spec/],
       ['a new name with an uppercase first letter', 'ledger', 'post', 'Append', /invalid-name/],
       ['a new name carrying a namespace separator', 'ledger', 'post', 'ext::append', /invalid-name/],
       ['a new name with a space', 'ledger', 'post', 'append entry', /invalid-name/],
@@ -328,8 +328,8 @@ describe('renameMethod', () => {
       ['a new name a moving contract already declares', 'ledger', 'post', 'audit', /name-taken/],
       // The refusals are checked in order: existence, then chaining, then the
       // grammar, then the method, then the name taken.
-      ['a missing component before the new name', 'nope', 'post', 'Append', /component-missing/],
-      ['a chained component before the new name', 'ext::widget', 'post', 'Append', /chained-component/],
+      ['a missing component before the new name', 'nope', 'post', 'Append', /spec-missing/],
+      ['a chained component before the new name', 'ext::widget', 'post', 'Append', /chained-spec/],
       ['a new name outside the grammar before the missing method', 'ledger', 'missing', 'Append', /invalid-name/],
       ['a missing method before the name taken', 'ledger', 'missing', 'audit', /method-missing/],
     ];

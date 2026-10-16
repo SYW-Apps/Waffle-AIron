@@ -205,7 +205,7 @@ describe('a bare id a member holds is the bound project\'s own: writes never lan
     await Promise.all([createMcpServer().connect(serverTransport), client.connect(clientTransport)]);
 
     // Phase A — nothing local holds these ids: every write that needs an
-    // existing spec (or an existing parent) is refused as missing.
+    // existing spec (or an existing parent) is refused, as the member's.
     const refused = (ids: Ids): Record<string, Record<string, unknown>[]> => ({
       sdd_update_spec: [
         { kind: 'subsystem', id: ids.sub, delta: { description: 'x' } },
@@ -258,7 +258,8 @@ describe('a bare id a member holds is the bound project\'s own: writes never lan
         for (const args of argsList) {
           const { isError, text } = await call(tool, args);
           expect(isError, `${tool} ${JSON.stringify(args)} answered: ${text}`).toBe(true);
-          expect(text, `${tool} ${JSON.stringify(args)}`).toMatch(/lives in another project|does not exist|not exist|no such|not found|no (component|type|interface|implementation|subsystem|spec)|missing|unknown/i);
+          // A bare id only a member holds is refused as that member's, naming it — never as missing.
+          expect(text, `${tool} ${JSON.stringify(args)}`).toMatch(/^Error: chained-spec: "[^"]+" lives in another project.*It belongs to the member project "[^"]+" at [^:]+: .* there\.( This project has no \w+ "[^"]+" of its own: a bare id always names this project's own spec\.)? Nothing was written\.$/s);
           invalidateSpecCache();
           expect(contents(m.dir), `${tool} ${JSON.stringify(args)} changed the member`).toEqual(before[at]);
         }

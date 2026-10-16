@@ -292,7 +292,7 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
     const { call } = await bound();
     await seed(call);
     const result = await call('sdd_set_public_interfaces', { subsystem: 'nowhere', publicInterfaces: [] });
-    expect(textOf(result)).toBe('Error: Subsystem "nowhere" does not exist.');
+    expect(textOf(result)).toBe('Error: spec-missing: this project has no subsystem "nowhere". Nothing was written.');
   });
 });
 
@@ -394,7 +394,7 @@ describe('sdd_delete_spec — the deletion as data', () => {
     await seed(call);
     const result = await call('sdd_delete_spec', { kind: 'component', id: 'nowhere' });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/^Error: spec-missing: no component has the id "nowhere" — nothing was deleted\. Its components: /);
+    expect(textOf(result)).toMatch(/^Error: spec-missing: this project has no component "nowhere"\. Nothing was written\. Its components: /);
     expect(textOf(result)).not.toMatch(/may not exist/);
   });
 });

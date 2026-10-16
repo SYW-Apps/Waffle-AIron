@@ -151,7 +151,7 @@ describe('sdd_rename_method', () => {
     for (const id of ['widget', 'ext::widget']) {
       const result = await call({ id, method: 'post', newName: 'append' });
       expect(result.isError, id).toBe(true);
-      expect(textOf(result), id).toMatch(/chained-component/);
+      expect(textOf(result), id).toMatch(/chained-spec/);
       expect(textOf(result), id).toContain('ext::widget');
     }
   });
@@ -161,7 +161,7 @@ describe('sdd_rename_method', () => {
     client = await connect(createMcpServer());
 
     for (const [args, label] of [
-      [{ id: 'nope', method: 'post', newName: 'append' }, /component-missing/],
+      [{ id: 'nope', method: 'post', newName: 'append' }, /spec-missing/],
       [{ id: 'ledger', method: 'post', newName: 'Append' }, /invalid-name/],
       [{ id: 'ledger', method: 'missing', newName: 'append' }, /method-missing/],
       [{ id: 'ledger', method: 'post', newName: 'close' }, /name-taken/],

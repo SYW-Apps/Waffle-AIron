@@ -50,6 +50,9 @@ import {
   type WritableSpecKind,
   assertSpecsInReach,
   signatureFacts,
+  crossProjectWriteRefusal,
+  foreignSpecRefusal,
+  missingSpecSentence,
 } from './specs.js';
 import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
@@ -3278,26 +3281,15 @@ export interface ComponentRename {
  * realizes one of the component's contracts move with it; interfaces and
  * implementations named otherwise keep their ids, and only their component and
  * contract references change. Before writing anything it refuses a component
- * that does not exist (component-missing), one inside a chained subproject
- * (chained-component), a new id outside the id grammar (invalid-id), and a new
+ * no project in reach holds (spec-missing), one another project holds
+ * (chained-spec), a new id outside the id grammar (invalid-id), and a new
  * id — or the interface or implementation id it implies — already in use
  * (id-taken).
  */
 export function renameComponent(componentId: string, newId: string, dryRun?: boolean): ComponentRename {
-  // Steps 4–5 first: a component of another project, whatever it is spelled as.
-  const foreign = foreignIdRefusal(componentId, 'chained-component', 'rename it', `sdd_rename_component ${componentId.slice(componentId.lastIndexOf('::') + 2)} <new id>`);
-  if (foreign !== null) throw new WaironError(foreign);
-  // Steps 1–3: the component must exist…
-  const component = loadComponentSpec(componentId);
-  if (!component) {
-    throw new WaironError(`component-missing: no component has the id "${componentId}".`);
-  }
-  // Steps 4–5: …and belong to the bound project itself.
-  if (componentId.includes('::')) {
-    throw new WaironError(
-      `chained-component: "${componentId}" lives in another project; rename it from that project's own root. ${memberRootWay(componentId, `sdd_rename_component ${componentId.slice(componentId.lastIndexOf('::') + 2)} <new id>`)}`,
-    );
-  }
+  // Steps 1–5: the component must exist and belong to the bound project itself —
+  // refused with the boundary's one sentence: another project's, or missing.
+  const component = writeTarget('component', componentId, 'sdd_rename_component', `sdd_rename_component ${localOf(componentId)} <new id>`, () => loadComponentSpec(componentId));
   // Steps 6–7: the new id must be a plain lowercase identifier.
   if (!SpecIdSchema.safeParse(newId).success) {
     throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator.`);
@@ -3655,15 +3647,10 @@ export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, 
     const owner = kind === 'component' ? 'sdd_rename_component' : kind === 'type' ? 'sdd_rename_type' : 'no tool yet';
     throw new WaironError(`invalid-kind: sdd_rename_spec renames a contract (kind interface) or an implementation on its own; a ${kind} is renamed with ${owner}.`);
   }
-  // Step 3: the spec — another project's refused first, however it is spelled.
-  const foreign = foreignIdRefusal(id, 'chained-spec', 'rename it', `sdd_rename_spec ${kind} ${id.slice(id.lastIndexOf('::') + 2)} <new id>`);
-  if (foreign !== null) throw new WaironError(foreign);
-  const spec: InterfaceSpec | ImplementationSpec | null = kind === 'interface' ? loadInterfaceSpec(id) : loadImplementationSpec(id);
-  // Steps 4-5: it exists, is the bound project's own, and the new id fits.
-  if (!spec) throw new WaironError(`spec-missing: no ${kind} has the id "${id}".`);
-  if (id.includes('::')) {
-    throw new WaironError(`chained-spec: "${id}" lives in another project; rename it from that project's own root. ${memberRootWay(id, `sdd_rename_spec ${kind} ${id.slice(id.lastIndexOf('::') + 2)} <new id>`)}`);
-  }
+  // Steps 3-5: the spec exists and is the bound project's own — refused with the
+  // boundary's one sentence when it is another project's or missing — and the new id fits.
+  const spec: InterfaceSpec | ImplementationSpec = writeTarget<InterfaceSpec | ImplementationSpec>(kind, id, 'sdd_rename_spec', `sdd_rename_spec ${kind} ${localOf(id)} <new id>`,
+    () => (kind === 'interface' ? loadInterfaceSpec(id) : loadImplementationSpec(id)));
   if (!SpecIdSchema.safeParse(newId).success || (kind === 'interface' && !/^i[a-z0-9-_]+$/.test(newId))) {
     throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator${kind === 'interface' ? ' beginning with "i", as a contract id does' : ''}.`);
   }
@@ -3740,9 +3727,10 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
   const components = loadComponentSpecs();
   const component = components.find((c) => c.id === id);
   // Steps 6-7: it can move there.
-  if (!component) throw new WaironError(`spec-missing: no component has the id "${id}".`);
-  if (id.includes('::')) {
-    throw new WaironError(`chained-spec: "${id}" lives in another project; move it from that project's own root. ${memberRootWay(id, `sdd_move_spec component ${id.slice(id.lastIndexOf('::') + 2)} <subsystem>`)}`);
+  if (!component || id.includes('::')) {
+    // The boundary's one sentence: another project's, or missing.
+    writeTarget('component', id, 'sdd_move_spec', `sdd_move_spec component ${localOf(id)} <subsystem>`, () => component ?? null);
+    throw new WaironError(missingSpecSentence('component', id));
   }
   if (target === undefined) throw new WaironError(`subsystem-missing: name the subsystem component "${id}" moves to — a component always lives in a subsystem.`);
   if (component.subsystem === target) throw new WaironError(`same-subsystem: component "${id}" already lives in "${target}" — nothing to move.`);
@@ -3876,13 +3864,18 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   const types = loadTypeSpecs();
   const cut = id.lastIndexOf('::');
   const qualifier = cut >= 0 ? id.slice(0, cut) : undefined;
+  // Refused with the boundary's one sentence when another project holds it or none does.
+  const call = `sdd_move_spec type ${localOf(id)} <subsystem>`;
   if (qualifier !== undefined && !subsystems.some((s) => s.id === qualifier)) {
-    throw new WaironError(`chained-spec: "${id}" lives in another project; move it from that project's own root. ${memberRootWay(id, `sdd_move_spec type ${id.slice(cut + 2)} <subsystem>`)}`);
+    throw new WaironError(crossProjectWriteRefusal([{ kind: 'type', id }], 'sdd_move_spec', call, true) ?? foreignSpecRefusal(id, call));
   }
   const bare = cut >= 0 ? id.slice(cut + 2) : id;
   const matching = types.filter((t) => t.id === bare && (qualifier === undefined || t.subsystem === qualifier));
   // Steps 16-17: it can move there.
-  if (matching.length === 0) throw new WaironError(`spec-missing: no type has the id "${id}" (a type is addressed by its bare id, or as <subsystem>::<id>).`);
+  if (matching.length === 0) {
+    throw new WaironError(crossProjectWriteRefusal([{ kind: 'type', id }], 'sdd_move_spec', call, true)
+      ?? missingSpecSentence('type', id, 'A type is addressed by its bare id, or as <subsystem>::<id>.'));
+  }
   if (matching.length > 1) throw new WaironError(`ambiguous: ${matching.length} types have the id "${bare}" — address it as <subsystem>::${bare} (${matching.map((t) => qualifiedTypeId(t)).join(', ')}).`);
   const type = matching[0];
   const from = type.subsystem ?? '';
@@ -4290,26 +4283,15 @@ function shouldPinSymbol(implementation: ImplementationSpec, methodName: string,
  * findings unchanged; an implementation that declared no symbol is pinned to
  * the old name unless `pinSymbol` is false, so the function it already binds to
  * keeps binding. Before writing anything it refuses a component that does not
- * exist (component-missing), one inside a chained subproject
- * (chained-component), a new name outside the identifier grammar
+ * exist (spec-missing), one another project holds
+ * (chained-spec), a new name outside the identifier grammar
  * (invalid-name), a method the component does not declare (method-missing), and
  * a new name a moving contract already declares (name-taken).
  */
 export function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean, dryRun?: boolean): MethodRename {
-  // Steps 2–3, the boundary first: a component of another project, however it is spelled.
-  const foreign = foreignIdRefusal(componentId, 'chained-component', 'rename its method', `sdd_rename_method ${componentId.slice(componentId.lastIndexOf('::') + 2)} <method> <new name>`);
-  if (foreign !== null) throw new WaironError(foreign);
-  // Steps 1–3: the component must exist…
-  const component = loadComponentSpec(componentId);
-  if (!component) {
-    throw new WaironError(`component-missing: no component has the id "${componentId}".`);
-  }
-  // Steps 4–5: …and belong to the bound project itself.
-  if (componentId.includes('::')) {
-    throw new WaironError(
-      `chained-component: "${componentId}" lives in another project; rename its method from that project's own root. ${memberRootWay(componentId, `sdd_rename_method ${componentId.slice(componentId.lastIndexOf('::') + 2)} <method> <new name>`)}`,
-    );
-  }
+  // Steps 1–5: the component must exist and belong to the bound project itself —
+  // refused with the boundary's one sentence: another project's, or missing.
+  const component = writeTarget('component', componentId, 'sdd_rename_method', `sdd_rename_method ${localOf(componentId)} ${methodName} <new name>`, () => loadComponentSpec(componentId));
   // Steps 6–7: the new name must be an identifier in the tree's method casing —
   // unless a contract of the component implements another project's extension
   // point, whose producer names those methods in its own language: then any
@@ -4621,55 +4603,32 @@ function respellLike(written: string, oldId: string, newId: string): string {
  * its rename trace; every type position naming it is respelled, and an export
  * entry's typeDef — one that stated no `as` first keeping its public name.
  * Before writing anything it refuses a type that does not exist
- * (type-missing), one in another project (chained-type), a new id outside the
+ * (spec-missing), one in another project (chained-spec), a new id outside the
  * id grammar (invalid-id), and a new id another type of the same owner holds
  * or retired (id-taken, id-retired).
  */
-/**
- * The exact way to change something a member project owns: the doctrine says a
- * member project is written from its own root, never through its parent's
- * tree, so a refusal names the member's folder and the call to make there.
- */
-function memberRootWay(qualifiedId: string, call: string): string {
-  return projectRootWay(qualifiedId, call)
-    ?? `It belongs to the member project "${qualifiedId.slice(0, qualifiedId.indexOf('::'))}": open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
+/** The local id of a possibly qualified id: what a session at the owning project's root names it by. */
+function localOf(id: string): string {
+  return id.includes('::') ? id.slice(id.lastIndexOf('::') + 2) : id;
 }
 
 /**
- * The way to change what another project owns, read off the id's first
- * segment as every write tool reads it: a member project — named by its id,
- * as crossProjectWriteRefusal names it, whether the id was spelled with its
- * alias or its key — with its folder and the session to open there; or an
- * external, which this project only reads through its pin. Null when the
- * segment names neither.
+ * The spec a rename or move writes, or the boundary's one refusal
+ * (core_orchestrator.crossProjectWriteRefusal): asked BEFORE the spec is read,
+ * so another project's spec — named through its alias, its key, or a bare id
+ * only a member holds — is refused as living in another project, naming which
+ * one and the call to make there, and an id no project holds as missing. A
+ * spec read under a qualified key the boundary let through (a legacy L1
+ * mount's) is still never written across. `keyOf` answers the stored key.
  */
-function projectRootWay(qualifiedId: string, call: string): string | null {
-  const alias = qualifiedId.slice(0, qualifiedId.indexOf('::'));
-  try {
-    const node = graph().nodes.find((n) => n.namespace === alias || (n.parent === '' && n.mountAlias === alias));
-    if (node) {
-      const folder = path.relative(getProjectRoot(), node.directory).split(path.sep).join('/') || '.';
-      return `It belongs to the member project "${node.id ?? alias}" at ${folder}: open a session in that folder (its own guide and .mcp.json — run \`wairon generate\` and \`wairon mcp install --backend claude\` there first if it has none) and call ${call} there.`;
-    }
-  } catch { /* a graph that cannot be read names no member */ }
-  const external = ownGet(projectConfigRepository.load()?.externals, alias);
-  if (external !== undefined) {
-    const producer = (external as { project?: string } | null)?.project ?? alias;
-    return `"${alias}" is the external "${producer}", a project this one only reads through its pin: a project's specs are written from its own root — open a session in that project's folder and call ${call} there.`;
-  }
-  return null;
-}
-
-/**
- * The refusal for an id another project holds — asked BEFORE whether the id
- * exists, so a member's or an external's spec named through its alias is
- * refused with the project boundary's sentence, never reported missing. Null
- * for an id of the bound project's own.
- */
-function foreignIdRefusal(id: string, code: string, doing: string, call: string): string | null {
-  if (!id.includes('::')) return null;
-  const way = projectRootWay(id, call);
-  return way === null ? null : `${code}: "${id}" lives in another project; ${doing} from that project's own root. ${way}`;
+function writeTarget<T>(kind: WritableSpecKind, id: string, tool: string, call: string, read: () => T | null, keyOf?: (spec: T) => string): T {
+  const refusal = crossProjectWriteRefusal([{ kind, id }], tool, call, true);
+  if (refusal !== undefined) throw new WaironError(refusal);
+  const spec = read();
+  if (spec === null) throw new WaironError(missingSpecSentence(kind, id));
+  const key = keyOf ? keyOf(spec) : id;
+  if (key.includes('::')) throw new WaironError(foreignSpecRefusal(key, call));
+  return spec;
 }
 
 export function renameType(typeId: string, newId: string, dryRun?: boolean): TypeRename {
@@ -4679,16 +4638,14 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
   const qualifier = cut >= 0 ? typeId.slice(0, cut) : undefined;
   const ownSubsystem = qualifier !== undefined && loadSubsystemSpecs().some((s) => s.id === qualifier);
   // Steps 4–5: …and belong to the bound project itself — an alias:: prefix names another project.
+  // Refused with the boundary's one sentence when another project holds it or none does.
+  const call = `sdd_rename_type ${localOf(typeId)} <new id>`;
   if (qualifier !== undefined && !ownSubsystem) {
-    throw new WaironError(`chained-type: "${typeId}" lives in another project; rename it from that project's own root. ${memberRootWay(typeId, `sdd_rename_type ${typeId.slice(cut + 2)} <new id>`)} An exported type keeps its public name through \`as\`, so this project's references do not break.`);
+    throw new WaironError(crossProjectWriteRefusal([{ kind: 'type', id: typeId }], 'sdd_rename_type', call, true) ?? foreignSpecRefusal(typeId, call));
   }
-  const type: TypeSpec | null = qualifier !== undefined
+  const type: TypeSpec = writeTarget<TypeSpec>('type', typeId, 'sdd_rename_type', call, () => (qualifier !== undefined
     ? all.find((t) => t.id === typeId.slice(cut + 2) && t.subsystem === qualifier) ?? null
-    : loadTypeSpec(typeId);
-  if (!type) throw new WaironError(`type-missing: no type has the id "${typeId}".`);
-  if (type.id.includes('::')) {
-    throw new WaironError(`chained-type: "${type.id}" lives in another project; rename it from that project's own root. ${memberRootWay(type.id, `sdd_rename_type ${type.id.slice(type.id.lastIndexOf('::') + 2)} <new id>`)}`);
-  }
+    : loadTypeSpec(typeId)), (t) => t.id);
   const oldId = type.id;
   // Steps 6–7: the new id must be a plain lowercase identifier.
   if (!SpecIdSchema.safeParse(newId).success) {
@@ -4874,7 +4831,7 @@ export interface FieldRename {
  * (previousNames — `formerly` in the design export); every foreign key
  * `references: <type>.<field>` naming it is respelled. Traces and prose are
  * never rewritten. Refuses before any write: a type that does not exist
- * (type-missing), one in another project (chained-type), a field it does not
+ * (spec-missing), one in another project (chained-spec), a field it does not
  * declare (field-missing), a new name that is not an identifier
  * (invalid-name), and a name another field holds or retired (name-taken,
  * name-retired).
@@ -4885,16 +4842,14 @@ export function renameField(typeId: string, field: string, newName: string, dryR
   const cut = typeId.lastIndexOf('::');
   const qualifier = cut >= 0 ? typeId.slice(0, cut) : undefined;
   const ownSubsystem = qualifier !== undefined && loadSubsystemSpecs().some((s) => s.id === qualifier);
+  // Refused with the boundary's one sentence when another project holds it or none does.
+  const call = `sdd_rename_field ${localOf(typeId)} ${field} <new name>`;
   if (qualifier !== undefined && !ownSubsystem) {
-    throw new WaironError(`chained-type: "${typeId}" lives in another project; rename its field from that project's own root. ${memberRootWay(typeId, `sdd_rename_field ${typeId.slice(cut + 2)} ${field} <new name>`)}`);
+    throw new WaironError(crossProjectWriteRefusal([{ kind: 'type', id: typeId }], 'sdd_rename_field', call, true) ?? foreignSpecRefusal(typeId, call));
   }
-  const type: TypeSpec | null = qualifier !== undefined
+  const type: TypeSpec = writeTarget<TypeSpec>('type', typeId, 'sdd_rename_field', call, () => (qualifier !== undefined
     ? all.find((t) => t.id === typeId.slice(cut + 2) && t.subsystem === qualifier) ?? null
-    : loadTypeSpec(typeId);
-  if (!type) throw new WaironError(`type-missing: no type has the id "${typeId}".`);
-  if (type.id.includes('::')) {
-    throw new WaironError(`chained-type: "${type.id}" lives in another project; rename its field from that project's own root.`);
-  }
+    : loadTypeSpec(typeId)), (t) => t.id);
   // Step 3: the field, the new name, and the names the type holds or retired.
   const fields = type.fields ?? [];
   const moving = fields.find((f) => f.name === field);
@@ -5069,21 +5024,14 @@ export interface ParamRename {
  * appended to its rename trace (previousNames — `formerly` in the design
  * export); the writer re-derives each signature from the params, and an HTTP
  * path placeholder `{old}` on the method's own binding is respelled. Prose is
- * never rewritten. Refuses before any write: component-missing,
- * chained-component, method-missing, param-missing, invalid-name, name-taken
+ * never rewritten. Refuses before any write: spec-missing,
+ * chained-spec, method-missing, param-missing, invalid-name, name-taken
  * and name-retired.
  */
 export function renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?: boolean): ParamRename {
-  // Steps 1-2: the component, in this project — another project's refused first, however it is spelled.
-  const foreign = foreignIdRefusal(componentId, 'chained-component', 'rename its parameter', `sdd_rename_param ${componentId.slice(componentId.lastIndexOf('::') + 2)} ${methodName} ${param} <new name>`);
-  if (foreign !== null) throw new WaironError(foreign);
-  const component = loadComponentSpec(componentId);
-  if (!component) throw new WaironError(`component-missing: no component has the id "${componentId}".`);
-  if (componentId.includes('::')) {
-    throw new WaironError(
-      `chained-component: "${componentId}" lives in another project; rename its parameter from that project's own root. ${memberRootWay(componentId, `sdd_rename_param ${componentId.slice(componentId.lastIndexOf('::') + 2)} ${methodName} ${param} <new name>`)}`,
-    );
-  }
+  // Steps 1-2: the component, in this project — refused with the boundary's one
+  // sentence when it is another project's or missing.
+  const component = writeTarget('component', componentId, 'sdd_rename_param', `sdd_rename_param ${localOf(componentId)} ${methodName} ${param} <new name>`, () => loadComponentSpec(componentId));
   // Step 3: the contracts that declare the method.
   const contracts = loadInterfaceSpecs().filter((i) => i.component === componentId);
   const moving = contracts.filter((i) => i.methods.some((m) => m.name === methodName));

@@ -277,6 +277,22 @@ function errMessage(e: unknown): CallToolResult {
 }
 
 /**
+ * The refusal of a write naming a spec the bound project does not hold, in the
+ * authoring seam's one sentence: its boundary answers another project's spec
+ * (a member's, an external's, or a bare id only a member holds) as living in
+ * another project and anything else as missing. Asked as a dry run of an empty
+ * delta, which the seam refuses before it reads anything else.
+ */
+function absentTargetRefusal(kind: 'subsystem' | 'interface', id: string, tool: string): string {
+  try {
+    updateSpecGated(kind, id, {}, true, tool);
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+  return `spec-missing: this project has no ${kind} "${id}". Nothing was written.`;
+}
+
+/**
  * What an author may write where a type goes, said once and attached to every
  * such field. A type string is TOKENIZED rather than parsed as a type
  * expression, so a union needs no special syntax — and an author who does not
@@ -2122,7 +2138,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.setPublicInterfaces step 1: the subsystem whose
         // published surface is being set.
         const sub = loadSubsystemSpec(subsystem);
-        if (!sub) return errText(`Subsystem "${subsystem}" does not exist.`);
+        // One the bound project does not hold is refused with the authoring seam's
+        // boundary sentence (another project's, or missing), as every write tool answers it.
+        if (!sub) return errText(absentTargetRefusal('subsystem', subsystem, 'sdd_set_public_interfaces'));
         // Step 2: the replacement as ONE delta, so it stays a single judged write.
         const delta = publicInterfacesReplacement(subsystem, sub.publicInterfaces ?? [], publicInterfaces);
         if (typeof delta === 'string') return errText(delta);
@@ -2372,7 +2390,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; newId: string; dryRun?: boolean }>(server,
     'sdd_rename_component',
     {
-      description: 'Rename a component and rewrite every reference to it in the bound tree: dependsOn, owns and dispatch entries, lifecycle entrypoints, published interfaces at L1 and L0, narrative call/dispatch/register targets, an interface\'s component, an implementation\'s contract and an entity\'s componentClass. The interface named i<id> and the implementation named <id>_impl move to the new ids and files; interfaces and implementations named otherwise keep their ids, and their files follow the component\'s folder (rename one of those on its own with sdd_rename_spec). Findings keyed on the component follow it too: every lint allow naming it on an edge site or in a covered unit, and every entry of the debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or naming the component in its site or units — rewritten in place, every comment and all other formatting of the register kept, so unchanged debt never reads as paid and new at once. A register that cannot be rewritten that precisely is refused before the first write. Display names are left as they are. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename it from that project\'s own root), a new id that is not a lowercase identifier without a namespace separator (invalid-id), and a new id — or i<newId> or <newId>_impl — already in use (id-taken). With dryRun it answers what it would move, rewrite, keep and rekey, and writes nothing. Returns the specs moved, each with its old and new id, the ids of the other specs rewritten (lint allows included), and `carried`: each register edit — the entry by code, spec and site as it stood, the key changed (spec, at or covers), from and to.',
+      description: 'Rename a component and rewrite every reference to it in the bound tree: dependsOn, owns and dispatch entries, lifecycle entrypoints, published interfaces at L1 and L0, narrative call/dispatch/register targets, an interface\'s component, an implementation\'s contract and an entity\'s componentClass. The interface named i<id> and the implementation named <id>_impl move to the new ids and files; interfaces and implementations named otherwise keep their ids, and their files follow the component\'s folder (rename one of those on its own with sdd_rename_spec). Findings keyed on the component follow it too: every lint allow naming it on an edge site or in a covered unit, and every entry of the debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or naming the component in its site or units — rewritten in place, every comment and all other formatting of the register kept, so unchanged debt never reads as paid and new at once. A register that cannot be rewritten that precisely is refused before the first write. Display names are left as they are. Refuses, writing nothing: a component no project in reach holds (spec-missing), one another project holds (chained-spec — by its alias, its key, or a bare id only a member holds; the refusal names that project and how it is changed there), a new id that is not a lowercase identifier without a namespace separator (invalid-id), and a new id — or i<newId> or <newId>_impl — already in use (id-taken). With dryRun it answers what it would move, rewrite, keep and rekey, and writes nothing. Returns the specs moved, each with its old and new id, the ids of the other specs rewritten (lint allows included), and `carried`: each register edit — the entry by code, spec and site as it stood, the key changed (spec, at or covers), from and to.',
       inputSchema: {
         id: z.string().describe('The component to rename (namespaced if needed)'),
         newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator'),
@@ -2385,7 +2403,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // rename (or ask what it would do) through the core adapter, and return the report.
         return json(renameComponent(qualifiedComponentId(id), newId, dryRun));
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2393,7 +2411,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; newName: string; pinSymbol?: boolean; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_method',
     {
-      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name when its code exists (the file realizing the method is on disk), so the function it already binds to keeps binding — with no code written yet nothing is pinned unless pinSymbol is true, and pinSymbol false never pins. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component — rename its method from that project\'s own root), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript; for a component one of whose contracts implements another project\'s extension point, any identifier, since the producer names those methods (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
+      description: 'Rename a contract method and retarget every reference to it in the bound tree. The method moves on every interface of the component that declares it — its name, and the name inside its signature — and on the implementations of those contracts, carrying narrative, sourcePath, symbol, detail, intent and findings unchanged; an implementation that declared no symbol is pinned to the old name when its code exists (the file realizing the method is on disk), so the function it already binds to keeps binding — with no code written yet nothing is pinned unless pinSymbol is true, and pinSymbol false never pins. Narrative call, register and dispatch steps naming this component and method, dispatch-table bindings and lifecycle entrypoints are retargeted, and so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering `<component>.<method>`, and every debt-register entry (.wai/project.yaml rules.conformance.carried) keyed the same way — rewritten in place with every comment and all other formatting kept (a register that cannot be rewritten that precisely is refused before the first write). Prose is never rewritten and a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently rename an RPC; both are reported as mentions. Refuses, writing nothing: a component no project in reach holds (spec-missing), one another project holds (chained-spec — by its alias, its key, or a bare id only a member holds; the refusal names that project and how it is changed there), a new name that is not an identifier in the method casing of the tree — the configured rules.naming.methods, else the convention of its targetLanguage: snake_case for Rust or Python, camelCase for TypeScript; for a component one of whose contracts implements another project\'s extension point, any identifier, since the producer names those methods (invalid-name), a method the component does not declare (method-missing), and a name a moving contract already declares (name-taken). Returns the specs the method moved in, the specs retargeted (lint allows included), the specs whose prose still names it, the pinned symbol when one was set, and `carried`: each register edit.',
       inputSchema: {
         id: z.string().describe('The component whose method is renamed (namespaced if needed)'),
         method: z.string().describe('The method name as it stands'),
@@ -2418,7 +2436,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const breaks = consumers.map((c) => narrowedToUses(c, published)).filter((c): c is ExternalConsumer => c !== null);
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2426,7 +2444,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; newId: string; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_type',
     {
-      description: 'Rename a type and rewrite every reference to it in the bound tree: every type position naming it (contract and type-method params and returns, fields, signature-type params and returns), a signatureFrom naming it as a signature type, and an L1 or L0 export entry\'s typeDef. Only the named members of a type expression that name this type are respelled, in the style they were written (`Invoice` → `Bill`, `invoice` → `bill`); the rest of the text stays as written. The type moves to the new id and file under the same owner, and its old id joins its rename trace (previousIds) so a consumer of the design export reads the rename as a rename; an export entry that derived its public name from the old id gets `as: <that name>` first, so the published name and every consumer\'s pin stay. Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming it, and every debt-register entry anchored on it, rewritten in place (a register that cannot be rewritten that precisely is refused before the first write). The display name is left as it is. Refuses, writing nothing: a type that does not exist (type-missing), one in another project (chained-type), a new id that is not a lowercase identifier (invalid-id), and a new id another type of the same owner holds (id-taken) or retired (id-retired — unsetting the holder\'s previousIds releases it). With dryRun it answers what it would rewrite, keep and rekey, and writes nothing. Returns from and to, the specs rewritten, keptPublicNames, `carried`: each register edit, `publishedIn` — every public name a consumer reaches the type through (an exported type that is or embeds it, member `type`; an exported contract whose methods name one in their signature closure, those methods) — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those, a contract they depend on as a whole included, narrowed to what carries the type — as sdd_rename_field and sdd_rename_param name theirs.',
+      description: 'Rename a type and rewrite every reference to it in the bound tree: every type position naming it (contract and type-method params and returns, fields, signature-type params and returns), a signatureFrom naming it as a signature type, and an L1 or L0 export entry\'s typeDef. Only the named members of a type expression that name this type are respelled, in the style they were written (`Invoice` → `Bill`, `invoice` → `bill`); the rest of the text stays as written. The type moves to the new id and file under the same owner, and its old id joins its rename trace (previousIds) so a consumer of the design export reads the rename as a rename; an export entry that derived its public name from the old id gets `as: <that name>` first, so the published name and every consumer\'s pin stay. Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming it, and every debt-register entry anchored on it, rewritten in place (a register that cannot be rewritten that precisely is refused before the first write). The display name is left as it is. Refuses, writing nothing: a type no project in reach holds (spec-missing), one another project holds (chained-spec — the refusal names that project and how it is changed there), a new id that is not a lowercase identifier (invalid-id), and a new id another type of the same owner holds (id-taken) or retired (id-retired — unsetting the holder\'s previousIds releases it). With dryRun it answers what it would rewrite, keep and rekey, and writes nothing. Returns from and to, the specs rewritten, keptPublicNames, `carried`: each register edit, `publishedIn` — every public name a consumer reaches the type through (an exported type that is or embeds it, member `type`; an exported contract whose methods name one in their signature closure, those methods) — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those, a contract they depend on as a whole included, narrowed to what carries the type — as sdd_rename_field and sdd_rename_param name theirs.',
       inputSchema: {
         id: z.string().describe('The type to rename (qualified by its owning subsystem if needed, `subsystem::id`)'),
         newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator'),
@@ -2446,7 +2464,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const breaks = consumers.map((c) => narrowedToUses(c, report.publishedIn)).filter((c): c is ExternalConsumer => c !== null);
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2454,7 +2472,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; field: string; newName: string; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_field',
     {
-      description: 'Rename a field of a type and respell every reference to it in the bound tree: a foreign key\'s `references: <type>.<field>` naming it from any type (the type\'s own self-references included). The field keeps its place, type and description under the new name, and its old name joins the field\'s rename trace (previousNames), which the design export shows as `formerly` so a consumer holding the old name can follow the move. Rename traces and prose are never rewritten. Refuses, writing nothing: a type that does not exist (type-missing), one in another project (chained-type), a field the type does not declare (field-missing), a new name that is not an identifier (invalid-name), and a name another field of the type holds (name-taken) or retired (name-retired — unsetting the holder\'s previousNames releases it). Returns the type, from and to, the specs rewritten, `publishedIn` — every public name a consumer reaches the field through (an exported type that is or embeds the renamed type, member `type`; an exported contract whose methods name one, those methods) — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those, narrowed to what carries the field. With dryRun it answers all of that and writes nothing. The approval reads the type as changed until the next `wairon lock`, as with any edit.',
+      description: 'Rename a field of a type and respell every reference to it in the bound tree: a foreign key\'s `references: <type>.<field>` naming it from any type (the type\'s own self-references included). The field keeps its place, type and description under the new name, and its old name joins the field\'s rename trace (previousNames), which the design export shows as `formerly` so a consumer holding the old name can follow the move. Rename traces and prose are never rewritten. Refuses, writing nothing: a type no project in reach holds (spec-missing), one another project holds (chained-spec — the refusal names that project and how it is changed there), a field the type does not declare (field-missing), a new name that is not an identifier (invalid-name), and a name another field of the type holds (name-taken) or retired (name-retired — unsetting the holder\'s previousNames releases it). Returns the type, from and to, the specs rewritten, `publishedIn` — every public name a consumer reaches the field through (an exported type that is or embeds the renamed type, member `type`; an exported contract whose methods name one, those methods) — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those, narrowed to what carries the field. With dryRun it answers all of that and writes nothing. The approval reads the type as changed until the next `wairon lock`, as with any edit.',
       inputSchema: {
         id: z.string().describe('The type whose field is renamed (qualified by its owning subsystem if needed, `subsystem::id`)'),
         field: z.string().describe('The field\'s name as it stands'),
@@ -2475,7 +2493,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const breaks = consumers.map((c) => narrowedToUses(c, report.publishedIn)).filter((c): c is ExternalConsumer => c !== null);
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2483,7 +2501,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; param: string; newName: string; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_param',
     {
-      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` (or `/:old`) is respelled on the method\'s own binding and on every method whose signatureFrom takes its signature (the URL a caller sends is unchanged). Prose is never rewritten. Refuses, writing nothing: a component that does not exist (component-missing), one inside a chained subproject (chained-component), a method no contract of the component declares (method-missing), a parameter the method does not declare, or takes from another project\x27s method or a signature type (param-missing, naming that source), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Asked of a method that takes its signature from another of this project\x27s contract methods (a Portal verb with signatureFrom), the rename is made on that source and reaches the asked method through its signatureFrom; `routedFrom` names the method asked for. Returns the component, method, from and to, the interfaces it moved in, the placeholders respelled, `publishedIn` (the export entries carrying the method, and every published verb forwarding it), `published` (the same, method-granular, with former names) and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) that call it there — a call by a former method name included. With dryRun it answers all of that and writes nothing. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
+      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` (or `/:old`) is respelled on the method\'s own binding and on every method whose signatureFrom takes its signature (the URL a caller sends is unchanged). Prose is never rewritten. Refuses, writing nothing: a component no project in reach holds (spec-missing), one another project holds (chained-spec — by its alias, its key, or a bare id only a member holds; the refusal names that project and how it is changed there), a method no contract of the component declares (method-missing), a parameter the method does not declare, or takes from another project\x27s method or a signature type (param-missing, naming that source), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Asked of a method that takes its signature from another of this project\x27s contract methods (a Portal verb with signatureFrom), the rename is made on that source and reaches the asked method through its signatureFrom; `routedFrom` names the method asked for. Returns the component, method, from and to, the interfaces it moved in, the placeholders respelled, `publishedIn` (the export entries carrying the method, and every published verb forwarding it), `published` (the same, method-granular, with former names) and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) that call it there — a call by a former method name included. With dryRun it answers all of that and writes nothing. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
       inputSchema: {
         id: z.string().describe('The component whose contract method\'s parameter is renamed (namespaced if needed)'),
         method: z.string().describe('The contract method'),
@@ -2505,7 +2523,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const breaks = consumers.map((c) => narrowedToUses(c, report.published ?? [])).filter((c): c is ExternalConsumer => c !== null);
         return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2523,18 +2541,15 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ from, to, methods, dryRun }) => {
       try {
-        // mcp_orchestrator.moveMethods steps 1-2: both components are resolved
-        // and read HERE, so a mistyped id reads as a mistyped id rather than as
-        // a rule refusing the design.
-        const source = qualifiedComponentId(from);
-        const target = qualifiedComponentId(to);
-        if (!loadComponentSpec(source)) return errText(`no component has the id "${from}".`);
-        if (!loadComponentSpec(target)) return errText(`no component has the id "${to}".`);
-        // Step 3: hand it to the authoring gate, which judges the move as a
-        // whole and writes all of it or none of it.
-        return json(moveMethods(source, target, methods, dryRun));
+        // mcp_orchestrator.moveMethods step 1: hand it to the authoring gate. Its
+        // project boundary refuses a component the bound project does not hold
+        // first — another project's, or missing, in the one sentence every write
+        // tool answers with — so a mistyped id reads as a mistyped id rather than
+        // as a rule refusing the design; then the move is judged as a whole and
+        // writes all of it or none of it.
+        return json(moveMethods(qualifiedComponentId(from), qualifiedComponentId(to), methods, dryRun));
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2555,7 +2570,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.renameSpec: through the core adapter.
         return json(renameSpecId(kind, id, newId, dryRun));
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2577,7 +2592,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // mcp_orchestrator.moveSpec: through the authoring seam, which judges the moved components together first.
         return json(moveSpec(kind, id, subsystem, dryRun, together));
       } catch (e) {
-        return errText(String(e));
+        return errMessage(e);
       }
     },
   );
@@ -2822,7 +2837,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       try {
         // mcp_orchestrator.setEndpoints step 1: the contract the bindings attach to.
         const intf = loadInterfaceSpec(interfaceId);
-        if (!intf) return errText(`Interface "${interfaceId}" does not exist.`);
+        if (!intf) return errText(absentTargetRefusal('interface', interfaceId, 'sdd_set_endpoints'));
         // Step 2: the Portal the contract belongs to, and its own transport.
         const owner = intf.component ? loadComponentSpec(intf.component) : null;
         if (owner?.componentType === 'Portal' && owner.transport === 'InProcess') {
