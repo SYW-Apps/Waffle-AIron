@@ -1374,6 +1374,8 @@ interface ExactFacts {
   functionReturns: Map<string, (string | null)[]>;
   /** The members of each top-level named class (see SourceFileFacts.classMembers). */
   classMembers: Map<string, ClassMemberFact[]>;
+  /** The top-level named classes the file names outside their own declaration (see SourceFileFacts.classReferences). */
+  classReferences: Set<string>;
   /**
    * The values of each enum-like declaration, by declaration name, in
    * declared order: a string-literal union alias, a `z.enum([...])` constant
@@ -2505,7 +2507,31 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  // The top-level classes the file's own code names outside their own
+  // declaration — constructed, extended, implemented, annotated with, tested
+  // by instanceof, passed or returned as a value. A name inside the class's
+  // own body is the class talking about itself, and an export clause is its
+  // publication: neither is a use.
+  const classReferences = new Set<string>();
+  if (classMembers.size > 0) {
+    const inOwnDeclaration = (node: import('typescript').Node, name: string): boolean => {
+      for (let up: import('typescript').Node | undefined = node.parent; up; up = up.parent) {
+        if (ts.isClassDeclaration(up) && up.name?.text === name && up.parent && ts.isSourceFile(up.parent)) return true;
+      }
+      return false;
+    };
+    const visitReference = (node: import('typescript').Node): void => {
+      if (ts.isIdentifier(node) && classMembers.has(node.text) && !classReferences.has(node.text)) {
+        const parent = node.parent;
+        const publication = !!parent && (ts.isExportSpecifier(parent) || ts.isExportAssignment(parent));
+        if (!publication && !inOwnDeclaration(node, node.text)) classReferences.add(node.text);
+      }
+      ts.forEachChild(node, visitReference);
+    };
+    visitReference(sf);
+  }
+
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -4146,6 +4172,7 @@ export function buildCodeModel(
             asyncFunctions: [...facts.asyncFunctions],
             functionReturns: Object.fromEntries(facts.functionReturns),
             classMembers: Object.fromEntries(facts.classMembers),
+            classReferences: [...facts.classReferences].sort(),
             enumValues: Object.fromEntries(facts.enumValues),
             aliasTypes: Object.fromEntries(facts.aliasTypes),
             topLevelMutableBindings: [...facts.mutableBindings],
@@ -4829,6 +4856,8 @@ interface PythonFacts {
   functionBodies: Record<string, FunctionBodyFact[]>;
   functionCallSites: Record<string, CallSiteFact[]>;
   classMembers: Record<string, ClassMemberFact[]>;
+  /** The top-level classes the module names outside their own `class` block. */
+  classReferences: string[];
   importBindings: Record<string, ImportBindingFact>;
   fieldTypes: Record<string, string[]>;
   localTypes: Record<string, string[]>;
@@ -5043,6 +5072,25 @@ function readPython(text: string): PythonFacts {
   }
   const exportedNames = moduleNames.filter(name => !name.startsWith('_') && (declaredAll ? declaredAll.has(name) : true));
 
+  // The top-level classes the module names outside their own `class` block:
+  // a name token anywhere else — a call constructing it, a base class, an
+  // annotation, an isinstance, a value passed on. A string (`__all__`, a
+  // forward reference) is publication or text, not a use.
+  const classReferences = new Set<string>();
+  let ownClass: { name: string; indent: number } | undefined;
+  for (const line of lines) {
+    if (ownClass && line.indent <= ownClass.indent) ownClass = undefined;
+    const t = line.tokens;
+    if (t[0]?.kind === 'name' && t[0].text === 'class' && t[1]?.kind === 'name' && line.indent === 0) {
+      ownClass = { name: t[1].text, indent: 0 };
+      for (const tok of t.slice(2)) if (tok.kind === 'name' && classMembers.has(tok.text) && tok.text !== ownClass.name) classReferences.add(tok.text);
+      continue;
+    }
+    for (const tok of t) {
+      if (tok.kind === 'name' && classMembers.has(tok.text) && tok.text !== ownClass?.name) classReferences.add(tok.text);
+    }
+  }
+
   return {
     functionParams: Object.fromEntries(functionParams),
     functionReturns: Object.fromEntries(functionReturns),
@@ -5050,6 +5098,7 @@ function readPython(text: string): PythonFacts {
     functionBodies: Object.fromEntries(functionBodies),
     functionCallSites,
     classMembers: Object.fromEntries(classMembers),
+    classReferences: [...classReferences].sort(),
     importBindings: Object.fromEntries(importBindings),
     fieldTypes: Object.fromEntries([...fieldTypes].map(([k, v]) => [k, [...v]])),
     localTypes: Object.fromEntries([...localTypes].map(([k, v]) => [k, [...v]])),

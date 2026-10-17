@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { defineRuleFixture, runRuleFixture, type FixtureTree } from '../rules-matrix/harness.js';
 import {
-  dispatchTree, py, ts, tsOrchestrator, PY_DISPATCH_BODY, PY_STORE, TS_DISPATCH_BODY, TS_STORE,
+  deskTree, dispatchTree, py, ts, tsOrchestrator, PY_DISPATCH_BODY, PY_STORE, TS_DISPATCH_BODY, TS_STORE,
 } from '../rules-matrix/families/conformance-surface-gaps.fixtures.js';
 
 /** The codes the gate gained or extended to Python: an honest tree must raise none of them. */
@@ -166,7 +166,7 @@ describe('the findings name the method that changed', () => {
     expect(issues[0].message).toContain('`Promise<string[]>`');
   });
 
-  it('a caller whose own port no longer matches the drifted class is told the cause', () => {
+  it('a caller whose own port no longer matches the drifted class is held under the root cause, not reported again', () => {
     const tree = dispatchTree(ts([
       'async dispatchParcel(parcelId: string): Promise<string[]> {',
       '  this.store.record(parcelId, parcelId);',
@@ -192,10 +192,14 @@ describe('the findings name the method that changed', () => {
       '',
     ].join('\n');
     const issues = run(tree).issues;
-    expect(issues.some(i => i.code === 'RETURN_TYPE_MISMATCH' && i.specId === 'dispatch_orchestrator_impl')).toBe(true);
-    const onCaller = issues.filter(i => i.specId === 'dispatch_desk_impl' && (i.code === 'UNREALIZED_DEPENDENCY' || i.code === 'CALL_ORIGIN_UNRESOLVED'));
-    expect(onCaller.length).toBeGreaterThan(0);
-    for (const issue of onCaller) expect(issue.message).toContain('RETURN_TYPE_MISMATCH');
+    const root = issues.filter(i => i.code === 'RETURN_TYPE_MISMATCH' && i.specId === 'dispatch_orchestrator_impl');
+    expect(root).toHaveLength(1);
+    expect(root[0].message).toContain('held under this finding');
+    // The caller's port no longer matches, so its call and its edge only LOOK broken: one finding, at the cause.
+    expect(issues.filter(i => i.specId === 'dispatch_desk_impl' && (i.code === 'UNREALIZED_DEPENDENCY' || i.code === 'CALL_ORIGIN_UNRESOLVED'))).toEqual([]);
+    // With the drift fixed, the same port resolves to the class and nothing is said on the caller either.
+    tree.files!['src/dispatch/dispatch_orchestrator.ts'] = tsOrchestrator(TS_DISPATCH_BODY);
+    expect(run(tree).issues.filter(i => i.specId === 'dispatch_desk_impl' && (i.code === 'UNREALIZED_DEPENDENCY' || i.code === 'CALL_ORIGIN_UNRESOLVED'))).toEqual([]);
   });
 
   it('an unnarrated call names the collaborator\'s verb and how it was written', () => {
@@ -223,11 +227,87 @@ describe('the findings name the method that changed', () => {
   });
 });
 
+describe('an import against a Portal\'s call edge is reported once, on the importer', () => {
+  const importsDesk = (python: boolean, imports: string[]): string[] => {
+    const tree = python
+      ? deskTree(py(PY_DISPATCH_BODY, [], imports), true)
+      : deskTree(ts(TS_DISPATCH_BODY, [...imports, 'void DispatchDesk;', '']), false);
+    return run(tree).issues.filter(i => i.code === 'UNDECLARED_DEPENDENCY' || (i.code === 'UNDECLARED_EXPORT' && i.specId === 'dispatch_desk_impl')).map(i => `${i.code} ${i.specId}: ${i.message}`);
+  };
+
+  it('TypeScript: UNDECLARED_DEPENDENCY on the orchestrator naming the desk and the edge it inverts; the desk\'s UNDECLARED_EXPORT names the importer', () => {
+    const found = importsDesk(false, ["import { DispatchDesk } from './dispatch_desk.js';"]);
+    expect(found).toHaveLength(2);
+    const dependency = found.find(f => f.startsWith('UNDECLARED_DEPENDENCY'))!;
+    expect(dependency).toMatch(/^UNDECLARED_DEPENDENCY dispatch_orchestrator_impl: "src\/dispatch\/dispatch_orchestrator\.ts" \(realizing dispatch-orchestrator\) imports "src\/dispatch\/dispatch_desk\.ts" \(realizing dispatch-desk\)/);
+    expect(dependency).toContain('"dispatch-desk" depends on "dispatch-orchestrator" and calls it');
+    const exported = found.find(f => f.startsWith('UNDECLARED_EXPORT'))!;
+    expect(exported).toContain('"DispatchDesk" (imported by "src/dispatch/dispatch_orchestrator.ts")');
+  });
+
+  it.each([
+    ['a relative import', ['from .dispatch_desk import DispatchDesk']],
+    ['`from . import` of the module', ['from . import dispatch_desk']],
+    ['an absolute import from the source root', ['from src.dispatch.dispatch_desk import DispatchDesk']],
+    ['an absolute module import', ['import src.dispatch.dispatch_desk']],
+  ])('Python: %s of the desk is UNDECLARED_DEPENDENCY on the orchestrator', (_name, imports) => {
+    const found = importsDesk(true, imports);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('UNDECLARED_DEPENDENCY dispatch_orchestrator_impl: "src/dispatch/dispatch_orchestrator.py" (realizing dispatch-orchestrator) imports "src/dispatch/dispatch_desk.py" (realizing dispatch-desk)');
+  });
+
+  it('Python: a package\'s __init__.py is the module a package import lands in', () => {
+    const tree = deskTree(py(PY_DISPATCH_BODY, [], ['from .desk import DispatchDesk']), true);
+    const desk = tree.implementations!.find(i => i.id === 'dispatch_desk_impl')!;
+    desk.sourcePath = 'src/dispatch/desk/__init__.py';
+    tree.files!['src/dispatch/desk/__init__.py'] = tree.files!['src/dispatch/dispatch_desk.py'].replace('from .dispatch_orchestrator', 'from ..dispatch_orchestrator');
+    delete tree.files!['src/dispatch/dispatch_desk.py'];
+    const found = run(tree).issues.filter(i => i.code === 'UNDECLARED_DEPENDENCY');
+    expect(found.map(i => i.message)).toEqual([expect.stringContaining('imports "src/dispatch/desk/__init__.py" (realizing dispatch-desk)')]);
+  });
+
+  it('Python: standard-library and third-party imports are no component', () => {
+    expect(importsDesk(true, ['import typing', 'import requests', 'from collections import OrderedDict'])).toEqual([]);
+  });
+});
+
 describe('the code reading says what was checked', () => {
   it('a Python realization is read at pattern grade, its checks and its gaps named', () => {
     const reading = run(dispatchTree(py(PY_DISPATCH_BODY), true)).result.codeReading ?? '';
     expect(reading).toMatch(/^Code read at grade pattern/);
     expect(reading).toContain('python: 2 file(s) at grade pattern with its signature reader, checked methods, params, returns (where annotated), public members, imports, calls through declared receivers — not checked: routes, data types');
+  });
+
+  it('a Portal binding HTTP endpoints with no router named is counted among what was not checked', () => {
+    const tree: FixtureTree = {
+      subsystems: [{ id: 'parcel-tracking', description: 'Lets recipients follow where their parcel is.' }],
+      components: [{ id: 'tracking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Answers recipients\' parcel-tracking requests over HTTP.' }],
+      interfaces: [{
+        id: 'itracking_portal',
+        component: 'tracking-portal',
+        methods: [{ name: 'trackParcel', description: 'Answer where one parcel is.', signature: 'trackParcel(parcelId: string): string', returns: 'string', params: [{ name: 'parcelId', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/parcels/{parcelId}' } }],
+      }],
+      implementations: [{
+        id: 'tracking_portal_impl',
+        contract: 'itracking_portal',
+        sourcePath: 'src/tracking/tracking-portal.ts',
+        methods: [{ name: 'trackParcel', narrative: [{ stepNumber: 1, type: 'return', outcome: 'success', description: 'Answer the parcel\'s last known position.' }] }],
+      }],
+      files: {
+        'src/tracking/tracking-portal.ts': [
+          'export class TrackingPortal {',
+          '  trackParcel(parcelId: string): string {',
+          '    return \'parcel \' + parcelId;',
+          '  }',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    };
+    const result = run(tree).result;
+    expect(result.codeReading).toContain('routes where a router is named');
+    expect(result.codeReading).toContain('not checked: routes of 1 HTTP Portal(s) naming no router (each judged by the public methods of its realizing class alone)');
+    expect(result.codeCompact).toBe('typescript exact (not checked: routes of 1 HTTP Portal(s) naming no router)');
   });
 
   it('a TypeScript realization read whole is one clause', () => {

@@ -711,6 +711,15 @@ export interface SourceFileFacts {
    */
   classMembers?: Record<string, ClassMemberFact[]>;
   /**
+   * The top-level named classes (classMembers' keys) the file's own code
+   * names outside their own declaration — constructed, extended or
+   * implemented, annotated with, tested by instanceof or isinstance, passed
+   * or returned as a value; an export clause publishing one is no use. What
+   * tells an exported class nothing uses from the module's own factoring
+   * (UNDECLARED_PUBLIC_MEMBER). EXACT grade, and the Python reader.
+   */
+  classReferences?: string[];
+  /**
    * What the analysis READ in this file beyond declared names, set by a
    * reader that reads a language's signatures without a type checker (the
    * Python reader): the conformance checks its facts are fuel for. Absent for

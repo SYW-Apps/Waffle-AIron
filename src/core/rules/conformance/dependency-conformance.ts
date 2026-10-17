@@ -3,7 +3,7 @@ import {
   fieldTypesOf, implementationSourceFiles, importBindingOf, localTypesOf, methodSourceFile, pathKey, resolveImport,
   technologyName, technologyPackages, TECHNOLOGY_PACKAGES, type CallSiteFact, type ComponentSpec, type ImplementationSpec, type ResolvedCallFact,
 } from '../../../models/index.js';
-import { closedCallSites, driftCause, throughText, unownedReach, writeCandidates } from './call-conformance.js';
+import { closedCallSites, throughText, unownedReach, writeCandidates } from './call-conformance.js';
 import { returnDrifts } from './param-conformance.js';
 import { RuleContext, SddRule } from '../types.js';
 
@@ -59,11 +59,109 @@ function quoteCall(call: ResolvedCallFact, site: ResolvedCallFact, through: read
 /** How deep a chain of unowned modules is followed for the technology packages they import — the same bound unowned calls are read to. */
 const UNOWNED_IMPORT_DEPTH = 8;
 
+/**
+ * The ONE reading of whether an import edge between two sets of components is
+ * declared, and of which reverse import is a mount: every accusation and every
+ * realization below reads it, so the two directions never disagree.
+ */
+function importJustification(ctx: RuleContext): {
+  dependsOrOwns: (from: ComponentSpec, toId: string) => boolean;
+  ownerOf: Map<string, ComponentSpec>;
+  edgeJustified: (from: ComponentSpec[], to: ComponentSpec[]) => boolean;
+  invertedCall: (from: ComponentSpec[], to: ComponentSpec[]) => { caller: ComponentSpec; callee: ComponentSpec } | undefined;
+  callsInto: (caller: ComponentSpec, calleeId: string) => boolean;
+} {
+  const dependsOrOwns = (from: ComponentSpec, toId: string): boolean =>
+    from.dependsOn.includes(toId) || (from.owns ?? []).includes(toId);
+
+  // Pattern facade ownership, one hop, both directions. This is the PLAIN
+  // reading — every owns claim, last claimant winning — deliberately NOT the
+  // shared ownership index, which records nothing for an illegal claim. The
+  // two differ only on trees that already carry an ownership ERROR, and
+  // narrowing this map there would turn one finding into two; adopting the
+  // strict reading here is a doctrine decision, not a refactor.
+  const ownerOf = new Map<string, ComponentSpec>();
+  for (const c of ctx.components) {
+    for (const member of c.owns ?? []) ownerOf.set(member, c);
+  }
+
+  // Does `from` declare an edge to the published surface of `subsystemId`?
+  const declaresSurfaceEdge = (from: ComponentSpec, subsystemId: string): boolean => {
+    const published = ctx.publicSet.get(subsystemId);
+    if (!published || published.size === 0) return false;
+    return from.dependsOn.some(d => published.has(d));
+  };
+
+  // Whether a Portal or Observer CALLS a component — a narrative call or
+  // dispatch step naming it, a method's `calls` entry, or a dispatch-table
+  // binding. Such a component is the portal's downstream collaborator, not
+  // the host it mounts onto.
+  const realization = ctx.realizationIndex();
+  const callsInto = (caller: ComponentSpec, calleeId: string): boolean =>
+    (caller.dispatch ?? []).some(binding => binding.component === calleeId)
+    || realization.implementationsOf(caller.id).some(impl => impl.methods.some(m =>
+      m.narrative.some(step => (step.type === 'call' || step.type === 'dispatch') && step.targetComponent === calleeId)
+      || (m.calls ?? []).some(ref => ref.slice(0, ref.lastIndexOf('.')) === calleeId)));
+
+  // Mutual wiring collapsed to one file direction: a portal declares it
+  // mounts ONTO the server (portal → supervisor), while the server file
+  // physically imports the portal's file to dispatch inward — the declared
+  // relation exists, code chose the other direction. ONLY the mounting shape
+  // is forgiven: the reverse-declarer is an inbound Portal/Observer, and the
+  // importer is not a component that portal CALLS. A portal that calls the
+  // importer uses it as its downstream collaborator, so the importer
+  // importing the portal back runs against the declared direction — an
+  // inversion (an import cycle), the same as a Store importing the
+  // orchestrator that depends on it.
+  const mounts = (importer: ComponentSpec, declarer: ComponentSpec): boolean =>
+    importer.subsystem === declarer.subsystem
+    && dependsOrOwns(declarer, importer.id)
+    && (declarer.componentType === 'Portal' || declarer.componentType === 'Observer')
+    && !callsInto(declarer, importer.id);
+
+  const edgeJustified = (from: ComponentSpec[], to: ComponentSpec[]): boolean => {
+    for (const cf of from) {
+      for (const cg of to) {
+        if (cf.id === cg.id) return true;
+        if (dependsOrOwns(cf, cg.id)) return true;
+        if (mounts(cf, cg)) return true;
+        // facade hops, both directions: the target is a member of a pattern
+        // the importer depends on/is; OR the importer is itself an owned
+        // member whose FACADE declares the collaborator (a Repository's
+        // Store does the physical I/O the Repository declared) — and two
+        // members of the same pattern collaborate by construction.
+        const ownerG = ownerOf.get(cg.id);
+        if (ownerG && (dependsOrOwns(cf, ownerG.id) || cf.id === ownerG.id)) return true;
+        const ownerF = ownerOf.get(cf.id);
+        if (ownerF && (dependsOrOwns(ownerF, cg.id) || ownerF.id === cg.id)) return true;
+        if (ownerF && ownerG && ownerF.id === ownerG.id) return true;
+        // cross-subsystem: declared edge to the target subsystem's surface
+        if (cf.subsystem !== cg.subsystem && declaresSurfaceEdge(cf, cg.subsystem)) return true;
+      }
+    }
+    return false;
+  };
+
+  // The declared edge an unjustified import runs AGAINST: the imported
+  // component depends on the importer and calls it — what the finding names,
+  // so it says why this is no mount.
+  const invertedCall = (from: ComponentSpec[], to: ComponentSpec[]): { caller: ComponentSpec; callee: ComponentSpec } | undefined => {
+    for (const cf of from) {
+      for (const cg of to) {
+        if (dependsOrOwns(cg, cf.id) && callsInto(cg, cf.id)) return { caller: cg, callee: cf };
+      }
+    }
+    return undefined;
+  };
+
+  return { dependsOrOwns, ownerOf, edgeJustified, invertedCall, callsInto };
+}
+
 export const dependencyConformanceRule: SddRule = {
   name: 'dependency-conformance',
   judges: 'code',
   description:
-    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses — type coupling is allowed — but a CALL of a modelled contract method through a collaborator whose declared type comes from another component\'s file is runtime collaboration whatever the import\'s form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target, or — where the type checker read a file of the source — as a call or reference the checker lands in a file of the target, through every barrel, port declaration, dependency bag and unowned helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading, hence warning); a type-only import realizes it, since `import type` is what dependency injection writes down. An Adapter\'s edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter\'s transport client realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would couple two deployables\' builds. Two twins of design rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal\'s own narrative already claims that call (the design rule\'s finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal\'s calls are resolved by the TypeScript type checker: every call written in a file realizing only Portals — in a file shared with other components, every call in a body the Portal\'s own methods reach — and every reference there to a function or method the code takes as a value (passed as an argument, assigned, returned, bound, handed to Reflect.apply), together with every call the UNOWNED code they reach makes (a function in a file no component realizes, or one that is none of its file\'s components\' modelled methods, read as if inlined at the call site, transitively to a bounded depth, the finding naming the hops), lands on the declaration its signature resolves to, whatever the receiver\'s spelling, and a declaration in an interface or type shape, a port the Portal declares for itself included, lands on each class of the project that realizes it (the classes whose implements clause names it when any does, else every class the checker finds assignable to it); such a landing on a component the file neither imports at runtime nor is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker could be loaded, the receiver is followed through the shape facts instead: a non-null assertion, parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field exactly as through the field itself. A call in a Portal\'s own code the analysis cannot resolve at all — its receiver typed any or unknown however it came to be (a cast, an untyped or any-typed parameter of a closure, a local typed any, a function result typed any), cast to either or to an index signature, its member picked by a computed key, or typed nothing — under the name of a write- or lifecycle-effect method of a data component, or reading a member by a key that names no single member off a receiver that was a data component before any cast — invoked on the spot or taken as a value, however the receiver or the key is cast (where the checker recorded the receiver\'s ORIGINAL type, before any cast — an `await (x)` written outside an async function read as the x it means, nullability set aside, a name bound once by a const read through its initializer, an interface no class realizes landing on the file declaring it — a write of the data component that type lands on — any of its writes when a computed key names none; else one in the Portal\'s own subsystem or one it depends into — the design\'s write set, which a data component whose code is still planned has too, and what a receiver landing only on the Portal\'s own file, a port it declares for itself, is judged by), which the Portal does not already claim, fails closed — one finding per site and per function it is written in, so one shortcut never hides another of the same name: it is neither proven a shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read (PORTAL_CALL_UNRESOLVED). So does a call landing only on a PORT no written class realizes — a member of an interface or shape declared where no component\'s contract answers for it — under the name of such a write the Portal claims nowhere and no narrative of the Portal names on any component: the design says what that port will be before the code realizing it is written, and the finding says when the data component has no code yet. And an import, runtime or type-only, from ANOTHER project\'s source — a folder holding its own .wai/project.yaml that is not this project\'s root — that the type checker resolves to nothing, the module gone or the name no longer exported, is CROSS_PROJECT_IMPORT_UNRESOLVED: another project\'s code moves on its own release, and a type-only import of it is erased at run time, so only a compiler would notice. One that DOES resolve is judged like any other edge, because it is one: a name it imports that the other project does not publish — not in its L0 export table as a member exports it now, nor in the pinned snapshot of the external it is (an exported type by its id or code name, an exported component by its contract methods and their code symbols; a project that is neither publishes nothing to this one) — is code reaching into that project\'s internals past its surface, which no pin and no binding compares (CROSS_PROJECT_SOURCE_IMPORT, a warning; the finding says when the module it lands in realizes a data component of that project, since a write through it is the persistence shortcut past the other project\'s surface). A binding module an implementation declares is the sanctioned place for exactly that reach, compared by binding conformance, so an import written in one is never reported here. And a file importing a technology\'s package — itself, or through the UNOWNED modules it imports (a module no component realizes, read as if inlined in its importer, transitively to a bounded depth, the finding naming the hops; a module a component realizes is judged as its own) — while no component it realizes is that technology\'s home is the leak TECH_LEAKAGE refuses in the design (TECH_LEAKAGE_IN_CODE): a technology\'s packages are its declared tokens (its name, or its `matches`), the curated built-in table of the common packages its name is known by (postgres: pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis, ioredis; mongodb: mongodb, mongoose; sqlite: better-sqlite3, sqlite3; kafka: kafkajs; rabbitmq: amqplib — an HTTP client is never a technology leak), and the packages a loaded pack contributes for it, each compared exactly with an import\'s package name. A package of the built-in table or of a loaded pack whose technology NO implementation binds is reported too, since the design never says where that technology lives: bind it on the data-layer component that owns the vendor call. Only exact-grade analyzed files participate; chained subprojects validate standalone. Python files are judged for UNDECLARED_DEPENDENCY too, from the imports the analyzer\'s signature reader read (source_file_facts.reads): `from .sibling import X`, `from ..pkg.mod import X`, `import pkg.mod` and `from . import sibling`, resolved from the importing file\'s package or any folder above it to a module or a package\'s `__init__.py` — a Python import resolves only to a Python module, so the two languages\' graphs never cross; whether a declared Python edge is realized is not judged. And a declared edge whose target\'s own code drifted from its contract (RETURN_TYPE_MISMATCH) says so on UNREALIZED_DEPENDENCY: a port typed after the contract no longer matches the class, so the edge only looks stale.',
+    'Code↔spec Level 2: runtime import edges between component-mapped source files (a component maps to every file its implementations and their methods name) must be justified by declared relations — a direct dependsOn/owns pair, a shared component, membership in a depended-on pattern, or (across subsystems) a declared edge to the target subsystem\'s published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses — type coupling is allowed — but a CALL of a modelled contract method through a collaborator whose declared type comes from another component\'s file is runtime collaboration whatever the import\'s form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge). Conversely, a declared dependsOn/owns edge between components realized in different files should be visible as an import between any file of the source and any file of the target, or — where the type checker read a file of the source — as a call or reference the checker lands in a file of the target, through every barrel, port declaration, dependency bag and unowned helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading, hence warning); a type-only import realizes it, since `import type` is what dependency injection writes down. An Adapter\'s edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter\'s transport client realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that boundary, which would couple two deployables\' builds. Two twins of design rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract method of a Repository, Index, Store or Registry is the persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal\'s own narrative already claims that call (the design rule\'s finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal\'s calls are resolved by the TypeScript type checker: every call written in a file realizing only Portals — in a file shared with other components, every call in a body the Portal\'s own methods reach — and every reference there to a function or method the code takes as a value (passed as an argument, assigned, returned, bound, handed to Reflect.apply), together with every call the UNOWNED code they reach makes (a function in a file no component realizes, or one that is none of its file\'s components\' modelled methods, read as if inlined at the call site, transitively to a bounded depth, the finding naming the hops), lands on the declaration its signature resolves to, whatever the receiver\'s spelling, and a declaration in an interface or type shape, a port the Portal declares for itself included, lands on each class of the project that realizes it (the classes whose implements clause names it when any does, else every class the checker finds assignable to it); such a landing on a component the file neither imports at runtime nor is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker could be loaded, the receiver is followed through the shape facts instead: a non-null assertion, parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field exactly as through the field itself. A call in a Portal\'s own code the analysis cannot resolve at all — its receiver typed any or unknown however it came to be (a cast, an untyped or any-typed parameter of a closure, a local typed any, a function result typed any), cast to either or to an index signature, its member picked by a computed key, or typed nothing — under the name of a write- or lifecycle-effect method of a data component, or reading a member by a key that names no single member off a receiver that was a data component before any cast — invoked on the spot or taken as a value, however the receiver or the key is cast (where the checker recorded the receiver\'s ORIGINAL type, before any cast — an `await (x)` written outside an async function read as the x it means, nullability set aside, a name bound once by a const read through its initializer, an interface no class realizes landing on the file declaring it — a write of the data component that type lands on — any of its writes when a computed key names none; else one in the Portal\'s own subsystem or one it depends into — the design\'s write set, which a data component whose code is still planned has too, and what a receiver landing only on the Portal\'s own file, a port it declares for itself, is judged by), which the Portal does not already claim, fails closed — one finding per site and per function it is written in, so one shortcut never hides another of the same name: it is neither proven a shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read (PORTAL_CALL_UNRESOLVED). So does a call landing only on a PORT no written class realizes — a member of an interface or shape declared where no component\'s contract answers for it — under the name of such a write the Portal claims nowhere and no narrative of the Portal names on any component: the design says what that port will be before the code realizing it is written, and the finding says when the data component has no code yet. And an import, runtime or type-only, from ANOTHER project\'s source — a folder holding its own .wai/project.yaml that is not this project\'s root — that the type checker resolves to nothing, the module gone or the name no longer exported, is CROSS_PROJECT_IMPORT_UNRESOLVED: another project\'s code moves on its own release, and a type-only import of it is erased at run time, so only a compiler would notice. One that DOES resolve is judged like any other edge, because it is one: a name it imports that the other project does not publish — not in its L0 export table as a member exports it now, nor in the pinned snapshot of the external it is (an exported type by its id or code name, an exported component by its contract methods and their code symbols; a project that is neither publishes nothing to this one) — is code reaching into that project\'s internals past its surface, which no pin and no binding compares (CROSS_PROJECT_SOURCE_IMPORT, a warning; the finding says when the module it lands in realizes a data component of that project, since a write through it is the persistence shortcut past the other project\'s surface). A binding module an implementation declares is the sanctioned place for exactly that reach, compared by binding conformance, so an import written in one is never reported here. And a file importing a technology\'s package — itself, or through the UNOWNED modules it imports (a module no component realizes, read as if inlined in its importer, transitively to a bounded depth, the finding naming the hops; a module a component realizes is judged as its own) — while no component it realizes is that technology\'s home is the leak TECH_LEAKAGE refuses in the design (TECH_LEAKAGE_IN_CODE): a technology\'s packages are its declared tokens (its name, or its `matches`), the curated built-in table of the common packages its name is known by (postgres: pg, postgres, @neondatabase/serverless, @vercel/postgres; mysql: mysql2, mysql; redis: redis, ioredis; mongodb: mongodb, mongoose; sqlite: better-sqlite3, sqlite3; kafka: kafkajs; rabbitmq: amqplib — an HTTP client is never a technology leak), and the packages a loaded pack contributes for it, each compared exactly with an import\'s package name. A package of the built-in table or of a loaded pack whose technology NO implementation binds is reported too, since the design never says where that technology lives: bind it on the data-layer component that owns the vendor call. Only exact-grade analyzed files participate; chained subprojects validate standalone. Python files are judged for UNDECLARED_DEPENDENCY too, from the imports the analyzer\'s signature reader read (source_file_facts.reads): `from .sibling import X`, `from ..pkg.mod import X`, `import pkg.mod` and `from . import sibling`, resolved from the importing file\'s package or any folder above it to a module or a package\'s `__init__.py` — a Python import resolves only to a Python module, so the two languages\' graphs never cross; whether a declared Python edge is realized is not judged. And a declared edge whose target\'s own code drifted from its contract (RETURN_TYPE_MISMATCH) is not reported as UNREALIZED_DEPENDENCY: a port typed after the contract no longer matches the class, so the edge only looks stale — the drift\'s consequence, held under that one finding and judged again once it is fixed. The one reverse import a declared edge justifies is a MOUNT: a Portal or Observer that depends on a component of its own subsystem without calling it — no narrative call or dispatch step, declared call or dispatch-table binding of the Portal names it — whose file imports the Portal\'s to dispatch inward (a server mounting its Portals). A component the Portal calls is its downstream collaborator, so that component importing the Portal back runs against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the importer, the finding naming the edge it inverts — and such a reverse import realizes no edge of a Portal that calls.',
   codes: [
     { code: 'UNDECLARED_DEPENDENCY', defaultSeverity: 'warning', summary: 'A runtime import, a call through a type-only-imported collaborator, or a Portal\'s call the type checker resolves into another component\'s file, between component-mapped files has no declared dependsOn/owns (or published-surface) justification' },
     { code: 'PORTAL_WRITE_SHORTCUT_IN_CODE', defaultSeverity: 'error', summary: 'A Portal\'s code calls, or takes as a value, a write- or lifecycle-effect method of a data component (Repository, Index, Store, Registry) — directly or through unowned code it calls — the code twin of PORTAL_WRITE_SHORTCUT: mutations route through an Orchestrator' },
@@ -104,60 +202,7 @@ export const dependencyConformanceRule: SddRule = {
         .filter(impl => implementationSourceFiles(impl).some(f => isExact(pathKey(f))));
 
     // ---- justification helpers ----
-    const dependsOrOwns = (from: ComponentSpec, toId: string): boolean =>
-      from.dependsOn.includes(toId) || (from.owns ?? []).includes(toId);
-
-    // Pattern facade ownership, one hop, both directions. This is the PLAIN
-    // reading — every owns claim, last claimant winning — deliberately NOT the
-    // shared ownership index, which records nothing for an illegal claim. The
-    // two differ only on trees that already carry an ownership ERROR, and
-    // narrowing this map there would turn one finding into two; adopting the
-    // strict reading here is a doctrine decision, not a refactor.
-    const ownerOf = new Map<string, ComponentSpec>();
-    for (const c of ctx.components) {
-      for (const member of c.owns ?? []) ownerOf.set(member, c);
-    }
-
-    // Does `from` declare an edge to the published surface of `subsystemId`?
-    const declaresSurfaceEdge = (from: ComponentSpec, subsystemId: string): boolean => {
-      const published = ctx.publicSet.get(subsystemId);
-      if (!published || published.size === 0) return false;
-      return from.dependsOn.some(d => published.has(d));
-    };
-
-    const edgeJustified = (from: ComponentSpec[], to: ComponentSpec[]): boolean => {
-      for (const cf of from) {
-        for (const cg of to) {
-          if (cf.id === cg.id) return true;
-          if (dependsOrOwns(cf, cg.id)) return true;
-          // mutual wiring collapsed to one file direction: a portal declares
-          // it mounts ONTO the server (portal → supervisor), while the server
-          // file physically imports the portal's file to dispatch inward —
-          // the declared relation exists, code chose the other direction.
-          // ONLY the mounting shape (the reverse-declarer is an inbound
-          // Portal/Observer) is forgiven; a Store importing the orchestrator
-          // that depends on it stays a violation.
-          if (
-            cf.subsystem === cg.subsystem
-            && dependsOrOwns(cg, cf.id)
-            && (cg.componentType === 'Portal' || cg.componentType === 'Observer')
-          ) return true;
-          // facade hops, both directions: the target is a member of a pattern
-          // the importer depends on/is; OR the importer is itself an owned
-          // member whose FACADE declares the collaborator (a Repository's
-          // Store does the physical I/O the Repository declared) — and two
-          // members of the same pattern collaborate by construction.
-          const ownerG = ownerOf.get(cg.id);
-          if (ownerG && (dependsOrOwns(cf, ownerG.id) || cf.id === ownerG.id)) return true;
-          const ownerF = ownerOf.get(cf.id);
-          if (ownerF && (dependsOrOwns(ownerF, cg.id) || ownerF.id === cg.id)) return true;
-          if (ownerF && ownerG && ownerF.id === ownerG.id) return true;
-          // cross-subsystem: declared edge to the target subsystem's surface
-          if (cf.subsystem !== cg.subsystem && declaresSurfaceEdge(cf, cg.subsystem)) return true;
-        }
-      }
-      return false;
-    };
+    const { ownerOf, edgeJustified, invertedCall, callsInto } = importJustification(ctx);
 
     // ---- UNDECLARED_DEPENDENCY: every import edge needs a justification ----
     // Runtime imports are collaboration (checked); export-from re-exports are
@@ -170,10 +215,14 @@ export const dependencyConformanceRule: SddRule = {
       for (const toPath of (mappedPaths.has(fromPath) ? graph : importReadGraph).importsOf(fromPath)) {
         const toComponents = realization.componentsAt(toPath);
         if (edgeJustified(fromComponents, toComponents)) continue;
+        const inverted = invertedCall(fromComponents, toComponents);
         ctx.addIssue(
           'warning',
           'UNDECLARED_DEPENDENCY',
-          `"${fromPath}" (realizing ${fromComponents.map(c => c.id).join(', ')}) imports "${toPath}" (realizing ${toComponents.map(c => c.id).join(', ')}) but no declared dependsOn/owns edge justifies it — declare the collaboration on the component that actually uses it, or route the cross-subsystem hop through the target's published surface.`,
+          `"${fromPath}" (realizing ${fromComponents.map(c => c.id).join(', ')}) imports "${toPath}" (realizing ${toComponents.map(c => c.id).join(', ')}) but no declared dependsOn/owns edge justifies it — declare the collaboration on the component that actually uses it, or route the cross-subsystem hop through the target's published surface.`
+          + (inverted
+            ? ` The design declares the opposite direction: "${inverted.caller.id}" depends on "${inverted.callee.id}" and calls it, so this import runs against that edge (an import cycle between the two), not a ${inverted.caller.componentType} mounting onto its host.`
+            : ''),
           realization.implementationsAt(fromPath)[0]?.id,
           draftAt(fromPath) || draftAt(toPath),
           undefined,
@@ -262,11 +311,18 @@ export const dependencyConformanceRule: SddRule = {
         // edge.
         if (toFiles.length === 0) continue;
         if (fromFiles.some(f => toFiles.includes(f))) continue;
-        if (graph.connects(fromFiles, toFiles, isMountingDeclarer)) continue;
+        // The reverse import realizes only a MOUNT: a portal calling the
+        // target is its client, and the target importing it back is no trace.
+        if (graph.connects(fromFiles, toFiles, isMountingDeclarer && !callsInto(component, targetId))) continue;
         // A type-only import realizes the edge too: DI writes nothing else.
         if (typeConnects(fromFiles, toFiles)) continue;
         // A call the type checker lands in the target's files realizes it, whatever the imports look like.
         if (callConnects(fromFiles, toFiles)) continue;
+        // A target whose own code drifted from its contract's return
+        // (RETURN_TYPE_MISMATCH) no longer matches a port typed after the
+        // contract, so its edges only LOOK stale: the drift's consequence,
+        // held under that one finding and judged again once it is fixed.
+        if (returnDrifts(ctx).some(d => d.component?.id === targetId)) continue;
 
         const impls = mappedImplsOf(component.id);
         const declaredDependsOn = component.dependsOn.includes(targetId);
@@ -277,8 +333,7 @@ export const dependencyConformanceRule: SddRule = {
         ctx.addIssue(
           'warning',
           'UNREALIZED_DEPENDENCY',
-          `Component "${component.id}" declares ${relation} "${targetId}", but no import — runtime or type-only — connects their source files (${fromFiles.join(', ')} ↛ ${crossSubsystem ? `subsystem ${target.subsystem}` : filesOf(targetId).join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`
-          + driftCause(returnDrifts(ctx).filter(d => d.component?.id === targetId)),
+          `Component "${component.id}" declares ${relation} "${targetId}", but no import — runtime or type-only — connects their source files (${fromFiles.join(', ')} ↛ ${crossSubsystem ? `subsystem ${target.subsystem}` : filesOf(targetId).join(', ')}) — either the collaboration is wired indirectly (DI) or the declared edge is stale.`,
           impls[0]?.id ?? component.id,
           draft,
           undefined,
