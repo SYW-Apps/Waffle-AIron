@@ -109,7 +109,6 @@ import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, 
 import { followProducerRenames, resolveProjectTable, resolveSubsystemTables } from './exports.js';
 import type { ExportUsage, ExportUse, ResolvedExport, ResolvedExportTable } from '../models/exports.js';
 import {
-  approvalKeyIn,
   keyIn,
   landReference,
   type AuthoredReference,
@@ -456,132 +455,6 @@ function readRetiredReachAcrossSpecs(index: SpecIndex): void {
     const binds = index.interfaces.some((i) => i.component === portal.id && i.methods.some((m) => m.endpoint !== undefined));
     if (!binds) index.retiredReach.push({ form: 'in-process-endpoint', specId: portal.id, stored: { transport: 'Custom', endpoints: [] } });
   }
-}
-
-// ---------------------------------------------------------------------------
-// Pure namespace helpers
-// ---------------------------------------------------------------------------
-
-function qualifyId(id: string, prefix: string, rootSubsystems: ReadonlySet<string>): string;
-function qualifyId(id: string | undefined, prefix: string, rootSubsystems: ReadonlySet<string>): string | undefined;
-function qualifyId(id: string | undefined, prefix: string, rootSubsystems: ReadonlySet<string>): string | undefined {
-  if (!id) return id;
-  if (id.startsWith('::')) {
-    return id.slice(2);
-  }
-  if (id.startsWith('super::')) {
-    const prefixParts = prefix.split('::');
-    const idParts = id.split('::');
-    while (idParts[0] === 'super') {
-      idParts.shift();
-      prefixParts.pop();
-    }
-    return [...prefixParts, ...idParts].join('::');
-  }
-  const firstSegment = id.split('::')[0];
-  if (rootSubsystems.has(firstSegment)) {
-    return id;
-  }
-  return prefix ? `${prefix}::${id}` : id;
-}
-
-const NO_ROOT_SUBSYSTEMS: ReadonlySet<string> = new Set();
-
-/**
- * The exact inverse of `qualifyId`: turn an in-memory qualified id back into
- * the relative form that re-qualifies to the same id when the file is loaded
- * again from `prefix`'s namespace context.
- *
- * - `::`/`super::` forms are already relative — passed through.
- * - Ids under `prefix` lose it (the local case).
- * - Ids in a DIFFERENT namespace climb to the common ancestor with `super::`
- *   hops, or anchor `::`-absolute when there is none. Never truncate to the
- *   last segment: that re-qualifies into the LOCAL namespace on the next load
- *   and silently corrupts the reference (the cross-tree targetComponent bug).
- * - At the root context (empty prefix) qualified ids are already absolute in
- *   the loading namespace and round-trip as-is.
- */
-function relativizeId(id: string, prefix: string): string {
-  if (id.startsWith('::') || id.startsWith('super::')) {
-    return id;
-  }
-  // Root context: in-memory ids are already absolute in the loading namespace
-  // and round-trip as-is.
-  if (!prefix) {
-    return id;
-  }
-  if (id.startsWith(`${prefix}::`)) {
-    return id.slice(prefix.length + 2);
-  }
-  // The mount namespace itself (a flat external subsystem's own id, e.g. a
-  // child component's `subsystem` field): stored bare, it resolves in BOTH
-  // load contexts — as the child's root subsystem standalone, and via the
-  // root-subsystem anchor when loaded through the parent.
-  if (id === prefix) {
-    return id.split('::').pop()!;
-  }
-  // NOT under the save prefix — including a BARE id, which in a prefixed
-  // context is a root-level reference (what qualifyId('super::x'/'::x')
-  // resolves to), never a local one: locals carry the prefix in memory.
-  // Emit super:: hops to the deepest common ancestor — a RELATIVE path whose hop
-  // count is the physical nesting between source and target, which is invariant
-  // across WHICH ancestor is the loading root. This is the key to a chained
-  // subproject validating identically from the top project and from its own dir
-  // as a standalone root: an absolute ::-anchor instead encodes the depth from
-  // the current root and silently breaks the moment the root changes (the
-  // "different root, different verdict" bug).
-  const prefixParts = prefix.split('::');
-  const idParts = id.split('::');
-  let common = 0;
-  while (common < prefixParts.length && common < idParts.length && prefixParts[common] === idParts[common]) {
-    common++;
-  }
-  // The id IS an ancestor namespace: step out one more hop so it can be named.
-  if (common === idParts.length) common--;
-  return `${'super::'.repeat(prefixParts.length - common)}${idParts.slice(common).join('::')}`;
-}
-
-/**
- * Re-express a reference stored by a spec that moves ONE mount hop — from a
- * namespace N into the mount `mount` beneath it (`into`), or from `N::mount` back
- * out to N (`outOf`) — so it names the same target from where the spec now
- * loads. The target never changes, only the namespace the reference is written
- * relative to. The primitive behind externalize/internalize.
- *
- * - A root-anchored `::x` names the same target at every depth: kept as written.
- * - Every other form is resolved where it was written (qualifyId) and written
- *   again relative to where it is now read (relativizeId). A target that travels
- *   with the spec moves first: going `into` the mount, the ids `isMoved` accepts
- *   (named relative to N); going `outOf` it, everything inside the mount, whose
- *   namespace the move dissolves into N.
- * - Only the hop between the two namespaces decides the result, never where N
- *   sits — the property that makes relativizeId's super:: chains root-invariant.
- *   So N is a stand-in: deep enough that the reference's own super:: hops stay
- *   inside it, spelled with segments no spec id can contain so no common ancestor
- *   is found by accident, and without the root-subsystem anchor, which belongs
- *   to whichever root happens to be loading.
- */
-export function rebaseReference(
-  ref: string,
-  mount: string,
-  direction: 'into' | 'outOf',
-  isMoved: (id: string) => boolean = () => false,
-): string {
-  if (!ref || ref.startsWith('::')) return ref;
-  const segments = ref.split('::');
-  let hops = 0;
-  while (segments[hops] === 'super') hops++;
-  if (hops === segments.length) return ref; // hops alone name nothing
-
-  const outer = Array.from({ length: hops + 1 }, (_, i) => `<n${i}>`).join('::');
-  const inner = `${outer}::${mount}`;
-  const [from, to] = direction === 'into' ? [outer, inner] : [inner, outer];
-  const target = qualifyId(ref, from, NO_ROOT_SUBSYSTEMS);
-  // The target as named from the namespace the spec leaves — a super:: form
-  // exactly when it lies outside that namespace, and then it stays put.
-  const left = relativizeId(target, from);
-  const travels = !left.startsWith('super::') && (direction === 'outOf' || isMoved(left));
-  return relativizeId(travels ? qualifyId(left, to, NO_ROOT_SUBSYSTEMS) : target, to);
 }
 
 /** True when `file` is the same as, or nested under, directory `dir`. */
@@ -4258,16 +4131,6 @@ export class SpecWorkspace {
       subsystemId = this.componentSubsystem(component);
     }
     return { root: root.dir, project: root.project, subsystemId };
-  }
-
-  /**
-   * The key one spec file is approved under (stage 8): its path from the bound
-   * root, POSIX — or, for a part's file, `members/<alias>/<path inside the
-   * part>`, so moving a part's storage changes no key.
-   */
-  approvalKeyOf(file: string): string {
-    this.scanAll();
-    return approvalKeyIn(file, this.rootDir, this.cachedRoots[0]?.parts ?? []);
   }
 
   /** The file store's write, at a home the writer resolved — a part's folder included, a git part's refused. */

@@ -1,0 +1,38 @@
+kind: value-object
+id: variant_guidance
+name: VariantGuidance
+description: >-
+  One component's resolved variant: the variant it declares, the core stereotype that variant
+  specializes, the implementation guidance, and the same-variant sibling components, so every
+  component of the same kind is implemented alike instead of reinvented per instance. Carries the
+  scoping of the variant it resolved from.
+fields:
+  - name: variant
+    type: string
+    description: The variant id the component declares.
+    optional: false
+  - name: base
+    type: string
+    description: The core stereotype it specializes, authoritative for generic semantics.
+    optional: false
+  - name: guidance
+    type: string
+    description: How to implement a component of this variant.
+    optional: false
+  - name: siblings
+    type: list<string>
+    description: Ids of the other components of the same variant, to implement consistently.
+    optional: false
+  - name: target
+    type: string
+    description: Only applies for this target language, when the variant scopes itself.
+    optional: true
+  - name: profile
+    type: string
+    description: Only applies under this architectural profile, when the variant scopes itself.
+    optional: true
+methods: []
+sourcePath: src/core/variants.ts
+symbol: ResolvedVariantGuidance
+createdAt: '2026-10-17T16:34:47.951Z'
+updatedAt: '2026-10-17T16:34:48.713Z'

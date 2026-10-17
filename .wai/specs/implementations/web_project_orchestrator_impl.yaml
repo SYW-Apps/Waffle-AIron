@@ -47,16 +47,23 @@ methods:
         targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
+        description: >-
+          Reduce the visible scopes to the ids of the projects the caller can act on (read, write or
+          admin) - the set the records are kept against, an instance admin skipping it
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableProjects
+      - stepNumber: 4
         description: List all hosted project records
         type: call
         targetComponent: project_repository
         targetMethod: list
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Keep only the records whose id is an actionable project scope in the visible set (an
           instance-admin sees all)
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the project records the caller may see
         type: return
         outcome: scoped hosted project records
@@ -88,4 +95,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-10-17T15:47:22.105Z'
+updatedAt: '2026-10-17T16:27:25.062Z'

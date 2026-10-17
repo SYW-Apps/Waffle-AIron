@@ -245,6 +245,7 @@ export function renderSpecFindings(result: ValidationResult, all = false): SpecT
     for (const p of result.projects) {
       const mark = p.valid ? chalk.green('ok') : chalk.red('fails');
       logger.info(`  ${projectLabel(p.key, result)} — ${mark}: ${p.errors} error(s), ${p.warnings} warning(s), ${p.notices} notice(s)`);
+      if (p.codeReading) logger.info(chalk.gray(`    ${p.codeReading}`));
     }
   }
   if (result.hint) logger.info(result.hint);
@@ -293,6 +294,8 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   // Whether there was a design to check at all: an empty tree passes, but
   // "all checks passed" over nothing would claim more than was checked.
   let treeChecked = false;
+  // The per-language code reading, for the closing lines.
+  let codeCompact = '';
 
   // --- Legacy spec filenames check ---
   const legacySpecs = findLegacySpecFiles();
@@ -373,6 +376,8 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     // Step 11: render — the advisory findings in their own section, never in
     // the failure decision.
     const tally = renderSpecFindings(sddResult, options.all === true);
+    codeCompact = sddResult.codeCompact
+      ?? (sddResult.projects ?? []).filter(p => p.codeCompact).map(p => `${projectLabel(p.key, sddResult)}: ${p.codeCompact}`).join(' | ');
     hasErrors ||= tally.errors;
     hasFatalWarnings ||= tally.fatalWarnings;
     waivedWarnings += tally.waived;
@@ -432,6 +437,10 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   logger.blank();
+
+  // How much of the code the gate read, said beside the verdict: a pass
+  // never implies more was checked than was.
+  if (codeCompact) logger.info(`Code checked: ${codeCompact}.`);
 
   // Notices are counted on every run, and said to be outside the failure
   // decision, so a reader of a green CI log still sees they exist.

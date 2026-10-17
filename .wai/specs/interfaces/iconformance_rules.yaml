@@ -230,7 +230,24 @@ methods:
       the member or project it belongs to declares such a target language) is not judged by this
       call graph at all, and the language boundary is said once per project and language
       (CALL_ACROSS_LANGUAGE, a notice) — never as an unrealized call no code could ever clear, since
-      what crosses that boundary is the binding; and weaker analysis grades never guess.
+      what crosses that boundary is the binding; and weaker analysis grades never guess. Converse,
+      any call: a method that claims its calls at call level — a narrative at detail full or
+      calls-only, or declared calls — whose function calls, in its OWN body, a contract method of
+      another component the narrative already names, that no step and no declared call names, is
+      UNNARRATED_CALL: the narrative a brief and a review read as the list of that collaboration is
+      not. A port the method calls a claimed target through (an interface no class realizes, as a
+      collaborator whose code is planned or in another project is typed) is that target's component,
+      so another verb called on it is a call into the same component, said even where its contract
+      does not declare the verb. What the detail dial lets a narrative summarize is not judged: a
+      call made inside a helper the function calls (one statement, one local step), a call to a
+      collaborator the narrative never names (UNDECLARED_DEPENDENCY judges one the design does not
+      list at all), a method at detail intent with no declared calls, and a reference taken as a
+      value; a write said as one is UNDECLARED_WRITE_CALL's. Where no type checker read the file but
+      a reader read its calls (Python), the call sites of the method's body, closed over its own
+      file's helpers and stopping at another modelled method, land through what the code DECLARES: a
+      bare call on an import binding in that module, a call through a namespace binding in that
+      module, `self.<field>` through the class the field is annotated with (or the annotated
+      parameter the constructor assigns it from), an annotated name the same way.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -287,6 +304,13 @@ methods:
           another language (a member or project written in Rust, say): the call graph cannot resolve
           into it, so the claims are not judged by it, and the boundary is said once per project and
           language
+      - code: UNNARRATED_CALL
+        severity: warning
+        summary: >-
+          A method whose narrative is at call-level detail (full or calls-only), or that declares
+          its calls, calls a contract method of another component that neither a narrative step nor
+          a declared call names — the narrative a brief and a review read as the list of what the
+          method calls is not
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -398,7 +422,14 @@ methods:
       built-in table or of a loaded pack whose technology NO implementation binds is reported too,
       since the design never says where that technology lives: bind it on the data-layer component
       that owns the vendor call. Only exact-grade analyzed files participate; chained subprojects
-      validate standalone.
+      validate standalone. Python files are judged for UNDECLARED_DEPENDENCY too, from the imports
+      the analyzer's signature reader read (source_file_facts.reads): `from .sibling import X`,
+      `from ..pkg.mod import X`, `import pkg.mod` and `from . import sibling`, resolved from the
+      importing file's package or any folder above it to a module or a package's `__init__.py` — a
+      Python import resolves only to a Python module, so the two languages' graphs never cross;
+      whether a declared Python edge is realized is not judged. And a declared edge whose target's
+      own code drifted from its contract (RETURN_TYPE_MISMATCH) says so on UNREALIZED_DEPENDENCY: a
+      port typed after the contract no longer matches the class, so the edge only looks stale.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -437,13 +468,6 @@ methods:
           (typed any or unknown, cast to either or to an index signature, or typed nothing), or
           lands only on a port no written class realizes — neither proven a shortcut nor cleared, so
           it fails closed until the receiver carries its type
-      - code: CROSS_PROJECT_IMPORT_UNRESOLVED
-        severity: warning
-        summary: >-
-          A source file imports from ANOTHER project's source — a folder holding its own
-          .wai/project.yaml — a module that is gone or a name it no longer exports: a type-only
-          import is erased at run time, so only a compiler would notice, and the gate reads the file
-          with one
       - code: CROSS_PROJECT_SOURCE_IMPORT
         severity: warning
         summary: >-
@@ -451,6 +475,13 @@ methods:
           export — code reaching into its internals past its surface, which no pin and no binding
           compares (a write into its Store through it included); a declared binding module is the
           sanctioned place for that reach
+      - code: CROSS_PROJECT_IMPORT_UNRESOLVED
+        severity: warning
+        summary: >-
+          A source file imports from ANOTHER project's source — a folder holding its own
+          .wai/project.yaml — a module that is gone or a name it no longer exports: a type-only
+          import is erased at run time, so only a compiler would notice, and the gate reads the file
+          with one
   - name: integrationSimDeclaration
     description: >-
       Rule integration-sim-declaration. Once a subsystem has adopted integration sims (its first
@@ -684,7 +715,21 @@ methods:
       from: below that nothing separates an export from a mention, or a shared word from a shared
       module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns,
       so the owner's file, or another member of the same pattern, importing a member's class is the
-      owns relation made real.
+      owns relation made real. And the surface no taker reveals: a public method of a component's
+      REALIZING class — a class holding one of its modelled methods — or a function its realizing
+      file exports, that no contract of the components the file realizes declares (nor a `symbol`,
+      `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or
+      reference in its own file, no name another analyzed file writes, no identifier in a project
+      file the run did not analyze (its tests, a composition root), no star re-export publishing the
+      module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller
+      explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to
+      it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt:
+      constructors, accessors and fields, static, private, protected, #private and
+      underscore-prefixed members, an `override`, a computed name, a language protocol or framework
+      lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount,
+      ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation
+      whose conformance dial is off. Read at exact grade, or by a reader that reads class members
+      (Python, where a leading underscore is private).
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -704,6 +749,12 @@ methods:
           A declared publication handle (a method's `exportedVia`, or a Portal implementation's
           `router`) names an export its own source file does not have: the spec names a route to the
           code that nobody can import
+      - code: UNDECLARED_PUBLIC_MEMBER
+        severity: warning
+        summary: >-
+          A component's realizing class has a public method, or its realizing module an exported
+          function, that no contract of the components it realizes declares and nothing in the
+          project uses — a verb the code added that the design never promised
   - name: typeShape
     description: >-
       Rule type-shape. Code-to-contract for the DATA: a type spec's `fields` are compared, name by
@@ -853,7 +904,24 @@ methods:
       fails a gate. A name with several bodies is judged on what they all agree on, and a method the
       named file only CALLS is left to `methodRealization`, which already reports that the body is
       not here; a method whose conformance dial is off (its own, else its implementation's) is not
-      judged.
+      judged. The signature's other half is its RETURN: a realizing function annotated to return a
+      type its contract's `returns` does not describe is RETURN_TYPE_MISMATCH, naming the method,
+      the contract's type and the code's — whatever every body of the name agrees on, read through
+      the file's dialect. Completing later is ASYNC_MISMATCH's subject, so both sides are read past
+      `async`; a named scalar agrees with what it holds, an enum with a string, a date, a datetime
+      or a duration with the string (or Date, or number) the code writes it as, and a name differing
+      only in case and separators with itself. Not compared: a contract returning void (whatever the
+      code hands back beside it, no caller built from the contract reads), a function that registers
+      the method's handler (a narrative `register` step), whose result is the handler's, a void
+      function handed a response handle (`injectedParams`: res, response, reply, ctx, context),
+      which writes its result through the handle, an unannotated body, and a type either side does
+      not read or the design does not know — never accused. A caller whose port no longer matches
+      the drifted class is told the cause on its own finding (UNREALIZED_DEPENDENCY,
+      CALL_ORIGIN_UNRESOLVED). Python is read without a type checker by the analyzer's signature
+      reader (source_file_facts.reads): its `def` parameter names — compared in the language's
+      snake_case, so the contract's `documentId` is the code's `document_id` — their annotations and
+      return annotations, the receiver (`self`, `cls`) set aside, judged like any other signature;
+      an unannotated Python parameter is never read as opaque.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -895,6 +963,11 @@ methods:
           an opaque type (any, unknown, an index signature) or an object missing the record's fields
           or adding its own, or a scalar under an opaque type the body reads as an object — so what
           a caller hands over is never compared with what the design declares
+      - code: RETURN_TYPE_MISMATCH
+        severity: warning
+        summary: >-
+          The function realizing a contract method is annotated to return a type the contract's
+          `returns` does not describe — every caller built from the contract expects the other one
   - name: routeCoverage
     description: >-
       Rule route-coverage. Code-to-contract for the ROUTES: does every route a router actually
@@ -942,7 +1015,13 @@ methods:
       code spreads it and it spreads none itself, is said as a notice (ROUTER_NOT_DISPATCHED): if
       the server dispatches the sibling, no route of the named table is served, while coverage
       reading the named table reads its routes as served. A notice, because which process dispatches
-      which table is never read: a module may serve two aggregates to two servers.
+      which table is never read: a module may serve two aggregates to two servers. A Portal binding
+      HTTP endpoints whose implementation names no router while its files, read at exact grade, hold
+      what reads as a router or a route table is ROUTES_UNCHECKED — a warning that fails --ci,
+      naming each spelling `router:` accepts — since route-bearing code no check read is a hole, not
+      a choice; only where its files hold none is it the notice ROUTER_UNDECLARED, the Portal then
+      read as served method by method, every public method of its realizing class answering to its
+      contract (export-conformance's UNDECLARED_PUBLIC_MEMBER).
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
     params:
@@ -976,6 +1055,12 @@ methods:
           A Portal's router names a route table that a sibling table spreading its module's other
           tables leaves out — if the server dispatches the sibling, none of the named table's routes
           is served while coverage reads them as routed
+      - code: ROUTES_UNCHECKED
+        severity: warning
+        summary: >-
+          A Portal binds HTTP endpoints and its files hold what reads as a router or a route table,
+          but its implementation names no router (`router:`) — routes its code serves were checked
+          against nothing
   - name: portalImports
     description: >-
       Rule portal-imports. A runtime import that crosses a subsystem boundary must land on a file
@@ -1114,4 +1199,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-15T16:03:28.954Z'
+updatedAt: '2026-10-17T15:41:12.523Z'

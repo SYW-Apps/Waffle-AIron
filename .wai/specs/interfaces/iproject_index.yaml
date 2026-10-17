@@ -12,7 +12,7 @@ methods:
       mapped to its member's record); reject cross-project access (null — no existence leak). Only
       an active record resolves.
     signature: 'resolveRoot(principal: Principal, selector: string): string'
-    returns: string
+    returns: string?
   - name: list
     description: >-
       Return all hosted-project records registered under the data root — family roots and member
@@ -147,4 +147,4 @@ methods:
         description: One entry of a mint request's projects narrowing.
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-04T10:19:20.352Z'
+updatedAt: '2026-10-17T16:35:30.528Z'

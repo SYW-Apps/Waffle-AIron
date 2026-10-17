@@ -61,7 +61,20 @@ methods:
           long-lived process, and a module left in the require cache by the previous install is
           evicted before the new one loads; else the file language's declarative pattern table
           (built-in tables merged under extension-pack registrations); else the generic
-          word-boundary scan
+          word-boundary scan. A Python file is read through its pattern table and, beside it, the
+          Python signature reader: a tokenizer that honours strings, comments, brackets and line
+          continuations reads each `def` (its parameters, the receiver of a method set aside —
+          `self`, or `cls` for a classmethod — with each name, its annotation as written and whether
+          a caller may leave it out; its return annotation; whether it is async), the class each
+          sits in and that class's members (a leading underscore private, @staticmethod and
+          @classmethod static, @property an accessor, `__init__` the constructor), each body's call
+          sites by receiver shape (a bare call, `self.<method>()`, `self.<field>.<method>()`, a call
+          through a name), the annotated type of each instance field (an annotation, or the
+          annotated constructor parameter it is assigned from) and of each annotated name, and the
+          module's imports with the local name each binds (`from .x import Y`, `from . import x`,
+          `import a.b as c`) — still pattern grade, the checks it read for recorded in
+          source_file_facts.reads. What it cannot read it leaves unset, so a check never reads
+          silence as a pass
         type: local
       - stepNumber: 6
         description: >-
@@ -141,7 +154,13 @@ methods:
           them, are recorded by constant name (source_file_facts.tableSpreads): which table another
           dispatches as a part of itself. A body that neither speaks of a method or a verb nor
           writes an HTTP verb out is no router. A table any of whose entries cannot be settled is
-          read as no table at all, never as part of one: a route is never invented
+          read as no table at all, never as part of one: a route is never invented. Beside each
+          body's signature, record its return annotation as written, whitespace-normalized, or null
+          where it annotates none (source_file_facts.functionReturns), one entry per body in
+          signature order; and for each top-level named class, its members as its public surface
+          reads them — a method or a function-valued property, an accessor, a field or the
+          constructor, public, protected, private or #private, static, override, a computed name
+          (source_file_facts.classMembers)
         type: local
       - stepNumber: 8
         label: chaseReexports
@@ -266,7 +285,11 @@ methods:
           resolution reads, and — where the checker reached project files the run holds no facts for
           — their resolved calls as reachedCalls, keyed by canonical path, and — where the checker
           was loaded — what every own file of the program imports as reachedImports (ModuleImports:
-          the project files and the packages), keyed by canonical path
+          the project files and the packages), keyed by canonical path; and outsideNames: every
+          identifier, comments stripped, of each source file of the project the run analyzed no
+          facts for — its tests, a composition root, scripts — read by a bounded walk of the project
+          root that enters no dependency, build-output, cache or hidden folder; what lets a public
+          verb nothing uses be told from one code outside the design calls
         type: return
         outcome: CodeModel
   - name: findTestsReferencing
@@ -339,4 +362,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-09T16:54:32.341Z'
+updatedAt: '2026-10-17T15:43:55.944Z'

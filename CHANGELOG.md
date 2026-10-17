@@ -507,6 +507,66 @@ and rewritten by `wairon doctor --fix`:
 
 ### New
 
+**The code gate closes the holes the release QA found, and says what it checked.**
+A release QA seat changed realized code one way at a time and found ordinary
+mismatches passing with "All checks passed". Each is now caught, and `validate` says
+how much of the code it read. Each new code is a **warning, so `validate --ci` can
+newly fail** on code that passed before:
+
+- **`RETURN_TYPE_MISMATCH`** (new): a function annotated to return a type its
+  contract's `returns` does not describe is reported on that method, naming the
+  contract's type and the code's. Before, a changed return type surfaced only on a
+  caller whose own port no longer matched (`UNREALIZED_DEPENDENCY` "the declared edge
+  is stale", `CALL_ORIGIN_UNRESOLVED`); those findings now name the drifted method as
+  the likely cause. Not compared: a contract returning void, a function registering
+  the method's handler, a void handler writing through an injected response handle,
+  an unannotated body, and a type the design does not know.
+- **`UNDECLARED_PUBLIC_MEMBER`** (new): a public method of a component's realizing
+  class, or a function its file exports, that no contract declares and nothing in the
+  project uses (no call in its own file, no other file, no test). Before,
+  `UNDECLARED_EXPORT` fired only once another component imported the name. Exempt:
+  constructors, accessors, fields, static, private, protected, `#private` and
+  underscore-prefixed members, `override`, computed names, language protocol and
+  framework lifecycle hooks, Python dunders, test files, and `conformance: off`.
+- **`UNNARRATED_CALL`** (new): a method whose narrative is at `full` or
+  `calls-only` detail (or that declares its calls) calls, in its own body, a verb of a
+  collaborator the narrative names that no step names — the forward twin of
+  `CALL_STEP_UNREALIZED`. A collaborator reached through a port (a planned one, or
+  another project's) counts as the component its narrated calls go to.
+- **`ROUTES_UNCHECKED`** (new): a Portal binding HTTP endpoints whose files hold a
+  router or route table its implementation never names in `router:` was a standing
+  `ROUTER_UNDECLARED` notice; it is now a warning naming each spelling `router:`
+  accepts. `ROUTER_UNDECLARED` stays a notice only where the files hold no router: the
+  Portal is then read as served method by method, and an undeclared handler method is
+  `UNDECLARED_PUBLIC_MEMBER`.
+- **Python is judged, not only read for method names.** A signature reader (no
+  interpreter, no dependency) reads each `def`: parameter names — compared in
+  snake_case, so the contract's `documentId` is the code's `document_id` — their
+  annotations and return annotations, class members, imports and call sites. A
+  renamed parameter is `PARAM_NAME_MISMATCH` (and the rest of the parameter checks),
+  a changed return annotation `RETURN_TYPE_MISMATCH`, an import of another
+  component's module the design does not list `UNDECLARED_DEPENDENCY`, an extra
+  public method or module function `UNDECLARED_PUBLIC_MEMBER`, and an unnarrated call
+  through an annotated collaborator `UNNARRATED_CALL`. Python gains a type dialect;
+  briefs give its mapping without the "mapping only" line.
+- **What was checked is said.** The code-reading line (`validate`, `sdd_validate_tree`)
+  now names, per language, the grade and the checks it ran and did not
+  (`python: 4 file(s) at grade pattern with its signature reader, checked methods,
+  params, returns (where annotated), public members, imports, calls through declared
+  receivers — not checked: routes, data types`); a family run prints it per project,
+  and the closing line repeats it in a few words (`Code checked: …`).
+- **Still not checked**, and said in that line: calls made inside helpers and calls to
+  collaborators a narrative never names (the detail dial lets a narrative summarize
+  them; a collaborator the design does not list at all is `UNDECLARED_DEPENDENCY`);
+  Python routes and data shapes; a declared Python dependency that no import
+  realizes; languages other than TypeScript, JavaScript and Python beyond method
+  names. Static methods are exempt from `UNDECLARED_PUBLIC_MEMBER`, and a verb some
+  other code mentions by name counts as used.
+- wairon's own tree carries what the new checks measured in it as drift in its
+  conformance debt register: 29 narratives that leave out a call to a collaborator
+  they narrate, and 6 contracts whose `returns` the code no longer matches. Three dead
+  exports they also found were removed.
+
 **Forwarders: required or removable.**
 
 - New warning `REMOVABLE_FORWARDER`. An Orchestrator whose every narrated method

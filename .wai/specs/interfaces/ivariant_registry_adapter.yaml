@@ -22,8 +22,8 @@ methods:
       kind gets implemented alike instead of reinvented per instance.
     signature: >-
       resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
-      variantsById: list<VariantDef>): VariantDef
-    returns: VariantDef
+      variantsById: list<VariantDef>): VariantGuidance?
+    returns: VariantGuidance?
     params:
       - name: component
         type: ComponentSpec
@@ -77,4 +77,4 @@ methods:
         description: The stereotype that replaces it
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-10-04T10:19:46.842Z'
+updatedAt: '2026-10-17T16:34:57.816Z'

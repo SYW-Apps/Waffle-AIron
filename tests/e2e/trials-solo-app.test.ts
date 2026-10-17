@@ -367,7 +367,7 @@ describe('solo-app: a type with no sourcePath is said so (MISSING_TYPE_SOURCE_PA
     expect(coded.code, transcript(coded)).toBe(0);
     expect(coded.all).toMatch(/⚠\s+\[habit\] \[MISSING_TYPE_SOURCE_PATH\]/);
     // Round 2 MINOR: "✔ All checks passed." was printed under warnings.
-    expect(coded.all).toContain('Passed with 1 warning(s)');
+    expect(coded.all).toMatch(/Passed with \d+ warning\(s\)/);
     expect(coded.all).not.toContain('All checks passed');
     expect((await sb.run(['validate', '--ci'], dir)).code).toBe(1);
   });

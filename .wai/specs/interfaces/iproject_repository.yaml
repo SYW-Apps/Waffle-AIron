@@ -13,7 +13,7 @@ methods:
       record; a deprecated member-qualified selector resolves for one release to the member's
       record, never wider.
     signature: 'resolveRoot(principal: Principal, selector: string): string'
-    returns: string
+    returns: string?
   - name: create
     description: Allocate an isolated project root, create its directory, and persist the record.
     signature: 'create(id: string): HostedProjectRecord'
@@ -90,4 +90,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-04T10:19:22.748Z'
+updatedAt: '2026-10-17T16:35:36.066Z'

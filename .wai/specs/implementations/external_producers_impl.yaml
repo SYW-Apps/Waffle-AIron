@@ -466,7 +466,7 @@ methods:
         over: >-
           the graph's direct project members that are contained or `../` siblings (never a part, a
           git or a hosted one)
-        endStep: 10
+        endStep: 11
       - stepNumber: 6
         description: Map the bound project's references into it onto its public names
         type: call
@@ -474,35 +474,42 @@ methods:
         targetMethod: exportUsage
       - stepNumber: 7
         description: >-
+          Find the git work tree the member's folder lies in; a member in no work tree has no
+          revision, so the three steps below are skipped for it
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: repositoryRoot
+      - stepNumber: 8
+        description: >-
           The commit of the member's own `.wai/lock.json` that introduced the digest the lock
           records for it, when it records one
         type: call
         targetComponent: git_source_adapter
         targetMethod: commitIntroducing
-      - stepNumber: 8
+      - stepNumber: 9
         description: Else (no record, or no commit holds it) the member's own last committed approval
         type: call
         targetComponent: git_source_adapter
         targetMethod: lastCommitOf
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Materialize the member's tree at that commit, read-only, in the fetch cache — skipped when
           no commit was found or the member is in no work tree (then it has no revision)
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
-      - stepNumber: 10
+      - stepNumber: 11
         label: recorded
         description: >-
           Record the member: alias, project id, root, usage and the revision (its directory, commit
           and label — the approval this project's lock records, or the member's own last approval);
           a git failure leaves the revision out, never fails the read
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Answer one entry per live member, in declaration order
         type: return
         outcome: list<member_revision>
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-09T16:50:57.342Z'
+updatedAt: '2026-10-17T16:24:36.408Z'

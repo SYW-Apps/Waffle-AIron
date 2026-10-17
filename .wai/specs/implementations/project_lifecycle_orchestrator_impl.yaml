@@ -680,20 +680,27 @@ methods:
         type: loop
         condition: the request is still pending and the timeout has not elapsed
         loopKind: while
-        endStep: 9
+        endStep: 10
       - stepNumber: 8
         description: Wait a short interval
         type: local
       - stepNumber: 9
+        description: >-
+          Realize any lazy expiry: mark every pending request past its deadline expired, so the
+          re-read below sees a request that timed out as expired rather than still pending
+        type: call
+        targetComponent: approval_repository
+        targetMethod: expirePending
+      - stepNumber: 10
         description: Re-read the request's current state
         type: call
         targetComponent: approval_repository
         targetMethod: getById
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the request in its current state (decided/completed, or still pending at timeout)
         type: return
         outcome: the request's current state
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-17T14:32:22.342Z'
+updatedAt: '2026-10-17T16:25:44.818Z'

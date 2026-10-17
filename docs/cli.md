@@ -123,7 +123,33 @@ warnings as errors (notices are printed and counted, never fatal).
   compiler that read it — `Code read at grade exact with TypeScript 5.9.3
   (wairon's own copy)` on a project with TypeScript 7 or none, `(the project's
   own)` on TypeScript 5 or 6 — or `Code: none read yet` before any file the design
-  names exists.
+  names exists. Then, per language, what that reading CHECKED and what it did
+  not: `typescript: 9 file(s) at grade exact, checked methods, params, returns
+  (where annotated), public members, imports, calls, routes, data types`;
+  `python: 4 file(s) at grade pattern with its signature reader, checked methods,
+  params, returns (where annotated), public members, imports, calls through
+  declared receivers — not checked: routes, data types`; a language read by its
+  pattern table alone checks methods only and names everything else. A family run
+  prints each project's reading under its verdict, and the closing line repeats it
+  in a few words (`Code checked: python pattern (not checked: routes, data
+  types); typescript exact.`) — a pass never implies more was checked than was.
+- **The code's own surface, signature and calls** (warnings, so `--ci` fails on
+  them). A function annotated to return another type than its contract's
+  `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
+  whose port no longer matches the class is told the cause on its own finding).
+  A public method of a component's realizing class, or a function its file
+  exports, that no contract declares and nothing in the project uses — no call
+  in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
+  (private, protected, `#private`, underscore-prefixed, static, accessor,
+  `override`, constructor, protocol and lifecycle members are exempt). A method
+  whose narrative is at `full` or `calls-only` detail and calls, in its own body,
+  a verb of a collaborator it narrates that no step names is `UNNARRATED_CALL`;
+  calls inside helpers and to collaborators the narrative never names are what
+  the detail lets it summarize (a collaborator the design does not list at all is
+  `UNDECLARED_DEPENDENCY`). Python is read by its signature reader: parameter
+  names (in snake_case, so the contract's `documentId` is `document_id`),
+  annotations, return annotations, public members and imports are judged like
+  TypeScript's.
 - **Binding modules.** A consumer whose code reaches another project's library
   through a hand-written binding module (a typed binding to a native addon, a
   client stub) names it on the implementation — `bindings:
@@ -353,8 +379,11 @@ array of `{ method, path }` objects or an object keyed `VERB /path`
 (template-literal keys over constants included), bound to a const or returned in
 place, spreading other tables (`[...ingestRoutes, ...statsRoutes]`) from any
 module. Route coverage is never silently off: a Portal whose contract binds HTTP
-endpoints and whose implementation names no router gets a `ROUTER_UNDECLARED`
-notice naming `router:`, and a router that cannot be read is
+endpoints and whose implementation names no router while its files hold what reads
+as a router or a route table gets `ROUTES_UNCHECKED` (a warning, so `--ci` fails)
+naming each spelling `router:` accepts; one whose files hold none is served method
+by method and gets the `ROUTER_UNDECLARED` notice, its realizing class's public
+methods judged by `UNDECLARED_PUBLIC_MEMBER`; and a router that cannot be read is
 `UNREADABLE_ROUTER`. A table is read under the ONE prefix its router strips off the
 path (`path.slice(BASE.length)`), so that prefix must be the Portal's `basePath`:
 another one is `UNDECLARED_ROUTE` + `UNROUTED_ENDPOINT`, naming both.

@@ -32,12 +32,20 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
+          When the re-lock is scoped to named files, read the project graph through the spec loader
+          for the root project's parts, so a part's file is approved under its storage-independent
+          key rather than its path
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
+        description: >-
           Read the record already on file, so a scoped approval carries forward the digests it is
           not re-capturing rather than dropping them
         type: call
         targetComponent: lock_store
         targetMethod: read
-      - stepNumber: 4
+      - stepNumber: 5
         description: Answer with the digest map to write into the record
         type: return
         outcome: captured
@@ -302,4 +310,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-17T14:47:22.322Z'
+updatedAt: '2026-10-17T16:24:16.468Z'

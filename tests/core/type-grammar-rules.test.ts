@@ -96,7 +96,7 @@ describe('source_file_facts.dialect', () => {
   });
 
   it('answers none for a file with no language a dialect reads', () => {
-    expect(dialectOf({ path: 'flow.py', status: 'analyzed', language: 'python', declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [] })).toBeNull();
+    expect(dialectOf({ path: 'flow.rs', status: 'analyzed', language: 'rust', declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [] })).toBeNull();
     expect(dialectOf({ path: 'notes.txt', status: 'analyzed', declaredNames: [], anchoredNames: [], exportedNames: [], imports: [], reexports: [] })).toBeNull();
   });
 });
