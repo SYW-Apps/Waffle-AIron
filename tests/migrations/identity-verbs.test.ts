@@ -136,6 +136,8 @@ describe('stage 6 — the identity verbs', () => {
       // Round 11: the plan named the renamed project alone and never the parent.
       expect(planned.notes).toContain(`Outside this family: billing (${path.join('..', 'billing')}) declares this project as its member "ledger" — nothing there is written. Once this project is re-locked as "acme-ledger", run \`wairon lock\` in ${path.join('..', 'billing')} to pin its new approval.`);
       expect(planned.changes.every((c) => path.resolve(c.project) === path.resolve(pair.ledger))).toBe(true);
+      // What a rename never looks for is said as such, with the command that lists it.
+      expect(planned.notes).toContain('A project outside this family that declares "ledger" as an external is not looked for by a rename (only a parent composing it as a member is): each must rewrite its own external (its next gate reports the id change); `wairon externals consumers --search <dir>` lists them.');
       migrations.discard(planned);
       expect(dirHash(pair.billing)).toEqual(before);
     } finally {
