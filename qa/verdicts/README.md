@@ -48,5 +48,5 @@ anything the next release's panel should look at first.
 A pull request into main passes the "Release QA verdict" job when a verdict file has `result: PASS`,
 its `rc` is an ancestor of the pull request head, and nothing shipped (`src/`, `web/`, `sdk/`,
 `schemas/`, `templates`, `package.json`, `package-lock.json`) changed between `rc` and the head. Lock
-records, docs, the CHANGELOG, `qa/` and regenerated `.wai/` context may change after the RC. Anything
-else means the QA runs again on a new RC.
+records, docs, the CHANGELOG, `qa/`, regenerated `.wai/` context and the release bot's version-only
+`chore: release v…` commits may change after the RC. Anything else means the QA runs again on a new RC.

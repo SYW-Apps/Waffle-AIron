@@ -125,8 +125,9 @@ requests into main only) fails unless some verdict in `qa/verdicts/` has all of:
 3. no change under `src/`, `web/`, `sdk/`, `schemas/`, a `templates` folder, `package.json` or
    `package-lock.json` between `rc` and the head.
 
-Lock records, docs, the CHANGELOG, `qa/` and regenerated `.wai/` context may change after the RC.
-Anything else means the QA has to run again on a new RC. To make the job a hard gate, add it to the
+Lock records, docs, the CHANGELOG, `qa/` and regenerated `.wai/` context may change after the RC, and
+so may the release bot's version stamp (`chore: release v…` commits that change only
+`src/config/defaults.ts`), which every merge into dev produces. Anything else means the QA has to run again on a new RC. To make the job a hard gate, add it to the
 required checks of the main branch protection (a repository setting, not something this repository can
 change for itself).
 

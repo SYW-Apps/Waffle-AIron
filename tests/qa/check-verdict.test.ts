@@ -78,6 +78,20 @@ describe('qa/scripts/check-verdict.mjs', () => {
     git('checkout', '-q', '-f', main);
   });
 
+  it("ignores the release bot's version stamp after the RC, but not a release commit that changes more", () => {
+    write('src/config/defaults.ts', "export const WAIRON_VERSION = '1.0.1';\n");
+    commit('chore: release v1.0.1');
+    const stamped = check();
+    expect(stamped.code, stamped.out).toBe(0);
+    write('src/config/defaults.ts', "export const WAIRON_VERSION = '1.0.2';\n");
+    write('src/a.ts', 'export const a = 3;\n');
+    commit('chore: release v1.0.2');
+    const r = check();
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('src/a.ts');
+    git('reset', '-q', '--hard', 'HEAD~1');
+  });
+
   it('fails when a shipped file changed after the RC, and names it', () => {
     write('src/a.ts', 'export const a = 2;\n');
     commit('fix after rc');

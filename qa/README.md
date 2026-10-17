@@ -81,6 +81,12 @@ instructions and these values in its task: `QA_SEAT_DIR`, `QA_TOOLCHAIN`, `QA_PR
 `QA_SCENARIO` (the line `pick-scenario.mjs` printed), `QA_FINDINGS_DIR`, `QA_MODEL`. The seats do
 not depend on each other, so run them in parallel. Each ends with a summary line,
 "Ready for release: yes/no, because ...". Their `FINDINGS.md` files stay in `$QA_FINDINGS_DIR`.
+Tell each seat to write `FINDINGS.md` through the shell (a heredoc): a subagent's file-writing tool
+may refuse a report file, and the findings would then exist only in its returned message.
+
+The toolchain script refuses to finish when `wairon` started through `cmd` (how Claude Code on Windows
+starts the MCP server named in `.mcp.json`) is not the RC build; never run a seat on a toolchain
+built before that check existed, or the seat's assistant may talk to another wairon on the machine.
 
 ## Stage 4: triage and the fix loop
 
