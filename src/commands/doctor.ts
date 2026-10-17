@@ -166,7 +166,8 @@ function mcpEntryHealth(settingsPath: string, checkLaunched = true, projectScope
       remedy: 'run `wairon mcp install --backend claude` to write the portable entry',
     };
   }
-  return { mark: 'ok', note: 'registered' };
+  // Name the build the entry starts also when it matches, so a reader can tell which install it is.
+  return { mark: 'ok', note: launched !== null ? `registered (starts wairon ${launched})` : 'registered' };
 }
 
 /**
@@ -658,7 +659,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     const projPath = fromProjectRoot('.gemini', 'settings.json');
     if (fs.existsSync(projPath)) {
       const hp = mcpEntryHealth(projPath);
-      line(tally, hp.mark === 'error' ? 'error' : 'ok', `Gemini CLI (project): ${hp.note} ${chalk.gray('(Antigravity ignores this file)')}`);
+      line(tally, hp.mark, `Gemini CLI (project): ${hp.note}${hp.mark === 'ok' ? '' : ` — ${hp.remedy ?? 'run `wairon mcp install --backend gemini`'}`} ${chalk.gray('(Antigravity ignores this file)')}`);
     }
   }
 
@@ -1134,6 +1135,12 @@ async function repairMcpRegistration(options: DoctorOptions, targets: string[]):
   const gemini = targets.includes('gemini') || targets.includes('agy');
   // Global for Antigravity (the file it reads); also fine for the Gemini CLI.
   if (gemini) installs.push({ backend: 'gemini', global: targets.includes('agy') });
+  // An Antigravity install writes only the machine-wide file; a project
+  // .gemini/settings.json that is already there is registered and reported by
+  // doctor too, so --fix repairs it with the same install (the project-scoped one).
+  if (targets.includes('agy') && fs.existsSync(fromProjectRoot('.gemini', 'settings.json'))) {
+    installs.push({ backend: 'gemini', global: false });
+  }
 
   const outside: PlannedInstall[] = [];
   for (const install of installs) {

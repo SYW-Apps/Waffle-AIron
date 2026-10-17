@@ -72,9 +72,10 @@ methods:
           through a name), the annotated type of each instance field (an annotation, or the
           annotated constructor parameter it is assigned from) and of each annotated name, and the
           module's imports with the local name each binds (`from .x import Y`, `from . import x`,
-          `import a.b as c`) — still pattern grade, the checks it read for recorded in
-          source_file_facts.reads. What it cannot read it leaves unset, so a check never reads
-          silence as a pass
+          `import a.b as c`), and which top-level classes the module names outside their own `class`
+          block (source_file_facts.classReferences) — still pattern grade, the checks it read for
+          recorded in source_file_facts.reads. What it cannot read it leaves unset, so a check never
+          reads silence as a pass
         type: local
       - stepNumber: 6
         description: >-
@@ -160,7 +161,10 @@ methods:
           signature order; and for each top-level named class, its members as its public surface
           reads them — a method or a function-valued property, an accessor, a field or the
           constructor, public, protected, private or #private, static, override, a computed name
-          (source_file_facts.classMembers)
+          (source_file_facts.classMembers); and which of those classes the file's own code names
+          outside their own declaration — constructed, extended or implemented, annotated with,
+          tested by instanceof, passed or returned as a value, an export clause aside
+          (source_file_facts.classReferences)
         type: local
       - stepNumber: 8
         label: chaseReexports
@@ -362,4 +366,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-17T15:43:55.944Z'
+updatedAt: '2026-10-17T19:37:46.969Z'

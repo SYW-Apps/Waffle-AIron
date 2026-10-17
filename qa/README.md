@@ -87,6 +87,8 @@ may refuse a report file, and the findings would then exist only in its returned
 The toolchain script refuses to finish when `wairon` started through `cmd` (how Claude Code on Windows
 starts the MCP server named in `.mcp.json`) is not the RC build; never run a seat on a toolchain
 built before that check existed, or the seat's assistant may talk to another wairon on the machine.
+In a seat's Git Bash, put the toolchain on PATH in its `/c/...` form (`export PATH="/c/wairon-qa/toolchain-rc/bin:$PATH"`):
+a `C:/...` entry is not one `cmd` resolves, so `cmd //c "wairon --version"` would find another install.
 
 ## Stage 4: triage and the fix loop
 

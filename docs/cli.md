@@ -133,13 +133,19 @@ warnings as errors (notices are printed and counted, never fatal).
   prints each project's reading under its verdict, and the closing line repeats it
   in a few words (`Code checked: python pattern (not checked: routes, data
   types); typescript exact.`) — a pass never implies more was checked than was.
+  Routes are read only out of a router a Portal names (`router:`), so where an
+  HTTP Portal names none the line says `routes where a router is named` and
+  counts it among what was not checked (`not checked: routes of 1 HTTP Portal(s)
+  naming no router`); such a Portal is judged by its realizing class's public
+  methods alone.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
-  whose port no longer matches the class is told the cause on its own finding).
-  A public method of a component's realizing class, or a function its file
-  exports, that no contract declares and nothing in the project uses — no call
-  in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
+  whose port no longer matches the class is not reported again: its call and its
+  edge are held under that finding until the return is fixed).
+  A public method of a component's realizing class, or a function or class its
+  file exports, that no contract declares and nothing in the project uses — no
+  call in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
   (private, protected, `#private`, underscore-prefixed, static, accessor,
   `override`, constructor, protocol and lifecycle members are exempt). A method
   whose narrative is at `full` or `calls-only` detail and calls, in its own body,
@@ -149,7 +155,10 @@ warnings as errors (notices are printed and counted, never fatal).
   `UNDECLARED_DEPENDENCY`). Python is read by its signature reader: parameter
   names (in snake_case, so the contract's `documentId` is `document_id`),
   annotations, return annotations, public members and imports are judged like
-  TypeScript's.
+  TypeScript's. A component importing a Portal that depends on it and calls it is
+  `UNDECLARED_DEPENDENCY` on the importer, in either language: only a server
+  importing a Portal mounted onto it, which the Portal does not call, is the
+  declared edge read in reverse.
 - **Binding modules.** A consumer whose code reaches another project's library
   through a hand-written binding module (a typed binding to a native addon, a
   client stub) names it on the implementation — `bindings:
@@ -1547,6 +1556,21 @@ by `project:write`:
 Give authors `project:write` and reviewers `approval:decide`; a single
 administrator holds both. `wairon host lock` runs with the master credential,
 which approves on any project.
+
+**Deciding a request.** The web UI's Approvals page and `POST /web/admin/approvals/decide`
+take a JSON body with exactly these fields:
+
+| Field | Type | |
+|-------|------|---|
+| `requestId` | string | required: the id of a pending request |
+| `approved` | boolean | required: `true` approves, `false` denies |
+| `reason` | string | optional |
+
+Anything else is refused with `400` and a message naming these fields, and the request
+stays pending: a body without `approved` (for example `{"decision": "approve"}`), a value that
+is not a boolean, or a missing or unknown `requestId` is never read as a denial. Who
+decided is always the signed-in person, never a field of the body. The admin API's
+`POST /admin/approvals/{id}/decision` takes the same `approved` and `reason`, with the id in the path.
 
 | Command | Description |
 |---------|-------------|

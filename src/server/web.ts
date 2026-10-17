@@ -3073,6 +3073,10 @@ function adminListApprovals(cfg: HostConfig, sessionId: string): ApprovalRequest
   return listPendingRequests(cfg, sessionId);
 }
 
+/** Accepted body of POST /web/admin/approvals/decide, named in every 400 so a caller can fix it. */
+const APPROVAL_DECIDE_FIELDS_MESSAGE =
+  'Body must be JSON {"requestId": string, "approved": boolean, "reason"?: string}.';
+
 /** Decide a pending approval request; forwards the decision the router decoded
  *  to project_lifecycle_orchestrator.decideRequest, which sets decidedBy from the
  *  session principal and refuses self-approval. */
@@ -4048,14 +4052,34 @@ export async function handleWebRequest(
       // pending request. decidedBy is server-authoritative (the session principal);
       // self-approval is refused inside decideRequest.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'approvals' && parts[3] === 'decide') {
+        // Strict decoding: a body that does not carry exactly the accepted fields is
+        // refused (400) and the request stays pending — it is never read as a denial.
+        const requestId: unknown = body?.requestId;
+        if (typeof requestId !== 'string' || requestId.trim() === '') {
+          return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' `requestId` must be a non-empty string.' });
+        }
+        if (typeof body?.approved !== 'boolean') {
+          return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' `approved` must be true or false.' });
+        }
+        if (body.reason !== undefined && typeof body.reason !== 'string') {
+          return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' `reason` must be a string.' });
+        }
         const decision: ApprovalDecision = {
-          requestId: String(body?.requestId ?? ''),
-          approved: body?.approved === true,
-          reason: typeof body?.reason === 'string' ? body.reason : undefined,
+          requestId,
+          approved: body.approved,
+          reason: body.reason,
           decidedBy: { userId: '', kind: 'human', issuer: 'local' }, // overridden server-side
           decidedAt: '', // set server-side
         };
-        return sendJson(res, 200, adminDecideApproval(cfg, sessionId, decision));
+        try {
+          return sendJson(res, 200, adminDecideApproval(cfg, sessionId, decision));
+        } catch (err) {
+          // An unknown request id is a malformed decision, not a missing route.
+          if (err instanceof Error && /^Approval request ".*" not found\./.test(err.message)) {
+            return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' No pending approval request has that `requestId`.' });
+          }
+          throw err;
+        }
       }
     }
 
