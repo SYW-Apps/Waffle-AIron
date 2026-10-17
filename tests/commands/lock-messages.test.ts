@@ -121,6 +121,19 @@ describe('lock on an all-draft tree says so', () => {
     expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(true);
   });
 
+  it('says what `validate --ci` would do with the design it approves', async () => {
+    project('draft');
+    const out = capture();
+    await lock();
+    // The ordinary run, not the as-complete one the lock gates on: drafts are judged as drafts.
+    expect(out.lines.join('\n')).toMatch(/`wairon validate --ci` would (pass|FAIL on \d+ finding\(s\) in this project)/);
+
+    project('complete');
+    const clean = capture();
+    await lock();
+    expect(clean.lines.join('\n')).toMatch(/`wairon validate --ci` would (pass|FAIL on \d+ finding\(s\) in this project)/);
+  });
+
   it('is silent about drafts once every spec is complete', async () => {
     project('complete');
     const out = capture();

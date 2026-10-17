@@ -55,6 +55,48 @@ describe('validateRegistry', () => {
     expect(result.issues.some((i) => i.code === 'NO_OWNED_PATHS')).toBe(true);
   });
 
+  it('treats a derived implementer with no planned sourcePath as a notice naming the planned-sourcePath remedy', () => {
+    const registry = createEmptyRegistry();
+    registry.agents.push(
+      createAgentRecord({
+        id: 'cart-implementer',
+        name: 'Cart Implementer',
+        template: 'implementer',
+        creationReason: 'test',
+        ownedPaths: [],
+        tags: ['implementer', 'component', 'sdd', 'store'],
+      }),
+    );
+
+    const result = validateRegistry(registry, defaultRules);
+    const found = result.issues.filter((i) => i.code === 'NO_OWNED_PATHS');
+    expect(found).toHaveLength(1);
+    expect(found[0].severity).toBe('notice');
+    expect(found[0].message).toContain('plan a sourcePath');
+    expect(found[0].message).not.toContain('tag as meta');
+    expect(result.valid).toBe(true);
+  });
+
+  it('escalates an unplanned implementer to an error under rules.conformance.requireCode', () => {
+    const registry = createEmptyRegistry();
+    registry.agents.push(
+      createAgentRecord({
+        id: 'cart-implementer',
+        name: 'Cart Implementer',
+        template: 'implementer',
+        creationReason: 'test',
+        ownedPaths: [],
+        tags: ['implementer', 'component', 'sdd'],
+      }),
+    );
+
+    const result = validateRegistry(registry, { ...defaultRules, conformance: { requireCode: true } });
+    const found = result.issues.filter((i) => i.code === 'NO_OWNED_PATHS');
+    expect(found[0].severity).toBe('error');
+    expect(found[0].message).toContain('requireCode');
+    expect(result.valid).toBe(false);
+  });
+
   it('does not warn about missing ownedPaths for meta-tagged agents', () => {
     const registry = createEmptyRegistry();
     registry.agents.push(

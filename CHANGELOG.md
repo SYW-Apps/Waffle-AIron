@@ -43,7 +43,12 @@ last.
 1. **Upgrade wairon everywhere at once:** developer machines, CI (and the
    `setup-wairon` action's `version`) and the hosted server. Then restart or
    reconnect each AI tool's wairon MCP server. A server whose build on disk changed the
-   spec schemas now refuses every spec write and says so.
+   spec schemas now refuses every spec write and says so. A machine with two installs
+   (an old standalone binary and the npm package) can start an older server than the CLI
+   you run, because the committed `.mcp.json` says `wairon` and the PATH decides which:
+   `wairon doctor` names the version that entry starts when it differs from the CLI's,
+   and a server older than the wairon that last wrote the project (its lock or guides)
+   leads its `sdd_get_status` answer with an `OLDER SERVER` banner.
 2. **Hosted operators: `wairon host doctor`, then `wairon host doctor --fix`.** The
    dry run prints the plan. `--fix` migrates a data dir that predates the permission
    model. It also registers every member that hosted families declare as a project
@@ -107,8 +112,12 @@ last.
      export and `use` import follow once the target is published.
 
    **Members are repaired by the same run.** Every member inside the project root gets
-   the per-project repairs, each line marked `[alias]`. A member in a sibling checkout
-   (`../x`) is named with the command to run in its own directory.
+   the per-project repairs, each line marked `[alias]`: its specs, and its agent
+   surfaces (the project `.mcp.json`, the guide, the `.wai/context` documents and the
+   skills), so an assistant opened in the member's own folder has the wairon tools.
+   A machine-wide registration stays the one plan the top asks about. A member in a
+   sibling checkout (`../x`) is named with the command to run in its own directory.
+   Plain `wairon doctor` lists, per member, what is pending, agent surfaces included.
 
    **Committed agent files are kept.** A `project.yaml` that never set
    `rules.materializeAgentFiles` reads as `true` while wairon-managed agent files are
@@ -167,6 +176,20 @@ last.
    - Settle every other unreached verb: model the caller that really calls it, or
      remove it.
    - Make a member's parent-relative `sourcePath`s relative to the member.
+   - Plan a `sourcePath` on every component not built yet. A project that generates
+     one implementer agent per component (`rules.generateComponentImplementers`)
+     reports `NO_OWNED_PATHS` for each component whose implementation names no file,
+     and the fix is the planned file, not a `meta` tag: set it with
+     `sdd_write_narrative` or `sdd_update_spec` (`sourcePath`; the file need not
+     exist yet). It is a notice, like `MISSING_SOURCE_PATH`, so it does not fail
+     `--ci`, unless `rules.conformance.requireCode` is on, which makes every unplanned
+     or unbuilt component an error. Planning the path is code linkage: it does not
+     reopen the approval.
+   - A Portal that a member exports and only the parent calls reports
+     `UNUSED_COMPONENT` inside the member, which cannot see the parent's call. Declare
+     the entry in the member: a Portal-level `invokedBy: { kind: entry, caller }` naming
+     the parent (or the outside caller that really reaches it). `sdd_list_consumers`
+     shows who calls the verb across the family.
    - To soften a warning while you pay it down, set it to `notice` in
      `rules.sddRuleSeverity` (notices never fail `--ci`).
    - Re-pin with `wairon externals pin` after editing what a consumer uses.
@@ -177,6 +200,11 @@ last.
      the approval and does not block on them, so a passing lock alongside a failing
      `validate --ci` is expected until the code findings are paid.
    - `lock` no longer writes `status: complete` into spec files.
+   - `lock` accepts a design that still has drafts or warnings (approval is not
+     status), and says how many findings `validate --ci` would fail on. Run
+     `validate --ci` until it passes before locking a design meant to be finished.
+   - `wairon diagram` writes `.wai/docs/diagrams/`, which is derived and never read
+     back: commit it to browse the diagrams on GitHub, or ignore it.
    - A lock written by an earlier v6 build (format 2) still passes while nothing it
      covers moved. Run `wairon doctor --fix` to re-express it as format 3: who
      approved it and when are kept, and the record notes `reexpressed`. One that

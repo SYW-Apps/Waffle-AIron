@@ -105,6 +105,14 @@ describe('domain_projector and domain_curator span the two sources the Repositor
     expect(registered.boundTo).toBeUndefined();
   });
 
+  it('states every derived path relative to the BOUND project root, never to the process working directory', () => {
+    buildFixture();
+    // The cwd of this test run is the repository, not the fixture: a path relative to it would climb out.
+    const owned = projector.deriveSubsystemDomains().find((d) => d.id === 'billing')!.ownedPaths;
+    expect(owned.length).toBeGreaterThan(0);
+    for (const p of owned) expect(p.startsWith('.wai/specs/'), p).toBe(true);
+  });
+
   it('owns the subsystem spec path for every domain it derives', () => {
     buildFixture();
 

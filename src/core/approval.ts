@@ -595,6 +595,25 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       ? `${noun} ${parts[0].slice(String(diffSize(diff)).length + 1)} since approval`
       : `${noun} changed since approval (${parts.join(', ')})`;
 
+    // The approval's own verdict is the identity's, and it can hold while the
+    // bytes of some spec files differ: a record read in the content reading
+    // sees a moved authoring status or code linkage as a changed file, while
+    // the approval itself leaves both out. Said as that — never as "changed
+    // since approval" beside "approved", which reads as a contradiction.
+    if (own?.state === 'approved' && !pinDrift) {
+      return {
+        text: `\nThe approval still holds (${stamp}). ${noun} differ${n === 1 ? 's' : ''} in bytes from the approved ones, `
+          + 'but only in what the approval leaves out (authoring status, code linkage, timestamps) — nothing the design is judged on moved:\n'
+          + named.map((p) => `  ${p}`).join('\n')
+          + (rest > 0 ? `\n  … and ${rest} more — \`wairon status --all\` lists every one` : '')
+          + childNote
+          + carry
+          + '\n',
+        drifted: false,
+        moved: [...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`)],
+      };
+    }
+
     return {
       text: `\n${headline} — approved ${stamp}:\n`
         + named.map((p) => `  ${p}`).join('\n')

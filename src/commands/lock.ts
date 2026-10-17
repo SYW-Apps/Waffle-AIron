@@ -32,9 +32,9 @@ import { approvalKeyIn } from '../models/project-family.js';
 import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { AI_PATHS } from '../config/paths.js';
 import { LockRecordUnreadableError, WaironError } from '../utils/errors.js';
-import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, type ValidationResult } from '../core/validation.js';
+import { computeGateStateId, familyApprovals, unpinnedExternals, unrecordedExternalUses, validateProject, type ValidationResult } from '../core/validation.js';
 import {
-  approvalStamp, approvalSubject, describeApprover, describeGateParts, designOnly, gatePartsProblem, missingTreeSentence, movedGateParts, memberPinOf,
+  approvalStamp, approvalSubject, describeApprover, describeGateParts, designOnly, ciBlockingIssues, gatePartsProblem, missingTreeSentence, movedGateParts, memberPinOf,
   releaseStampProblem, sameRulesNotice, stampRecordsGateParts, usableGateParts, GATE_PARTS_SINCE,
   type CodeAnalysis, type ProjectApproval, type ReleaseVerdict,
 } from '../models/lock.js';
@@ -783,6 +783,31 @@ function draftCounts(): { draft: number; total: number; byKind: string } {
   return { draft, total, byKind: parts.join(', ') };
 }
 
+/**
+ * What `wairon validate --ci` would say of this project's own gate: the findings
+ * that fail it (every error, every warning not waived as draft-related, code
+ * findings included) and the draft-related warnings it waives. The as-complete
+ * result the lock gated on judges a draft as if it were complete, so while any
+ * spec is still draft or design the ordinary run is made too, and counted instead.
+ * Null when that run cannot be made: the line is then left out, never guessed.
+ */
+function ciOutlook(gate: ValidationResult, hasDrafts: boolean): { failing: number; errors: number; warnings: number; waived: number } | null {
+  let judged = gate;
+  if (hasDrafts) {
+    try {
+      const config = loadProjectConfig();
+      judged = validateProject({ rules: config?.rules, projectType: config?.projectType });
+    } catch {
+      return null;
+    }
+  }
+  const blocking = ciBlockingIssues(judged);
+  const errors = blocking.filter((i) => i.severity === 'error').length;
+  const warnings = blocking.length - errors;
+  const waived = judged.issues.filter((i) => i.severity === 'warning').length - warnings;
+  return { failing: blocking.length, errors, warnings, waived };
+}
+
 /** Print what is being approved: the own spec diff, the code half, and each direct member. */
 function summarize(gate: ValidationResult, members: ProjectApproval[], captured: StateId, options: LockOptions): void {
   // Against the previous approval, not against each spec's stored status: the
@@ -850,6 +875,18 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
   const drafts = draftCounts();
   if (drafts.draft > 0) {
     logger.warn(`${drafts.draft} of ${drafts.total} spec(s) are still draft or design (${drafts.byKind}): this approves the design as it stands, drafts included. Status is readiness, never approval — mark specs complete when they are ready to implement.`);
+  }
+  // What CI will say about the design being approved: approval is not status,
+  // so a design with warnings may be locked — but `wairon validate --ci` fails
+  // on every warning not waived as draft-related, and an approver should know.
+  const ci = ciOutlook(gate, drafts.draft > 0);
+  if (ci !== null) {
+    if (ci.failing > 0) {
+      logger.warn(`\`wairon validate --ci\` would FAIL on ${ci.failing} finding(s) in this project (${ci.errors} error(s), ${ci.warnings} warning(s), code findings included${ci.waived > 0 ? `; ${ci.waived} draft-related warning(s) are waived while those specs are draft` : ''}). `
+        + 'Approving it is allowed; clear them (`wairon validate` lists them) before CI, or before asking someone to approve a design meant to be finished.');
+    } else {
+      logger.info(`\`wairon validate --ci\` would pass${ci.waived > 0 ? `: the ${ci.waived} warning(s) are all draft-related and waived while those specs are draft` : ': it has no errors or warnings'}.`);
+    }
   }
   logger.info(codeLine(gate.analysis));
   // A member's own edits never show up in this project's spec diff: what this

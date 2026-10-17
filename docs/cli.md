@@ -435,7 +435,12 @@ approval lives in `.wai/lock.json`. Implementation gates on that approval —
 `status: complete`. Commit `.wai/lock.json` with the change it approves.
 When any spec is still `draft` or `design`, the lock says how many of how many,
 per kind (subsystems, components, contracts, implementations, types), and that
-it approves them as they stand. Re-running it when nothing it records moved
+it approves them as they stand. Approval is not status, so a design that
+`wairon validate --ci` fails on can still be locked; the summary says plainly
+how many findings CI would fail on (errors and warnings, code findings
+included, with the draft-related warnings CI waives counted apart), or that it
+would pass. Run `validate --ci` until it passes before asking someone to
+approve a design meant to be finished. Re-running it when nothing it records moved
 keeps the record on file — its `lockedAt` included — so `.wai/lock.json` stays
 unmodified; a change of approver, verdict or member pin writes a new record. A
 new wairon release writes nothing by itself: when its built-in design rules are
@@ -787,6 +792,14 @@ nothing: `chaining` (the member/reference migration plan) or
 findings) or `reachability` (the reachability migration's plan); it never
 combines with `--fix`.
 
+In a family, `--fix` runs the same per-project repairs in every member project inside the
+project root, each line marked `[alias]`: its specs, and its agent surfaces (the project
+`.mcp.json`, the injected guide, the `.wai/context` documents and the skills), so an assistant
+opened in a member's own folder has the wairon tools. The member never asks for a second
+machine-wide write; the top's plan covers it. A member in a sibling checkout is named with the
+command to run there. Plain `wairon doctor` lists what is pending per member, agent surfaces
+included, and warns when the MCP entry would start a different wairon than the running CLI.
+
 Among its spec repairs, `--fix` rewrites every stored type position that is an
 alias of its canonical spelling (`string[]` becomes `list<string>`, `boolean`
 becomes `bool`, `T | null` becomes `T?`, `Promise<T>` becomes `async T`) — what
@@ -1011,6 +1024,11 @@ another file or directory); nothing opens automatically.
   `.wai/docs/diagrams/` (or `--out`).
 - `--no-health`: skip comparing each consumption relation with its live
   producer; the canvas draws those edges as not checked.
+
+The files under `.wai/docs/diagrams/` are derived from the spec tree and
+rewritten by every run; wairon never reads them back. Commit the folder if you
+want the diagrams browsable on GitHub and in review, or add it to `.gitignore`.
+The command says so after each run that writes to the default folder.
 
 The canvas is a small single-page app with **C4-style scoped navigation**:
 each view renders one scope's direct children (System → subsystems →
@@ -1382,6 +1400,19 @@ project, so it holds nothing machine-specific: it runs `wairon mcp serve` from t
 `node ./<path>` when the CLI lives inside the project, as in a checkout of wairon itself),
 and the server attaches to the project it is started in. A `--global` registration is
 machine-wide and names the running CLI by its absolute path.
+
+The project entry is deliberately not an absolute path: the file is committed and shared
+across machines, and a path to one developer's install breaks on every other. The cost is
+that `wairon` resolves through the PATH, so a machine with two installs (an old standalone
+binary and the npm package) can start an older server than the CLI you run. Two checks say so.
+`wairon doctor` asks the entry which wairon it would start (`wairon --version` for a bare
+`wairon`, the package version for a `node ./path` entry; nothing else from the file is ever
+executed) and warns when it is not the running CLI's version, and for a project entry that names
+an absolute path. And an MCP server older than the wairon that last wrote the project (the release
+stamped on `.wai/lock.json` or on a generated guide) leads its `sdd_get_status` answer, and trails
+its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in the structured
+content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
+`which -a wairon` elsewhere), then reconnect the assistant.
 
 The local server offers 49 tools:
 

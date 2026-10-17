@@ -134,7 +134,13 @@ methods:
           own root, a warning that the right order is bottom-up — lock that member at its own root
           first (its folder named), then here — because this lock records it drifted, lock-check
           here fails until it is re-locked, and this project must lock again to pin it; then each
-          part stored outside the project with the commit being approved
+          part stored outside the project with the commit being approved. Then what `wairon validate
+          --ci` would say of this project: the findings that fail it (every error, every warning not
+          waived as draft-related, code findings included) with the draft-related warnings it
+          waives, counted from the ordinary run while any spec is still draft or design (the
+          as-complete gate the lock runs judges a draft as complete) and from that gate otherwise,
+          or that it would pass — approval is not status, so a design that fails CI may still be
+          locked, and the human is told what CI will do with it.
         type: local
       - stepNumber: 12
         description: >-
@@ -815,4 +821,4 @@ methods:
         outcome: ok
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-15T16:03:32.544Z'
+updatedAt: '2026-10-17T15:15:05.108Z'
