@@ -55,6 +55,15 @@ export CLAUDE_CONFIG_DIR='$(native "$TC/home/.claude")' GEMINI_CONFIG_DIR='$(nat
 exec node '$(native "$CLI")' "\$@"
 WRAP
 
+# The same wrapper for Windows: Claude Code there starts an MCP server's `wairon` through
+# cmd, which cannot run the bash script above and would fall through to any other wairon
+# on PATH (a global install), so the assistant would talk to a different build than the CLI.
+printf '%s\r\n' '@echo off' \
+  "set \"HOME=$(native "$TC/home")\"" "set \"USERPROFILE=$(native "$TC/home")\"" \
+  "set \"APPDATA=$(native "$TC/appdata")\"" "set \"LOCALAPPDATA=$(native "$TC/localappdata")\"" \
+  "set \"WAIRON_CACHE_DIR=$(native "$TC/cache")\"" \
+  "node \"$(native "$CLI")\" %*" > "$TC/bin/wairon.cmd"
+
 cat > "$TC/bin/ask-claude" <<'WRAP'
 #!/usr/bin/env bash
 # ask-claude <project-dir> <prompt-file> [session-id-to-resume]
@@ -62,16 +71,17 @@ cat > "$TC/bin/ask-claude" <<'WRAP'
 # the RC wairon first on PATH, only the project's own MCP config, no user/global MCP servers.
 # Prints the reply and, last, the session id. Model: $QA_MODEL (default sonnet).
 set -e
-dir="$1"; prompt_file="$2"; resume="${3:-}"
+dir="$1"; prompt_file="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; resume="${3:-}"
 export PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd):$PATH"
 cd "$dir"
 name=$(basename "$dir"); logdir="$(dirname "$dir")/_logs"; mkdir -p "$logdir"
 args=(-p "$(cat "$prompt_file")" --model "${QA_MODEL:-sonnet}" --strict-mcp-config --permission-mode bypassPermissions --output-format json)
 [ -f .mcp.json ] && args+=(--mcp-config .mcp.json)
 [ -n "$resume" ] && args+=(--resume "$resume")
-out=$(claude "${args[@]}" 2>&1) || true
+out=$(claude "${args[@]}" < /dev/null 2>&1) || true
 printf '%s\n' "$out" >> "$logdir/$name.jsonl"
-printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(j.result??s);console.log("\n[session_id] "+j.session_id+"  [cost_usd] "+j.total_cost_usd+"  [turns] "+j.num_turns);}catch{console.log(s)}})'
+# The JSON answer is the last line that starts with "{"; a warning line may come before it.
+printf '%s' "$out" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s.split(/\r?\n/).filter(l=>l.startsWith("{")).pop()??s);console.log(j.result??s);console.log("\n[session_id] "+j.session_id+"  [cost_usd] "+j.total_cost_usd+"  [turns] "+j.num_turns);}catch{console.log(s)}})'
 WRAP
 chmod +x "$TC/bin/wairon" "$TC/bin/ask-claude"
 
@@ -79,6 +89,14 @@ GOT="$("$TC/bin/wairon" --version)"
 if [ -n "$EXPECTED" ] && [ "$GOT" != "$EXPECTED" ]; then
   echo "installed wairon reports '$GOT', this checkout builds '$EXPECTED': the toolchain is stale" >&2
   exit 1
+fi
+# What an assistant's MCP config starts as `wairon` must be this build too (on Windows, via cmd).
+if command -v cmd >/dev/null 2>&1; then
+  VIA_CMD="$(cd "$TC/bin" && cmd //c "set PATH=$(native "$TC/bin");%PATH% && wairon --version" 2>&1 | tr -d '\r' | tail -1)"
+  if [ "$VIA_CMD" != "$GOT" ]; then
+    echo "\`wairon\` started through cmd reports '$VIA_CMD', not '$GOT': an assistant would run another build" >&2
+    exit 1
+  fi
 fi
 echo "Toolchain ready: wairon $GOT in $TC/bin"
 echo "  export PATH=\"$TC/bin:\$PATH\""
