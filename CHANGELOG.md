@@ -359,6 +359,11 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | † `MISSING_TYPE_SOURCE_PATH` | warning | a type names no `sourcePath`, so its shape is never compared with the code, and its subsystem already has code (a notice before that) | name the file that declares the type (`symbol` when the code name differs) |
 | † `TECH_LEAKAGE_IN_CODE` | warning | now also fires for a technology written by its plain name: common packages are known by default (`postgres` covers `pg`) | move the import behind the component that binds the technology |
 | `EXTERNAL_UNPINNED` | error | a declared external was never pinned (the project's gate composed with its externals, and the family root); `wairon lock` refuses until it is | `wairon externals pin` |
+| † `RETURN_TYPE_MISMATCH` | warning | a realizing function (TypeScript or Python) is annotated to return something the contract's `returns` cannot hold | fix the code, or restate the contract (a design change) |
+| † `UNDECLARED_PUBLIC_MEMBER` | warning | a public method or exported function of a realizing file that no contract, `symbol`, `exportedVia`, router or type declares, and nothing in the project uses | declare it, make it private, or remove it |
+| † `UNNARRATED_CALL` | warning | a method narrated at call level calls a contract method of a collaborator its narrative names, with no step for that call | narrate the call, declare it in `calls`, or remove it |
+| † `ROUTES_UNCHECKED` | warning | a Portal's files hold a router or route table that no `router:` names, so its routes are never compared with the design | name the router on the Portal implementation |
+| `REMOVABLE_FORWARDER` | warning | an Orchestrator only passes calls on, and every caller could make the call itself | remove the hop, or keep it with a reasoned `lint.allow` |
 
 Code-conformance findings can be recorded as classified debt in
 `rules.conformance.carried` instead of being allowed.
