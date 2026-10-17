@@ -188,7 +188,12 @@ methods:
           project's drift. A format-2 lock that still holds gets one more line: it is read in its
           original reading, and `wairon doctor --fix` carries it into the design reading without a
           review (approval_comparison.reexpress), after which adding or moving a sourcePath never
-          drifts it
+          drifts it. When the approval holds (the root's own entry is approved) yet some spec files
+          differ in bytes from the approved ones — a record read in the content reading sees a moved
+          authoring status or code linkage as a changed file, which the approval itself leaves out —
+          the verdict says so in those words ("the approval still holds", the differing files named,
+          and only what the approval leaves out moved) instead of "changed since approval" beside
+          "approved", and reports no drift.
         type: return
         outcome: verdict
     symbol: approvalVerdict
@@ -297,4 +302,4 @@ methods:
         outcome: empty
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-10-15T16:03:34.795Z'
+updatedAt: '2026-10-17T14:47:22.322Z'

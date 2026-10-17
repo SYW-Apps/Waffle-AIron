@@ -30,6 +30,17 @@ methods:
       schemaFingerprint export prints, cache it under the key and answer it. A child that fails,
       times out or prints nothing throws, naming the module and the cause; a failure is never
       cached, so the next call after a finished build tries again.
+  - name: findNewerWriter
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the release stamped on the project's approval record (validatorVersion in .wai/lock.json)
+      and on each generated guide (the wairon-version comment in .claude/CLAUDE.md and
+      .wai/context/wairon-guide.md), skipping any file that is missing or unreadable and any stamp
+      that is no wairon version. Of those stamps, answer the newest one that is newer than the
+      running version together with the file that carries it, or nothing when none is newer. Only
+      files are read; nothing is executed.
+    symbol: findNewerWriter
 status: complete
 createdAt: '2026-09-26T00:24:26.203Z'
-updatedAt: '2026-09-26T00:24:26.213Z'
+updatedAt: '2026-10-17T14:44:18.844Z'

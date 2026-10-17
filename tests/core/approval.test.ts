@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
@@ -519,6 +520,29 @@ describe('the verdict the lock gives on the tree', () => {
     expect(verdict.text).not.toMatch(/\(1 changed\)/);
     expect(verdict.text).toMatch(/worker/);
     expect(verdict.text).not.toContain('STALE');
+  });
+
+  it('does not say "changed since approval" beside an approval that holds: only what the approval leaves out moved', () => {
+    root = project();
+    const record = approve();
+    // A record read in the content reading (before lock format 3): its per-spec
+    // digests are the raw bytes, so a moved authoring status reads as a changed file.
+    const specs: Record<string, string> = {};
+    for (const rel of Object.keys(record.specs ?? {})) {
+      specs[rel] = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8').replace(/\r\n/g, '\n')).digest('hex');
+    }
+    delete (record as { specsReading?: unknown }).specsReading;
+    writeLockRecord({ ...record, specs, format: 2 });
+
+    updateSpec('component', 'worker', { status: 'complete' });
+    invalidateSpecCache();
+
+    const own = { key: '', state: 'approved' } as unknown as ProjectApproval;
+    const verdict = approvalVerdict([own]);
+    expect(verdict.text).not.toMatch(/changed since approval/);
+    expect(verdict.text).toContain('The approval still holds');
+    expect(verdict.text).toContain('authoring status');
+    expect(verdict.drifted).toBe(false);
   });
 
   it('names the LIMIT of a lock written before per-spec approval', () => {

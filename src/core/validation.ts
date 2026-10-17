@@ -322,14 +322,32 @@ function validateAgent(
   const isMeta = agent.tags.some((t) => rules.metaAgentTags.includes(t));
 
   if (rules.requireOwnedPaths && !isMeta && agent.ownedPaths.length === 0) {
-    issues.push(
-      issue(
-        'warning',
-        'NO_OWNED_PATHS',
-        `Agent "${agent.id}" has no ownedPaths. Add paths or tag as meta/guardian.`,
-        agent.id,
-      ),
-    );
+    // A component implementer is derived from the spec tree and owns the files
+    // its implementations name, planned or built. One that owns none has no
+    // sourcePath planned yet: the condition MISSING_SOURCE_PATH reports, so the
+    // same notice (an error under rules.conformance.requireCode), and the
+    // remedy is a planned sourcePath, never a meta tag.
+    const derived = agent.tags.includes('implementer') && agent.tags.includes('sdd');
+    if (derived) {
+      const strict = rules.conformance?.requireCode === true;
+      issues.push(
+        issue(
+          strict ? 'error' : 'notice',
+          'NO_OWNED_PATHS',
+          `Implementer "${agent.id}" owns no code path yet: plan a sourcePath on its component's implementation (sdd_write_narrative or sdd_update_spec \`sourcePath\`; the file need not exist yet). ${strict ? 'rules.conformance.requireCode makes an unplanned component an error.' : 'A planned file is a notice; rules.conformance.requireCode makes it an error.'}`,
+          agent.id,
+        ),
+      );
+    } else {
+      issues.push(
+        issue(
+          'warning',
+          'NO_OWNED_PATHS',
+          `Agent "${agent.id}" has no ownedPaths. Add paths, or tag it as meta/guardian if it owns no code.`,
+          agent.id,
+        ),
+      );
+    }
   }
 
   if (agent.targets.length === 0) {

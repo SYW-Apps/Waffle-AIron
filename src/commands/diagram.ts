@@ -106,6 +106,15 @@ function canvasRelations(options: DiagramOptions): ProjectRelations[] | undefine
 }
 
 export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
+  await writeDiagrams(options);
+  // Said once per run, and only for the default folder: a diagram written where
+  // the user asked (--out) is theirs to place.
+  if (options.out === undefined) {
+    logger.info('These files are derived from the spec tree and are rewritten by every run. Commit `.wai/docs/diagrams/` if you want the diagrams browsable on GitHub and in review; otherwise add it to .gitignore. wairon does not read them back.');
+  }
+}
+
+async function writeDiagrams(options: DiagramOptions): Promise<void> {
   assertProjectInitialized();
   const formatted = applyFormat(options);
   // Step 1: a --depth or a --subsystem that names nothing is refused before

@@ -13,7 +13,12 @@ methods:
         description: Validate agent ID uniqueness
         type: local
       - stepNumber: 2
-        description: Validate per-agent properties like owned paths
+        description: >-
+          Validate per-agent properties like owned paths. A component implementer derived from the
+          spec tree that owns no code path yet has no sourcePath planned: the condition
+          MISSING_SOURCE_PATH reports, so a notice (an error under rules.conformance.requireCode)
+          whose remedy is the planned sourcePath; any other non-meta agent without ownedPaths is a
+          warning naming the paths or the meta/guardian tag.
         type: local
       - stepNumber: 3
         description: Check for overlapping workspace file ownerships
@@ -969,4 +974,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T11:39:12.499Z'
+updatedAt: '2026-10-17T14:47:34.847Z'
