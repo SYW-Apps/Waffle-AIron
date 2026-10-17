@@ -32,6 +32,16 @@ jobs:
       contents: write
 
     steps:
+      # A run by hand releases main only: started on another branch, the
+      # checkout and the rebase below would tag that branch's unmerged commits.
+      - name: Refuse a manual run off main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Auto Tag releases main only; this run was started on $REF. Start it on main."
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

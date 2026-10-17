@@ -113,6 +113,7 @@ node qa/scripts/check-verdict.mjs
 Then open dev -> main with `[major]` or `[minor]` in the merge commit message, as usual. CI's
 "Release QA verdict" job re-checks the same thing. Check the merge message before confirming:
 GitHub's default message carries neither word, and every push to main releases at once, so a
-default merge releases a PATCH version. When a push to main released nothing (the release run
-failed), release by hand instead: Actions → Auto Tag → Run workflow, and pick `major`, `minor` or
-`patch`.
+default merge releases a PATCH version. If Auto Tag failed before it pushed a tag, release by hand:
+Actions → Auto Tag → Run workflow on `main`, and pick `major`, `minor` or `patch`. If Auto Tag pushed
+the tag but the tag-triggered Release workflow failed, rerun that Release workflow for the existing
+tag instead; running Auto Tag again would skip to the next version.
