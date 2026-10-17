@@ -14,7 +14,11 @@ import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotoc
 // ---------------------------------------------------------------------------
 
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
-export const DIST_CLI = path.join(REPO_ROOT, 'dist', 'cli', 'index.js');
+// WAIRON_E2E_CLI points the tier at another build of the CLI (the release QA
+// checklist runs the upgrade journey against the PACKED release candidate).
+export const DIST_CLI = process.env['WAIRON_E2E_CLI']
+  ? path.resolve(process.env['WAIRON_E2E_CLI'])
+  : path.join(REPO_ROOT, 'dist', 'cli', 'index.js');
 
 /** Fail FAST and clearly when the built artifact is missing — never rebuild
  *  from inside a test. */

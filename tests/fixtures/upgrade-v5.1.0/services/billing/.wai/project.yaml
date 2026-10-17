@@ -1,0 +1,21 @@
+schemaVersion: 1.0.0
+name: billing
+projectType: backend
+targets:
+  - type: claude
+    outputDir: .claude/agents
+    enabled: true
+rules:
+  noOverlappingOwnership: true
+  requireOwnedPaths: true
+  metaAgentTags:
+    - meta
+    - guardian
+    - architect
+  enforceReproducibility: true
+  generateComponentImplementers: false
+  sddRuleSeverity: {}
+paths:
+  specsDir: .wai/specs
+createdAt: '2026-10-17T11:46:26.403Z'
+updatedAt: '2026-10-17T11:46:26.403Z'

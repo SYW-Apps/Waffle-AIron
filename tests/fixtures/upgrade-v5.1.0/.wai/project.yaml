@@ -1,0 +1,24 @@
+schemaVersion: 1.0.0
+name: shop
+projectType: backend
+targets:
+  - type: claude
+    outputDir: .claude/agents
+    enabled: true
+  - type: agy
+    outputDir: .gemini/agents
+    enabled: true
+rules:
+  noOverlappingOwnership: true
+  requireOwnedPaths: true
+  metaAgentTags:
+    - meta
+    - guardian
+    - architect
+  enforceReproducibility: true
+  generateComponentImplementers: true
+  sddRuleSeverity: {}
+paths:
+  specsDir: .wai/specs
+createdAt: '2026-10-17T11:46:25.937Z'
+updatedAt: '2026-10-17T11:46:25.937Z'

@@ -1,0 +1,11 @@
+id: orders-billing-client
+name: Billing Client
+description: Calls the billing service
+subsystem: orders
+componentType: Adapter
+owns: []
+dependsOn:
+  - billing::billing-portal
+status: complete
+createdAt: '2026-10-17T11:46:27.508Z'
+updatedAt: '2026-10-17T11:46:28.199Z'

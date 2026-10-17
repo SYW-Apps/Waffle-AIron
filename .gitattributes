@@ -1,3 +1,7 @@
 # Shell scripts must always use LF so they run on Linux CI runners
 # (a CRLF shebang breaks `#!/usr/bin/env bash` with "bad interpreter").
 *.sh text eol=lf
+
+# Upgrade fixtures are the exact bytes a published release wrote (LF): never converted.
+tests/fixtures/upgrade-v*/** -text
+tests/fixtures/upgrade-v*/GENERATE.md text

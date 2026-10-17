@@ -1,0 +1,16 @@
+id: iorders-billing-client
+name: IBillingClient
+description: Client contract for charging
+component: orders-billing-client
+methods:
+  - name: charge
+    description: Charge one order
+    signature: 'charge(orderId: string): string'
+    returns: string
+    params:
+      - name: orderId
+        type: string
+        description: The orderId
+status: complete
+createdAt: '2026-10-17T11:46:27.518Z'
+updatedAt: '2026-10-17T11:46:28.316Z'

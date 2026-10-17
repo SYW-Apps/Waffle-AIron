@@ -1,0 +1,12 @@
+id: orders-portal
+name: Orders Portal
+description: HTTP front door for orders
+subsystem: orders
+componentType: Portal
+owns: []
+dependsOn:
+  - orders-orch
+portalType: HTTP_API
+status: complete
+createdAt: '2026-10-17T11:46:27.573Z'
+updatedAt: '2026-10-17T11:46:28.219Z'

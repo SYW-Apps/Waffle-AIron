@@ -1,0 +1,24 @@
+id: icatalog-orch
+name: ICatalogOrchestrator
+description: Workflows for products
+component: catalog-orch
+methods:
+  - name: create
+    description: Create one product
+    signature: 'create(record: string): string'
+    returns: string
+    params:
+      - name: record
+        type: string
+        description: The record
+  - name: find
+    description: Look one product up
+    signature: 'find(key: string): string'
+    returns: string
+    params:
+      - name: key
+        type: string
+        description: The key
+status: complete
+createdAt: '2026-10-17T11:46:26.873Z'
+updatedAt: '2026-10-17T11:46:28.267Z'

@@ -103,6 +103,29 @@ jobs:
       - name: Run e2e journeys (built artifact)
         run: npm run test:e2e
 
+  # The release gate: dev -> main merges only carry a QA verdict the code still
+  # matches. See docs/release-qa.md. Runs only on pull requests into main.
+  release-qa-verdict:
+    name: Release QA verdict
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      # The pull request's own head (not the synthetic merge commit), with the
+      # whole history: the check asks whether the QA'd RC is an ancestor of it.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: A passing verdict covers this head
+        run: node qa/scripts/check-verdict.mjs
+
   docker-build:
     name: Build Docker image (no push)
     runs-on: ubuntu-latest

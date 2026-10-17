@@ -1,0 +1,26 @@
+id: orders-store-impl
+name: Orders store impl
+description: Keeps records by key
+contract: iorders-store
+methods:
+  - name: save
+    narrative:
+      - stepNumber: 1
+        description: Write the record under its key
+        type: local
+      - stepNumber: 2
+        description: Saved
+        type: return
+        outcome: success
+  - name: load
+    narrative:
+      - stepNumber: 1
+        description: Read the record stored under the key
+        type: local
+      - stepNumber: 2
+        description: Record returned
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-10-17T11:46:27.632Z'
+updatedAt: '2026-10-17T11:46:28.451Z'

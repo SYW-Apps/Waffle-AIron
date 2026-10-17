@@ -1,0 +1,38 @@
+id: orders-orch-impl
+name: Orders orch impl
+description: Runs the order workflows
+contract: iorders-orch
+methods:
+  - name: create
+    narrative:
+      - stepNumber: 1
+        description: Check the record is not empty
+        type: local
+      - stepNumber: 2
+        description: Charge the order
+        type: call
+        targetComponent: orders-billing-client
+        targetMethod: charge
+      - stepNumber: 3
+        description: Store the record
+        type: call
+        targetComponent: orders-repo
+        targetMethod: put
+      - stepNumber: 4
+        description: Record accepted
+        type: return
+        outcome: success
+  - name: find
+    narrative:
+      - stepNumber: 1
+        description: Fetch the record
+        type: call
+        targetComponent: orders-repo
+        targetMethod: get
+      - stepNumber: 2
+        description: Record returned
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-10-17T11:46:27.651Z'
+updatedAt: '2026-10-17T11:46:28.425Z'

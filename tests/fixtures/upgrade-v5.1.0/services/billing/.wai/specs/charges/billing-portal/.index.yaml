@@ -1,0 +1,12 @@
+id: billing-portal
+name: Billing Portal
+description: HTTP front door for charges
+subsystem: charges
+componentType: Portal
+owns: []
+dependsOn:
+  - billing-orch
+portalType: HTTP_API
+status: complete
+createdAt: '2026-10-17T11:46:27.400Z'
+updatedAt: '2026-10-17T11:46:28.258Z'

@@ -1,0 +1,9 @@
+id: catalog
+name: Catalog
+description: Catalog for the shop
+parentSystem: Shopfront
+publicInterfaces: []
+trustedLinks: []
+status: complete
+createdAt: '2026-10-17T11:46:26.796Z'
+updatedAt: '2026-10-17T11:46:28.116Z'

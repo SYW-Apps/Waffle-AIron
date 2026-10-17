@@ -1,0 +1,30 @@
+id: orders-portal-impl
+name: Orders portal impl
+description: Maps order routes onto the workflows
+contract: iorders-portal
+methods:
+  - name: post
+    narrative:
+      - stepNumber: 1
+        description: Create the record
+        type: call
+        targetComponent: orders-orch
+        targetMethod: create
+      - stepNumber: 2
+        description: Respond 201
+        type: return
+        outcome: success
+  - name: fetch
+    narrative:
+      - stepNumber: 1
+        description: Look the record up
+        type: call
+        targetComponent: orders-orch
+        targetMethod: find
+      - stepNumber: 2
+        description: Respond 200
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-10-17T11:46:27.662Z'
+updatedAt: '2026-10-17T11:46:28.433Z'

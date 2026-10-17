@@ -169,6 +169,16 @@ pass and is where a mis-relocated target is obvious.
 
 ---
 
+## Releasing
+
+A release is a dev to main merge, and it goes through the release QA gate first: a release
+candidate, the automated checks, a fixed panel of persona seats, and a committed verdict that CI
+reads on pull requests into main. The procedure and the reasons are in `docs/release-qa.md`; the
+commands are in `qa/README.md`. The upgrade test (`tests/e2e/upgrade-from-v5.1.0.test.ts`) runs on
+every pull request, so a CHANGELOG upgrade step that stops working is found when the code changes.
+
+---
+
 ## Untracked paths are somebody else's work in flight
 
 Run `git status` before you start. This repo regularly carries an uncommitted

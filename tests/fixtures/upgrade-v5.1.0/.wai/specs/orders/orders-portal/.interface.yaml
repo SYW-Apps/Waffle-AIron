@@ -1,0 +1,32 @@
+id: iorders-portal
+name: IOrdersPortal
+description: HTTP surface for orders
+component: orders-portal
+methods:
+  - name: post
+    description: Accept a new order
+    signature: 'post(body: string): string'
+    returns: string
+    params:
+      - name: body
+        type: string
+        description: The body
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /orders
+  - name: fetch
+    description: Return one order
+    signature: 'fetch(key: string): string'
+    returns: string
+    params:
+      - name: key
+        type: string
+        description: The key
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /orders/{key}
+status: complete
+createdAt: '2026-10-17T11:46:27.613Z'
+updatedAt: '2026-10-17T11:46:28.335Z'
