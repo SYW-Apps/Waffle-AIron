@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { captureBuildStamp, isBuildStale, type BuildStamp } from '../../src/mcp/build.js';
+import { captureBuildStamp, isBuildStale, findNewerWriter, type BuildStamp } from '../../src/mcp/build.js';
 import { assessBuildFreshness, createMcpServer, markStale, schemaFingerprint } from '../../src/mcp/server.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
@@ -208,5 +208,51 @@ describe('the guard on the tools', () => {
     const status = await call('sdd_get_status', {});
     expect(textOf(status).startsWith('⚠ STALE SERVER:')).toBe(true);
     expect(textOf(status)).not.toContain('REFUSED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Two installs on one machine: a server OLDER than the wairon that last wrote
+// the project says so on the two answers a session builds on.
+// ---------------------------------------------------------------------------
+
+describe('a server older than the wairon that wrote the project', () => {
+  const NEWER = '99.0.0';
+
+  it('names the newest release stamped on the lock or a guide, only when it is newer than the running one', () => {
+    const root = tempDir('wairon-skew-');
+    fs.mkdirSync(path.join(root, '.wai', 'context'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
+    expect(findNewerWriter(root, '5.1.1-dev.121')).toBeNull();
+
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ validatorVersion: '5.1.1-dev.119' }));
+    expect(findNewerWriter(root, '5.1.1-dev.121')).toBeNull();
+    expect(findNewerWriter(root, '5.1.1-dev.23')).toEqual({ file: '.wai/lock.json', version: '5.1.1-dev.119' });
+
+    fs.writeFileSync(path.join(root, '.claude', 'CLAUDE.md'), 'x\n<!-- wairon-version: 5.1.1-dev.121 -->\n');
+    expect(findNewerWriter(root, '5.1.1-dev.23')).toEqual({ file: '.claude/CLAUDE.md', version: '5.1.1-dev.121' });
+
+    // A stamp that is no version, or a lock that cannot be read, compares with nothing.
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), '{ not json');
+    fs.writeFileSync(path.join(root, '.claude', 'CLAUDE.md'), '<!-- wairon-version: test -->');
+    expect(findNewerWriter(root, '5.1.1-dev.23')).toBeNull();
+  });
+
+  it('leads sdd_get_status and trails sdd_validate_tree with the banner, in both channels', async () => {
+    const { call, root } = await serverStandingFor(rebuiltEntry(schemaFingerprint()));
+    // The server of this test is not stale: only the project is newer.
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ validatorVersion: NEWER }));
+
+    const status = await call('sdd_get_status', {});
+    expect(textOf(status)).toMatch(/OLDER SERVER: this MCP server is wairon \S+, but \.wai\/lock\.json was written by wairon 99\.0\.0/);
+    expect(textOf(status)).toContain('where wairon');
+
+    const validated = await call('sdd_validate_tree', {});
+    expect(textOf(validated)).toContain('OLDER SERVER');
+    expect(textOf(validated).startsWith('⚠ OLDER SERVER')).toBe(false);
+
+    fs.unlinkSync(path.join(root, '.wai', 'lock.json'));
+    const quiet = await call('sdd_get_status', {});
+    expect(textOf(quiet)).not.toContain('OLDER SERVER');
   });
 });

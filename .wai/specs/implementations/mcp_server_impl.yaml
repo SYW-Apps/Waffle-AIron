@@ -38,6 +38,19 @@ methods:
         targetMethod: assessBuildFreshness
       - stepNumber: 5
         description: >-
+          On the two answers a session builds on, sdd_get_status and sdd_validate_tree, ask the
+          build adapter whether the wairon that last wrote the bound project (the release stamped on
+          its approval record or a generated guide) is newer than this server. When it is, the
+          answer carries an OLDER SERVER banner naming that file and release and the way out (update
+          the old install, then reconnect): leading on sdd_get_status, trailing on
+          sdd_validate_tree, plus olderServer on the structured content where the tool has one. Two
+          installs on one machine is how an assistant ends up on a server older than the CLI that
+          wrote the project.
+        type: register
+        targetComponent: mcp_build_adapter
+        targetMethod: findNewerWriter
+      - stepNumber: 6
+        description: >-
           Wrap every spec-write tool registered below in the tree's cross-process write lock, taken
           through the core client adapter before the handler runs on each call — the lock also
           re-reads the tree, so the handler's read-modify-write starts from what another session
@@ -47,40 +60,40 @@ methods:
         type: register
         targetComponent: mcp_core_adapter
         targetMethod: lockTree
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           …and released through the core client adapter once the handler has answered, a refusal or
           an exception included
         type: register
         targetComponent: mcp_core_adapter
         targetMethod: unlockTree
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Register tool 'listAgents', which reads the resolved agent registry through the core
           client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadRegistry
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Register tool 'getAgent', which retrieves a single resolved agent's details from the same
           registry
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadRegistry
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Register the validation tool, which runs the owner's gate (validateProject) or the family
           run (validateFamily) through the validator client adapter
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 10
+      - stepNumber: 11
         description: Register loader tools to fetch system, subsystem, and component specs from spec_loader
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Resolve the bound root's chaining context through the core adapter; when the root is a
           chained subproject, announce the parent project, the mounting subsystem id, and the
@@ -90,7 +103,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Return the bare McpServer instance; the MCP portal mounts its own surface (resources,
           prompts, the hosted-tool advertisement) on it
@@ -184,4 +197,4 @@ methods:
         outcome: unreadable
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T12:11:26.678Z'
+updatedAt: '2026-10-17T14:44:30.850Z'

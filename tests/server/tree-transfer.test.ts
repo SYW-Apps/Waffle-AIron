@@ -174,6 +174,35 @@ describe('hosted spec-tree transfer', () => {
     expect(fs.readFileSync(targetConfig, 'utf8')).toContain('Source System');
   });
 
+  it('carries an approval record in only for an importer who may approve the destination', async () => {
+    createPlacedProject(cfg, MASTER, 'source');
+    createPlacedProject(cfg, MASTER, 'plain');
+    createPlacedProject(cfg, MASTER, 'approved');
+    const sourceRoot = seedTree('source', 'Source System');
+    // The source tree carries an approval record, as a committed tree does.
+    const record = JSON.stringify({ format: 3, stateId: { algorithm: 'a', digest: 'd' }, lockedAt: '2026-01-01T00:00:00.000Z', status: 'ready' });
+    fs.writeFileSync(path.join(sourceRoot, '.wai', 'lock.json'), record);
+    allow(dataDir, 'u-admin', 'project:read', 'project', 'source');
+    allow(dataDir, 'u-admin', 'project:admin', 'project', 'plain');
+    allow(dataDir, 'u-admin', 'project:admin', 'project', 'approved');
+    allow(dataDir, 'u-admin', 'approval:decide', 'project', 'approved');
+    const token = mintUserToken(dataDir, { id: 'k-admin', userId: 'u-admin', projects: ['source', 'plain', 'approved'] });
+    const archiveBase64 = JSON.parse((await call(token, 'source', 'sdd_host_export_tree')).text).archiveBase64;
+
+    // project:admin without approval:decide: the design arrives, its approval does not.
+    const plain = await call(token, 'plain', 'sdd_host_import_tree', { archiveBase64 });
+    expect(plain.isError, plain.text).toBe(false);
+    expect(JSON.parse(plain.text).approvalsDropped).toEqual(['.']);
+    expect(fs.existsSync(path.join(dataDir, 'projects', 'plain', '.wai', 'project.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(dataDir, 'projects', 'plain', '.wai', 'lock.json'))).toBe(false);
+
+    // With approval:decide over the destination, the record comes along.
+    const approved = await call(token, 'approved', 'sdd_host_import_tree', { archiveBase64 });
+    expect(approved.isError, approved.text).toBe(false);
+    expect(JSON.parse(approved.text).approvalsDropped).toBeUndefined();
+    expect(fs.readFileSync(path.join(dataDir, 'projects', 'approved', '.wai', 'lock.json'), 'utf8')).toBe(record);
+  });
+
   it('refuses export without project:read and import without project:admin', async () => {
     createPlacedProject(cfg, MASTER, 'demo');
     seedTree('demo', 'Demo');

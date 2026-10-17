@@ -216,9 +216,12 @@ wairon init                 # bootstrap .wai/ (spec tree, context, skills, MCP r
 #    spec tree through the sdd_* MCP tools.
 
 wairon status               # the tree, its authoring readiness, and its approval state
-wairon validate             # architecture-conformance gate (--ci in CI)
+wairon validate --ci        # architecture-conformance gate; run it until it passes clean:
+                            # CI fails on every warning, draft-related ones excepted
 
-# 2. Approve: once it validates, a human approves the design.
+# 2. Approve: once `validate --ci` passes, a human approves the design.
+#    (`lock` accepts a design that still has warnings or drafts - approval is not
+#    status - but it says how many warnings CI would fail on, and CI will.)
 wairon lock                 # records the approval in .wai/lock.json
 git add .wai && git commit -m "Approve the design"
 

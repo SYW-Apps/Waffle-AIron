@@ -123,26 +123,70 @@ methods:
         targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Resolve the caller's project:write permission over the project
+        description: >-
+          Resolve the caller's approval:decide permission over the project: a lock is the project's
+          approval
         type: call
         targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
+        description: May the caller approve the project themselves?
+        type: branch
+        condition: the caller's approval:decide over the project resolves yes
+        onFalseStep: 7
+      - stepNumber: 4
+        description: >-
+          Authorized: lock directly via the admin plane's pre-authorized entry with the caller as
+          the approver, forwarding the project id — a member's own record id when a member is
+          locked; no qualifier exists any more
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedLock
+      - stepNumber: 5
+        description: Build a completed ProjectActionOutcome (action project:lock) carrying the lock record
+        type: local
+      - stepNumber: 6
+        description: Executed — continue to auditing
+        type: jump
+        toStep: 17
+      - stepNumber: 7
+        description: >-
+          Resolve the caller's project:write permission over the project: only a writer may request
+          the lock for someone else to approve
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 8
+        description: >-
+          May the caller request the lock? A writer at the project rung may (a subsystem's yes never
+          reaches a whole-tree action), and so may a caller whose approval:decide resolves to
+          approval
+        type: branch
+        condition: >-
+          project:write over the project resolves no and approval:decide does not resolve to
+          approval
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Reject the lock; nothing is requested
+        type: throw
+        error: >-
+          Forbidden — caller may not lock this project: approving it needs approval:decide,
+          requesting it needs project:write
+      - stepNumber: 10
         description: >-
           Read the subsystem rungs the caller meets in the project through the authorization seam: a
-          lock signs the whole tree, so it is a whole-tree write
+          lock signs the whole tree
         type: call
         targetComponent: authorization
         targetMethod: reach
-      - stepNumber: 4
+      - stepNumber: 11
         description: >-
-          Does a subsystem rule deny the caller write on any subsystem of the project? A subsystem
-          yes never authorizes a lock — the project rung decides it — but nobody signs a subsystem
-          they may not change
+          Does a subsystem rule deny the caller write on any subsystem of the project? Nobody
+          requests a signature over a subsystem they may not change
         type: branch
-        condition: the project resolves yes or approval and a subsystem rung in it denies the caller write
-        onFalseStep: 6
-      - stepNumber: 5
+        condition: the caller may write the project and a subsystem rung in it denies the caller write
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
           Refuse the lock, naming every subsystem denied and the rung that decided each; nothing is
           requested
@@ -150,36 +194,7 @@ methods:
         error: >-
           Forbidden — a lock signs the whole tree, and the caller may not change these subsystems:
           <each, decided at its rung>
-      - stepNumber: 6
-        description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
-        type: switch
-        'on': the resolved effective permission value
-        cases:
-          - value: 'yes'
-            step: 7
-          - value: 'no'
-            step: 10
-        defaultStep: 11
-      - stepNumber: 7
-        description: >-
-          Authorized: lock directly via the admin plane's pre-authorized entry, forwarding the
-          project id — a member's own record id when a member is locked; no qualifier exists any
-          more
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedLock
-      - stepNumber: 8
-        description: Build a completed ProjectActionOutcome (action project:lock) carrying the lock record
-        type: local
-      - stepNumber: 9
-        description: Executed — continue to auditing
-        type: jump
-        toStep: 15
-      - stepNumber: 10
-        description: Reject the lock
-        type: throw
-        error: Forbidden — caller may not lock this project
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Approval required: capture the gate identity of the project's tree (a member's own tree
           when the project is a member) through the admin plane, so the approved execution can
@@ -187,41 +202,41 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: gateIdentity
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
           member's when a member is locked), the requester's subject and token id, expiry, a
           redacted human summary naming the project, and gateStateId = the identity just captured.
           No qualifier is recorded: the record id alone confines the approved action
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 14
+      - stepNumber: 16
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 17
+        endStep: 19
         catches:
           - error: audit append failure
-            step: 18
-      - stepNumber: 16
+            step: 20
+      - stepNumber: 18
         description: Append the redacted project-lifecycle audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 17
+      - stepNumber: 19
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 19
-      - stepNumber: 18
+        toStep: 21
+      - stepNumber: 20
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 19
+      - stepNumber: 21
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -665,20 +680,27 @@ methods:
         type: loop
         condition: the request is still pending and the timeout has not elapsed
         loopKind: while
-        endStep: 9
+        endStep: 10
       - stepNumber: 8
         description: Wait a short interval
         type: local
       - stepNumber: 9
+        description: >-
+          Realize any lazy expiry: mark every pending request past its deadline expired, so the
+          re-read below sees a request that timed out as expired rather than still pending
+        type: call
+        targetComponent: approval_repository
+        targetMethod: expirePending
+      - stepNumber: 10
         description: Re-read the request's current state
         type: call
         targetComponent: approval_repository
         targetMethod: getById
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the request in its current state (decided/completed, or still pending at timeout)
         type: return
         outcome: the request's current state
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-03T17:58:49.837Z'
+updatedAt: '2026-10-17T16:25:44.818Z'

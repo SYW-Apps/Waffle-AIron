@@ -127,7 +127,7 @@ methods:
         endStep: 11
         catches:
           - error: any extraction failure
-            step: 17
+            step: 18
       - stepNumber: 11
         description: Extract the archive into the staging directory.
         type: call
@@ -135,33 +135,41 @@ methods:
         targetMethod: extractTreeArchive
       - stepNumber: 12
         description: >-
+          When the caller asked for dropApprovals (it may not approve the destination), leave the
+          staged roots' approval records out before anything moves, so no approval is carried in.
+        type: call
+        targetComponent: tree_archive_adapter
+        targetMethod: dropStagedApprovals
+      - stepNumber: 13
+        description: >-
           Swap the staged tree into place, moving any previous tree aside into one timestamped
           backup.
         type: call
         targetComponent: tree_archive_adapter
         targetMethod: commitStagedTree
-      - stepNumber: 13
+      - stepNumber: 14
         description: Remove the now-empty staging directory (best effort).
         type: call
         targetComponent: tree_archive_adapter
         targetMethod: discardStagingDir
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Drop the spec repository's cached index — this tree arrived as a directory swap, bypassing
           every save path the cache observes.
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Assemble the TreeImportResult: destination, project name and roots from the envelope, file
-          count, whether a tree was replaced, and the backup path when one was taken.
+          count, whether a tree was replaced, the backup path when one was taken, and the roots
+          whose approval record was left out when any was.
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return what was written and where the backup went.
         type: return
         outcome: success
-      - stepNumber: 17
+      - stepNumber: 18
         label: cleanupAndRethrow
         description: >-
           Discard the staging directory, then re-raise — a failed import leaves neither a
@@ -169,10 +177,10 @@ methods:
         type: call
         targetComponent: tree_archive_adapter
         targetMethod: discardStagingDir
-      - stepNumber: 18
+      - stepNumber: 19
         description: Re-raise the extraction failure to the caller.
         type: throw
         error: the original extraction failure
 status: complete
 createdAt: '2026-08-12T17:26:02.381Z'
-updatedAt: '2026-09-12T17:38:29.381Z'
+updatedAt: '2026-10-17T14:48:24.959Z'

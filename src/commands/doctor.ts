@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
+import { execFileSync, execSync, type ExecSyncOptionsWithStringEncoding } from 'child_process';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -44,7 +45,8 @@ import {
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot } from '../utils/fs.js';
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
-import { activeTargetTypes } from '../models/project.js';
+import { activeTargetTypes, isPart } from '../models/project.js';
+import { isNewerVersion } from '../utils/version.js';
 import { computeGateStateId, validateFamily } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
@@ -122,7 +124,7 @@ function stampVerdict(content: string | null): { mark: Mark; note: string } {
  * file that exists — a stale path (moved repo, wrong machine) registers fine but
  * silently fails to launch, leaving the agent with zero wairon tools.
  */
-function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
+function mcpEntryHealth(settingsPath: string, checkLaunched = true, projectScoped = true): { mark: Mark; note: string; remedy?: string } {
   if (!fs.existsSync(settingsPath)) return { mark: 'warn', note: 'not registered' };
   let entry: { command?: string; args?: unknown[] } | undefined;
   try {
@@ -140,7 +142,71 @@ function mcpEntryHealth(settingsPath: string): { mark: Mark; note: string } {
       return { mark: 'error', note: `registered but the server path is missing — ${scriptPath}` };
     }
   }
+  // Which build the entry would start, against the CLI that is running now: two
+  // installs on one machine is how an assistant ends up on an older build.
+  const launched = checkLaunched ? launchedVersion(entry) : null;
+  if (launched !== null && launched !== WAIRON_VERSION) {
+    const how = entry.command === 'node' ? `by the path ${String(entry.args?.[0])}` : 'as `wairon` on the PATH';
+    const older = isNewerVersion(WAIRON_VERSION, launched);
+    return {
+      mark: 'warn',
+      note: `registered, but it launches wairon ${launched} ${how}, while this CLI is ${WAIRON_VERSION}`
+        + (older ? ': the assistant\'s tools are an OLDER build than the CLI' : ': a different build than this CLI'),
+      remedy: entry.command === 'wairon'
+        ? 'two installs? find them with `where wairon` (Windows) or `which -a wairon`, update or remove the old one, then reconnect the assistant'
+        : 'run `wairon mcp install` to point it at this CLI, then reconnect the assistant',
+    };
+  }
+  // A committed .mcp.json that names one machine's toolchain by an absolute path
+  // breaks on every other machine, and keeps launching that toolchain after an upgrade.
+  if (projectScoped && entry.command === 'node' && Array.isArray(entry.args) && typeof entry.args[0] === 'string' && path.isAbsolute(entry.args[0])) {
+    return {
+      mark: 'warn',
+      note: `registered, but it launches a toolchain by an absolute path (${entry.args[0]}): machine-specific in a committed file`,
+      remedy: 'run `wairon mcp install --backend claude` to write the portable entry',
+    };
+  }
   return { mark: 'ok', note: 'registered' };
+}
+
+/**
+ * The wairon version a registered MCP entry would start, when it can be told
+ * cheaply and safely: `wairon` on the PATH answers `--version` (the same
+ * command the developer's shell would run), and a `node <script>` entry names
+ * a built @wairon/cli package whose manifest holds the version. Nothing else
+ * from a repository's .mcp.json is ever executed. Null when it cannot be told.
+ */
+function launchedVersion(entry: { command?: string; args?: unknown[] }): string | null {
+  const valid = (v: string): string | null => (/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v) && v !== '0.0.0-dev' ? v : null);
+  if (entry.command === 'wairon') {
+    try {
+      // Windows resolves `wairon` through its .cmd shim, which only a shell runs;
+      // the command line is a constant, never built from the repository.
+      const opts: ExecSyncOptionsWithStringEncoding = { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true };
+      const out = process.platform === 'win32' ? execSync('wairon --version', opts) : execFileSync('wairon', ['--version'], opts);
+      return valid(out.trim().split(/\s+/).pop() ?? '');
+    } catch {
+      return null;
+    }
+  }
+  if (entry.command === 'node' && Array.isArray(entry.args) && typeof entry.args[0] === 'string') {
+    let dir = path.dirname(path.resolve(getProjectRoot(), entry.args[0]));
+    for (;;) {
+      const manifest = path.join(dir, 'package.json');
+      if (fs.existsSync(manifest)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8')) as { name?: string; version?: string };
+          return pkg.name === '@wairon/cli' && typeof pkg.version === 'string' ? valid(pkg.version) : null;
+        } catch {
+          return null;
+        }
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) return null;
+      dir = parent;
+    }
+  }
+  return null;
 }
 
 /** doctor_options — the flags of `wairon doctor`. */
@@ -573,7 +639,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     // Claude loads server definitions from .mcp.json (project scope) — NOT
     // .claude/settings.json, whose mcpServers block it ignores.
     const h = mcpEntryHealth(claudeMcpConfigPath(false));
-    line(tally, h.mark, `Claude (project .mcp.json): ${h.note}${h.mark === 'ok' ? '' : ' — run `wairon mcp install --backend claude`'}`);
+    line(tally, h.mark, `Claude (project .mcp.json): ${h.note}${h.mark === 'ok' ? '' : ` — ${h.remedy ?? 'run `wairon mcp install --backend claude`'}`}`);
   }
   if (wantGemini) {
     // Antigravity loads MCP from its GLOBAL mcp_config.json — that's the file that
@@ -585,8 +651,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       line(tally, 'ok', `Antigravity: not installed on this machine (no ${agyHome}) — nothing to register. `
         + 'Once it is: `wairon mcp install --backend gemini --global`');
     } else {
-      const hg = mcpEntryHealth(path.join(agyHome, 'mcp_config.json'));
-      line(tally, hg.mark, `Antigravity (global mcp_config.json): ${hg.note}${hg.mark === 'ok' ? '' : ' — run `wairon mcp install --backend gemini --global`'}`);
+      const hg = mcpEntryHealth(path.join(agyHome, 'mcp_config.json'), true, false);
+      line(tally, hg.mark, `Antigravity (global mcp_config.json): ${hg.note}${hg.mark === 'ok' ? '' : ` — ${hg.remedy ?? 'run `wairon mcp install --backend gemini --global`'}`}`);
     }
     // The project .gemini/settings.json is the Gemini-CLI convention; Antigravity ignores it.
     const projPath = fromProjectRoot('.gemini', 'settings.json');
@@ -693,6 +759,15 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // member below it — after the chaining migration, so a legacy mount it moved
   // into `members` is a member here — the way the family run validates them.
   repairMembers();
+
+  // The derived documents describe the tree as it stands NOW: the first
+  // regeneration above ran before the spec repairs, the chaining migration and
+  // the members' repairs moved it, so it is written once more, last.
+  try {
+    syncContextFiles();
+  } catch (e) {
+    console.log(`  ${icon('error')} Regeneration failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
 
   await repairMcpRegistration(options, targets);
 
@@ -934,8 +1009,62 @@ function repairMembers(): void {
     runWithProjectRoot(member.directory, () => {
       if (!projectConfigExists()) return;
       repairProjectSpecs(member.alias);
+      repairMemberSurfaces(member.alias);
     });
   }
+}
+
+/**
+ * --fix's cascade, the agent surfaces of one member (bound to its root, inside
+ * the parent's): the derived context documents, the skills, the injected guide
+ * and the project-scoped .mcp.json, so an assistant opened in the member's own
+ * folder has the wairon tools and a current guide. The same rules as the
+ * parent's: only this project's own files are written, and the machine-wide
+ * registrations (a global Antigravity config) stay the parent's one plan, so a
+ * member never asks a second time for a write outside the project root. A
+ * part has no agent surfaces of its own: its parent's serve it.
+ */
+function repairMemberSurfaces(alias: string): void {
+  const who = whoPrefix(alias);
+  try {
+    const config = loadProjectConfig();
+    if (!config || isPart(config)) return;
+    const targets = activeTargetTypes(config);
+    syncContextFiles();
+    exportSddSkills(targets);
+    const guides = reinjectLocalGuides(getProjectRoot(), targets);
+    console.log(`  ${icon('ok')} ${who}Regenerated context files, skills, and ${guides.length} local guide(s).`);
+    if (targets.includes('claude')) {
+      const install: McpInstallOptions = { backend: 'claude', global: false };
+      const writes = planMcpInstall(install);
+      if (writes.some((w) => w.outsideProject)) return;
+      if (writes.some((w) => !w.upToDate)) {
+        runMcpInstall(install);
+        console.log(`  ${icon('ok')} ${who}Registered the wairon MCP server in its .mcp.json.`);
+      }
+    }
+  } catch (e) {
+    console.log(`  ${icon('warn')} ${who}Could not repair its agent surfaces: ${e instanceof Error ? e.message : String(e)} — run \`wairon doctor --fix\` in ${getProjectRoot()}.`);
+  }
+}
+
+/**
+ * What an assistant opened in this project's own folder lacks, bound to the
+ * project's root: the project-scoped .mcp.json entry, the injected guide, the
+ * derived context documents, the skills. Read-only; none for a part.
+ */
+function memberSurfaceProblems(): string[] {
+  const config = loadProjectConfig();
+  if (!config || isPart(config)) return [];
+  const targets = activeTargetTypes(config);
+  const problems: string[] = [];
+  if (targets.includes('claude') && mcpEntryHealth(claudeMcpConfigPath(false), false).mark !== 'ok') problems.push('no working .mcp.json entry');
+  const stale = new Set(staleDerivedDocs().map((f) => path.resolve(f)));
+  if (derivedDocPaths().some((p) => !pathExists(p) || stampVerdict(readFileOrNull(p)).mark !== 'ok' || stale.has(path.resolve(p)))) problems.push('stale or missing context');
+  const guides = targets.map((t) => localGuideFilePath(getProjectRoot(), t)).filter((g): g is string => g !== null);
+  if (guides.some((g) => !pathExists(g) || stampVerdict(readFileOrNull(g)).mark !== 'ok')) problems.push('stale or missing guide');
+  if (targets.some((t) => { const f = checkSkillFreshness(t); return f.dir && (f.stale.length > 0 || f.missing.length > 0); })) problems.push('stale or missing skills');
+  return problems;
 }
 
 /** Plain doctor: one line per member with repairs pending, planned bound to its root; silent when none has any. */
@@ -947,6 +1076,7 @@ function reportMemberRepairs(tally: Tally): void {
       const spellings = repairTypeSpellings(false);
       const reach = migrateReachability(false);
       return {
+        surfaces: memberSurfaceProblems(),
         reachRewrites: reach.rewrites.length,
         reachReported: reach.reported.length,
         specialists: retireSpecialists(false).retyped.length,
@@ -967,6 +1097,7 @@ function reportMemberRepairs(tally: Tally): void {
       counts.authorNeeded ? `${counts.authorNeeded} position(s) needing an author` : '',
       counts.reachRewrites ? `${counts.reachRewrites} reachability rewrite(s)` : '',
       counts.reachReported ? `${counts.reachReported} reachability form(s) for an author` : '',
+      counts.surfaces.length ? `agent surfaces: ${counts.surfaces.join(', ')}` : '',
     ].filter(Boolean);
     if (parts.length === 0) continue;
     const where = member.inside

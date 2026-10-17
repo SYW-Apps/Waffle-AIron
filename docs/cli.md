@@ -123,7 +123,33 @@ warnings as errors (notices are printed and counted, never fatal).
   compiler that read it — `Code read at grade exact with TypeScript 5.9.3
   (wairon's own copy)` on a project with TypeScript 7 or none, `(the project's
   own)` on TypeScript 5 or 6 — or `Code: none read yet` before any file the design
-  names exists.
+  names exists. Then, per language, what that reading CHECKED and what it did
+  not: `typescript: 9 file(s) at grade exact, checked methods, params, returns
+  (where annotated), public members, imports, calls, routes, data types`;
+  `python: 4 file(s) at grade pattern with its signature reader, checked methods,
+  params, returns (where annotated), public members, imports, calls through
+  declared receivers — not checked: routes, data types`; a language read by its
+  pattern table alone checks methods only and names everything else. A family run
+  prints each project's reading under its verdict, and the closing line repeats it
+  in a few words (`Code checked: python pattern (not checked: routes, data
+  types); typescript exact.`) — a pass never implies more was checked than was.
+- **The code's own surface, signature and calls** (warnings, so `--ci` fails on
+  them). A function annotated to return another type than its contract's
+  `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
+  whose port no longer matches the class is told the cause on its own finding).
+  A public method of a component's realizing class, or a function its file
+  exports, that no contract declares and nothing in the project uses — no call
+  in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
+  (private, protected, `#private`, underscore-prefixed, static, accessor,
+  `override`, constructor, protocol and lifecycle members are exempt). A method
+  whose narrative is at `full` or `calls-only` detail and calls, in its own body,
+  a verb of a collaborator it narrates that no step names is `UNNARRATED_CALL`;
+  calls inside helpers and to collaborators the narrative never names are what
+  the detail lets it summarize (a collaborator the design does not list at all is
+  `UNDECLARED_DEPENDENCY`). Python is read by its signature reader: parameter
+  names (in snake_case, so the contract's `documentId` is `document_id`),
+  annotations, return annotations, public members and imports are judged like
+  TypeScript's.
 - **Binding modules.** A consumer whose code reaches another project's library
   through a hand-written binding module (a typed binding to a native addon, a
   client stub) names it on the implementation — `bindings:
@@ -353,8 +379,11 @@ array of `{ method, path }` objects or an object keyed `VERB /path`
 (template-literal keys over constants included), bound to a const or returned in
 place, spreading other tables (`[...ingestRoutes, ...statsRoutes]`) from any
 module. Route coverage is never silently off: a Portal whose contract binds HTTP
-endpoints and whose implementation names no router gets a `ROUTER_UNDECLARED`
-notice naming `router:`, and a router that cannot be read is
+endpoints and whose implementation names no router while its files hold what reads
+as a router or a route table gets `ROUTES_UNCHECKED` (a warning, so `--ci` fails)
+naming each spelling `router:` accepts; one whose files hold none is served method
+by method and gets the `ROUTER_UNDECLARED` notice, its realizing class's public
+methods judged by `UNDECLARED_PUBLIC_MEMBER`; and a router that cannot be read is
 `UNREADABLE_ROUTER`. A table is read under the ONE prefix its router strips off the
 path (`path.slice(BASE.length)`), so that prefix must be the Portal's `basePath`:
 another one is `UNDECLARED_ROUTE` + `UNROUTED_ENDPOINT`, naming both.
@@ -435,7 +464,12 @@ approval lives in `.wai/lock.json`. Implementation gates on that approval —
 `status: complete`. Commit `.wai/lock.json` with the change it approves.
 When any spec is still `draft` or `design`, the lock says how many of how many,
 per kind (subsystems, components, contracts, implementations, types), and that
-it approves them as they stand. Re-running it when nothing it records moved
+it approves them as they stand. Approval is not status, so a design that
+`wairon validate --ci` fails on can still be locked; the summary says plainly
+how many findings CI would fail on (errors and warnings, code findings
+included, with the draft-related warnings CI waives counted apart), or that it
+would pass. Run `validate --ci` until it passes before asking someone to
+approve a design meant to be finished. Re-running it when nothing it records moved
 keeps the record on file — its `lockedAt` included — so `.wai/lock.json` stays
 unmodified; a change of approver, verdict or member pin writes a new record. A
 new wairon release writes nothing by itself: when its built-in design rules are
@@ -787,6 +821,14 @@ nothing: `chaining` (the member/reference migration plan) or
 findings) or `reachability` (the reachability migration's plan); it never
 combines with `--fix`.
 
+In a family, `--fix` runs the same per-project repairs in every member project inside the
+project root, each line marked `[alias]`: its specs, and its agent surfaces (the project
+`.mcp.json`, the injected guide, the `.wai/context` documents and the skills), so an assistant
+opened in a member's own folder has the wairon tools. The member never asks for a second
+machine-wide write; the top's plan covers it. A member in a sibling checkout is named with the
+command to run there. Plain `wairon doctor` lists what is pending per member, agent surfaces
+included, and warns when the MCP entry would start a different wairon than the running CLI.
+
 Among its spec repairs, `--fix` rewrites every stored type position that is an
 alias of its canonical spelling (`string[]` becomes `list<string>`, `boolean`
 becomes `bool`, `T | null` becomes `T?`, `Promise<T>` becomes `async T`) — what
@@ -1011,6 +1053,11 @@ another file or directory); nothing opens automatically.
   `.wai/docs/diagrams/` (or `--out`).
 - `--no-health`: skip comparing each consumption relation with its live
   producer; the canvas draws those edges as not checked.
+
+The files under `.wai/docs/diagrams/` are derived from the spec tree and
+rewritten by every run; wairon never reads them back. Commit the folder if you
+want the diagrams browsable on GitHub and in review, or add it to `.gitignore`.
+The command says so after each run that writes to the default folder.
 
 The canvas is a small single-page app with **C4-style scoped navigation**:
 each view renders one scope's direct children (System → subsystems →
@@ -1374,7 +1421,7 @@ and author specs directly.
 |---------|-------------|
 | `wairon mcp serve` | Start the MCP server (stdio transport) |
 | `wairon mcp install [--global] [--config-dir <path>] [--backend claude\|gemini]` | Register the server. Default: project-local. `--global` uses the home config (respects `CLAUDE_CONFIG_DIR`/`GEMINI_CONFIG_DIR`); `--config-dir` installs into an explicit, validated config dir (requires `--backend`) |
-| `wairon mcp install --hosted <url> [--project <id>] [--token <token>]` | Register a **hosted** entry against an instance instead of the local stdio server; the token defaults to the credential stored by `wairon login` |
+| `wairon mcp install --hosted <url> [--project <id>] [--token <token>]` | Register a **hosted** entry against an instance instead of the local stdio server; the token defaults to the credential stored by `wairon login`. It needs no local project — run it in an empty folder: it writes only the registration (no `.wai/`, no guide), and the AI tool started there gets the hosted project's tools. The file then holds the bearer, so keep it out of version control (or install with `--global`) |
 | `wairon mcp status` | Show whether the server is registered |
 
 A project-local registration (`.mcp.json`, `.gemini/settings.json`) is committed with the
@@ -1382,6 +1429,19 @@ project, so it holds nothing machine-specific: it runs `wairon mcp serve` from t
 `node ./<path>` when the CLI lives inside the project, as in a checkout of wairon itself),
 and the server attaches to the project it is started in. A `--global` registration is
 machine-wide and names the running CLI by its absolute path.
+
+The project entry is deliberately not an absolute path: the file is committed and shared
+across machines, and a path to one developer's install breaks on every other. The cost is
+that `wairon` resolves through the PATH, so a machine with two installs (an old standalone
+binary and the npm package) can start an older server than the CLI you run. Two checks say so.
+`wairon doctor` asks the entry which wairon it would start (`wairon --version` for a bare
+`wairon`, the package version for a `node ./path` entry; nothing else from the file is ever
+executed) and warns when it is not the running CLI's version, and for a project entry that names
+an absolute path. And an MCP server older than the wairon that last wrote the project (the release
+stamped on `.wai/lock.json` or on a generated guide) leads its `sdd_get_status` answer, and trails
+its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in the structured
+content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
+`which -a wairon` elsewhere), then reconnect the assistant.
 
 The local server offers 49 tools:
 
@@ -1470,6 +1530,24 @@ warns when the owner cannot read the project — each naming the grant that fixe
 it. An owner needs no user record — an id with no record acts as a service
 principal.
 
+**Who approves a design.** A hosted lock (`sdd_host_lock_project`, the web UI's
+Lock, `wairon lock` while attached, `POST /admin/projects/{id}/lock`) is the
+project's approval, so it is decided by `approval:decide` over the project, not
+by `project:write`:
+
+- `approval:decide` = `yes` locks directly, recorded as that person's approval.
+- A person who may write the project (`project:write` = `yes` or `approval` at
+  the project — a subsystem grant is not enough) but holds no `approval:decide`
+  `yes` only **requests** the lock: the request is pending until someone else
+  with `approval:decide` decides it (in the web UI under Approvals), and the
+  requester can wait for it with `sdd_host_await_approval`. Nobody decides
+  their own request. `approval:decide` = `approval` requests as well.
+- Anyone else is refused, and nothing is requested.
+
+Give authors `project:write` and reviewers `approval:decide`; a single
+administrator holds both. `wairon host lock` runs with the master credential,
+which approves on any project.
+
 | Command | Description |
 |---------|-------------|
 | `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be a `business_entity`, which is its default kind; under `--parent` the default is `team`, and `department`, … are allowed where the hierarchy admits them |
@@ -1500,6 +1578,54 @@ preview as `sdd_host_pack_impact`. The unattended hosted policy writes —
 reconcile, a project type change, and a policy-governed project creation —
 return the impact of every pack they applied in their results.
 
+### Web UI and sign-in
+
+The browser UI (canvas, specs, approvals, administration) is served on the
+**data plane** at `/` with its API under `/web/*` — the same listener and port as
+`/mcp`. It is **off** by default: until it is on, every web path answers 404, and
+the server's startup log says so. Turn it on in the instance exposure policy, the
+JSON file `exposure-policy.json` in the data dir (a partial object; unset flags
+keep their defaults). The server reads it on every request, so no restart is
+needed:
+
+```json
+{ "webUiEnabled": true }
+```
+
+`requireTls` (default `true`) marks the session cookie `Secure`, so browsers send
+it only over HTTPS (and on `localhost`). Serve the UI behind TLS; set it to
+`false` only on a trusted network reached over plain HTTP. Once the UI is on, an
+administrator edits the same policy under Instance → Exposure.
+
+A person signs in one of two ways; the startup log names the ones configured:
+
+- **The built-in administrator.** Set both `WAIRON_ADMIN_USER` and
+  `WAIRON_ADMIN_PASSWORD` in the server's environment; the login page then shows
+  a username and password form (`POST /web/login`). This account is the
+  instance super-administrator, like `WAIRON_ADMIN_TOKEN`, and the only
+  password login: there are no per-user passwords.
+- **Single sign-on (OIDC).** Everyone else signs in through an identity
+  provider. Set `WAIRON_OIDC_ISSUER` (with `WAIRON_OIDC_CLIENT_ID` and
+  `WAIRON_OIDC_CLIENT_SECRET`, or `WAIRON_OIDC_CLIENT_SECRET_REF` naming a secret
+  stored with `wairon host secret set`) and the server registers the provider
+  `default` at every start. Register `<public URL>/web/sso/callback` as the
+  redirect URI at the provider, and list it in `WAIRON_OIDC_ALLOWED_REDIRECT_URIS`
+  so no other is accepted. Optional: `WAIRON_OIDC_DISPLAY_NAME` (the button
+  label), `WAIRON_OIDC_PROVIDER_TYPE` (default `oidc`),
+  `WAIRON_OIDC_ALLOWED_DOMAINS` (email domains admitted),
+  `WAIRON_OIDC_ADMIN_GROUPS` (group claims bound to the built-in `sso-admin`
+  role: project administration and creation everywhere, never the
+  super-administrator), and `WAIRON_OIDC_AUTHORIZATION_ENDPOINT`,
+  `_TOKEN_ENDPOINT`, `_JWKS_URI`, `_USERINFO_ENDPOINT` to override discovery.
+  List values are comma-separated. More providers can be added in the UI under
+  Sign-in (SSO).
+
+A person who signs in through a provider starts with no permissions: an
+administrator grants them under Users or Permissions, or with
+`wairon host permission set --user <id>` using the id the Users view shows.
+API keys for AI tools stay what `wairon host key mint --owner` mints (or the UI
+under Agents), and act as their owner.
+
 ---
 
 ## Connecting to a hosted instance
@@ -1508,7 +1634,7 @@ return the impact of every pack they applied in their results.
 |---------|-------------|
 | `wairon login <url> [--token <token>] [--project <id>]` | Store a bearer credential for a hosted instance on this machine (`--project` verifies it against that project first; the token defaults to `WAIRON_REMOTE_TOKEN`) |
 | `wairon logout [url]` | Forget a stored credential (local only — it does not revoke it), or list what is stored |
-| `wairon remote push \| pull [--url] [--project] [--token] [--unit <id>] [--force] …` | Migrate a spec tree to or from a hosted project (`--unit` creates the destination project first) |
+| `wairon remote push \| pull [--url] [--project] [--token] [--unit <id>] [--force] …` | Migrate a spec tree to or from a hosted project (`--unit` creates the destination project first). `--project` is a project id; a member is a project of its own and is named by its own id. A key is never narrowed to a subsystem — confine a person to one with `wairon host permission set --project <id> --subsystem <id>` |
 | `wairon remote attach \| detach \| status` | Bind this checkout to a hosted project; while attached, `wairon lock` locks the hosted project |
 
 ## Surfaces, externals and producers

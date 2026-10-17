@@ -14,6 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
+import { isNewerVersion } from '../utils/version.js';
 
 export interface BuildStamp {
   path: string;
@@ -109,5 +110,47 @@ function fingerprintModuleFor(entryPath: string): string {
     const parent = path.dirname(dir);
     if (parent === dir) return entryPath;
     dir = parent;
+  }
+}
+
+/** The release that last wrote a project, and the file that carries its mark. */
+export interface NewerWriter {
+  file: string;
+  version: string;
+}
+
+/** The wairon-version stamp a generated file carries (`<!-- wairon-version: X -->`). */
+const STAMP_IN_FILE = /<!--\s*wairon-version:\s*([^\s]+)\s*-->/;
+
+/**
+ * The newest release that left its mark on this project, when it is NEWER than
+ * `running`: the release stamped on the approval (.wai/lock.json) or on a
+ * generated guide (.claude/CLAUDE.md, .wai/context/wairon-guide.md). A server
+ * older than the wairon that last wrote the project is the usual sign of two
+ * installs on one machine, where the `wairon` an assistant launches is not the
+ * one the developer runs. Null when nothing newer is found or no file can be
+ * read: only the stamps already on disk are read, nothing is executed.
+ */
+export function findNewerWriter(root: string, running: string): NewerWriter | null {
+  let newest: NewerWriter | null = null;
+  for (const file of MARKED_FILES) {
+    const version = markedVersion(root, file);
+    if (version === null || !isNewerVersion(running, version)) continue;
+    if (newest === null || isNewerVersion(newest.version, version)) newest = { file, version };
+  }
+  return newest;
+}
+
+/** The files that carry the mark of the release that wrote them, relative to the project root. */
+const MARKED_FILES = ['.wai/lock.json', '.claude/CLAUDE.md', '.wai/context/wairon-guide.md'];
+
+/** The release a marked file names (the approval's validatorVersion, a guide's stamp), or null when the file is missing, unreadable or names no wairon version. */
+function markedVersion(root: string, file: string): string | null {
+  try {
+    const text = fs.readFileSync(path.join(root, ...file.split('/')), 'utf8');
+    const version = file.endsWith('.json') ? (JSON.parse(text) as { validatorVersion?: unknown }).validatorVersion : STAMP_IN_FILE.exec(text)?.[1];
+    return typeof version === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) ? version : null;
+  } catch {
+    return null;
   }
 }

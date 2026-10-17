@@ -34,7 +34,15 @@ fields:
     type: int
     description: Its own gate's notice count
     optional: false
+  - name: codeReading
+    type: string
+    description: How its own gate read its code (validation_result.codeReading)
+    optional: true
+  - name: codeCompact
+    type: string
+    description: The same in a few words (validation_result.codeCompact)
+    optional: true
 methods: []
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-28T06:01:58.186Z'
-updatedAt: '2026-10-04T10:29:11.610Z'
+updatedAt: '2026-10-17T15:42:23.244Z'

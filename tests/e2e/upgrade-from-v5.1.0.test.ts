@@ -32,7 +32,9 @@ const EXPECTED_CODES: Record<string, string> = {
   // The fixture is a design with no code, as v5.1.0 left it.
   MISSING_SOURCE_PATH: 'design-only fixture, notice',
   SIGNATURE_SOURCE_AVAILABLE: 'optional notice',
-  NO_OWNED_PATHS: 'design-only fixture: agents own no paths',
+  // The fixture generates one implementer per component and plans no sourcePath yet:
+  // a NOTICE (the planned-sourcePath doctrine), never a warning that fails --ci.
+  NO_OWNED_PATHS: 'design-only fixture: implementers plan no sourcePath yet, notice',
 };
 
 /** Copy the fixture, normalising line endings: the files are exactly what v5.1.0
@@ -76,6 +78,11 @@ function changelogSteps(): Map<number, string> {
     if (m) { current = Number(m[1]); steps.set(current, line); } else if (current) steps.set(current, `${steps.get(current)}\n${line}`);
   }
   return steps;
+}
+
+/** The codes of the WARNING lines (the ones `validate --ci` fails on) an output prints. */
+function warningCodes(out: string): string[] {
+  return out.split('\n').filter((l) => l.startsWith('⚠')).flatMap((l) => [...l.matchAll(/\[([A-Z][A-Z0-9_]+)\]/g)].map((m) => m[1]));
 }
 
 /** Codes of every finding line an output prints, and how many are errors. */
@@ -157,6 +164,16 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
     expect(child.id).toBe('billing');
     expect(Object.keys(child.externals ?? {})).toEqual(['shop']);
 
+    // The member's own folder is repaired too (U2): an assistant opened there has the
+    // wairon tools, a current guide, the context documents and the skills.
+    const mcp = JSON.parse(fs.readFileSync(path.join(billing, '.mcp.json'), 'utf8')) as { mcpServers?: Record<string, { command?: string }> };
+    expect(mcp.mcpServers?.wairon?.command).toBeTruthy();
+    expect(fix.all).toContain('[billing] Registered the wairon MCP server in its .mcp.json');
+    expect(fs.readFileSync(path.join(billing, '.claude', 'CLAUDE.md'), 'utf8')).toMatch(/wairon-version: \d+\.\d+\.\d+/);
+    expect(fs.existsSync(path.join(billing, '.wai', 'context', 'wairon-guide.md'))).toBe(true);
+    expect(fs.existsSync(path.join(billing, '.wai', 'context', 'domains.md'))).toBe(true);
+    expect(fs.existsSync(path.join(billing, '.claude', 'skills'))).toBe(true);
+
     // No spec carries the legacy fields any more.
     const all = [...snapshot(dir)].filter(([f]) => f.includes(`${path.sep}specs${path.sep}`) || f.includes('/specs/'));
     expect(all.length).toBeGreaterThan(10);
@@ -166,7 +183,7 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
     }
   });
 
-  it('step 8: validate --ci reports no errors, only the documented findings', async () => {
+  it('step 8: validate --ci reports no errors, only the documented findings, and NO_OWNED_PATHS is a notice', async () => {
     for (const cwd of [dir, billing]) {
       const res = await run(['validate', '--ci'], cwd);
       const { codes, errors } = findings(res.all);
@@ -176,8 +193,36 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
         if (code === 'MEMBER_UNAPPROVED') continue;
         expect(Object.keys(EXPECTED_CODES), `unexpected finding ${code}\n${transcript(res)}`).toContain(code);
       }
-      if (res.code !== 0) expect(countCode(res.all, 'UNUSED_COMPONENT') + countCode(res.all, 'NO_OWNED_PATHS')).toBeGreaterThan(0);
+      // U1: an implementer that plans no sourcePath yet is the notice MISSING_SOURCE_PATH
+      // is, never a warning that fails --ci, and the message names the real remedy.
+      expect(warningCodes(res.all), transcript(res)).not.toContain('NO_OWNED_PATHS');
+      if (cwd === dir) {
+        expect(res.all).toMatch(/notice[^\n]*\[NO_OWNED_PATHS\][^\n]*plan a sourcePath/);
+        expect(res.all).not.toContain('tag as meta');
+      }
+      if (res.code !== 0) expect(countCode(res.all, 'UNUSED_COMPONENT')).toBeGreaterThan(0);
     }
+  });
+
+  it('step 8: once the entries are declared, only the unlocked member is left (no NO_OWNED_PATHS failure)', async () => {
+    // "Declare the entries the migration will not invent": each Portal's callers are outside the design.
+    const caller = 'Visitors of the storefront reach this Portal over HTTP from their browsers';
+    for (const portal of [
+      path.join(dir, '.wai', 'specs', 'catalog', 'catalog-portal', '.index.yaml'),
+      path.join(dir, '.wai', 'specs', 'orders', 'orders-portal', '.index.yaml'),
+      path.join(billing, '.wai', 'specs', 'charges', 'billing-portal', '.index.yaml'),
+    ]) {
+      const text = fs.readFileSync(portal, 'utf8').replace(/\r\n/g, '\n');
+      expect(text, portal).toContain('transport: HTTP\n');
+      fs.writeFileSync(portal, text.replace('transport: HTTP\n', () => `transport: HTTP\ninvokedBy:\n  kind: entry\n  caller: ${caller}\n`));
+    }
+    const member = await run(['validate', '--ci'], billing);
+    expect(findings(member.all).errors, transcript(member)).toEqual([]);
+    expect(warningCodes(member.all), transcript(member)).toEqual([]);
+    const top = await run(['validate', '--ci']);
+    expect(findings(top.all).errors, transcript(top)).toEqual([]);
+    // The member is not locked yet (step 9); nothing else fails the family run.
+    expect(warningCodes(top.all).filter((c) => c !== 'MEMBER_UNAPPROVED'), transcript(top)).toEqual([]);
   });
 
   it('step 9: lock bottom-up, and the approval holds at both roots', async () => {
@@ -193,6 +238,19 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
     const after = await run(['validate', '--ci']);
     expect(after.all).not.toContain('MEMBER_UNAPPROVED');
     expect(findings(after.all).errors, transcript(after)).toEqual([]);
+    // U1: once the steps are followed, nothing fails --ci: not NO_OWNED_PATHS, not anything else.
+    expect(after.code, transcript(after)).toBe(0);
+    expect(warningCodes(after.all)).toEqual([]);
+    ok(await run(['validate', '--ci'], billing));
+
+    // U2: the doctor of the member's own folder has no agent surface left to repair. (The MCP
+    // line may still warn about a different `wairon` on this machine's PATH: that is N1's check
+    // of the machine, not of the folder.)
+    const doctor = await run(['doctor'], billing);
+    const warned = doctor.all.split('\n').filter((l) => l.startsWith('  ⚠') && !l.includes('launches wairon')).join('\n');
+    expect(warned, transcript(doctor)).not.toMatch(/stale|not generated|not injected|not registered|missing/);
+    const parent = await run(['doctor']);
+    expect(parent.all).not.toContain('agent surfaces');
   });
 });
 

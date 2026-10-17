@@ -25,6 +25,7 @@
 // ---------------------------------------------------------------------------
 
 import * as path from 'path';
+import { getProjectRoot } from '../utils/fs.js';
 import { Domain } from '../models/domain.js';
 import {
   loadSubsystemSpecs,
@@ -39,7 +40,7 @@ import {
 import * as topology from './topology.js';
 
 function rel(p: string): string {
-  return path.relative(process.cwd(), p).replace(/\\/g, '/');
+  return path.relative(getProjectRoot(), p).replace(/\\/g, '/');
 }
 
 /**

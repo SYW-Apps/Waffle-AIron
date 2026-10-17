@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { listFiles, pathExists, readFileOrNull } from '../utils/fs.js';
+import { pathExists, readFileOrNull } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { TemplateNotFoundError } from '../utils/errors.js';
 import { Template, TemplateSchema } from '../models/template.js';
@@ -56,20 +56,6 @@ export function loadTemplate(templateName: string, globalTemplatesDir?: string):
 export function loadAgentOverride(agentId: string): string | null {
   const filePath = path.join(AI_PATHS.root(), 'agents', `${agentId}.md`);
   return readFileOrNull(filePath);
-}
-
-/**
- * List all available template ids across all tiers, deduplicated.
- * Earlier tiers shadow later ones.
- */
-export function listTemplateIds(globalOverride?: string): string[] {
-  const seen = new Set<string>();
-  for (const dir of templateSearchDirs(globalOverride)) {
-    for (const file of listFiles(dir, '.yaml')) {
-      seen.add(path.basename(file, '.yaml'));
-    }
-  }
-  return Array.from(seen).sort();
 }
 
 /**

@@ -62,7 +62,9 @@ You must read, respect, and update the living quest log file: `.wai/phased_desig
    - Run the MCP tool `sdd_validate_tree` to check for circular dependencies or component stereotype violations early.
    - Check off the completed stages in `.wai/phased_design.md`.
 6. **Hand over for approval (Stage 6)**:
-   - When the whole design validates with zero errors, stop designing and tell the human, in these words: *"The specs are complete and validate. Please run `wairon lock` to approve them, and commit `.wai/lock.json`."*
+   - When the whole design validates with zero errors AND no warnings (`sdd_validate_tree` lists no `DRAFT_*` finding and nothing else at warning level), stop designing and tell the human, in these words: *"The specs are complete and validate. Please run `wairon lock` to approve them, and commit `.wai/lock.json`."*
+   - When errors are gone but warnings remain, never say "complete and validate". Say what is true instead: *"The design has no errors, but N warning(s) remain: <the drafts and findings, grouped>. `wairon validate --ci` fails on every one that is not draft-related. Finish them first, or run `wairon lock` to approve the design as it stands (approval is not status)."* The human decides; do not hold the handoff back, and do not hide the warnings.
+   - Re-lock is owed only for a DESIGN change. After a turn that only set code linkage (`sourcePath`, `symbol`, `exportedVia`, `simPath`, `injectedParams`, conformance tiers) or promoted a `status`, say no re-lock is needed; only a prose or structure edit (a description, an intent, a step, a signature) re-opens the approval. Read `sdd_get_status` for what the approval says now; never claim a re-lock from your own memory of what you edited.
    - Never run `wairon lock` yourself: the lock record is the human's signature. It records approval in `.wai/lock.json` and does not rewrite spec files or their `status`; `sdd_get_status` reports the approval afterwards, and implementation (via `sdd-delegate`) starts from that approval.
 
 ## Guidelines

@@ -57,6 +57,12 @@ fields:
       `wairon validate` prints it, and sdd_validate_tree carries the same sentence in its hint.
       Absent on a family run's members.
     optional: true
+  - name: codeCompact
+    type: string
+    description: >-
+      The code reading in a few words, per language — its grade and what it did not check — for the
+      closing verdict line: a pass says how much it read
+    optional: true
 methods:
   - name: changesTo
     signature: 'changesTo(after: ValidationResult): FindingChanges'
@@ -91,4 +97,4 @@ methods:
     symbol: ciBlockingIssues
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-08T08:36:00.725Z'
+updatedAt: '2026-10-17T15:42:25.296Z'

@@ -17,6 +17,10 @@ import * as path from 'node:path';
 // Paths that make up the shipped product. A change here invalidates a verdict.
 const SHIPPED = [/^src\//, /^web\//, /^sdk\//, /^schemas\//, /(^|\/)templates(\/|$)/, /^package\.json$/, /^package-lock\.json$/];
 
+// The release bot's version stamp after every merge into dev: never a product change.
+const RELEASE_SUBJECT = /^chore: release v\S+$/;
+const VERSION_FILE = 'src/config/defaults.ts';
+
 const argv = process.argv.slice(2);
 const opt = (name, dflt) => (argv.includes(`--${name}`) ? argv[argv.indexOf(`--${name}`) + 1] : dflt);
 const dir = opt('dir', 'qa/verdicts');
@@ -36,6 +40,23 @@ function frontMatter(text) {
   return out;
 }
 
+/**
+ * The shipped files the commits after the RC changed, read commit by commit. The
+ * release bot's own commits (`chore: release v...` touching only the version
+ * constant) stamp the version every merge into dev produces, so they never count.
+ */
+function shippedChanges(rc) {
+  const log = git('log', '--no-merges', '--format=%x00%s', '--name-only', `${rc}..${head}`);
+  const moved = new Set();
+  for (const entry of log.split('\0').filter((e) => e.trim())) {
+    const [subject, ...rest] = entry.split('\n');
+    const files = rest.map((f) => f.trim()).filter(Boolean);
+    if (RELEASE_SUBJECT.test(subject) && files.every((f) => f === VERSION_FILE)) continue;
+    for (const f of files) if (SHIPPED.some((re) => re.test(f))) moved.add(f);
+  }
+  return [...moved];
+}
+
 /** Why this verdict does not clear the PR, or null when it does. */
 function problem(file) {
   const v = frontMatter(fs.readFileSync(file, 'utf8'));
@@ -43,7 +64,7 @@ function problem(file) {
   if (!/^[0-9a-f]{40}$/.test(v.rc ?? '')) return 'rc is not a full 40-character commit sha';
   if (!gitOk('cat-file', '-e', `${v.rc}^{commit}`)) return `rc ${v.rc} is not in this checkout (fetch full history)`;
   if (!gitOk('merge-base', '--is-ancestor', v.rc, head)) return `rc ${v.rc} is not an ancestor of ${head}`;
-  const moved = git('diff', '--name-only', v.rc, head).split('\n').filter((f) => SHIPPED.some((re) => re.test(f)));
+  const moved = shippedChanges(v.rc);
   if (moved.length) return `${moved.length} shipped file(s) changed after the RC, so the QA has to run again: ${moved.slice(0, 5).join(', ')}`;
   return null;
 }

@@ -1,0 +1,36 @@
+kind: value-object
+id: class_member_fact
+name: ClassMemberFact
+description: >-
+  One member a top-level named class declares, as its public surface reads it: its name, what kind
+  of member it is, who may reach it, and the modifiers that say it is no new surface of its own.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: The member's name as the code spells it
+    optional: false
+  - name: kind
+    type: class_member_kind
+    description: What kind of member it is
+    optional: false
+  - name: access
+    type: class_member_access
+    description: Who may reach it
+    optional: false
+  - name: static
+    type: bool
+    description: True for a static member (a Python staticmethod or classmethod)
+    optional: true
+  - name: override
+    type: bool
+    description: 'True for a member marked override: it overrides a base class member rather than adding one'
+    optional: true
+  - name: computed
+    type: bool
+    description: 'True for a member whose name is computed: it names no verb'
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-17T15:42:15.795Z'
+updatedAt: '2026-10-17T15:42:16.999Z'

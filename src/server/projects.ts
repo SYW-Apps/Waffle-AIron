@@ -488,7 +488,8 @@ function walkMemberAliases(
     if (!member) {
       throw new Error(
         `unknown member "${alias}" on "${at}" — it declares no member under that alias ` +
-          '(in project.yaml `members`, or a legacy L1 mount); an internal subsystem is not a member and cannot be bound',
+          '(in project.yaml `members`, or a legacy L1 mount); an internal subsystem is not a member and cannot be bound '
+          + '(a person is narrowed to a subsystem by a permission: `wairon host permission set --project <id> --subsystem <id>`)',
       );
     }
     if (member.refused !== undefined || member.path === undefined) {

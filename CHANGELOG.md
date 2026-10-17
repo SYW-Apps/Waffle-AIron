@@ -43,7 +43,12 @@ last.
 1. **Upgrade wairon everywhere at once:** developer machines, CI (and the
    `setup-wairon` action's `version`) and the hosted server. Then restart or
    reconnect each AI tool's wairon MCP server. A server whose build on disk changed the
-   spec schemas now refuses every spec write and says so.
+   spec schemas now refuses every spec write and says so. A machine with two installs
+   (an old standalone binary and the npm package) can start an older server than the CLI
+   you run, because the committed `.mcp.json` says `wairon` and the PATH decides which:
+   `wairon doctor` names the version that entry starts when it differs from the CLI's,
+   and a server older than the wairon that last wrote the project (its lock or guides)
+   leads its `sdd_get_status` answer with an `OLDER SERVER` banner.
 2. **Hosted operators: `wairon host doctor`, then `wairon host doctor --fix`.** The
    dry run prints the plan. `--fix` migrates a data dir that predates the permission
    model. It also registers every member that hosted families declare as a project
@@ -107,8 +112,12 @@ last.
      export and `use` import follow once the target is published.
 
    **Members are repaired by the same run.** Every member inside the project root gets
-   the per-project repairs, each line marked `[alias]`. A member in a sibling checkout
-   (`../x`) is named with the command to run in its own directory.
+   the per-project repairs, each line marked `[alias]`: its specs, and its agent
+   surfaces (the project `.mcp.json`, the guide, the `.wai/context` documents and the
+   skills), so an assistant opened in the member's own folder has the wairon tools.
+   A machine-wide registration stays the one plan the top asks about. A member in a
+   sibling checkout (`../x`) is named with the command to run in its own directory.
+   Plain `wairon doctor` lists, per member, what is pending, agent surfaces included.
 
    **Committed agent files are kept.** A `project.yaml` that never set
    `rules.materializeAgentFiles` reads as `true` while wairon-managed agent files are
@@ -167,6 +176,20 @@ last.
    - Settle every other unreached verb: model the caller that really calls it, or
      remove it.
    - Make a member's parent-relative `sourcePath`s relative to the member.
+   - Plan a `sourcePath` on every component not built yet. A project that generates
+     one implementer agent per component (`rules.generateComponentImplementers`)
+     reports `NO_OWNED_PATHS` for each component whose implementation names no file,
+     and the fix is the planned file, not a `meta` tag: set it with
+     `sdd_write_narrative` or `sdd_update_spec` (`sourcePath`; the file need not
+     exist yet). It is a notice, like `MISSING_SOURCE_PATH`, so it does not fail
+     `--ci`, unless `rules.conformance.requireCode` is on, which makes every unplanned
+     or unbuilt component an error. Planning the path is code linkage: it does not
+     reopen the approval.
+   - A Portal that a member exports and only the parent calls reports
+     `UNUSED_COMPONENT` inside the member, which cannot see the parent's call. Declare
+     the entry in the member: a Portal-level `invokedBy: { kind: entry, caller }` naming
+     the parent (or the outside caller that really reaches it). `sdd_list_consumers`
+     shows who calls the verb across the family.
    - To soften a warning while you pay it down, set it to `notice` in
      `rules.sddRuleSeverity` (notices never fail `--ci`).
    - Re-pin with `wairon externals pin` after editing what a consumer uses.
@@ -177,6 +200,11 @@ last.
      the approval and does not block on them, so a passing lock alongside a failing
      `validate --ci` is expected until the code findings are paid.
    - `lock` no longer writes `status: complete` into spec files.
+   - `lock` accepts a design that still has drafts or warnings (approval is not
+     status), and says how many findings `validate --ci` would fail on. Run
+     `validate --ci` until it passes before locking a design meant to be finished.
+   - `wairon diagram` writes `.wai/docs/diagrams/`, which is derived and never read
+     back: commit it to browse the diagrams on GitHub, or ignore it.
    - A lock written by an earlier v6 build (format 2) still passes while nothing it
      covers moved. Run `wairon doctor --fix` to re-express it as format 3: who
      approved it and when are kept, and the record notes `reexpressed`. One that
@@ -331,6 +359,11 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | † `MISSING_TYPE_SOURCE_PATH` | warning | a type names no `sourcePath`, so its shape is never compared with the code, and its subsystem already has code (a notice before that) | name the file that declares the type (`symbol` when the code name differs) |
 | † `TECH_LEAKAGE_IN_CODE` | warning | now also fires for a technology written by its plain name: common packages are known by default (`postgres` covers `pg`) | move the import behind the component that binds the technology |
 | `EXTERNAL_UNPINNED` | error | a declared external was never pinned (the project's gate composed with its externals, and the family root); `wairon lock` refuses until it is | `wairon externals pin` |
+| † `RETURN_TYPE_MISMATCH` | warning | a realizing function (TypeScript or Python) is annotated to return something the contract's `returns` cannot hold | fix the code, or restate the contract (a design change) |
+| † `UNDECLARED_PUBLIC_MEMBER` | warning | a public method or exported function of a realizing file that no contract, `symbol`, `exportedVia`, router or type declares, and nothing in the project uses | declare it, make it private, or remove it |
+| † `UNNARRATED_CALL` | warning | a method narrated at call level calls a contract method of a collaborator its narrative names, with no step for that call | narrate the call, declare it in `calls`, or remove it |
+| † `ROUTES_UNCHECKED` | warning | a Portal's files hold a router or route table that no `router:` names, so its routes are never compared with the design | name the router on the Portal implementation |
+| `REMOVABLE_FORWARDER` | warning | an Orchestrator only passes calls on, and every caller could make the call itself | remove the hop, or keep it with a reasoned `lint.allow` |
 
 Code-conformance findings can be recorded as classified debt in
 `rules.conformance.carried` instead of being allowed.
@@ -421,7 +454,16 @@ rules are split into smaller named rules (40 → 115); a split rule kept its cod
   "no" on a member's own record beats any inherited grant.
 - **Writes are judged per member and per subsystem.** A spec write into a member, or
   a subsystem, that the caller may not write is refused with `SubsystemWriteDenied`,
-  even when the caller may write the parent. A lock needs write on the whole project.
+  even when the caller may write the parent.
+- **A hosted lock is an approval.** It needs `approval:decide` over the project on
+  every surface (MCP, the admin API, the web UI, `wairon lock` while attached). A
+  person who may write the whole project but holds no `approval:decide` now gets a
+  pending approval request for someone else to decide, where they used to lock
+  directly. The web Lock button makes the same decision as the MCP tool: it locks
+  for someone who may approve, and for a writer it creates the request and says
+  "Approval requested; someone with approval rights decides it". The admin API
+  still refuses a caller who may not approve. Grant `approval:decide` to the people
+  who approve designs.
 - **Promote is removed:** `wairon host promote`, `sdd_host_promote_project`, the
   admin and web promote routes, the `project:promote` approval kind and the Promote
   button. Stored `promote:mark-ready` grants still migrate.
@@ -469,6 +511,66 @@ and rewritten by `wairon doctor --fix`:
 `wairon packs` remains a deprecated alias of `wairon pack`.
 
 ### New
+
+**The code gate closes the holes the release QA found, and says what it checked.**
+A release QA seat changed realized code one way at a time and found ordinary
+mismatches passing with "All checks passed". Each is now caught, and `validate` says
+how much of the code it read. Each new code is a **warning, so `validate --ci` can
+newly fail** on code that passed before:
+
+- **`RETURN_TYPE_MISMATCH`** (new): a function annotated to return a type its
+  contract's `returns` does not describe is reported on that method, naming the
+  contract's type and the code's. Before, a changed return type surfaced only on a
+  caller whose own port no longer matched (`UNREALIZED_DEPENDENCY` "the declared edge
+  is stale", `CALL_ORIGIN_UNRESOLVED`); those findings now name the drifted method as
+  the likely cause. Not compared: a contract returning void, a function registering
+  the method's handler, a void handler writing through an injected response handle,
+  an unannotated body, and a type the design does not know.
+- **`UNDECLARED_PUBLIC_MEMBER`** (new): a public method of a component's realizing
+  class, or a function its file exports, that no contract declares and nothing in the
+  project uses (no call in its own file, no other file, no test). Before,
+  `UNDECLARED_EXPORT` fired only once another component imported the name. Exempt:
+  constructors, accessors, fields, static, private, protected, `#private` and
+  underscore-prefixed members, `override`, computed names, language protocol and
+  framework lifecycle hooks, Python dunders, test files, and `conformance: off`.
+- **`UNNARRATED_CALL`** (new): a method whose narrative is at `full` or
+  `calls-only` detail (or that declares its calls) calls, in its own body, a verb of a
+  collaborator the narrative names that no step names — the forward twin of
+  `CALL_STEP_UNREALIZED`. A collaborator reached through a port (a planned one, or
+  another project's) counts as the component its narrated calls go to.
+- **`ROUTES_UNCHECKED`** (new): a Portal binding HTTP endpoints whose files hold a
+  router or route table its implementation never names in `router:` was a standing
+  `ROUTER_UNDECLARED` notice; it is now a warning naming each spelling `router:`
+  accepts. `ROUTER_UNDECLARED` stays a notice only where the files hold no router: the
+  Portal is then read as served method by method, and an undeclared handler method is
+  `UNDECLARED_PUBLIC_MEMBER`.
+- **Python is judged, not only read for method names.** A signature reader (no
+  interpreter, no dependency) reads each `def`: parameter names — compared in
+  snake_case, so the contract's `documentId` is the code's `document_id` — their
+  annotations and return annotations, class members, imports and call sites. A
+  renamed parameter is `PARAM_NAME_MISMATCH` (and the rest of the parameter checks),
+  a changed return annotation `RETURN_TYPE_MISMATCH`, an import of another
+  component's module the design does not list `UNDECLARED_DEPENDENCY`, an extra
+  public method or module function `UNDECLARED_PUBLIC_MEMBER`, and an unnarrated call
+  through an annotated collaborator `UNNARRATED_CALL`. Python gains a type dialect;
+  briefs give its mapping without the "mapping only" line.
+- **What was checked is said.** The code-reading line (`validate`, `sdd_validate_tree`)
+  now names, per language, the grade and the checks it ran and did not
+  (`python: 4 file(s) at grade pattern with its signature reader, checked methods,
+  params, returns (where annotated), public members, imports, calls through declared
+  receivers — not checked: routes, data types`); a family run prints it per project,
+  and the closing line repeats it in a few words (`Code checked: …`).
+- **Still not checked**, and said in that line: calls made inside helpers and calls to
+  collaborators a narrative never names (the detail dial lets a narrative summarize
+  them; a collaborator the design does not list at all is `UNDECLARED_DEPENDENCY`);
+  Python routes and data shapes; a declared Python dependency that no import
+  realizes; languages other than TypeScript, JavaScript and Python beyond method
+  names. Static methods are exempt from `UNDECLARED_PUBLIC_MEMBER`, and a verb some
+  other code mentions by name counts as used.
+- wairon's own tree carries what the new checks measured in it as drift in its
+  conformance debt register: 29 narratives that leave out a call to a collaborator
+  they narrate, and 6 contracts whose `returns` the code no longer matches. Three dead
+  exports they also found were removed.
 
 **Forwarders: required or removable.**
 
@@ -830,6 +932,20 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 
 ### Fixes
 
+- **Hosted operator setup:**
+  - The shipped docs now explain how to turn on the web UI (the exposure policy's
+    `webUiEnabled`), what `requireTls` does, how the built-in administrator signs in
+    (`WAIRON_ADMIN_USER` / `WAIRON_ADMIN_PASSWORD`), how to set up single sign-on
+    (`WAIRON_OIDC_*`), and who may approve a design. `wairon serve` logs one line
+    saying whether the web UI is on and how a person can sign in.
+  - `wairon mcp install --hosted` works in an empty folder. It writes only the
+    registration, with no local spec tree or guide, and warns that the file now
+    holds a credential.
+  - A hosted lock records its gate parts, as a local lock does, so status no longer
+    reports a fresh hosted approval as an old record that needs rewriting.
+  - `wairon remote --help` no longer offers `project::subsystem`: a key is never
+    narrowed to a subsystem. A refused mint names `wairon host permission set
+    --subsystem`, which confines a person to one.
 - **Code↔spec conformance, round-4 trials:**
   - A Portal's calls are resolved by the TypeScript type checker, so no receiver spelling hides a write to a data component any more (element access, destructuring, `.call`, a field of a dependency bag, a type alias, a barrel, `Pick<>`, a factory, `new Store()`, a port interface the Portal declares itself): `PORTAL_WRITE_SHORTCUT_IN_CODE`, plus `UNDECLARED_DEPENDENCY` on the edge.
   - `PORTAL_CALL_UNRESOLVED` is now a **warning** (was a notice): a write-named call through an `any`/`unknown`/untyped receiver fails `--ci` instead of passing.
@@ -1395,7 +1511,9 @@ Hosted deployments of v5.1.0 should upgrade. This release hardens:
 - the sign-in redirect allowlist on every sign-in entry point;
 - session handling on the local dev server;
 - how integration secrets reach the Git and producer integrations;
-- the local operator's administrative writes.
+- the local operator's administrative writes;
+- approval of a hosted design, which now requires the approval capability on every
+  surface.
 
 ### Release process
 

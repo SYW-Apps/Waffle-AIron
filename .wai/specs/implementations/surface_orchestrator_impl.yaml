@@ -672,19 +672,27 @@ methods:
         targetMethod: readLock
       - stepNumber: 5
         description: >-
+          Check the parent's excerpt is already on file: the pin counts as unchanged only when the
+          lock's parent entry carries the same digest and project and the stored excerpt is still
+          readable
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readExcerpt
+      - stepNumber: 6
+        description: >-
           Write the excerpt to .wai/externals/<parent id>.yaml when its digest differs from the
           lock's parent entry
         type: call
         targetComponent: externals_repository
         targetMethod: saveExcerpt
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Record the lock's parent entry — the parent's id, the excerpt's path and digest, the
           commit, role parent, an empty used map — when it changed
         type: call
         targetComponent: externals_repository
         targetMethod: saveLock
-      - stepNumber: 7
+      - stepNumber: 8
         description: 'Answer one outcome, the parent''s: pinned, unchanged or unreachable'
         type: return
         outcome: ExternalPin[]
@@ -954,4 +962,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-15T16:03:41.834Z'
+updatedAt: '2026-10-17T16:26:45.774Z'

@@ -53,9 +53,9 @@ describe('r10 (solo-app): a Portal served by a class method', () => {
     expect(extra.code, transcript(extra)).toBe(1);
     expect(extra.all).toMatch(/\[UNDECLARED_ROUTE\][^\n]*"DELETE \/habits\/\*"/);
   });
-  it('no router: ROUTER_UNDECLARED offers `HabitPortal.handle` and says to export the private table', async () => {
+  it('no router named while the files hold one: ROUTES_UNCHECKED offers `HabitPortal.handle` and says to export the private table', async () => {
     const r = await sb.run(['validate'], fresh(classRouterTree(undefined)));
-    expect(r.all, transcript(r)).toMatch(/\[ROUTER_UNDECLARED\][^\n]*HabitPortal\.handle \(src\/habit-portal\.ts\)[^\n]*ROUTES \(src\/habit-portal\.ts\)[^\n]*not exported/);
+    expect(r.all, transcript(r)).toMatch(/\[ROUTES_UNCHECKED\][^\n]*HabitPortal\.handle \(src\/habit-portal\.ts\)[^\n]*ROUTES \(src\/habit-portal\.ts\)[^\n]*not exported/);
   });
   it('`router: handle` is refused naming the `HabitPortal.handle` spelling', async () => {
     const r = await sb.run(['validate'], fresh(classRouterTree('handle')));

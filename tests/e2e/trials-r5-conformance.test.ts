@@ -251,10 +251,11 @@ describe('r5 (solo-app D22): a Portal calling a workflow verb its narrative neve
     expect(r.code, transcript(r)).toBe(1);
     expect(r.all).toMatch(/\[habit_portal_http\] \[UNDECLARED_WRITE_CALL\] Method "checkIn"[^\n]*habit_orchestrator\.archive/);
   });
-  it('control — the read verb streak: --ci exits 0', async () => {
+  it('control — the read verb streak is no write: no UNDECLARED_WRITE_CALL, and the unnarrated read is UNNARRATED_CALL', async () => {
     const r = await sb.run(['validate', '--ci'], fresh(habitly({ portal: { body: 'this.habits.streak(id);', field: NO_FIELD, head: '' } })));
-    expect(r.code, transcript(r)).toBe(0);
-    expect(countCode(r.all, 'UNDECLARED_WRITE_CALL')).toBe(0);
+    expect(countCode(r.all, 'UNDECLARED_WRITE_CALL'), transcript(r)).toBe(0);
+    expect(r.all).toMatch(/\[habit_portal_http\] \[UNNARRATED_CALL\] Method "checkIn"[^\n]*habit_orchestrator\.streak/);
+    expect(r.code).toBe(1);
   });
 });
 

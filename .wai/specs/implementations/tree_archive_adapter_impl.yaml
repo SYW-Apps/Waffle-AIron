@@ -154,6 +154,16 @@ methods:
         type: return
         outcome: authored
     detail: full
+  - name: dropStagedApprovals
+    narrative:
+      - stepNumber: 1
+        description: For each staged root, remove its .wai/lock.json when present and collect the root
+        type: local
+      - stepNumber: 2
+        description: Return the roots whose approval record was removed
+        type: return
+        outcome: the roots
+    detail: full
 status: complete
 createdAt: '2026-08-12T17:25:38.862Z'
-updatedAt: '2026-10-05T00:46:08.247Z'
+updatedAt: '2026-10-17T14:47:04.270Z'

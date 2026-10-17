@@ -462,10 +462,11 @@ methods:
           Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
           lockedAt, the AUTHENTICATED approver the caller resolved from the credential,
           validatorVersion, validationResult = the design half's counts, status ready, the effective
-          id as projectId, the captured specs with specsReading `design`, `members` = each direct
-          member's alias → a project member's {as: project, project, subject, state} or a part's
-          {as: part, contentDigest, commit when known, state approved}, and `code` = the result's
-          analysis without its codes list. No `children` is written
+          id as projectId, the captured specs with specsReading `design`, gateParts = each input of
+          the captured identity on its own (exactly as the local lock records them), `members` =
+          each direct member's alias → a project member's {as: project, project, subject, state} or
+          a part's {as: part, contentDigest, commit when known, state approved}, and `code` = the
+          result's analysis without its codes list. No `children` is written
         type: local
       - stepNumber: 19
         description: >-
@@ -602,7 +603,9 @@ methods:
         targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Resolve the caller's project:write permission over the target project
+        description: >-
+          Resolve the caller's approval:decide permission over the target project: a lock is the
+          project's approval
         type: call
         targetComponent: authorization
         targetMethod: authorize
@@ -615,7 +618,7 @@ methods:
       - stepNumber: 4
         description: Reject the lock
         type: throw
-        error: Forbidden — locking a project requires project:write over it
+        error: Forbidden — locking a project approves it, which requires approval:decide over it
       - stepNumber: 5
         description: >-
           Name the approver the lock records: the authenticated caller's subject, or the instance
@@ -662,10 +665,19 @@ methods:
         error: Forbidden — binding a repository requires project:admin over the project
       - stepNumber: 5
         description: >-
+          When a personal access token was supplied inline, store it as this connection's own
+          credential under the project's scoped git secret key, BEFORE the clone so authentication
+          is available (project:admin over the project authorizes storing it); a connection without
+          a token stores nothing and falls back to the shared git-token
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 6
+        description: >-
           Ensure the project record and an empty directory exist (no native provisioning) and bind
           the root
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Resolve the clone's token from the host's own secret repository: the connection's own
           credential ref first, when it has one, so each connection can carry a distinct PAT, else
@@ -673,7 +685,7 @@ methods:
         type: call
         targetComponent: secret_repository
         targetMethod: resolveGit
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Bind the project to its REAL repository (clone the remote onto the isolated working
           branch), handing the git plane the resolved token as an argument; wairon will commit ONLY
@@ -681,7 +693,7 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: enable
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return the project record
         type: return
         outcome: project record
@@ -1163,16 +1175,24 @@ methods:
         type: throw
         error: Forbidden — importing a project's spec tree requires project:admin over it
       - stepNumber: 5
+        description: >-
+          Resolve the caller's approval:decide permission over the project: an archive may carry
+          approval records, and only someone who may approve the project brings one in
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 6
         description: Bind the project's root — a member's own root when the project is a member record
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Import the archive within that scope, ALWAYS refusing executable entries (it arrived over
-          the wire) and passing the caller's replace choice through unchanged
+          the wire), passing the caller's replace choice through unchanged, and asking for
+          dropApprovals unless the caller's approval:decide over the project is yes
         type: call
         targetComponent: host_core_adapter
         targetMethod: importSpecTree
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return what was written and where the replaced tree was backed up
         type: return
         outcome: imported tree
@@ -1235,4 +1255,4 @@ methods:
     symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-06T10:11:18.748Z'
+updatedAt: '2026-10-17T16:23:55.424Z'

@@ -51,7 +51,8 @@ methods:
       - stepNumber: 7
         description: >-
           Assemble the outcome: direction push, the instance and project addressed, what moved,
-          whether the project was created, and the hosted backup path.
+          whether the project was created, the hosted backup path, and the roots whose approval
+          record the instance left out (the caller may not approve there).
         type: local
       - stepNumber: 8
         description: Return what the migration moved.
@@ -291,4 +292,4 @@ methods:
         targetMethod: readCredential
 status: complete
 createdAt: '2026-08-12T18:32:48.928Z'
-updatedAt: '2026-09-29T13:54:59.701Z'
+updatedAt: '2026-10-17T14:48:36.199Z'

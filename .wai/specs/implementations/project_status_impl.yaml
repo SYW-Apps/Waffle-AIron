@@ -48,21 +48,42 @@ methods:
         outcome: no system
       - stepNumber: 6
         description: >-
-          Read the subsystems, components, interfaces and implementations the tree holds; when the
-          options narrow to a subsystem the tree does not hold, the report fails, naming the
-          subsystems it does — an empty dashboard for a typo would read like a subsystem with
-          nothing in it
+          Read the subsystems the tree holds; when the options narrow to a subsystem the tree does
+          not hold, the report fails, naming the subsystems it does — an empty dashboard for a typo
+          would read like a subsystem with nothing in it
         type: call
         targetComponent: spec_loader
         targetMethod: loadSubsystemSpecs
       - stepNumber: 7
+        description: Read the components the tree holds, narrowed with the subsystems when the options name one
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 8
+        description: Read the interface contracts the tree holds, kept for the components that remain
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 9
+        description: Read the implementations the tree holds, kept for the contracts that remain
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 10
+        description: >-
+          Read the types the tree holds, to know which subsystems own types: a subsystem of types
+          alone is as far along as its own status says, not 0%
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 11
         description: >-
           Read the project graph: each member the tree reaches (its alias, project id, declaration
           form and parent), so members print as projects rather than as subsystems
         type: call
         targetComponent: spec_loader
         targetMethod: graph
-      - stepNumber: 8
+      - stepNumber: 12
         description: >-
           Count each component's progress through the layers — whether it has a contract, an
           implementation, and source files its implementation names — narrowing to one subsystem
@@ -75,7 +96,7 @@ methods:
           local name under its project. Roles rather than colours, so this renderer never learns
           what a terminal is
         type: local
-      - stepNumber: 9
+      - stepNumber: 13
         description: >-
           When the options carry the pin tree (options.approvals, computed by the validator at each
           project's own root and handed in — this component cannot compute a gate identity), mark
@@ -96,7 +117,7 @@ methods:
           on the methods it lists — as realization not checked: the dial is code linkage outside the
           approval, and the dashboard is where a reader looks for what the gate does not judge
         type: local
-      - stepNumber: 10
+      - stepNumber: 14
         description: >-
           Answer the report as text, not failed. One renderer, so the terminal and the MCP status
           tool cannot drift into disagreeing about what this tree contains — which they did, for as
@@ -106,4 +127,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-09T11:27:02.673Z'
+updatedAt: '2026-10-17T16:26:16.542Z'

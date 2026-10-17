@@ -71,6 +71,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          Refuse a LOCAL install outside an initialized wairon project — a local entry serves this
+          checkout's spec tree — while a HOSTED install needs none: a hosted user has no checkout,
+          and the hosted entry is written in this folder without creating a spec tree or a guide.
           Refuse a config dir given without a backend — a config directory is agent-specific, so the
           pair is meaningless alone.
         type: local
@@ -144,7 +147,9 @@ methods:
       - stepNumber: 12
         description: >-
           Report where it wrote, what the entry points at, and what the agent must do to pick it up
-          (restart, and for a project-scoped Claude server, approve it once).
+          (restart, and for a project-scoped Claude server, approve it once). A hosted entry written
+          to a project-scoped file carries the bearer, so warn that the file must stay out of
+          version control (or be installed with --global).
         type: local
       - stepNumber: 13
         label: backendEnd
@@ -205,4 +210,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-06T20:00:27.629Z'
+updatedAt: '2026-10-17T14:35:26.914Z'

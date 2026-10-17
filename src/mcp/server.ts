@@ -77,7 +77,7 @@ import {
   publishedUsesOf,
 } from './adapters/core.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
-import { captureBuildStamp, isBuildStale, readBuildFingerprint, type BuildStamp } from './build.js';
+import { captureBuildStamp, isBuildStale, readBuildFingerprint, findNewerWriter, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
@@ -1396,6 +1396,31 @@ export function markStale(
   return marked;
 }
 
+/**
+ * A result carrying the version skew in both channels when this server is OLDER
+ * than the wairon that last wrote the bound project (its approval or guides):
+ * the banner on the text, and `olderServer` (the version this server runs) on
+ * the structured content. Unchanged when nothing newer wrote the project.
+ */
+function markOlderServer(result: CallToolResult, placement: 'lead' | 'trail'): CallToolResult {
+  let newer: ReturnType<typeof findNewerWriter> = null;
+  try { newer = findNewerWriter(getProjectRoot(), WAIRON_VERSION); } catch { /* no bound project: nothing to compare */ }
+  if (!newer) return result;
+  const banner = `⚠ OLDER SERVER: this MCP server is wairon ${WAIRON_VERSION}, but ${newer.file} was written by wairon ${newer.version}. `
+    + 'The `wairon` this project\'s .mcp.json launches is an older install than the one used on the project, and an older server can '
+    + 'drop fields a newer schema knows. Update that install (find it with `where wairon` on Windows or `which -a wairon`), or run '
+    + '`wairon doctor` in the project, then reconnect this server. The human has to do this — an agent cannot.';
+  const marked: CallToolResult = result.structuredContent
+    ? { ...result, structuredContent: { ...result.structuredContent, olderServer: WAIRON_VERSION } }
+    : result;
+  const first = marked.content?.[0];
+  if (first && first.type === 'text') {
+    const text = placement === 'lead' ? `${banner}\n\n${first.text}` : `${first.text}\n\n${banner}`;
+    return { ...marked, content: [{ ...first, text }, ...marked.content.slice(1)] };
+  }
+  return marked;
+}
+
 /** The staleness markStale reports when it is handed none: a rebuild whose schemas were not compared. */
 const assessedAsChanged: BuildFreshness = {
   state: 'build-changed',
@@ -1561,9 +1586,14 @@ function reg<Args extends Record<string, unknown>>(
     // processes by the tree's write lock (which also re-reads the tree), so two
     // sessions writing one spec land both writes instead of losing one.
     const answered = SPEC_WRITE_TOOLS.has(name) ? underTreeLock(() => cb(args)) : cb(args);
-    const result = freshness.state === 'fresh'
+    const fresh = freshness.state === 'fresh'
       ? answered
       : markStale(answered, freshness, name === 'sdd_get_status' ? 'lead' : 'trail');
+    // The two answers a session builds on say when the wairon behind them is
+    // older than the one that last wrote the project (two installs on one machine).
+    const result = name === 'sdd_get_status' || name === 'sdd_validate_tree'
+      ? markOlderServer(fresh, name === 'sdd_get_status' ? 'lead' : 'trail')
+      : fresh;
     // A SUCCESSFUL spec write just changed the derived agent topology — tell
     // the connected session its resources/prompts lists are stale.
     if (result.isError !== true && SPEC_WRITE_TOOLS.has(name)) listChangedEmitters.get(server)?.();
@@ -3837,7 +3867,7 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
       errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
 
     reg<Record<string, never>>(server, 'sdd_host_lock_project', {
-      description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Executes directly when your resolved permission is yes and returns the completed outcome; when it is approval, a pending approval request is created instead (await it with sdd_host_await_approval).',
+      description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). A lock is the project\'s approval: it executes directly when your approval:decide over the project is yes and returns the completed outcome; when you may write the project but not approve it, a pending approval request is created instead for someone holding approval:decide (await it with sdd_host_await_approval).',
       inputSchema: {},
     }, hostedStub);
     reg<{ id: string; ownerUnitId: string }>(server, 'sdd_host_initialize_project', {

@@ -49,11 +49,15 @@ methods:
         optional: true
   - name: lock
     description: >-
-      Lock a project (validate-as-complete then write the StateId-scoped lock); forwards to
-      admin_orchestrator.lockProject with the session as the credential (project:write permission
-      enforced there).
-    signature: 'lock(sessionId: string, projectId: string): LockRecord'
-    returns: LockRecord
+      Lock a project for the signed-in principal, making the decision the MCP lock tool makes;
+      forwards to project_lifecycle_orchestrator.lockProject with the session as the credential.
+      approval:decide over the project locks directly, recorded under the caller name, and answers a
+      completed outcome carrying the lock record; a caller who may write the project (or whose
+      approval:decide resolves to approval) gets a pending-approval outcome carrying the approval
+      request someone with approval rights decides; anyone else is Forbidden. The check lives in the
+      lifecycle orchestrator, so the web route cannot bypass it.
+    signature: 'lock(sessionId: string, projectId: string): ProjectActionOutcome'
+    returns: ProjectActionOutcome
     params:
       - name: sessionId
         type: string
@@ -74,4 +78,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-10-04T10:19:49.153Z'
+updatedAt: '2026-10-17T15:47:04.076Z'

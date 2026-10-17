@@ -323,6 +323,8 @@ function verdictOf(node: ProjectNode, own: ValidationResult): ProjectVerdict {
     errors: count('error'),
     warnings: count('warning'),
     notices: count('notice'),
+    ...(own.codeReading ? { codeReading: own.codeReading } : {}),
+    ...(own.codeCompact ? { codeCompact: own.codeCompact } : {}),
   };
 }
 

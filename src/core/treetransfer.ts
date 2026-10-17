@@ -37,6 +37,9 @@ export interface TreeImportOptions {
   refuseExecutableEntries?: boolean;
   /** Project root to import into; defaults to the currently bound project root. */
   destDir?: string;
+  /** Leave every approval record (`.wai/lock.json`) the archive carries out of the
+   *  imported tree — set when the importer may not approve the destination. */
+  dropApprovals?: boolean;
 }
 
 /**
@@ -73,6 +76,8 @@ export interface TreeImportResult {
   replaced: boolean;
   backupPath?: string;
   stateId?: string;
+  /** The roots whose approval record was left out (dropApprovals); absent when none was. */
+  approvalsDropped?: string[];
 }
 
 /** Directory names the transfer machinery owns inside a project root. */
@@ -215,6 +220,23 @@ export function commitStagedTree(
   return '';
 }
 
+/**
+ * Remove the approval record (`.wai/lock.json`) of every staged root, before
+ * the staged tree is swapped into place, and answer the roots it was removed
+ * from. The imported design then reads as never approved, until someone who may
+ * approve it locks it.
+ */
+export function dropStagedApprovals(stagingDir: string, roots: string[]): string[] {
+  const dropped: string[] = [];
+  for (const rootRel of roots) {
+    const record = path.join(stagingDir, rootRel === '.' ? '' : rootRel, '.wai', 'lock.json');
+    if (!fs.existsSync(record)) continue;
+    fs.rmSync(record, { force: true });
+    dropped.push(rootRel);
+  }
+  return dropped;
+}
+
 /** Remove a staging directory and everything under it (best effort). */
 export function discardStagingDir(stagingDir: string): void {
   // Step 1: remove it, swallowing any failure — tidying must never fail an
@@ -330,20 +352,23 @@ export function importSpecTree(archive: Uint8Array, options: TreeImportOptions):
     // Step 10: extract the archive into the staging directory.
     extraction = extractTreeArchive(archive, stagingDir, options.refuseExecutableEntries);
   } catch (err) {
-    // Step 16 (cleanupAndRethrow): discard staging, then re-raise — a failed
+    // Step 17 (cleanupAndRethrow): discard staging, then re-raise — a failed
     // import leaves neither a half-written tree nor litter.
     discardStagingDir(stagingDir);
-    // Step 17: re-raise the extraction failure to the caller.
+    // Step 18: re-raise the extraction failure to the caller.
     throw err;
   }
-  // Step 11: swap the staged tree into place, moving any previous tree aside.
+  // Step 11: an importer who may not approve the destination carries in no
+  // approval: the staged roots' records are left out before anything moves.
+  const approvalsDropped = options.dropApprovals === true ? dropStagedApprovals(stagingDir, extraction.roots) : [];
+  // Step 12: swap the staged tree into place, moving any previous tree aside.
   const backupPath = commitStagedTree(stagingDir, destDir, extraction.roots, occupied);
-  // Step 12: remove the now-empty staging directory (best effort).
+  // Step 13: remove the now-empty staging directory (best effort).
   discardStagingDir(stagingDir);
-  // Step 13: drop the spec repository's cached index — this tree arrived as a
+  // Step 14: drop the spec repository's cached index — this tree arrived as a
   // directory swap, bypassing every save path the cache observes.
   invalidateSpecCache();
-  // Step 14: assemble the import result.
+  // Step 15: assemble the import result.
   const result: TreeImportResult = {
     destDir,
     projectName: extraction.manifest.projectName,
@@ -353,7 +378,8 @@ export function importSpecTree(archive: Uint8Array, options: TreeImportOptions):
   };
   if (backupPath) result.backupPath = backupPath;
   if (extraction.manifest.stateId) result.stateId = extraction.manifest.stateId;
-  // Step 15: return what was written and where the backup went.
+  if (approvalsDropped.length > 0) result.approvalsDropped = approvalsDropped;
+  // Step 16: return what was written and where the backup went.
   return result;
 }
 

@@ -183,8 +183,8 @@ methods:
       same-variant siblings
     signature: >-
       resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
-      variantsById: list<VariantDef>): VariantDef
-    returns: VariantDef
+      variantsById: list<VariantDef>): VariantGuidance?
+    returns: VariantGuidance?
     params:
       - name: component
         type: ComponentSpec
@@ -374,4 +374,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-15T16:06:30.757Z'
+updatedAt: '2026-10-17T16:35:15.031Z'

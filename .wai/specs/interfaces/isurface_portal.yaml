@@ -14,8 +14,8 @@ methods:
       as `rendered`).
     signature: >-
       exportSurface(maxAudience: SurfaceAudience, format: string, outPath?: string, portalId?:
-      string): SurfaceSnapshot
-    returns: SurfaceSnapshot
+      string): SurfaceExportResult
+    returns: SurfaceExportResult
     params:
       - name: maxAudience
         type: SurfaceAudience
@@ -188,4 +188,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-09T11:38:40.581Z'
+updatedAt: '2026-10-17T16:35:54.403Z'

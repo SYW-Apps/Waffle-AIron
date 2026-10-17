@@ -48,6 +48,26 @@ methods:
       - name: stamp
         type: BuildStamp
         description: The stamp of the build the server was started from; its path locates the build on disk
+  - name: findNewerWriter
+    description: >-
+      The newest release that left its mark on a project, when it is NEWER than the one running: the
+      release stamped on the approval record (.wai/lock.json) or on a generated guide
+      (.claude/CLAUDE.md, .wai/context/wairon-guide.md). A server older than the wairon that last
+      wrote the project is the usual sign of two installs on one machine, where the wairon an
+      assistant launches is not the one the developer runs. Nothing newer, no file that can be read,
+      or a stamp that is no version answers nothing: only stamps already on disk are read, nothing
+      is executed.
+    signature: 'findNewerWriter(root: string, running: string): NewerWriter?'
+    returns: NewerWriter?
+    params:
+      - name: root
+        type: string
+        description: The project root whose approval and guides are read
+      - name: running
+        type: string
+        description: The wairon version the running server is
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-26T00:24:18.727Z'
-updatedAt: '2026-10-04T10:18:59.750Z'
+updatedAt: '2026-10-17T14:44:14.719Z'
